@@ -4,11 +4,13 @@
 
 namespace litepgo {
 
-void EigenLDLT::analyze(const SpMat& A) {
+bool EigenLDLT::analyze_pattern(const SpMat& A) {
+    // Eigen's analysis has no failure mode short of throwing on allocation.
     solver_.analyzePattern(A);
+    return true;
 }
 
-bool EigenLDLT::factor(const SpMat& A) {
+bool EigenLDLT::factor_values(const SpMat& A) {
     solver_.factorize(A);
     return solver_.info() == Eigen::Success;
 }

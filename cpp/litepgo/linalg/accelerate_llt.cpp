@@ -8,24 +8,20 @@ namespace litepgo {
 
 struct AccelerateLLT::Impl {
     Eigen::AccelerateLLT<SpMat> solver;
-    // Eigen asserts in factorize() when the symbolic analysis failed, so a
-    // failed analysis must turn into a failed factor() here.
-    bool analyzed = false;
 };
 
 AccelerateLLT::AccelerateLLT() : impl_(std::make_unique<Impl>()) {}
 
 AccelerateLLT::~AccelerateLLT() = default;
 
-void AccelerateLLT::analyze(const SpMat& A) {
+// Accelerate can reject a pattern; Eigen then drops the analysis and would assert
+// in factorize(), which SparseSolver never calls after a failed analysis.
+bool AccelerateLLT::analyze_pattern(const SpMat& A) {
     impl_->solver.analyzePattern(A);
-    impl_->analyzed = impl_->solver.info() == Eigen::Success;
+    return impl_->solver.info() == Eigen::Success;
 }
 
-bool AccelerateLLT::factor(const SpMat& A) {
-    if (!impl_->analyzed) {
-        return false;
-    }
+bool AccelerateLLT::factor_values(const SpMat& A) {
     impl_->solver.factorize(A);
     return impl_->solver.info() == Eigen::Success;
 }

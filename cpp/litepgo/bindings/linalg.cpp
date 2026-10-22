@@ -26,9 +26,17 @@ void bind_linalg(nb::module_& m) {
     // SparseArgument). The GIL is released while factoring and solving.
     nb::class_<SparseSolver>(m, "SparseSolver")
         .def(
+            "analyze", [](SparseSolver& solver, const SparseArgument& A) { return solver.analyze(A.matrix); }, "A"_a,
+            nb::call_guard<nb::gil_scoped_release>(),
+            "Symbolic analysis of A's sparsity pattern; returns False if it cannot be analyzed.")
+        .def(
             "factorize", [](SparseSolver& solver, const SparseArgument& A) { return solver.factorize(A.matrix); },
             "A"_a, nb::call_guard<nb::gil_scoped_release>(),
-            "Factor A, a scipy.sparse matrix; returns False on numerical failure.")
+            "Numeric factorization of A, which must have the analyzed pattern; returns False on numerical "
+            "failure.")
+        .def(
+            "compute", [](SparseSolver& solver, const SparseArgument& A) { return solver.compute(A.matrix); }, "A"_a,
+            nb::call_guard<nb::gil_scoped_release>(), "analyze(A), then factorize(A).")
         .def("solve", nb::overload_cast<const ConstVecRef&>(&SparseSolver::solve, nb::const_), "rhs"_a,
              nb::call_guard<nb::gil_scoped_release>(), "Solve with the last successful factorization.")
         .def("solve", nb::overload_cast<const ConstVecRef&, VecRef>(&SparseSolver::solve, nb::const_), "rhs"_a,

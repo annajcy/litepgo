@@ -40,7 +40,7 @@ void check_matrix(const SpMat& A) {
         for (int k = outer[column] + 1; k < outer[column + 1]; ++k) {
             if (inner[k - 1] >= inner[k]) {
                 throw std::invalid_argument("SparseSolver requires strictly increasing row indices in each column; "
-                                            "sum duplicate entries first (scipy: sum_duplicates())");
+                                            "sum duplicate entries first");
             }
         }
     }
@@ -48,29 +48,42 @@ void check_matrix(const SpMat& A) {
 
 } // namespace
 
-bool SparseSolver::factorize(const SpMat& A) {
+bool SparseSolver::analyze(const SpMat& A) {
     BusyScope scope(busy_);
     check_matrix(A);
+    forget_analysis();
+    // A hook that throws leaves the solver unanalyzed, as forget_analysis() set it.
+    if (!analyze_pattern(A)) {
+        return false;
+    }
+    outer_indices_.assign(A.outerIndexPtr(), A.outerIndexPtr() + A.outerSize() + 1);
+    inner_indices_.assign(A.innerIndexPtr(), A.innerIndexPtr() + A.nonZeros());
+    analyzed_ = true;
+    return true;
+}
+
+bool SparseSolver::factorize(const SpMat& A) {
+    BusyScope scope(busy_);
+    if (!analyzed_) {
+        throw std::logic_error("SparseSolver::factorize requires a successful analyze()");
+    }
+    if (!matches_analyzed_pattern(A)) {
+        throw std::invalid_argument("SparseSolver::factorize: the matrix does not have the analyzed sparsity pattern; "
+                                    "call analyze() for the new pattern");
+    }
     factored_ = false;
     try {
-        if (!same_pattern(A)) {
-            outer_indices_.clear();
-            inner_indices_.clear();
-            analyze(A);
-            remember_pattern(A);
-        }
-        factored_ = factor(A);
+        factored_ = factor_values(A);
     } catch (...) {
-        outer_indices_.clear();
-        inner_indices_.clear();
+        // Do not trust a backend that failed unexpectedly: start over from analyze().
+        forget_analysis();
         throw;
     }
-    if (!factored_) {
-        // Analyze again next time instead of trusting state a failed backend left behind.
-        outer_indices_.clear();
-        inner_indices_.clear();
-    }
     return factored_;
+}
+
+bool SparseSolver::compute(const SpMat& A) {
+    return analyze(A) && factorize(A);
 }
 
 void SparseSolver::solve(const ConstVecRef& rhs, VecRef x) const {
@@ -94,16 +107,19 @@ Vec SparseSolver::solve(const ConstVecRef& rhs) const {
     return x;
 }
 
-bool SparseSolver::same_pattern(const SpMat& A) const {
-    return !outer_indices_.empty() && outer_indices_.size() == static_cast<size_t>(A.outerSize() + 1) &&
+bool SparseSolver::matches_analyzed_pattern(const SpMat& A) const {
+    return A.isCompressed() && A.rows() == static_cast<Eigen::Index>(outer_indices_.size()) - 1 &&
+           outer_indices_.size() == static_cast<size_t>(A.outerSize() + 1) &&
            inner_indices_.size() == static_cast<size_t>(A.nonZeros()) &&
            std::equal(outer_indices_.begin(), outer_indices_.end(), A.outerIndexPtr()) &&
            std::equal(inner_indices_.begin(), inner_indices_.end(), A.innerIndexPtr());
 }
 
-void SparseSolver::remember_pattern(const SpMat& A) {
-    outer_indices_.assign(A.outerIndexPtr(), A.outerIndexPtr() + A.outerSize() + 1);
-    inner_indices_.assign(A.innerIndexPtr(), A.innerIndexPtr() + A.nonZeros());
+void SparseSolver::forget_analysis() {
+    analyzed_ = false;
+    factored_ = false;
+    outer_indices_.clear();
+    inner_indices_.clear();
 }
 
 } // namespace litepgo

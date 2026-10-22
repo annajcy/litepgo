@@ -25,7 +25,7 @@ def test_solves_positive_definite(solver_type):
     A = laplacian(30)
     rhs = np.linspace(-1.0, 2.0, 30)
     solver = solver_type()
-    assert solver.factorize(A)
+    assert solver.compute(A)
     np.testing.assert_allclose(solver.solve(rhs), np.linalg.solve(A.toarray(), rhs), rtol=1e-10, atol=1e-12)
 
 
@@ -34,14 +34,14 @@ def test_solves_saddle_point(solver_type):
     A = saddle_point(10)
     rhs = np.arange(11, dtype=float)
     solver = solver_type()
-    assert solver.factorize(A)
+    assert solver.compute(A)
     np.testing.assert_allclose(solver.solve(rhs), np.linalg.solve(A.toarray(), rhs), rtol=1e-10, atol=1e-12)
 
 
 @pytest.mark.skipif(not HAS_ACCELERATE, reason="needs Apple Accelerate")
 def test_accelerate_llt_fails_on_indefinite():
     solver = la.AccelerateLLT()
-    assert not solver.factorize(saddle_point(10))
+    assert not solver.compute(saddle_point(10))
     with pytest.raises(RuntimeError):
         solver.solve(np.ones(11))
 
@@ -54,7 +54,7 @@ def test_accelerate_llt_fails_on_indefinite():
 def test_accepts_other_matrix_formats(convert):
     A = laplacian(8)
     solver = la.EigenLDLT()
-    assert solver.factorize(convert(A))
+    assert solver.compute(convert(A))
     np.testing.assert_allclose(A @ solver.solve(np.ones(8)), np.ones(8), atol=1e-12)
 
 
@@ -66,7 +66,7 @@ def test_sums_duplicates_and_sorts_without_touching_the_input():
     for matrix in (duplicated, unsorted):
         indices, data = matrix.indices.copy(), matrix.data.copy()
         solver = la.EigenSparseLU()
-        assert solver.factorize(matrix)
+        assert solver.compute(matrix)
         rhs = np.array([1.0, 2.0])
         np.testing.assert_allclose(matrix.toarray() @ solver.solve(rhs), rhs, atol=1e-12)
         np.testing.assert_array_equal(matrix.indices, indices)
@@ -75,13 +75,13 @@ def test_sums_duplicates_and_sorts_without_touching_the_input():
 
 def test_rejects_invalid_shapes():
     with pytest.raises(ValueError):
-        la.EigenLDLT().factorize(sp.csc_matrix((3, 4)))
+        la.EigenLDLT().compute(sp.csc_matrix((3, 4)))
 
 
 def test_solve_into_provided_array():
     A = laplacian(6)
     solver = la.EigenLDLT()
-    assert solver.factorize(A)
+    assert solver.compute(A)
     x = np.zeros(6)
     solver.solve(np.ones(6), x)
     np.testing.assert_allclose(A @ x, np.ones(6), atol=1e-12)
@@ -91,14 +91,14 @@ def test_solve_into_provided_array():
                          ids=["strided", "float32", "2d"])
 def test_solve_into_rejects_arrays_it_cannot_write(x):
     solver = la.EigenLDLT()
-    assert solver.factorize(laplacian(6))
+    assert solver.compute(laplacian(6))
     with pytest.raises(TypeError):
         solver.solve(np.ones(6), x)
 
 
 def test_vectors_must_be_arrays():
     solver = la.EigenLDLT()
-    assert solver.factorize(laplacian(3))
+    assert solver.compute(laplacian(3))
     with pytest.raises(TypeError):
         solver.solve([1.0, 2.0, 3.0])
 
@@ -110,7 +110,7 @@ def test_solve_requires_factorization():
 
 def test_solve_checks_size():
     solver = la.EigenLDLT()
-    assert solver.factorize(laplacian(4))
+    assert solver.compute(laplacian(4))
     with pytest.raises(ValueError):
         solver.solve(np.ones(5))
 
@@ -119,6 +119,39 @@ def test_base_class_is_abstract():
     with pytest.raises(TypeError):
         la.SparseSolver()
     assert all(issubclass(solver_type, la.SparseSolver) for solver_type in ALL_SOLVERS)
+
+
+def test_factorize_reuses_the_analysis_for_new_values():
+    solver = la.EigenLDLT()
+    assert solver.analyze(laplacian(20))
+    for scale in (1.0, 3.5):
+        A = laplacian(20, scale)
+        assert solver.factorize(A)
+        np.testing.assert_allclose(A @ solver.solve(np.ones(20)), np.ones(20), atol=1e-12)
+
+
+def test_factorize_requires_an_analysis():
+    with pytest.raises(RuntimeError, match="analyze"):
+        la.EigenLDLT().factorize(laplacian(4))
+
+
+def test_factorize_rejects_another_pattern():
+    solver = la.EigenLDLT()
+    assert solver.analyze(laplacian(4))
+    # Same size and nnz as laplacian(4), different positions.
+    lookalike = sp.csc_matrix(np.array([[4, 0, 1, 1], [0, 4, 0, 1], [1, 0, 4, 0], [1, 1, 0, 4]], dtype=float))
+    assert lookalike.nnz == laplacian(4).nnz
+    with pytest.raises(ValueError, match="analyzed sparsity pattern"):
+        solver.factorize(lookalike)
+    assert solver.factorize(laplacian(4))
+
+
+def test_analyze_discards_the_factorization():
+    solver = la.EigenLDLT()
+    assert solver.compute(laplacian(4))
+    assert solver.analyze(laplacian(4))
+    with pytest.raises(RuntimeError):
+        solver.solve(np.ones(4))
 
 
 def test_auto_aliases_are_the_platform_classes():

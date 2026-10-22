@@ -13,8 +13,8 @@ class EigenLDLT final : public SparseSolver {
     EigenLDLT() = default;
 
   private:
-    void analyze(const SpMat& A) override;
-    bool factor(const SpMat& A) override;
+    bool analyze_pattern(const SpMat& A) override;
+    bool factor_values(const SpMat& A) override;
     void solve_factored(const ConstVecRef& rhs, VecRef x) const override;
 
     Eigen::SimplicialLDLT<SpMat> solver_;
