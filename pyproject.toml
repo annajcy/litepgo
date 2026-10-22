@@ -1,0 +1,40 @@
+[build-system]
+requires = ["scikit-build-core>=0.11,<1", "nanobind>=2.4,<3"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "litepgo"
+version = "0.0.1"
+description = "Minimal libpgo"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = ["numpy>=1.26"]
+
+[dependency-groups]
+dev = ["pytest>=8", "clang-format==20.1.8"]
+
+[tool.scikit-build]
+minimum-version = "0.11"
+cmake.version = ">=3.28"
+cmake.build-type = "Release"
+build-dir = "build/python/{wheel_tag}"
+wheel.packages = ["python/litepgo"]
+wheel.py-api = "cp312"
+
+[tool.scikit-build.cmake.define]
+LITEPGO_BUILD_PYTHON = "ON"
+LITEPGO_BUILD_TESTS = "OFF"
+
+[tool.uv]
+# Rebuild the extension on uv sync when native sources or build files change;
+# uv only watches pyproject.toml by default.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "CMakeLists.txt" },
+    { file = "cmake/**" },
+    { file = "cpp/**" },
+    { file = "bindings/**" },
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]

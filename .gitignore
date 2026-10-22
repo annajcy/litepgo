@@ -1,0 +1,21 @@
+# Build trees
+/build/
+/out/
+/compile_commands.json
+CMakeUserPresets.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+*.egg-info/
+.venv/
+.pytest_cache/
+dist/
+
+# Editors and OS
+.vscode/
+.idea/
+.cache/
+.DS_Store
