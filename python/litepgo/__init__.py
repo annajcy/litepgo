@@ -2,4 +2,10 @@
 
 from litepgo import _core
 
-__all__ = ["_core"]
+
+def build_info() -> dict:
+    """Versions this build was compiled against and its available sparse backends."""
+    return _core.build_info()
+
+
+__all__ = ["build_info"]

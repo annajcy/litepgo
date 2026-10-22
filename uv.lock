@@ -48,7 +48,7 @@ wheels = [
 [[package]]
 name = "litepgo"
 version = "0.0.1"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "numpy" },
 ]
