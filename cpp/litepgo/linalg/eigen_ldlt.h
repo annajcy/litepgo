@@ -1,0 +1,23 @@
+#pragma once
+
+#include "litepgo/linalg/sparse_solver.h"
+
+#include <Eigen/SparseCholesky>
+
+namespace litepgo {
+
+// Eigen's SimplicialLDLT, without pivoting. For symmetric positive definite
+// matrices; it reads the lower triangle.
+class EigenLDLT final : public SparseSolver {
+  public:
+    EigenLDLT() = default;
+
+  private:
+    void analyze(const SpMat& A) override;
+    bool factor(const SpMat& A) override;
+    void solve_factored(const ConstVecRef& rhs, VecRef x) const override;
+
+    Eigen::SimplicialLDLT<SpMat> solver_;
+};
+
+} // namespace litepgo

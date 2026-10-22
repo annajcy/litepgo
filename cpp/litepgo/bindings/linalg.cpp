@@ -1,0 +1,52 @@
+#include "litepgo/bindings/bindings.h"
+#include "litepgo/bindings/sparse_matrix.h"
+#include "litepgo/linalg/auto_sparse_solver.h"
+#include "litepgo/linalg/eigen_ldlt.h"
+#include "litepgo/linalg/eigen_sparse_lu.h"
+#include "litepgo/linalg/sparse_solver.h"
+
+#if defined(LITEPGO_HAS_ACCELERATE)
+#include "litepgo/linalg/accelerate_ldlt.h"
+#include "litepgo/linalg/accelerate_llt.h"
+#endif
+
+#include <nanobind/eigen/dense.h>
+
+namespace nb = nanobind;
+using namespace nb::literals;
+
+namespace litepgo::bindings {
+
+void bind_linalg(nb::module_& m) {
+    m.doc() = "Sparse linear solvers (cpp/litepgo/linalg)";
+
+    // Matrices arrive as scipy.sparse and are copied into C++; see
+    // sparse_matrix_from_python. The GIL is released while factoring and solving.
+    nb::class_<SparseSolver>(m, "SparseSolver")
+        .def(
+            "factorize",
+            [](SparseSolver& solver, nb::handle A) {
+                const SpMat matrix = sparse_matrix_from_python(A);
+                nb::gil_scoped_release release;
+                return solver.factorize(matrix);
+            },
+            "A"_a, "Factor A, a scipy.sparse matrix; returns False on numerical failure.")
+        .def("solve", nb::overload_cast<const ConstVecRef&>(&SparseSolver::solve, nb::const_), "rhs"_a,
+             nb::call_guard<nb::gil_scoped_release>(), "Solve with the last successful factorization.")
+        .def("solve", nb::overload_cast<const ConstVecRef&, VecRef>(&SparseSolver::solve, nb::const_), "rhs"_a,
+             "x"_a.noconvert(), nb::call_guard<nb::gil_scoped_release>(),
+             "Solve into x, a contiguous writable float64 array.");
+
+    nb::class_<EigenLDLT, SparseSolver>(m, "EigenLDLT").def(nb::init<>());
+    nb::class_<EigenSparseLU, SparseSolver>(m, "EigenSparseLU").def(nb::init<>());
+#if defined(LITEPGO_HAS_ACCELERATE)
+    nb::class_<AccelerateLLT, SparseSolver>(m, "AccelerateLLT").def(nb::init<>());
+    nb::class_<AccelerateLDLT, SparseSolver>(m, "AccelerateLDLT").def(nb::init<>());
+#endif
+
+    // The C++ aliases: the same class objects under a second name.
+    m.attr("AutoSparseSolver") = nb::type<AutoSparseSolver>();
+    m.attr("AutoIndefiniteSparseSolver") = nb::type<AutoIndefiniteSparseSolver>();
+}
+
+} // namespace litepgo::bindings

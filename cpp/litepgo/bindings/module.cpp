@@ -1,3 +1,4 @@
+#include "litepgo/bindings/bindings.h"
 #include "litepgo/core/build_info.h"
 
 #include <nanobind/nanobind.h>
@@ -19,4 +20,7 @@ NB_MODULE(_core, m) {
         result["sparse_backends"] = info.sparse_backends;
         return result;
     });
+
+    nb::module_ linalg = m.def_submodule("linalg");
+    litepgo::bindings::bind_linalg(linalg);
 }

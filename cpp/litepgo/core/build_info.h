@@ -24,8 +24,9 @@ inline BuildInfo build_info() {
     info.eigen_version = EIGEN_VERSION_STRING;
     info.tbb_header_version = TBB_VERSION_STRING;
     info.tbb_runtime_version = TBB_runtime_version();
-    info.sparse_backends.push_back("EigenLDLT");
+    info.sparse_backends = {"EigenLDLT", "EigenSparseLU"};
 #if defined(LITEPGO_HAS_ACCELERATE)
+    info.sparse_backends.push_back("AccelerateLLT");
     info.sparse_backends.push_back("AccelerateLDLT");
 #endif
     return info;
