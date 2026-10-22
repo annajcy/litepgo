@@ -1,0 +1,65 @@
+#include "litepgo/linalg/reduced_matrix.h"
+
+#include <algorithm>
+#include <stdexcept>
+
+namespace litepgo {
+
+namespace {
+
+void check_matrix(const DofReduction& reduction, const SpMat& A) {
+    if (A.rows() != reduction.num_dofs() || A.cols() != reduction.num_dofs()) {
+        throw std::invalid_argument("ReducedMatrix requires a num_dofs x num_dofs matrix");
+    }
+    if (!A.isCompressed()) {
+        throw std::invalid_argument("ReducedMatrix requires a compressed matrix; call makeCompressed()");
+    }
+}
+
+} // namespace
+
+ReducedMatrix::ReducedMatrix(const DofReduction& reduction, const SpMat& A) {
+    check_matrix(reduction, A);
+    outer_indices_.assign(A.outerIndexPtr(), A.outerIndexPtr() + A.outerSize() + 1);
+    inner_indices_.assign(A.innerIndexPtr(), A.innerIndexPtr() + A.nonZeros());
+
+    // Walk the free columns in order and keep their free rows. free_index is
+    // increasing, so rows stay sorted within each column.
+    const int num_free = reduction.num_free();
+    std::vector<int> outer(static_cast<size_t>(num_free) + 1, 0);
+    std::vector<int> inner;
+    for (int column = 0; column < num_free; ++column) {
+        const int full_column = reduction.free_dofs()[static_cast<size_t>(column)];
+        for (int k = outer_indices_[static_cast<size_t>(full_column)];
+             k < outer_indices_[static_cast<size_t>(full_column) + 1]; ++k) {
+            const int row = reduction.free_index(inner_indices_[static_cast<size_t>(k)]);
+            if (row >= 0) {
+                inner.push_back(row);
+                source_positions_.push_back(k);
+            }
+        }
+        outer[static_cast<size_t>(column) + 1] = static_cast<int>(inner.size());
+    }
+
+    const std::vector<double> values(inner.size(), 0.0);
+    matrix_ = Eigen::Map<const SpMat>(num_free, num_free, static_cast<Eigen::Index>(inner.size()), outer.data(),
+                                      inner.data(), values.data());
+    matrix_.makeCompressed();
+    assign(A);
+}
+
+void ReducedMatrix::assign(const SpMat& A) {
+    if (!A.isCompressed() || A.outerSize() + 1 != static_cast<Eigen::Index>(outer_indices_.size()) ||
+        A.nonZeros() != static_cast<Eigen::Index>(inner_indices_.size()) ||
+        !std::equal(outer_indices_.begin(), outer_indices_.end(), A.outerIndexPtr()) ||
+        !std::equal(inner_indices_.begin(), inner_indices_.end(), A.innerIndexPtr())) {
+        throw std::invalid_argument("ReducedMatrix::assign requires the sparsity pattern given at construction");
+    }
+    const double* source = A.valuePtr();
+    double* target = matrix_.valuePtr();
+    for (size_t k = 0; k < source_positions_.size(); ++k) {
+        target[k] = source[source_positions_[k]];
+    }
+}
+
+} // namespace litepgo

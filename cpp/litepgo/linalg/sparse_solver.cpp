@@ -1,5 +1,7 @@
 #include "litepgo/linalg/sparse_solver.h"
 
+#include "litepgo/core/memory.h"
+
 #include <algorithm>
 #include <stdexcept>
 
@@ -44,10 +46,6 @@ void check_matrix(const SpMat& A) {
     }
 }
 
-bool overlaps(const double* a, const double* b, Eigen::Index size) {
-    return size > 0 && a < b + size && b < a + size;
-}
-
 } // namespace
 
 bool SparseSolver::factorize(const SpMat& A) {
@@ -84,7 +82,7 @@ void SparseSolver::solve(const ConstVecRef& rhs, VecRef x) const {
     if (rhs.size() != size || x.size() != size) {
         throw std::invalid_argument("SparseSolver::solve vector sizes must match the factorized matrix");
     }
-    if (overlaps(rhs.data(), x.data(), size)) {
+    if (overlaps(rhs.data(), size, x.data(), size)) {
         throw std::invalid_argument("SparseSolver::solve requires rhs and x not to overlap");
     }
     solve_factored(rhs, x);

@@ -1,0 +1,38 @@
+#pragma once
+
+#include "litepgo/core/types.h"
+#include "litepgo/linalg/dof_reduction.h"
+
+#include <vector>
+
+namespace litepgo {
+
+// The principal submatrix of A on a DofReduction's free DOFs, refreshed in place.
+//
+// Construction fixes the sparsity pattern of A and of the submatrix. assign()
+// then only copies values, so matrix() keeps its storage and a SparseSolver
+// factoring it keeps its symbolic analysis. When A's pattern changes, build a
+// new ReducedMatrix.
+class ReducedMatrix {
+  public:
+    // A must be compressed and reduction.num_dofs() square.
+    ReducedMatrix(const DofReduction& reduction, const SpMat& A);
+
+    const SpMat& matrix() const {
+        return matrix_;
+    }
+
+    // Copies the free block of A's values. A must have the construction pattern;
+    // otherwise throws std::invalid_argument and leaves matrix() unchanged.
+    void assign(const SpMat& A);
+
+  private:
+    // Pattern of A at construction.
+    std::vector<int> outer_indices_;
+    std::vector<int> inner_indices_;
+    // For each stored entry of matrix_, its position in A's value array.
+    std::vector<int> source_positions_;
+    SpMat matrix_;
+};
+
+} // namespace litepgo
