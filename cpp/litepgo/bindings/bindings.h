@@ -7,5 +7,6 @@ namespace litepgo::bindings {
 
 void bind_energy(nanobind::module_& m);
 void bind_linalg(nanobind::module_& m);
+void bind_solver(nanobind::module_& m);
 
 } // namespace litepgo::bindings

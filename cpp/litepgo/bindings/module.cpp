@@ -26,4 +26,7 @@ NB_MODULE(_core, m) {
 
     nb::module_ energy = m.def_submodule("energy");
     litepgo::bindings::bind_energy(energy);
+
+    nb::module_ solver = m.def_submodule("solver");
+    litepgo::bindings::bind_solver(solver);
 }

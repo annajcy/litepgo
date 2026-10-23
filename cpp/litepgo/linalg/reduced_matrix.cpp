@@ -24,19 +24,36 @@ ReducedMatrix::ReducedMatrix(const DofReduction& reduction, const SpMat& A) {
     inner_indices_.assign(A.innerIndexPtr(), A.innerIndexPtr() + A.nonZeros());
 
     // Walk the free columns in order and keep their free rows. free_index is
-    // increasing, so rows stay sorted within each column.
+    // increasing, so rows stay sorted within each column; the diagonal entry is
+    // inserted at its sorted place when A does not store it.
     const int num_free = reduction.num_free();
     std::vector<int> outer(static_cast<size_t>(num_free) + 1, 0);
     std::vector<int> inner;
+    diagonal_positions_.resize(static_cast<size_t>(num_free));
     for (int column = 0; column < num_free; ++column) {
         const int full_column = reduction.free_dofs()[static_cast<size_t>(column)];
+        bool has_diagonal = false;
+        const auto add_entry = [&](int row, int source) {
+            if (row == column) {
+                diagonal_positions_[static_cast<size_t>(column)] = static_cast<int>(inner.size());
+                has_diagonal = true;
+            }
+            inner.push_back(row);
+            source_positions_.push_back(source);
+        };
         for (int k = outer_indices_[static_cast<size_t>(full_column)];
              k < outer_indices_[static_cast<size_t>(full_column) + 1]; ++k) {
             const int row = reduction.free_index(inner_indices_[static_cast<size_t>(k)]);
-            if (row >= 0) {
-                inner.push_back(row);
-                source_positions_.push_back(k);
+            if (row < 0) {
+                continue;
             }
+            if (!has_diagonal && row > column) {
+                add_entry(column, -1);
+            }
+            add_entry(row, k);
+        }
+        if (!has_diagonal) {
+            add_entry(column, -1);
         }
         outer[static_cast<size_t>(column) + 1] = static_cast<int>(inner.size());
     }
@@ -58,7 +75,14 @@ void ReducedMatrix::assign(const SpMat& A) {
     const double* source = A.valuePtr();
     double* target = matrix_.valuePtr();
     for (size_t k = 0; k < source_positions_.size(); ++k) {
-        target[k] = source[source_positions_[k]];
+        target[k] = source_positions_[k] >= 0 ? source[source_positions_[k]] : 0.0;
+    }
+}
+
+void ReducedMatrix::add_to_diagonal(double shift) {
+    double* values = matrix_.valuePtr();
+    for (const int position : diagonal_positions_) {
+        values[position] += shift;
     }
 }
 

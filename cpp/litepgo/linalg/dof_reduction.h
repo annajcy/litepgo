@@ -40,8 +40,9 @@ class DofReduction {
     // state. reduced and full must not overlap.
     void expand(const ConstVecRef& reduced, VecRef full) const;
 
-    // Principal submatrix on the free DOFs. A must be compressed and
-    // num_dofs x num_dofs. Use ReducedMatrix to refresh it without reallocating.
+    // Principal submatrix on the free DOFs, storing its whole diagonal (explicit
+    // zeros where A has none). A must be compressed and num_dofs x num_dofs. Use
+    // ReducedMatrix to refresh it without reallocating.
     SpMat reduce(const SpMat& A) const;
 
   private:

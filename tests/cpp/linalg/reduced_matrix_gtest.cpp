@@ -1,6 +1,7 @@
 #include "litepgo/linalg/reduced_matrix.h"
 
 #include "litepgo/linalg/dof_reduction.h"
+#include "litepgo/linalg/sparse_pattern.h"
 
 #include <Eigen/Dense>
 #include <gtest/gtest.h>
@@ -81,4 +82,30 @@ TEST(ReducedMatrix, CoversNoAndAllFixedDofs) {
 TEST(ReducedMatrix, ChecksTheMatrix) {
     const DofReduction reduction(5, {1});
     EXPECT_THROW(ReducedMatrix(reduction, tridiagonal(4, 1.0)), std::invalid_argument);
+}
+
+TEST(ReducedMatrix, StoresTheWholeDiagonal) {
+    // Off-diagonal coupling only: A stores no diagonal at all.
+    const std::vector<Triplet> entries = {{0, 2, 1.0}, {2, 0, 1.0}, {1, 3, -2.0}, {3, 1, -2.0}};
+    SpMat A(4, 4);
+    A.setFromTriplets(entries.begin(), entries.end());
+    const DofReduction reduction(4, {3});
+    const ReducedMatrix reduced(reduction, A);
+    ASSERT_EQ(reduced.matrix().nonZeros(), 5); // (0,2), (2,0) and three diagonal zeros
+    for (int i = 0; i < 3; ++i) {
+        EXPECT_EQ(reduced.matrix().coeff(i, i), 0.0);
+    }
+    EXPECT_EQ(reduced.matrix().coeff(0, 2), 1.0);
+    EXPECT_TRUE(litepgo::is_canonical(reduced.matrix()));
+}
+
+TEST(ReducedMatrix, ShiftsTheDiagonalUntilTheNextAssign) {
+    const DofReduction reduction(6, {2});
+    const SpMat A = tridiagonal(6, 1.0);
+    ReducedMatrix reduced(reduction, A);
+    const Eigen::MatrixXd before = Eigen::MatrixXd(reduced.matrix());
+    reduced.add_to_diagonal(0.5);
+    EXPECT_EQ(Eigen::MatrixXd(reduced.matrix()), before + 0.5 * Eigen::MatrixXd::Identity(5, 5));
+    reduced.assign(A);
+    EXPECT_EQ(Eigen::MatrixXd(reduced.matrix()), before);
 }
