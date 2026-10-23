@@ -1,4 +1,5 @@
 #include "litepgo/fem/basis.h"
+#include "litepgo/fem/hex_q1_basis.h"
 #include "litepgo/fem/lagrange_basis.h"
 #include "litepgo/fem/tensor_product_basis.h"
 
@@ -106,6 +107,8 @@ struct Wrong3DReturn : Q1 {
 static_assert(litepgo::Basis<litepgo::LagrangeBasis, 1>);
 static_assert(litepgo::Basis<Q1, 3>);
 static_assert(litepgo::Basis3D<Q1>);
+static_assert(litepgo::Basis3D<litepgo::HexQ1Basis>);
+static_assert(!litepgo::Basis1D<litepgo::HexQ1Basis>);
 static_assert(litepgo::Basis3D<litepgo::TensorProductBasis3D<ConstantBasis>>);
 static_assert(!litepgo::Basis1D<Wrong1DGradientColumns>);
 static_assert(!litepgo::Basis3D<litepgo::LagrangeBasis>);

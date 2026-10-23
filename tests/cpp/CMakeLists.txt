@@ -12,6 +12,7 @@ add_executable(litepgo_tests
     energy/weighted_energy_sum_gtest.cpp
     fem/basis_gtest.cpp
     fem/displacement_dof_layout_gtest.cpp
+    fem/hex_q1_basis_gtest.cpp
     fem/lagrange_basis_gtest.cpp
     fem/tensor_product_basis_gtest.cpp
     fem/vertex_dof_layout_gtest.cpp

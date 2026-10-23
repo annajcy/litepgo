@@ -4,6 +4,7 @@ add_library(litepgo STATIC
     energy/energy.cpp
     energy/quadratic_energy.cpp
     energy/weighted_energy_sum.cpp
+    fem/hex_q1_basis.cpp
     fem/vertex_dof_layout.cpp
     linalg/dof_reduction.cpp
     linalg/eigen_ldlt.cpp

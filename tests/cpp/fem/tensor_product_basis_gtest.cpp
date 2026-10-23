@@ -44,29 +44,6 @@ TEST(TensorProductBasis, InterpolatesCornersInTensorOrder) {
     }
 }
 
-TEST(TensorProductBasis, MatchesLibpgoReferenceHexConvention) {
-    // libpgo referenceHex.h and CubicLinearShapeFunction use [0,1]^3 with
-    // ring-ordered corners. Its shape gradients are the transpose of ours.
-    constexpr std::array<int, 8> hex_to_tensor{0, 4, 6, 2, 1, 5, 7, 3};
-    Eigen::Matrix<double, 3, 8> hex_corners;
-    hex_corners << 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1;
-    const auto tensor_corners = corners();
-    for (int c = 0; c < 8; ++c) {
-        EXPECT_EQ(tensor_corners.col(hex_to_tensor[c]), hex_corners.col(c));
-    }
-
-    const auto sample = Basis::evaluate(Vec3(0.2, 0.3, 0.4));
-    Eigen::Matrix<double, 8, 1> weights;
-    weights << 0.336, 0.084, 0.036, 0.144, 0.224, 0.056, 0.024, 0.096;
-    Eigen::Matrix<double, 8, 3> gradients;
-    gradients << -0.42, -0.48, -0.56, 0.42, -0.12, -0.14, 0.18, 0.12, -0.06, -0.18, 0.48, -0.24, -0.28, -0.32, 0.56,
-        0.28, -0.08, 0.14, 0.12, 0.08, 0.06, -0.12, 0.32, 0.24;
-    for (int c = 0; c < 8; ++c) {
-        EXPECT_NEAR(sample.values[hex_to_tensor[c]], weights[c], 1e-15);
-        EXPECT_TRUE((sample.gradients.row(hex_to_tensor[c]) - gradients.row(c)).isZero(1e-15));
-    }
-}
-
 TEST(TensorProductBasis, PartitionsUnityAndHasZeroGradientSum) {
     for (const auto& p : samples) {
         const auto sample = Basis::evaluate(p);
