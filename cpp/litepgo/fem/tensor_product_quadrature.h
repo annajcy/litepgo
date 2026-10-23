@@ -1,5 +1,7 @@
 #pragma once
 
+#include "litepgo/fem/quadrature.h"
+
 #include <Eigen/Core>
 #include <unsupported/Eigen/KroneckerProduct>
 
@@ -7,10 +9,9 @@ namespace litepgo {
 
 // Three copies of a 1D rule with fixed-size Eigen column vectors returned by
 // points() and weights(). Coordinates form a Cartesian product; weights multiply.
-template <class Rule1D> class TensorProductQuadrature3D final {
+template <Quadrature1D Rule1D> class TensorProductQuadrature3D final {
   public:
     static constexpr int n = Rule1D::num_points;
-    static_assert(n > 0);
     static constexpr int num_points = n * n * n;
 
     // Row q contains (xi, eta, zeta). The last parameter varies fastest.

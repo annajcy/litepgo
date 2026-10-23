@@ -15,9 +15,12 @@ add_executable(litepgo_tests
     fem/gauss_legendre_1d_gtest.cpp
     fem/hex_q1_basis_gtest.cpp
     fem/lagrange_basis_gtest.cpp
+    fem/quadrature_gtest.cpp
     fem/tensor_product_basis_gtest.cpp
     fem/tensor_product_quadrature_gtest.cpp
     fem/vertex_dof_layout_gtest.cpp
+    fem/volume_quadrature_cache_gtest.cpp
+    fem/volume_reference_geometry_gtest.cpp
     linalg/dof_reduction_gtest.cpp
     linalg/reduced_matrix_gtest.cpp
     linalg/sparse_pattern_gtest.cpp
