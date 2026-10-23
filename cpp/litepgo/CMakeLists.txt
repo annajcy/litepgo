@@ -1,8 +1,14 @@
 add_library(litepgo STATIC
+    energy/affine_mapped_energy.cpp
+    energy/dynamic_pattern_energy.cpp
+    energy/energy.cpp
+    energy/quadratic_energy.cpp
+    energy/weighted_energy_sum.cpp
     linalg/dof_reduction.cpp
     linalg/eigen_ldlt.cpp
     linalg/eigen_sparse_lu.cpp
     linalg/reduced_matrix.cpp
+    linalg/sparse_pattern.cpp
     linalg/sparse_solver.cpp)
 add_library(litepgo::litepgo ALIAS litepgo)
 

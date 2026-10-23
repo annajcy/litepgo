@@ -23,4 +23,7 @@ NB_MODULE(_core, m) {
 
     nb::module_ linalg = m.def_submodule("linalg");
     litepgo::bindings::bind_linalg(linalg);
+
+    nb::module_ energy = m.def_submodule("energy");
+    litepgo::bindings::bind_energy(energy);
 }

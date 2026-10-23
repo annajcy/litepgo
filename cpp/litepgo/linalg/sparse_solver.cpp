@@ -1,6 +1,8 @@
 #include "litepgo/linalg/sparse_solver.h"
 
+#include "litepgo/core/busy_scope.h"
 #include "litepgo/core/memory.h"
+#include "litepgo/linalg/sparse_pattern.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -9,24 +11,6 @@ namespace litepgo {
 
 namespace {
 
-// Marks a solver busy for one call, so overlapping calls fail loudly.
-class BusyScope {
-  public:
-    explicit BusyScope(std::atomic<bool>& busy) : busy_(busy) {
-        if (busy_.exchange(true)) {
-            throw std::logic_error("SparseSolver is already in use by another call");
-        }
-    }
-    ~BusyScope() {
-        busy_.store(false);
-    }
-    BusyScope(const BusyScope&) = delete;
-    BusyScope& operator=(const BusyScope&) = delete;
-
-  private:
-    std::atomic<bool>& busy_;
-};
-
 void check_matrix(const SpMat& A) {
     if (A.rows() == 0 || A.rows() != A.cols()) {
         throw std::invalid_argument("SparseSolver requires a non-empty square matrix");
@@ -34,22 +18,16 @@ void check_matrix(const SpMat& A) {
     if (!A.isCompressed()) {
         throw std::invalid_argument("SparseSolver requires a compressed matrix; call makeCompressed()");
     }
-    const int* outer = A.outerIndexPtr();
-    const int* inner = A.innerIndexPtr();
-    for (Eigen::Index column = 0; column < A.cols(); ++column) {
-        for (int k = outer[column] + 1; k < outer[column + 1]; ++k) {
-            if (inner[k - 1] >= inner[k]) {
-                throw std::invalid_argument("SparseSolver requires strictly increasing row indices in each column; "
-                                            "sum duplicate entries first");
-            }
-        }
+    if (!is_canonical(A)) {
+        throw std::invalid_argument("SparseSolver requires strictly increasing row indices in each column; "
+                                    "sum duplicate entries first");
     }
 }
 
 } // namespace
 
 bool SparseSolver::analyze(const SpMat& A) {
-    BusyScope scope(busy_);
+    BusyScope scope(busy_, "SparseSolver");
     check_matrix(A);
     forget_analysis();
     // A hook that throws leaves the solver unanalyzed, as forget_analysis() set it.
@@ -63,7 +41,7 @@ bool SparseSolver::analyze(const SpMat& A) {
 }
 
 bool SparseSolver::factorize(const SpMat& A) {
-    BusyScope scope(busy_);
+    BusyScope scope(busy_, "SparseSolver");
     if (!analyzed_) {
         throw std::logic_error("SparseSolver::factorize requires a successful analyze()");
     }
@@ -87,7 +65,7 @@ bool SparseSolver::compute(const SpMat& A) {
 }
 
 void SparseSolver::solve(const ConstVecRef& rhs, VecRef x) const {
-    BusyScope scope(busy_);
+    BusyScope scope(busy_, "SparseSolver");
     if (!factored_) {
         throw std::logic_error("SparseSolver::solve requires a successful factorize()");
     }
