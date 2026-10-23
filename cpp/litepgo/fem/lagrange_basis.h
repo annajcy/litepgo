@@ -4,7 +4,7 @@
 
 namespace litepgo {
 
-// Linear nodal basis on [-1, 1], ordered by the nodes -1, +1.
+// Linear nodal basis on [0, 1], ordered by the nodes 0, 1 (libpgo convention).
 class LagrangeBasis {
   public:
     static constexpr int num_basis_functions = 2;
@@ -16,7 +16,7 @@ class LagrangeBasis {
 
     // Evaluates the polynomials without clamping the parameter to the interval.
     static Sample evaluate(double t) {
-        return {{0.5 * (1.0 - t), 0.5 * (1.0 + t)}, {-0.5, 0.5}};
+        return {{1.0 - t, t}, {-1.0, 1.0}};
     }
 };
 

@@ -17,6 +17,7 @@ add_executable(litepgo_tests
     linalg/reduced_matrix_gtest.cpp
     linalg/sparse_pattern_gtest.cpp
     linalg/sparse_solver_gtest.cpp
+    mesh/mesh_topology_gtest.cpp
     solver/newton_gtest.cpp)
 target_link_libraries(litepgo_tests PRIVATE litepgo::litepgo litepgo::warnings GTest::gtest_main)
 

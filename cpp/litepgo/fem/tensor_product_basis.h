@@ -8,7 +8,7 @@
 namespace litepgo {
 
 // Three copies of a 1D basis. Tensor indices are
-// flattened as i + n*j + n*n*k (the first parameter varies fastest).
+// flattened as (i*n + j)*n + k (the last parameter varies fastest, as in libpgo).
 template <Basis1D B> class TensorProductBasis3D {
   public:
     static constexpr int n = B::num_basis_functions;
@@ -37,8 +37,8 @@ template <Basis1D B> class TensorProductBasis3D {
     static Eigen::Matrix<double, num_basis_functions, 1> tensor_product(const Eigen::Matrix<double, n, 1>& x,
                                                                         const Eigen::Matrix<double, n, 1>& y,
                                                                         const Eigen::Matrix<double, n, 1>& z) {
-        // z (outermost), y, x (innermost) gives the x-fastest tensor ordering.
-        return Eigen::kroneckerProduct(z, Eigen::kroneckerProduct(y, x));
+        // x (outermost), y, z (innermost) gives the z-fastest tensor ordering.
+        return Eigen::kroneckerProduct(x, Eigen::kroneckerProduct(y, z));
     }
 };
 
