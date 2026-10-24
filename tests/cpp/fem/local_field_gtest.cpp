@@ -13,8 +13,8 @@ concept CanFormDirectField = requires { typename ElementField<ValueType>; };
 static_assert(!CanFormDirectField<Eigen::Matrix<double, 0, 1>>);
 static_assert(CanFormDirectField<Eigen::Vector2d>);
 
-VolumeReferenceGeometry<HexQ1Basis>::GeometryCoefficients nodes() {
-    VolumeReferenceGeometry<HexQ1Basis>::GeometryCoefficients X;
+Eigen::Matrix<double, 8, 3> nodes() {
+    Eigen::Matrix<double, 8, 3> X;
     for (int i = 0; i < 8; ++i)
         X.row(i) = HexQ1Basis::reference_node(i).transpose();
     return X;

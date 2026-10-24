@@ -8,7 +8,6 @@
 namespace {
 
 using litepgo::HexQ1Basis;
-using Vec3 = Eigen::Vector3d;
 
 Eigen::Matrix<double, 3, 8> reference_corners() {
     Eigen::Matrix<double, 3, 8> points;
@@ -16,8 +15,9 @@ Eigen::Matrix<double, 3, 8> reference_corners() {
     return points;
 }
 
-const std::array<Vec3, 6> samples{
-    {Vec3(0, 0, 0), Vec3(1, 1, 1), Vec3(0.5, 0.5, 0.5), Vec3(0, 0.3, 0.7), Vec3(0.2, 0.3, 0.4), Vec3(1.2, -0.1, 0.8)}};
+const std::array<Eigen::Vector3d, 6> samples{{Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(1, 1, 1),
+                                              Eigen::Vector3d(0.5, 0.5, 0.5), Eigen::Vector3d(0, 0.3, 0.7),
+                                              Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(1.2, -0.1, 0.8)}};
 
 } // namespace
 
@@ -36,7 +36,7 @@ TEST(HexQ1Basis, InterpolatesReferenceNodesInLibpgoOrder) {
 
 TEST(HexQ1Basis, MatchesVerifiedLibpgoWeightsAndGradients) {
     // Verified against fit-micro's CubicLinearShapeFunction at (0.2,0.3,0.4).
-    const auto sample = HexQ1Basis::evaluate(Vec3(0.2, 0.3, 0.4));
+    const auto sample = HexQ1Basis::evaluate(Eigen::Vector3d(0.2, 0.3, 0.4));
     Eigen::Matrix<double, 8, 1> weights;
     weights << 0.336, 0.084, 0.036, 0.144, 0.224, 0.056, 0.024, 0.096;
     Eigen::Matrix<double, 8, 3> gradients;
@@ -58,16 +58,16 @@ TEST(HexQ1Basis, ReproducesAffineGeometryAndVectorFields) {
     const auto corners = reference_corners();
     Eigen::Matrix3d J;
     J << 2, 0.3, 0.1, 0.2, 1.5, 0.1, 0, 0.2, 1.1;
-    const Vec3 origin(1.2, -0.7, 2.1);
+    const Eigen::Vector3d origin(1.2, -0.7, 2.1);
     Eigen::Matrix3d A;
     A << 0.2, -0.1, 0.3, 0.4, 0.2, -0.3, -0.2, 0.5, 0.1;
-    const Vec3 b(-0.3, 0.4, 0.7);
+    const Eigen::Vector3d b(-0.3, 0.4, 0.7);
     const Eigen::Matrix<double, 3, 8> Xe = (J * corners).colwise() + origin;
     const Eigen::Matrix<double, 3, 8> Ue = (A * Xe).colwise() + b;
 
     for (const auto& p : samples) {
         const auto sample = HexQ1Basis::evaluate(p);
-        const Vec3 X = origin + J * p;
+        const Eigen::Vector3d X = origin + J * p;
         EXPECT_TRUE((Xe * sample.values).isApprox(X, 1e-14));
         EXPECT_TRUE((Xe * sample.gradients).isApprox(J, 1e-14));
         EXPECT_TRUE((Ue * sample.values).isApprox(A * X + b, 1e-14));
@@ -80,8 +80,8 @@ TEST(HexQ1Basis, GradientsMatchFiniteDifferences) {
     for (const auto& p : samples) {
         const auto sample = HexQ1Basis::evaluate(p);
         for (int d = 0; d < 3; ++d) {
-            Vec3 plus = p;
-            Vec3 minus = p;
+            Eigen::Vector3d plus = p;
+            Eigen::Vector3d minus = p;
             plus[d] += h;
             minus[d] -= h;
             const Eigen::Matrix<double, 8, 1> derivative =

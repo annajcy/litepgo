@@ -14,13 +14,10 @@ namespace litepgo {
 // The basis and quadrature must use the same parameter domain.
 template <Basis3D BasisType, Quadrature3D QuadratureType> class VolumeQuadratureCache final {
   public:
-    using ReferenceGeometry = VolumeReferenceGeometry<BasisType>;
-    using PointData = typename ReferenceGeometry::PointData;
-
     static constexpr int num_quadrature_points = QuadratureType::num_points;
 
     struct Sample {
-        PointData point;
+        typename VolumeReferenceGeometry<BasisType>::PointData point;
         // w_q * det(J0(xi_q))
         double volume_weight;
     };
@@ -28,7 +25,7 @@ template <Basis3D BasisType, Quadrature3D QuadratureType> class VolumeQuadrature
     // Owns the evaluated samples; retains no reference to reference_geometry.
     // Propagates point evaluation errors. A non-finite volume weight throws
     // std::invalid_argument. Validity is checked at quadrature points only.
-    explicit VolumeQuadratureCache(const ReferenceGeometry& reference_geometry) {
+    explicit VolumeQuadratureCache(const VolumeReferenceGeometry<BasisType>& reference_geometry) {
         const auto& points = QuadratureType::points();
         const auto& weights = QuadratureType::weights();
         for (int q = 0; q < num_quadrature_points; ++q) {

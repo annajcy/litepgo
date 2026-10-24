@@ -7,16 +7,15 @@
 
 namespace {
 
-using Rule = litepgo::GaussLegendre1D<2>;
-static_assert(Rule::num_points == 2);
-static_assert(std::same_as<decltype(Rule::points()), const Eigen::Vector2d&>);
-static_assert(std::same_as<decltype(Rule::weights()), const Eigen::Vector2d&>);
+static_assert(litepgo::GaussLegendre1D<2>::num_points == 2);
+static_assert(std::same_as<decltype(litepgo::GaussLegendre1D<2>::points()), const Eigen::Vector2d&>);
+static_assert(std::same_as<decltype(litepgo::GaussLegendre1D<2>::weights()), const Eigen::Vector2d&>);
 
 } // namespace
 
 TEST(GaussLegendre1D, HasOrderedInteriorPointsAndNormalizedWeights) {
-    const auto& points = Rule::points();
-    const auto& weights = Rule::weights();
+    const auto& points = litepgo::GaussLegendre1D<2>::points();
+    const auto& weights = litepgo::GaussLegendre1D<2>::weights();
     EXPECT_NEAR(points[0], 0.21132486540518713, 1e-15);
     EXPECT_NEAR(points[1], 0.7886751345948129, 1e-15);
     EXPECT_GT(points[0], 0.0);
@@ -31,8 +30,9 @@ TEST(GaussLegendre1D, IntegratesMonomialsThroughDegreeThree) {
     for (int degree = 0; degree <= 3; ++degree) {
         SCOPED_TRACE(degree);
         double integral = 0.0;
-        for (int q = 0; q < Rule::num_points; ++q) {
-            integral += Rule::weights()[q] * std::pow(Rule::points()[q], degree);
+        for (int q = 0; q < litepgo::GaussLegendre1D<2>::num_points; ++q) {
+            integral +=
+                litepgo::GaussLegendre1D<2>::weights()[q] * std::pow(litepgo::GaussLegendre1D<2>::points()[q], degree);
         }
         EXPECT_NEAR(integral, 1.0 / (degree + 1), 1e-15);
     }

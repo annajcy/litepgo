@@ -21,21 +21,21 @@ static_assert(PointFirstOrderEnergy<NeoHookeanEnergyTheta> && PointSecondOrderEn
 TEST(NeoHookean, StressFreeAndLinearElasticTangent) {
     const NeoHookean m;
     const Eigen::Vector2d theta(2.0, 3.0);
-    const Mat3 I = Mat3::Identity();
-    Mat3 Fp;
+    const Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
+    Eigen::Matrix3d Fp;
     Fp << 1.3, 0.2, 0.1, 0.0, 0.9, -0.1, 0.1, 0.2, 1.2;
-    const Mat3 R = Eigen::AngleAxisd(0.7, Eigen::Vector3d(1, 2, 3).normalized()).toRotationMatrix();
-    for (const Mat3& F : {Fp, Mat3(R * Fp)}) {
+    const Eigen::Matrix3d R = Eigen::AngleAxisd(0.7, Eigen::Vector3d(1, 2, 3).normalized()).toRotationMatrix();
+    for (const Eigen::Matrix3d& F : {Fp, Eigen::Matrix3d(R * Fp)}) {
         EXPECT_NEAR(m.value({F, Fp, theta}), 0.0, 1e-13);
         EXPECT_LT(NeoHookeanEnergyF{}.gradient({F, Fp, theta}).norm(), 1e-13);
         EXPECT_LT(NeoHookeanEnergyFp{}.gradient({F, Fp, theta}).norm(), 1e-13);
     }
-    const Mat9 H = NeoHookeanEnergyF{}.hessian({I, I, theta});
+    const Eigen::Matrix<double, 9, 9> H = NeoHookeanEnergyF{}.hessian({I, I, theta});
     EXPECT_TRUE(NeoHookeanEnergyFp{}.hessian({I, I, theta}).isApprox(H, 1e-13));
     for (int j = 0; j < 9; ++j) {
-        Mat3 D = Mat3::Zero();
+        Eigen::Matrix3d D = Eigen::Matrix3d::Zero();
         D.data()[j] = 1;
-        const Mat3 expected = theta[1] * (D + D.transpose()) + theta[0] * D.trace() * I;
+        const Eigen::Matrix3d expected = theta[1] * (D + D.transpose()) + theta[0] * D.trace() * I;
         EXPECT_LT((H.col(j) - Eigen::Map<const Eigen::Matrix<double, 9, 1>>(expected.data())).norm(), 1e-13);
     }
 }
@@ -43,15 +43,15 @@ TEST(NeoHookean, StressFreeAndLinearElasticTangent) {
 TEST(NeoHookean, AnalyticDilationAndObjectivity) {
     const NeoHookean m;
     const Eigen::Vector2d theta(2, 3);
-    const Mat3 I = Mat3::Identity();
+    const Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
     const double s = 1.25, p = 1.3, logJ = 3 * std::log(s);
     const double psi = 1.5 * theta[1] * (s * s - 1) - theta[1] * logJ + 0.5 * theta[0] * logJ * logJ;
     EXPECT_NEAR(m.value({s * p * I, p * I, theta}), p * p * p * psi, 1e-13);
-    const Mat3 expectedP = p * p * (theta[1] * s + (theta[0] * logJ - theta[1]) / s) * I;
+    const Eigen::Matrix3d expectedP = p * p * (theta[1] * s + (theta[0] * logJ - theta[1]) / s) * I;
     EXPECT_TRUE(NeoHookeanEnergyF{}.gradient({s * p * I, p * I, theta}).isApprox(expectedP, 1e-13));
-    Mat3 F;
+    Eigen::Matrix3d F;
     F << 1.2, 0.2, 0.1, -0.1, 0.8, 0.3, 0.2, 0.1, 1.1;
-    const Mat3 R = Eigen::AngleAxisd(0.6, Eigen::Vector3d(2, -1, 3).normalized()).toRotationMatrix();
+    const Eigen::Matrix3d R = Eigen::AngleAxisd(0.6, Eigen::Vector3d(2, -1, 3).normalized()).toRotationMatrix();
     EXPECT_NEAR(m.value({R * F, p * I, theta}), m.value({F, p * I, theta}), 1e-13);
     EXPECT_TRUE(NeoHookeanEnergyF{}
                     .gradient({R * F, p * I, theta})
@@ -63,14 +63,14 @@ TEST(NeoHookean, FullGradientAndHessianFiniteDifferences) {
     // Deterministic varied dense states, including compression and non-unit Jp.
     for (int sample = 0; sample < 12; ++sample) {
         SCOPED_TRACE(sample);
-        Mat3 Fp, Fe;
+        Eigen::Matrix3d Fp, Fe;
         for (int j = 0; j < 9; ++j) {
             Fp.data()[j] = 0.12 * std::sin(1.7 * (j + 1) * (sample + 1));
             Fe.data()[j] = 0.15 * std::cos(0.8 * (j + 1) * (sample + 2));
         }
         Fp.diagonal().array() += 0.8 + 0.06 * sample;
         Fe.diagonal().array() += 0.7 + 0.05 * sample;
-        const Mat3 F = Fe * Fp;
+        const Eigen::Matrix3d F = Fe * Fp;
         ASSERT_GT(Fp.determinant(), 0);
         ASSERT_GT(Fe.determinant(), 0);
         const NeoHookean::Point point{F, Fp, Eigen::Vector2d(2, 3)};
@@ -78,21 +78,21 @@ TEST(NeoHookean, FullGradientAndHessianFiniteDifferences) {
         EXPECT_DOUBLE_EQ(NeoHookeanEnergyFp{}.value(point), m.value(point));
         EXPECT_DOUBLE_EQ(NeoHookeanEnergyTheta{}.value(point), m.value(point));
         const Eigen::Vector2d theta(0.5 * sample, 0.7 + sample);
-        const Mat3 P = NeoHookeanEnergyF{}.gradient({F, Fp, theta});
-        const Mat9 H = NeoHookeanEnergyF{}.hessian({F, Fp, theta});
+        const Eigen::Matrix3d P = NeoHookeanEnergyF{}.gradient({F, Fp, theta});
+        const Eigen::Matrix<double, 9, 9> H = NeoHookeanEnergyF{}.hessian({F, Fp, theta});
         EXPECT_LT((H - H.transpose()).norm(), 1e-12 * (1 + H.norm()));
         for (double h : {1e-3, 3e-4, 1e-4}) {
             SCOPED_TRACE(h);
-            Mat3 fdP;
-            Mat9 fdH;
+            Eigen::Matrix3d fdP;
+            Eigen::Matrix<double, 9, 9> fdH;
             for (int j = 0; j < 9; ++j) {
-                Mat3 plus = F, minus = F;
+                Eigen::Matrix3d plus = F, minus = F;
                 plus.data()[j] += h;
                 minus.data()[j] -= h;
                 fdP.data()[j] = (m.value({plus, Fp, theta}) - m.value({minus, Fp, theta})) / (2 * h);
-                const Mat3 dP = (NeoHookeanEnergyF{}.gradient({plus, Fp, theta}) -
-                                 NeoHookeanEnergyF{}.gradient({minus, Fp, theta})) /
-                                (2 * h);
+                const Eigen::Matrix3d dP = (NeoHookeanEnergyF{}.gradient({plus, Fp, theta}) -
+                                            NeoHookeanEnergyF{}.gradient({minus, Fp, theta})) /
+                                           (2 * h);
                 fdH.col(j) = Eigen::Map<const Eigen::Matrix<double, 9, 1>>(dP.data());
             }
             // O(h^2) central differences, with a roundoff floor.
@@ -100,7 +100,7 @@ TEST(NeoHookean, FullGradientAndHessianFiniteDifferences) {
             EXPECT_LT((H - fdH).norm() / (1 + H.norm()), 20 * h * h + 1e-9);
         }
         // Independent Hessian check directly from energy (mixed directions).
-        Mat3 U, V;
+        Eigen::Matrix3d U, V;
         U << 1, 2, -1, 0, 1, 3, -2, 0, 1;
         V << 0, 1, 2, -1, 3, 0, 1, -2, 1;
         U.normalize();
@@ -120,14 +120,14 @@ TEST(NeoHookean, FpGradientAndHessianFiniteDifferences) {
     // Deterministic varied dense states, including compression and non-unit Jp.
     for (int sample = 0; sample < 12; ++sample) {
         SCOPED_TRACE(sample);
-        Mat3 Fp, Fe;
+        Eigen::Matrix3d Fp, Fe;
         for (int j = 0; j < 9; ++j) {
             Fp.data()[j] = 0.12 * std::sin(1.7 * (j + 1) * (sample + 1));
             Fe.data()[j] = 0.15 * std::cos(0.8 * (j + 1) * (sample + 2));
         }
         Fp.diagonal().array() += 0.8 + 0.06 * sample;
         Fe.diagonal().array() += 0.7 + 0.05 * sample;
-        const Mat3 F = Fe * Fp;
+        const Eigen::Matrix3d F = Fe * Fp;
         ASSERT_GT(Fp.determinant(), 0);
         ASSERT_GT(Fe.determinant(), 0);
         const NeoHookean::Point point{F, Fp, Eigen::Vector2d(2, 3)};
@@ -135,21 +135,21 @@ TEST(NeoHookean, FpGradientAndHessianFiniteDifferences) {
         EXPECT_DOUBLE_EQ(NeoHookeanEnergyFp{}.value(point), m.value(point));
         EXPECT_DOUBLE_EQ(NeoHookeanEnergyTheta{}.value(point), m.value(point));
         const Eigen::Vector2d theta(0.5 * sample, 0.7 + sample);
-        const Mat3 P = NeoHookeanEnergyFp{}.gradient({F, Fp, theta});
-        const Mat9 H = NeoHookeanEnergyFp{}.hessian({F, Fp, theta});
+        const Eigen::Matrix3d P = NeoHookeanEnergyFp{}.gradient({F, Fp, theta});
+        const Eigen::Matrix<double, 9, 9> H = NeoHookeanEnergyFp{}.hessian({F, Fp, theta});
         EXPECT_LT((H - H.transpose()).norm(), 1e-12 * (1 + H.norm()));
         for (double h : {1e-3, 3e-4, 1e-4}) {
             SCOPED_TRACE(h);
-            Mat3 fdP;
-            Mat9 fdH;
+            Eigen::Matrix3d fdP;
+            Eigen::Matrix<double, 9, 9> fdH;
             for (int j = 0; j < 9; ++j) {
-                Mat3 plus = Fp, minus = Fp;
+                Eigen::Matrix3d plus = Fp, minus = Fp;
                 plus.data()[j] += h;
                 minus.data()[j] -= h;
                 fdP.data()[j] = (m.value({F, plus, theta}) - m.value({F, minus, theta})) / (2 * h);
-                const Mat3 dP = (NeoHookeanEnergyFp{}.gradient({F, plus, theta}) -
-                                 NeoHookeanEnergyFp{}.gradient({F, minus, theta})) /
-                                (2 * h);
+                const Eigen::Matrix3d dP = (NeoHookeanEnergyFp{}.gradient({F, plus, theta}) -
+                                            NeoHookeanEnergyFp{}.gradient({F, minus, theta})) /
+                                           (2 * h);
                 fdH.col(j) = Eigen::Map<const Eigen::Matrix<double, 9, 1>>(dP.data());
             }
             // O(h^2) central differences, with a roundoff floor.
@@ -157,7 +157,7 @@ TEST(NeoHookean, FpGradientAndHessianFiniteDifferences) {
             EXPECT_LT((H - fdH).norm() / (1 + H.norm()), 20 * h * h + 1e-9);
         }
         // Independent Hessian check directly from energy (mixed directions).
-        Mat3 U, V;
+        Eigen::Matrix3d U, V;
         U << 1, 2, -1, 0, 1, 3, -2, 0, 1;
         V << 0, 1, 2, -1, 3, 0, 1, -2, 1;
         U.normalize();
@@ -176,14 +176,14 @@ TEST(NeoHookean, ParameterDerivativesMatchFiniteDifferences) {
     const NeoHookean m;
     for (int sample = 0; sample < 12; ++sample) {
         SCOPED_TRACE(sample);
-        Mat3 Fp, Fe;
+        Eigen::Matrix3d Fp, Fe;
         for (int j = 0; j < 9; ++j) {
             Fp.data()[j] = 0.12 * std::sin(1.7 * (j + 1) * (sample + 1));
             Fe.data()[j] = 0.15 * std::cos(0.8 * (j + 1) * (sample + 2));
         }
         Fp.diagonal().array() += 0.8 + 0.06 * sample;
         Fe.diagonal().array() += 0.7 + 0.05 * sample;
-        const Mat3 F = Fe * Fp;
+        const Eigen::Matrix3d F = Fe * Fp;
         const Eigen::Vector2d theta(0.5 + sample, 0.7 + sample);
         const auto G = NeoHookeanEnergyTheta{}.gradient({F, Fp, theta});
         const auto H = NeoHookeanEnergyTheta{}.hessian({F, Fp, theta});
@@ -219,11 +219,11 @@ TEST(NeoHookean, ParameterDerivativesMatchFiniteDifferences) {
 
 TEST(NeoHookean, ParameterDerivativesAtRestAndZeroLambda) {
     const NeoHookean m;
-    const Mat3 I = Mat3::Identity();
+    const Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
     const Eigen::Vector2d theta(0, 3);
     EXPECT_TRUE(NeoHookeanEnergyTheta{}.gradient({I, I, theta}).isZero(0.0));
     EXPECT_TRUE(NeoHookeanEnergyTheta{}.hessian({I, I, theta}).isZero(0.0));
-    const Mat3 F = 1.4 * I, Fp = 1.2 * I;
+    const Eigen::Matrix3d F = 1.4 * I, Fp = 1.2 * I;
     const auto G = NeoHookeanEnergyTheta{}.gradient({F, Fp, theta});
     const double h = 1e-3;
     auto shifted = theta;
@@ -234,9 +234,9 @@ TEST(NeoHookean, ParameterDerivativesAtRestAndZeroLambda) {
 
 TEST(NeoHookean, RejectsInvalidStatesAndParametersInEveryEntryPoint) {
     const NeoHookean m;
-    const Mat3 I = Mat3::Identity();
+    const Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
     const Eigen::Vector2d theta(2, 3);
-    const auto bad_state = [&](const Mat3& F, const Mat3& Fp) {
+    const auto bad_state = [&](const Eigen::Matrix3d& F, const Eigen::Matrix3d& Fp) {
         EXPECT_THROW(m.value({F, Fp, theta}), InfeasibleState);
         EXPECT_THROW(NeoHookeanEnergyF{}.gradient({F, Fp, theta}), InfeasibleState);
         EXPECT_THROW(NeoHookeanEnergyF{}.hessian({F, Fp, theta}), InfeasibleState);
@@ -246,7 +246,7 @@ TEST(NeoHookean, RejectsInvalidStatesAndParametersInEveryEntryPoint) {
         EXPECT_THROW(NeoHookeanEnergyTheta{}.hessian({F, Fp, theta}), InfeasibleState);
     };
     for (double x : {0.0, -1.0}) {
-        Mat3 bad = I;
+        Eigen::Matrix3d bad = I;
         bad(0, 0) = x;
         bad_state(bad, I);
         bad_state(I, bad);
@@ -262,7 +262,7 @@ TEST(NeoHookean, RejectsInvalidStatesAndParametersInEveryEntryPoint) {
         EXPECT_THROW(NeoHookeanEnergyTheta{}.gradient({I, I, bad}), std::invalid_argument);
         EXPECT_THROW(NeoHookeanEnergyTheta{}.hessian({I, I, bad}), std::invalid_argument);
     }
-    Mat3 bad = I;
+    Eigen::Matrix3d bad = I;
     bad(0, 0) = std::numeric_limits<double>::quiet_NaN();
     EXPECT_THROW(m.value({bad, I, theta}), std::invalid_argument);
     EXPECT_THROW(NeoHookeanEnergyF{}.gradient({bad, I, theta}), std::invalid_argument);

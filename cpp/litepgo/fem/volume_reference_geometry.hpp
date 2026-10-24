@@ -16,25 +16,20 @@ template <Basis3D BasisType> class VolumeReferenceGeometry final {
   public:
     static constexpr int num_basis_functions = BasisType::num_basis_functions;
 
-    // Row i is the three-dimensional geometry coefficient of basis function i.
-    // For nodal Q1 elements these are the undeformed vertex positions.
-    using GeometryCoefficients = Eigen::Matrix<double, num_basis_functions, 3>;
-    using Values = Eigen::Matrix<double, num_basis_functions, 1>;
-    using Gradients = Eigen::Matrix<double, num_basis_functions, 3>;
-
     struct PointData {
         Eigen::Vector3d position;
         // dX/dxi, with columns corresponding to the three parameter axes.
         Eigen::Matrix3d jacobian;
-        Values basis_values; // N_i(xi), in basis order
+        Eigen::Matrix<double, num_basis_functions, 1> basis_values; // N_i(xi), in basis order
         // Row i is dN_i/dX in physical reference coordinates, not parameters xi.
-        Gradients basis_gradients;
+        Eigen::Matrix<double, num_basis_functions, 3> basis_gradients;
         double jacobian_determinant;
     };
 
+    // Row i contains the geometry coefficient of basis function i (rest vertex positions for Q1).
     // Copies the coefficients. Non-finite inputs throw std::invalid_argument.
     // Jacobian validity is checked when evaluating a point, not at construction.
-    explicit VolumeReferenceGeometry(const GeometryCoefficients& reference_geometry)
+    explicit VolumeReferenceGeometry(const Eigen::Matrix<double, num_basis_functions, 3>& reference_geometry)
         : reference_geometry_(reference_geometry) {
         if (!reference_geometry_.allFinite()) {
             throw std::invalid_argument("VolumeReferenceGeometry requires finite reference geometry");
@@ -63,7 +58,7 @@ template <Basis3D BasisType> class VolumeReferenceGeometry final {
     }
 
   private:
-    GeometryCoefficients reference_geometry_;
+    Eigen::Matrix<double, num_basis_functions, 3> reference_geometry_;
 };
 
 } // namespace litepgo

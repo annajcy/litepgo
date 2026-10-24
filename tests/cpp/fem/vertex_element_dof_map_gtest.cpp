@@ -17,17 +17,12 @@ using litepgo::HexTopology;
 using litepgo::Vec;
 using litepgo::VertexDofData;
 using litepgo::VertexElementDofMap;
-using HexMap = VertexElementDofMap<8>;
-using Basis = litepgo::HexQ1Basis;
-using Reference = litepgo::VolumeReferenceGeometry<Basis>;
-using VectorField = litepgo::FieldInterpolation<Basis, 3>;
-using ParameterField = litepgo::FieldInterpolation<Basis, 2>;
 
 template <int N>
 concept CanFormMap = requires { typename VertexElementDofMap<N>; };
 
 template <int D>
-concept CanGather = requires(const HexMap& map, const VertexDofData<D>& data) {
+concept CanGather = requires(const VertexElementDofMap<8>& map, const VertexDofData<D>& data) {
     map.gather(0, data);
     map.dof_indices(0, data);
 };
@@ -38,17 +33,27 @@ static_assert(!CanFormMap<-1>);
 static_assert(CanGather<3>);
 static_assert(CanGather<2>);
 static_assert(!CanGather<std::numeric_limits<int>::max()>);
-static_assert(std::same_as<decltype(VertexElementDofMap(std::declval<const HexTopology&>())), HexMap>);
-static_assert(std::same_as<HexMap::LocalCoefficients<3>, Eigen::Matrix<double, 8, 3>>);
-static_assert(std::same_as<HexMap::LocalCoefficients<2>, Eigen::Matrix<double, 8, 2>>);
-static_assert(std::same_as<HexMap::LocalCoefficients<3>, Eigen::Matrix<double, 8, 3>>);
-static_assert(std::same_as<HexMap::LocalCoefficients<2>, Eigen::Matrix<double, 8, 2>>);
-static_assert(std::same_as<HexMap::LocalCoefficients<1>, Eigen::Matrix<double, 8, 1>>);
-static_assert(HexMap::num_element_dofs<3> == 24);
-static_assert(HexMap::num_element_dofs<2> == 16);
-static_assert(!std::is_constructible_v<HexMap, HexTopology&&>);
-static_assert(!std::is_constructible_v<HexMap, const HexTopology&&>);
-static_assert(!std::is_convertible_v<const HexTopology&, HexMap>);
+static_assert(std::same_as<decltype(VertexElementDofMap(std::declval<const HexTopology&>())), VertexElementDofMap<8>>);
+static_assert(std::same_as<decltype(std::declval<const VertexElementDofMap<8>&>().gather(
+                               0, std::declval<const VertexDofData<3>&>())),
+                           Eigen::Matrix<double, 8, 3>>);
+static_assert(std::same_as<decltype(std::declval<const VertexElementDofMap<8>&>().gather(
+                               0, std::declval<const VertexDofData<2>&>())),
+                           Eigen::Matrix<double, 8, 2>>);
+static_assert(std::same_as<decltype(std::declval<const VertexElementDofMap<8>&>().gather(
+                               0, std::declval<const VertexDofData<3>&>())),
+                           Eigen::Matrix<double, 8, 3>>);
+static_assert(std::same_as<decltype(std::declval<const VertexElementDofMap<8>&>().gather(
+                               0, std::declval<const VertexDofData<2>&>())),
+                           Eigen::Matrix<double, 8, 2>>);
+static_assert(std::same_as<decltype(std::declval<const VertexElementDofMap<8>&>().gather(
+                               0, std::declval<const VertexDofData<1>&>())),
+                           Eigen::Matrix<double, 8, 1>>);
+static_assert(VertexElementDofMap<8>::num_element_dofs<3> == 24);
+static_assert(VertexElementDofMap<8>::num_element_dofs<2> == 16);
+static_assert(!std::is_constructible_v<VertexElementDofMap<8>, HexTopology&&>);
+static_assert(!std::is_constructible_v<VertexElementDofMap<8>, const HexTopology&&>);
+static_assert(!std::is_convertible_v<const HexTopology&, VertexElementDofMap<8>>);
 
 // Adjacent cells with a shared face, in Q1 corner order and shuffled global numbering.
 HexTopology two_hexes() {
@@ -83,11 +88,11 @@ TEST(VertexElementDofMap, GathersThreeIndependentFieldsInCellAndSlotOrder) {
         theta.values()[i] = 2.0 + 0.1 * i;
     }
 
-    const std::array<HexMap::Indices<3>, 2> expected3{{
+    const std::array<std::array<int, 24>, 2> expected3{{
         {3, 4, 5, 9, 10, 11, 27, 28, 29, 12, 13, 14, 21, 22, 23, 18, 19, 20, 0, 1, 2, 30, 31, 32},
         {9, 10, 11, 24, 25, 26, 15, 16, 17, 27, 28, 29, 18, 19, 20, 6, 7, 8, 33, 34, 35, 0, 1, 2},
     }};
-    const std::array<HexMap::Indices<2>, 2> expected2{{
+    const std::array<std::array<int, 16>, 2> expected2{{
         {2, 3, 6, 7, 18, 19, 8, 9, 14, 15, 12, 13, 0, 1, 20, 21},
         {6, 7, 16, 17, 10, 11, 18, 19, 12, 13, 4, 5, 22, 23, 0, 1},
     }};
@@ -144,15 +149,15 @@ TEST(VertexElementDofMap, ThreeGatheredFieldsReproduceAffineValuesAndPhysicalGra
     }
 
     for (int e = 0; e < 2; ++e) {
-        Reference::GeometryCoefficients X_e;
+        Eigen::Matrix<double, 8, 3> X_e;
         const auto& vertices = topology.cell_vertices(e);
         for (int i = 0; i < 8; ++i) {
             X_e.row(i) = X.row(vertices[static_cast<std::size_t>(i)]);
         }
-        const Reference geometry(X_e);
-        const VectorField u(map.gather(e, a));
-        const VectorField up(map.gather(e, b));
-        const ParameterField parameters(map.gather(e, theta));
+        const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis> geometry(X_e);
+        const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3> u(map.gather(e, a));
+        const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3> up(map.gather(e, b));
+        const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 2> parameters(map.gather(e, theta));
         for (const Eigen::Vector3d xi : {Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(0.76, 0.11, 0.64)}) {
             const auto point = geometry.evaluate(xi);
             const Eigen::Vector3d position =

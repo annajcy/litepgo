@@ -8,9 +8,10 @@ namespace litepgo {
 // Each member owns its local representation. F/Fp may be interpolated gradients
 // or direct matrices; theta may be interpolated or direct.
 template <class FField, class FpField, class ThetaField>
-    requires std::same_as<typename FField::FieldValue, Mat3> && std::same_as<typename FpField::FieldValue, Mat3> &&
+    requires std::same_as<typename FField::FieldValue, Eigen::Matrix3d> &&
+             std::same_as<typename FpField::FieldValue, Eigen::Matrix3d> &&
              FixedFieldValue<typename ThetaField::FieldValue> && (ThetaField::FieldValue::ColsAtCompileTime == 1)
-struct VolumeFieldInputs {
+struct MaterialFields {
     FField F;
     FpField Fp;
     ThetaField theta;

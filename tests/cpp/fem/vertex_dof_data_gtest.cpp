@@ -14,7 +14,6 @@ namespace {
 
 using litepgo::Vec;
 using litepgo::VertexDofData;
-using Data3 = VertexDofData<3>;
 
 template <int Width>
 concept CanFormData = requires { typename VertexDofData<Width>; };
@@ -23,18 +22,18 @@ static_assert(CanFormData<1>);
 static_assert(CanFormData<3>);
 static_assert(!CanFormData<0>);
 static_assert(!CanFormData<-1>);
-static_assert(!std::is_convertible_v<int, Data3>);
-static_assert(!std::is_convertible_v<Vec, Data3>);
-static_assert(Data3::dofs_per_vertex() == 3);
-static_assert(std::same_as<decltype(std::declval<Data3&>().values()), litepgo::VecRef>);
-static_assert(std::same_as<decltype(std::declval<const Data3&>().values()), litepgo::ConstVecRef>);
-static_assert(std::same_as<decltype(std::declval<Data3&>()(0, 0)), double&>);
-static_assert(std::same_as<decltype(std::declval<const Data3&>()(0, 0)), double>);
+static_assert(!std::is_convertible_v<int, VertexDofData<3>>);
+static_assert(!std::is_convertible_v<Vec, VertexDofData<3>>);
+static_assert(VertexDofData<3>::dofs_per_vertex() == 3);
+static_assert(std::same_as<decltype(std::declval<VertexDofData<3>&>().values()), litepgo::VecRef>);
+static_assert(std::same_as<decltype(std::declval<const VertexDofData<3>&>().values()), litepgo::ConstVecRef>);
+static_assert(std::same_as<decltype(std::declval<VertexDofData<3>&>()(0, 0)), double&>);
+static_assert(std::same_as<decltype(std::declval<const VertexDofData<3>&>()(0, 0)), double>);
 
 } // namespace
 
 TEST(VertexDofData, CreatesZeroDataWithMatchingCounts) {
-    const Data3 data(4);
+    const VertexDofData<3> data(4);
     EXPECT_EQ(data.num_vertices(), 4);
     EXPECT_EQ(data.dofs_per_vertex(), 3);
     EXPECT_EQ(data.num_dofs(), 12);
@@ -56,7 +55,7 @@ TEST(VertexDofData, NumbersConsecutiveVertexBlocks) {
 
 TEST(VertexDofData, InfersVertexCountAndCopiesInputValues) {
     Vec values = Vec::LinSpaced(12, 1.0, 12.0);
-    Data3 data(values);
+    VertexDofData<3> data(values);
     EXPECT_EQ(data.num_vertices(), 4);
     EXPECT_EQ(data.values(), values);
     EXPECT_NE(data.values().data(), values.data());
@@ -70,22 +69,22 @@ TEST(VertexDofData, InfersVertexCountAndCopiesInputValues) {
 
 TEST(VertexDofData, CopiesEigenViewsAndTemporaryInputs) {
     const Vec padded = Vec::LinSpaced(10, 0.0, 9.0);
-    const Data3 segment(padded.segment(2, 6));
+    const VertexDofData<3> segment(padded.segment(2, 6));
     const Vec expected = Vec::LinSpaced(6, 2.0, 7.0);
     EXPECT_EQ(segment.num_vertices(), 2);
     EXPECT_EQ(segment.values(), expected);
 
     std::array<double, 6> buffer{1, 2, 3, 4, 5, 6};
-    const Data3 mapped(Eigen::Map<const Vec>(buffer.data(), 6));
+    const VertexDofData<3> mapped(Eigen::Map<const Vec>(buffer.data(), 6));
     buffer[0] = -1;
     EXPECT_DOUBLE_EQ(mapped(0, 0), 1.0);
 
-    const Data3 temporary(Vec::Constant(6, 3.5));
+    const VertexDofData<3> temporary(Vec::Constant(6, 3.5));
     EXPECT_TRUE(temporary.values().isConstant(3.5));
 }
 
 TEST(VertexDofData, MutableViewsAndVertexAccessReferToTheSameStorage) {
-    Data3 data(2);
+    VertexDofData<3> data(2);
     auto values = data.values();
     values.setConstant(2.0);
     values[4] = 7.0;
@@ -101,24 +100,24 @@ TEST(VertexDofData, MutableViewsAndVertexAccessReferToTheSameStorage) {
 }
 
 TEST(VertexDofData, CopyMoveAndAssignmentKeepDataAndCountsConsistent) {
-    Data3 original(Vec::LinSpaced(6, 1.0, 6.0));
-    Data3 copied = original;
+    VertexDofData<3> original(Vec::LinSpaced(6, 1.0, 6.0));
+    VertexDofData<3> copied = original;
     original(0, 0) = 42.0;
     EXPECT_DOUBLE_EQ(copied(0, 0), 1.0);
 
-    Data3 moved = std::move(copied);
+    VertexDofData<3> moved = std::move(copied);
     EXPECT_DOUBLE_EQ(moved(0, 0), 1.0);
     EXPECT_EQ(moved.num_vertices(), 2);
     EXPECT_EQ(copied.num_dofs(), copied.values().size());
     EXPECT_EQ(copied.num_vertices() * copied.dofs_per_vertex(), copied.num_dofs());
 
-    Data3 assigned(1);
+    VertexDofData<3> assigned(1);
     assigned = original;
     EXPECT_EQ(assigned.num_vertices(), 2);
     assigned(0, 0) = -1.0;
     EXPECT_DOUBLE_EQ(original(0, 0), 42.0);
 
-    Data3 move_assigned(3);
+    VertexDofData<3> move_assigned(3);
     move_assigned = std::move(moved);
     EXPECT_EQ(move_assigned.num_vertices(), 2);
     EXPECT_DOUBLE_EQ(move_assigned(0, 0), 1.0);
@@ -127,8 +126,8 @@ TEST(VertexDofData, CopyMoveAndAssignmentKeepDataAndCountsConsistent) {
 }
 
 TEST(VertexDofData, AllowsEmptyDataAndChecksVertexAndSlotBounds) {
-    const Data3 zero(0);
-    Data3 inferred{Vec(0)};
+    const VertexDofData<3> zero(0);
+    VertexDofData<3> inferred{Vec(0)};
     EXPECT_EQ(zero.num_vertices(), 0);
     EXPECT_EQ(zero.num_dofs(), 0);
     EXPECT_EQ(inferred.num_vertices(), 0);
@@ -136,7 +135,7 @@ TEST(VertexDofData, AllowsEmptyDataAndChecksVertexAndSlotBounds) {
     EXPECT_THROW(zero(0, 0), std::out_of_range);
     EXPECT_THROW(inferred(0, 0), std::out_of_range);
 
-    Data3 data(2);
+    VertexDofData<3> data(2);
     EXPECT_THROW(data.dof(-1, 0), std::out_of_range);
     EXPECT_THROW(data.dof(2, 0), std::out_of_range);
     EXPECT_THROW(data.dof(0, -1), std::out_of_range);
@@ -151,19 +150,19 @@ TEST(VertexDofData, AllowsEmptyDataAndChecksVertexAndSlotBounds) {
 }
 
 TEST(VertexDofData, RejectsInvalidCountsAndIncompleteVertexBlocks) {
-    EXPECT_THROW(Data3(-1), std::invalid_argument);
-    EXPECT_THROW(Data3(std::numeric_limits<int>::max() / 3 + 1), std::invalid_argument);
+    EXPECT_THROW(VertexDofData<3>(-1), std::invalid_argument);
+    EXPECT_THROW(VertexDofData<3>(std::numeric_limits<int>::max() / 3 + 1), std::invalid_argument);
     EXPECT_THROW(VertexDofData<std::numeric_limits<int>::max()>(2), std::invalid_argument);
     const Vec five = Vec::Zero(5);
-    EXPECT_THROW((Data3(five)), std::invalid_argument);
+    EXPECT_THROW((VertexDofData<3>(five)), std::invalid_argument);
     const Vec seven = Vec::Zero(7);
     EXPECT_THROW((VertexDofData<2>(seven)), std::invalid_argument);
 }
 
 TEST(VertexDofData, ConnectsThreeIndependentFieldsToOneElementMap) {
     const litepgo::HexTopology topology(8, {{4, 2, 6, 0, 5, 3, 7, 1}});
-    Data3 displacement(8);
-    Data3 plastic_displacement(Vec::LinSpaced(24, -24.0, -1.0));
+    VertexDofData<3> displacement(8);
+    VertexDofData<3> plastic_displacement(Vec::LinSpaced(24, -24.0, -1.0));
     VertexDofData<2> material_parameters(Vec::LinSpaced(16, 1.0, 16.0));
     displacement(4, 0) = 42.0;
     const litepgo::VertexElementDofMap map(topology);

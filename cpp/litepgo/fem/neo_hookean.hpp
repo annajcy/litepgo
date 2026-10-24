@@ -21,9 +21,9 @@ class NeoHookean final {
 // fixed, retain the argument shape, and use column-major vec for exact Hessians.
 class NeoHookeanEnergyF final {
   public:
-    using Point = NeoHookean::Point;
-    using Gradient = Mat3;
-    using Hessian = Mat9;
+    using Point = MaterialInputs<2>;
+    using Gradient = Eigen::Matrix3d;
+    using Hessian = Eigen::Matrix<double, 9, 9>;
 
     double value(const Point& point) const {
         return NeoHookean{}.value(point);
@@ -34,9 +34,9 @@ class NeoHookeanEnergyF final {
 
 class NeoHookeanEnergyFp final {
   public:
-    using Point = NeoHookean::Point;
-    using Gradient = Mat3;
-    using Hessian = Mat9;
+    using Point = MaterialInputs<2>;
+    using Gradient = Eigen::Matrix3d;
+    using Hessian = Eigen::Matrix<double, 9, 9>;
 
     double value(const Point& point) const {
         return NeoHookean{}.value(point);
@@ -47,9 +47,9 @@ class NeoHookeanEnergyFp final {
 
 class NeoHookeanEnergyTheta final {
   public:
-    using Point = NeoHookean::Point;
+    using Point = MaterialInputs<2>;
     using Gradient = Eigen::Vector2d;
-    using Hessian = MaterialParameterTypes<NeoHookean::num_parameters>::ParameterHessian;
+    using Hessian = Eigen::Matrix2d;
 
     double value(const Point& point) const {
         return NeoHookean{}.value(point);

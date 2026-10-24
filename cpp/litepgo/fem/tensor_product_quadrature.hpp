@@ -15,24 +15,23 @@ template <Quadrature1D Rule1D> class TensorProductQuadrature3D final {
     static constexpr int num_points = n * n * n;
 
     // Row q contains (xi, eta, zeta). The last parameter varies fastest.
-    using Points = Eigen::Matrix<double, num_points, 3>;
-    using Weights = Eigen::Matrix<double, num_points, 1>;
 
-    static const Points& points() {
-        static const Points result = compute_points();
+    static const Eigen::Matrix<double, num_points, 3>& points() {
+        static const Eigen::Matrix<double, num_points, 3> result = compute_points();
         return result;
     }
 
-    static const Weights& weights() {
+    static const Eigen::Matrix<double, num_points, 1>& weights() {
         const auto& w = Rule1D::weights();
-        static const Weights result = Eigen::kroneckerProduct(w, Eigen::kroneckerProduct(w, w));
+        static const Eigen::Matrix<double, num_points, 1> result =
+            Eigen::kroneckerProduct(w, Eigen::kroneckerProduct(w, w));
         return result;
     }
 
   private:
-    static Points compute_points() {
+    static Eigen::Matrix<double, num_points, 3> compute_points() {
         const auto& t = Rule1D::points();
-        Points coordinates;
+        Eigen::Matrix<double, num_points, 3> coordinates;
         for (int i = 0; i < n; ++i) {
             for (int j = 0; j < n; ++j) {
                 for (int k = 0; k < n; ++k) {

@@ -18,16 +18,10 @@ template <int VerticesPerCell>
     requires(VerticesPerCell > 0)
 class VertexElementDofMap final {
   public:
-    using Topology = MeshTopology<VerticesPerCell>;
-
     template <int DofsPerVertex>
         requires(DofsPerVertex > 0 && VerticesPerCell <= std::numeric_limits<int>::max() / DofsPerVertex)
     static constexpr int num_element_dofs = VerticesPerCell * DofsPerVertex;
 
-    template <int DofsPerVertex> using Indices = std::array<int, num_element_dofs<DofsPerVertex>>;
-    template <int DofsPerVertex>
-        requires(DofsPerVertex > 0 && VerticesPerCell <= std::numeric_limits<int>::max() / DofsPerVertex)
-    using LocalCoefficients = Eigen::Matrix<double, VerticesPerCell, DofsPerVertex>;
     explicit VertexElementDofMap(const MeshTopology<VerticesPerCell>& topology) : topology_(topology) {}
 
     VertexElementDofMap(const MeshTopology<VerticesPerCell>&&) = delete;
@@ -35,10 +29,11 @@ class VertexElementDofMap final {
     // A mismatched vertex count throws std::invalid_argument; an invalid
     // element index throws std::out_of_range. Checks are repeated for each data object.
     template <int DofsPerVertex>
-    Indices<DofsPerVertex> dof_indices(int element, const VertexDofData<DofsPerVertex>& data) const {
+    std::array<int, num_element_dofs<DofsPerVertex>> dof_indices(int element,
+                                                                 const VertexDofData<DofsPerVertex>& data) const {
         check_vertex_count(data);
         const auto& vertices = topology_.cell_vertices(element);
-        Indices<DofsPerVertex> result;
+        std::array<int, num_element_dofs<DofsPerVertex>> result;
         for (int i = 0; i < VerticesPerCell; ++i) {
             const int first = data.dof(vertices[static_cast<std::size_t>(i)], 0);
             for (int slot = 0; slot < DofsPerVertex; ++slot) {
@@ -50,10 +45,12 @@ class VertexElementDofMap final {
 
     // Returns an independent copy: rows follow cell connectivity, columns are vertex slots.
     template <int DofsPerVertex>
-    LocalCoefficients<DofsPerVertex> gather(int element, const VertexDofData<DofsPerVertex>& data) const {
+        requires(DofsPerVertex > 0 && VerticesPerCell <= std::numeric_limits<int>::max() / DofsPerVertex)
+    Eigen::Matrix<double, VerticesPerCell, DofsPerVertex> gather(int element,
+                                                                 const VertexDofData<DofsPerVertex>& data) const {
         const auto indices = dof_indices(element, data);
         const auto values = data.values();
-        LocalCoefficients<DofsPerVertex> result;
+        Eigen::Matrix<double, VerticesPerCell, DofsPerVertex> result;
         for (int i = 0; i < VerticesPerCell; ++i) {
             for (int slot = 0; slot < DofsPerVertex; ++slot) {
                 result(i, slot) = values[indices[static_cast<std::size_t>(i * DofsPerVertex + slot)]];
@@ -69,7 +66,7 @@ class VertexElementDofMap final {
         }
     }
 
-    const Topology& topology_;
+    const MeshTopology<VerticesPerCell>& topology_;
 };
 
 } // namespace litepgo

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/fem/material_parameter_types.hpp"
+#include <Eigen/Core>
 
 namespace litepgo {
 
@@ -8,9 +8,9 @@ namespace litepgo {
 template <int NumParameters>
     requires(NumParameters > 0)
 struct MaterialInputs {
-    Mat3 F;
-    Mat3 Fp;
-    typename MaterialParameterTypes<NumParameters>::Parameters theta;
+    Eigen::Matrix3d F;
+    Eigen::Matrix3d Fp;
+    Eigen::Matrix<double, NumParameters, 1> theta;
 };
 
 } // namespace litepgo

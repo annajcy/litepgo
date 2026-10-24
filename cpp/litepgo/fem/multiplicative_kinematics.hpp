@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/fem/material_parameter_types.hpp"
+#include <Eigen/Core>
 
 namespace litepgo {
 
@@ -10,9 +10,9 @@ class MultiplicativeKinematics final {
     // Non-finite inputs throw invalid_argument. Non-positive det(Fp), or
     // an unrepresentable inverse/Fe, throw InfeasibleState. Fe's domain is
     // the material's responsibility; this class does not require det(F) > 0.
-    MultiplicativeKinematics(const Mat3& F, const Mat3& Fp);
+    MultiplicativeKinematics(const Eigen::Matrix3d& F, const Eigen::Matrix3d& Fp);
 
-    const Mat3& elastic_gradient() const {
+    const Eigen::Matrix3d& elastic_gradient() const {
         return Fe_;
     }
     double plastic_volume_ratio() const {
@@ -23,18 +23,19 @@ class MultiplicativeKinematics final {
     // volume. Derivatives hold Fp fixed and assume dependence on F through Fe.
     // Hessians are exact and use column-major vec(A)[i + 3*j] = A(i,j).
     double reference_energy(double psi) const;
-    Mat3 reference_gradient_F(const Mat3& Pe) const;
-    Mat9 reference_hessian_F(const Mat9& He) const;
+    Eigen::Matrix3d reference_gradient_F(const Eigen::Matrix3d& Pe) const;
+    Eigen::Matrix<double, 9, 9> reference_hessian_F(const Eigen::Matrix<double, 9, 9>& He) const;
 
     // Hold F and material parameters fixed. psi must depend on Fp only through
     // Fe; all elastic inputs must be evaluated at this snapshot's Fe.
     // Includes derivatives of both det(Fp) and Fp^-1. Same vec convention above.
-    Mat3 reference_gradient_Fp(double psi, const Mat3& Pe) const;
-    Mat9 reference_hessian_Fp(double psi, const Mat3& Pe, const Mat9& He) const;
+    Eigen::Matrix3d reference_gradient_Fp(double psi, const Eigen::Matrix3d& Pe) const;
+    Eigen::Matrix<double, 9, 9> reference_hessian_Fp(double psi, const Eigen::Matrix3d& Pe,
+                                                     const Eigen::Matrix<double, 9, 9>& He) const;
 
   private:
-    Mat3 inverse_Fp_;
-    Mat3 Fe_;
+    Eigen::Matrix3d inverse_Fp_;
+    Eigen::Matrix3d Fe_;
     double Jp_;
 };
 

@@ -1,6 +1,8 @@
 #include "litepgo/fem/field_interpolation.hpp"
+#include "litepgo/fem/gauss_legendre_1d.hpp"
 #include "litepgo/fem/gauss_legendre_3d.hpp"
 #include "litepgo/fem/hex_q1_basis.hpp"
+#include "litepgo/fem/tensor_product_quadrature.hpp"
 #include "litepgo/fem/volume_quadrature_cache.hpp"
 
 #include <gtest/gtest.h>
@@ -37,15 +39,14 @@ static_assert(std::same_as<decltype(&litepgo::FieldInterpolation<litepgo::HexQ1B
                            Eigen::Matrix<double, 9, 24> (*)(
                                const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData&)>);
 
-litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::GeometryCoefficients corners() {
-    litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::GeometryCoefficients X;
+Eigen::Matrix<double, 8, 3> corners() {
+    Eigen::Matrix<double, 8, 3> X;
     X << 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1;
     return X;
 }
 
-Eigen::Matrix<double, 8, 3>
-affine_field(const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::GeometryCoefficients& X,
-             const Eigen::Matrix3d& A, const Eigen::Vector3d& offset) {
+Eigen::Matrix<double, 8, 3> affine_field(const Eigen::Matrix<double, 8, 3>& X, const Eigen::Matrix3d& A,
+                                         const Eigen::Vector3d& offset) {
     Eigen::Matrix<double, 8, 3> coefficients;
     for (int i = 0; i < 8; ++i) {
         coefficients.row(i) = (A * X.row(i).transpose() + offset).transpose();
@@ -65,8 +66,8 @@ Eigen::Vector3d warped_parameter(const Eigen::Vector3d& X) {
     return {(X.x() - alpha * X.z() * X.y()) / determinant, (X.y() - beta * X.z() * X.x()) / determinant, X.z()};
 }
 
-litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::GeometryCoefficients warped_geometry() {
-    litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::GeometryCoefficients X = corners();
+Eigen::Matrix<double, 8, 3> warped_geometry() {
+    Eigen::Matrix<double, 8, 3> X = corners();
     for (int i = 0; i < 8; ++i) {
         X.row(i) = warped_position(X.row(i).transpose()).transpose();
     }
@@ -136,8 +137,7 @@ TEST(FieldInterpolation, SeparateRestGeometryDisplacementPlasticDisplacementAndM
     Eigen::Matrix3d J;
     J << 2, 0.3, 0.1, 0.2, 1.5, 0.1, 0, 0.2, 1.1;
     const Eigen::Vector3d origin(1.2, -0.7, 2.1);
-    const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::GeometryCoefficients X =
-        (corners() * J.transpose()).rowwise() + origin.transpose();
+    const Eigen::Matrix<double, 8, 3> X = (corners() * J.transpose()).rowwise() + origin.transpose();
     const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis> mapping(X);
 
     Eigen::Matrix3d A;
