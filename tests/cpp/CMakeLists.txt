@@ -1,5 +1,6 @@
 # Test files mirror cpp/litepgo: tests/cpp/<dir>/<name>_gtest.cpp covers cpp/litepgo/<dir>/.
 add_executable(litepgo_tests
+    fem/assembly/assembler_gtest.cpp
     core/build_info_gtest.cpp
     core/busy_scope_gtest.cpp
     core/memory_gtest.cpp
