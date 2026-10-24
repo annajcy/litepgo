@@ -1,5 +1,5 @@
+#include "litepgo/fem/field_interpolation.hpp"
 #include "litepgo/fem/hex_q1_basis.hpp"
-#include "litepgo/fem/interpolated_field.hpp"
 #include "litepgo/fem/vertex_element_dof_map.hpp"
 
 #include <gtest/gtest.h>
@@ -20,8 +20,8 @@ using litepgo::VertexElementDofMap;
 using HexMap = VertexElementDofMap<8>;
 using Basis = litepgo::HexQ1Basis;
 using Reference = litepgo::VolumeReferenceGeometry<Basis>;
-using VectorField = litepgo::InterpolatedField<Basis, 3>;
-using ParameterField = litepgo::InterpolatedField<Basis, 2>;
+using VectorField = litepgo::FieldInterpolation<Basis, 3>;
+using ParameterField = litepgo::FieldInterpolation<Basis, 2>;
 
 template <int N>
 concept CanFormMap = requires { typename VertexElementDofMap<N>; };

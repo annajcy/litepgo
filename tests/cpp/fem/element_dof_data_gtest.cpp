@@ -1,4 +1,4 @@
-#include "litepgo/fem/element_field.hpp"
+#include "litepgo/fem/element_dof_data.hpp"
 #include <array>
 #include <gtest/gtest.h>
 #include <limits>
@@ -7,16 +7,16 @@
 namespace {
 using namespace litepgo;
 template <class V>
-concept CanStore = requires { typename ElementField<V>; };
+concept CanStore = requires { typename ElementDofData<V>; };
 static_assert(CanStore<Eigen::Matrix3d> && CanStore<Eigen::Vector2d>);
 static_assert(!CanStore<double> && !CanStore<Eigen::MatrixXd> && !CanStore<Eigen::Matrix3f>);
 static_assert(!CanStore<Eigen::Matrix<double, 0, 1>>);
 
-TEST(ElementField, OwnsColumnMajorBlocksAndViews) {
+TEST(ElementDofData, OwnsColumnMajorBlocksAndViews) {
     std::array<Eigen::Matrix3d, 2> source;
     source[0] << 1, 2, 3, 4, 5, 6, 7, 8, 9;
     source[1] = 2 * source[0];
-    ElementField<Eigen::Matrix3d> field{std::span<const Eigen::Matrix3d>(source)};
+    ElementDofData<Eigen::Matrix3d> field{std::span<const Eigen::Matrix3d>(source)};
     EXPECT_EQ(field.num_elements(), 2);
     EXPECT_EQ(field.num_dofs(), 18);
     for (int e = 0; e < 2; ++e) {
@@ -41,31 +41,31 @@ TEST(ElementField, OwnsColumnMajorBlocksAndViews) {
     EXPECT_FALSE(field.value(1).isZero());
     auto moved = std::move(copy);
     EXPECT_EQ(moved.num_elements(), 2);
-    copy = ElementField<Eigen::Matrix3d>(1);
+    copy = ElementDofData<Eigen::Matrix3d>(1);
     EXPECT_EQ(copy.num_dofs(), 9);
     const auto& const_field = field;
     EXPECT_EQ(const_field.values()[1], 99);
 }
 
-TEST(ElementField, StorageOrderAndBounds) {
-    ElementField<Eigen::Matrix<double, 2, 2, Eigen::RowMajor>> field(1);
+TEST(ElementDofData, StorageOrderAndBounds) {
+    ElementDofData<Eigen::Matrix<double, 2, 2, Eigen::RowMajor>> field(1);
     EXPECT_TRUE(field.value(0).isZero());
     Eigen::Matrix<double, 2, 2, Eigen::RowMajor> value;
     value << 1, 2, 3, 4;
     field.set_value(0, value);
     EXPECT_EQ(field.value(0), value);
     EXPECT_DOUBLE_EQ(field.values()[1], 3);
-    EXPECT_THROW(ElementField<Eigen::Matrix3d>(-1), std::invalid_argument);
-    EXPECT_THROW((ElementField<Eigen::Matrix3d>(std::numeric_limits<int>::max())), std::invalid_argument);
+    EXPECT_THROW(ElementDofData<Eigen::Matrix3d>(-1), std::invalid_argument);
+    EXPECT_THROW((ElementDofData<Eigen::Matrix3d>(std::numeric_limits<int>::max())), std::invalid_argument);
     for (int e : {-1, 1}) {
         EXPECT_THROW(field.value(e), std::out_of_range);
         EXPECT_THROW(field.set_value(e, value), std::out_of_range);
         EXPECT_THROW(field.dof_indices(e), std::out_of_range);
     }
-    const ElementField<Eigen::Matrix3d> empty(0);
+    const ElementDofData<Eigen::Matrix3d> empty(0);
     EXPECT_EQ(empty.num_elements(), 0);
     EXPECT_THROW(empty.value(0), std::out_of_range);
-    const ElementField<Eigen::Matrix3d> from_span{std::span<const Eigen::Matrix3d>{}};
+    const ElementDofData<Eigen::Matrix3d> from_span{std::span<const Eigen::Matrix3d>{}};
     EXPECT_EQ(from_span.num_dofs(), 0);
 }
 } // namespace

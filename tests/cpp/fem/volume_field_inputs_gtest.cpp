@@ -1,7 +1,6 @@
 #include "litepgo/energy/energy.hpp"
 #include "litepgo/fem/constant_field.hpp"
-#include "litepgo/fem/direct_local_field.hpp"
-#include "litepgo/fem/displacement_gradient_field.hpp"
+#include "litepgo/fem/deformation_gradient_field.hpp"
 #include "litepgo/fem/element_field.hpp"
 #include "litepgo/fem/gauss_legendre_3d.hpp"
 #include "litepgo/fem/hex_q1_basis.hpp"
@@ -23,8 +22,8 @@ struct Fixture {
     HexTopology topology{12, {{0, 1, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 2, 5, 10, 11, 6}}};
     Eigen::Matrix<double, 12, 3> X;
     VertexDofData<3> u{12};
-    ElementField<Mat3> fp{2};
-    ConstantField<Eigen::Vector2d> theta{Eigen::Vector2d(2, 3)};
+    ElementDofData<Mat3> fp{2};
+    ConstantDofData<Eigen::Vector2d> theta{Eigen::Vector2d(2, 3)};
 
     Fixture() {
         for (int e = 0; e < 2; ++e) {
@@ -50,8 +49,8 @@ struct Fixture {
     }
     auto fields(int e) const {
         const VertexElementDofMap map(topology);
-        return VolumeFieldInputs{DisplacementGradientField<HexQ1Basis>(map.gather(e, u)),
-                                 DirectLocalField<Mat3>(fp.value(e)), DirectLocalField<Eigen::Vector2d>(theta.value())};
+        return VolumeFieldInputs{DeformationGradientField<HexQ1Basis>(map.gather(e, u)), ElementField(fp, e),
+                                 ConstantField(theta)};
     }
 };
 
@@ -106,7 +105,7 @@ TEST(VolumeFieldInputs, MixedRepresentationsPointInputsAndLocalFiniteDifferences
         for (int q = 0; q < VolumeQuadratureCache<HexQ1Basis, GaussLegendre3D<2>>::num_quadrature_points; ++q) {
             const auto& ref = cache.sample(q).point;
             const auto point = fields.evaluate(ref);
-            EXPECT_TRUE(point.F.isApprox(Mat3::Identity() + InterpolatedField<HexQ1Basis, 3>(ue).gradient(ref)));
+            EXPECT_TRUE(point.F.isApprox(Mat3::Identity() + FieldInterpolation<HexQ1Basis, 3>(ue).gradient(ref)));
             EXPECT_EQ(point.Fp, f.fp.value(e));
             EXPECT_EQ(point.theta, f.theta.value());
             EXPECT_TRUE(fields.Fp.jacobian(ref).isIdentity());
@@ -123,9 +122,8 @@ TEST(VolumeFieldInputs, MixedRepresentationsPointInputsAndLocalFiniteDifferences
                 Eigen::Matrix<double, 8, 3> c;
                 for (int j = 0; j < 24; ++j)
                     c(j / 3, j % 3) = x[j];
-                return VolumeFieldInputs{DisplacementGradientField<HexQ1Basis>(c),
-                                         DirectLocalField<Mat3>(f.fp.value(e)),
-                                         DirectLocalField<Eigen::Vector2d>(f.theta.value())};
+                return VolumeFieldInputs{DeformationGradientField<HexQ1Basis>(c), ElementField(f.fp, e),
+                                         ConstantField(f.theta)};
             },
             [](const auto& local_fields) { return NeoHookeanLocalEnergyF(local_fields); });
         const Mat3 fp = f.fp.value(e);
@@ -133,16 +131,15 @@ TEST(VolumeFieldInputs, MixedRepresentationsPointInputsAndLocalFiniteDifferences
         check_fd(
             kernel, pvec,
             [&](const Eigen::Matrix<double, 9, 1>& x) {
-                return VolumeFieldInputs{DisplacementGradientField<HexQ1Basis>(ue),
-                                         DirectLocalField<Mat3>(Eigen::Map<const Mat3>(x.data())),
-                                         DirectLocalField<Eigen::Vector2d>(f.theta.value())};
+                return VolumeFieldInputs{DeformationGradientField<HexQ1Basis>(ue),
+                                         ElementField<Mat3>(Eigen::Map<const Mat3>(x.data())), ConstantField(f.theta)};
             },
             [](const auto& local_fields) { return NeoHookeanLocalEnergyFp(local_fields); });
         check_fd(
             kernel, f.theta.value(),
             [&](const Eigen::Matrix<double, 2, 1>& x) {
-                return VolumeFieldInputs{DisplacementGradientField<HexQ1Basis>(ue), DirectLocalField<Mat3>(fp),
-                                         DirectLocalField<Eigen::Vector2d>(x)};
+                return VolumeFieldInputs{DeformationGradientField<HexQ1Basis>(ue), ElementField<Mat3>(fp),
+                                         ConstantField<Eigen::Vector2d>(x)};
             },
             [](const auto& local_fields) { return NeoHookeanLocalEnergyTheta(local_fields); });
     }
@@ -153,7 +150,7 @@ TEST(VolumeFieldInputs, SameKernelAcceptsDifferentActiveDofCounts) {
     fixture.u.values().setZero();
     const auto cache = fixture.cache(0);
     const auto nodal = fixture.fields(0);
-    const VolumeFieldInputs direct{DirectLocalField<Mat3>(Mat3::Identity()), nodal.Fp, nodal.theta};
+    const VolumeFieldInputs direct{ElementField<Mat3>(Mat3::Identity()), nodal.Fp, nodal.theta};
     const LocalKernel kernel(cache);
     const auto nodal_gradient = kernel.gradient(NeoHookeanLocalEnergyF(nodal));
     const auto direct_gradient = kernel.gradient(NeoHookeanLocalEnergyF(direct));
@@ -182,7 +179,7 @@ TEST(VolumeFieldInputs, SameKernelAcceptsDifferentActiveDofCounts) {
     check_fd(
         kernel, identity,
         [&](const Eigen::Matrix<double, 9, 1>& x) {
-            return VolumeFieldInputs{DirectLocalField<Mat3>(Eigen::Map<const Mat3>(x.data())), nodal.Fp, nodal.theta};
+            return VolumeFieldInputs{ElementField<Mat3>(Eigen::Map<const Mat3>(x.data())), nodal.Fp, nodal.theta};
         },
         [](const auto& fields) { return NeoHookeanLocalEnergyF(fields); });
 }
@@ -272,7 +269,7 @@ TEST(VolumeFieldInputs, SharedParameterHessianIncludesBothElements) {
         check_fd(
             kernel, f.theta.value(),
             [&](const Eigen::Vector2d& theta) {
-                return VolumeFieldInputs{fields.F, fields.Fp, DirectLocalField<Eigen::Vector2d>(theta)};
+                return VolumeFieldInputs{fields.F, fields.Fp, ConstantField<Eigen::Vector2d>(theta)};
             },
             [](const auto& local_fields) { return QuadraticParameterLocalEnergy(local_fields); });
     }
@@ -284,7 +281,7 @@ TEST(VolumeFieldInputs, DirectInfeasiblePlasticStateReachesMaterialValidation) {
     auto fields = f.fields(0);
     Mat3 inverted = Mat3::Identity();
     inverted(0, 0) = -1;
-    fields.Fp = DirectLocalField<Mat3>(inverted);
+    fields.Fp = ElementField<Mat3>(inverted);
     const litepgo::LocalKernel kernel(f.cache(0));
     EXPECT_THROW(kernel.value(NeoHookeanLocalEnergyFp(fields)), InfeasibleState);
     EXPECT_THROW(kernel.gradient(NeoHookeanLocalEnergyFp(fields)), InfeasibleState);

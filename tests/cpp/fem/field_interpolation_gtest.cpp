@@ -1,6 +1,6 @@
+#include "litepgo/fem/field_interpolation.hpp"
 #include "litepgo/fem/gauss_legendre_3d.hpp"
 #include "litepgo/fem/hex_q1_basis.hpp"
-#include "litepgo/fem/interpolated_field.hpp"
 #include "litepgo/fem/volume_quadrature_cache.hpp"
 
 #include <gtest/gtest.h>
@@ -14,26 +14,26 @@
 namespace {
 
 template <class B, int C>
-concept CanFormField = requires { typename litepgo::InterpolatedField<B, C>; };
+concept CanFormField = requires { typename litepgo::FieldInterpolation<B, C>; };
 
 static_assert(CanFormField<litepgo::HexQ1Basis, 1>);
 static_assert(CanFormField<litepgo::HexQ1Basis, 3>);
 static_assert(!CanFormField<litepgo::HexQ1Basis, 0>);
 static_assert(!CanFormField<litepgo::LagrangeBasis, 3>);
-static_assert(litepgo::InterpolatedField<litepgo::HexQ1Basis, 3>::num_dofs == 24);
-static_assert(litepgo::InterpolatedField<litepgo::HexQ1Basis, 2>::num_dofs == 16);
+static_assert(litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3>::num_dofs == 24);
+static_assert(litepgo::FieldInterpolation<litepgo::HexQ1Basis, 2>::num_dofs == 16);
 static_assert(
-    std::same_as<decltype(std::declval<const litepgo::InterpolatedField<litepgo::HexQ1Basis, 3>&>().value(
+    std::same_as<decltype(std::declval<const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3>&>().value(
                      std::declval<const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData&>())),
                  Eigen::Vector3d>);
 static_assert(
-    std::same_as<decltype(std::declval<const litepgo::InterpolatedField<litepgo::HexQ1Basis, 3>&>().gradient(
+    std::same_as<decltype(std::declval<const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3>&>().gradient(
                      std::declval<const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData&>())),
                  Eigen::Matrix3d>);
-static_assert(std::same_as<decltype(&litepgo::InterpolatedField<litepgo::HexQ1Basis, 3>::value_matrix),
+static_assert(std::same_as<decltype(&litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3>::value_matrix),
                            Eigen::Matrix<double, 3, 24> (*)(
                                const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData&)>);
-static_assert(std::same_as<decltype(&litepgo::InterpolatedField<litepgo::HexQ1Basis, 3>::gradient_matrix),
+static_assert(std::same_as<decltype(&litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3>::gradient_matrix),
                            Eigen::Matrix<double, 9, 24> (*)(
                                const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData&)>);
 
@@ -84,15 +84,15 @@ template <int Components> void check_coefficient_derivatives() {
         }
     }
     const auto point = mapping.evaluate(Eigen::Vector3d(0.2, 0.3, 0.4));
-    const auto sample_value = litepgo::InterpolatedField<litepgo::HexQ1Basis, Components>(coefficients).value(point);
+    const auto sample_value = litepgo::FieldInterpolation<litepgo::HexQ1Basis, Components>(coefficients).value(point);
     const auto sample_gradient =
-        litepgo::InterpolatedField<litepgo::HexQ1Basis, Components>(coefficients).gradient(point);
-    const Eigen::Matrix<double, litepgo::InterpolatedField<litepgo::HexQ1Basis, Components>::num_dofs, 1> flattened =
+        litepgo::FieldInterpolation<litepgo::HexQ1Basis, Components>(coefficients).gradient(point);
+    const Eigen::Matrix<double, litepgo::FieldInterpolation<litepgo::HexQ1Basis, Components>::num_dofs, 1> flattened =
         coefficients.template reshaped<Eigen::RowMajor>();
-    EXPECT_TRUE((litepgo::InterpolatedField<litepgo::HexQ1Basis, Components>::value_matrix(point) * flattened)
+    EXPECT_TRUE((litepgo::FieldInterpolation<litepgo::HexQ1Basis, Components>::value_matrix(point) * flattened)
                     .isApprox(sample_value, 1e-14));
     const Eigen::Map<const Eigen::Matrix<double, 3 * Components, 1>> gradient_vector(sample_gradient.data());
-    EXPECT_TRUE((litepgo::InterpolatedField<litepgo::HexQ1Basis, Components>::gradient_matrix(point) * flattened)
+    EXPECT_TRUE((litepgo::FieldInterpolation<litepgo::HexQ1Basis, Components>::gradient_matrix(point) * flattened)
                     .isApprox(gradient_vector, 1e-14));
 
     constexpr double h = 1e-4;
@@ -103,18 +103,18 @@ template <int Components> void check_coefficient_derivatives() {
             plus(i, c) += h;
             minus(i, c) -= h;
             const auto sample_plus_value =
-                litepgo::InterpolatedField<litepgo::HexQ1Basis, Components>(plus).value(point);
+                litepgo::FieldInterpolation<litepgo::HexQ1Basis, Components>(plus).value(point);
             const auto sample_plus_gradient =
-                litepgo::InterpolatedField<litepgo::HexQ1Basis, Components>(plus).gradient(point);
+                litepgo::FieldInterpolation<litepgo::HexQ1Basis, Components>(plus).gradient(point);
             const auto sample_minus_value =
-                litepgo::InterpolatedField<litepgo::HexQ1Basis, Components>(minus).value(point);
+                litepgo::FieldInterpolation<litepgo::HexQ1Basis, Components>(minus).value(point);
             const auto sample_minus_gradient =
-                litepgo::InterpolatedField<litepgo::HexQ1Basis, Components>(minus).gradient(point);
+                litepgo::FieldInterpolation<litepgo::HexQ1Basis, Components>(minus).gradient(point);
             const int column = i * Components + c;
             EXPECT_TRUE(
                 ((sample_plus_value - sample_minus_value) / (2 * h))
                     .isApprox(
-                        litepgo::InterpolatedField<litepgo::HexQ1Basis, Components>::value_matrix(point).col(column),
+                        litepgo::FieldInterpolation<litepgo::HexQ1Basis, Components>::value_matrix(point).col(column),
                         1e-9))
                 << "coefficient (" << i << ", " << c << ")";
             const Eigen::Map<const Eigen::Matrix<double, 3 * Components, 1>> gradient_plus(sample_plus_gradient.data());
@@ -122,9 +122,9 @@ template <int Components> void check_coefficient_derivatives() {
                 sample_minus_gradient.data());
             EXPECT_TRUE(
                 ((gradient_plus - gradient_minus) / (2 * h))
-                    .isApprox(
-                        litepgo::InterpolatedField<litepgo::HexQ1Basis, Components>::gradient_matrix(point).col(column),
-                        1e-9))
+                    .isApprox(litepgo::FieldInterpolation<litepgo::HexQ1Basis, Components>::gradient_matrix(point).col(
+                                  column),
+                              1e-9))
                 << "coefficient (" << i << ", " << c << ")";
         }
     }
@@ -132,7 +132,7 @@ template <int Components> void check_coefficient_derivatives() {
 
 } // namespace
 
-TEST(InterpolatedField, SeparateRestGeometryDisplacementPlasticDisplacementAndMaterialParameters) {
+TEST(FieldInterpolation, SeparateRestGeometryDisplacementPlasticDisplacementAndMaterialParameters) {
     Eigen::Matrix3d J;
     J << 2, 0.3, 0.1, 0.2, 1.5, 0.1, 0, 0.2, 1.1;
     const Eigen::Vector3d origin(1.2, -0.7, 2.1);
@@ -147,8 +147,8 @@ TEST(InterpolatedField, SeparateRestGeometryDisplacementPlasticDisplacementAndMa
     const Eigen::Matrix3d P = (Eigen::Matrix3d() << 0.1, 0.02, 0, 0.02, -0.05, 0, 0, 0, 0.03).finished();
     const Eigen::Vector3d b_offset(0.6, -0.2, 0.3);
     const auto b = affine_field(X, P, b_offset);
-    const litepgo::InterpolatedField<litepgo::HexQ1Basis, 3> displacement(a);
-    const litepgo::InterpolatedField<litepgo::HexQ1Basis, 3> plastic_displacement(b);
+    const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3> displacement(a);
+    const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3> plastic_displacement(b);
 
     Eigen::Matrix<double, 2, 3> material_gradient;
     material_gradient << 0.4, -0.1, 0.2, -0.3, 0.5, 0.1;
@@ -157,7 +157,7 @@ TEST(InterpolatedField, SeparateRestGeometryDisplacementPlasticDisplacementAndMa
     for (int i = 0; i < 8; ++i) {
         theta.row(i) = (material_gradient * X.row(i).transpose() + material_offset).transpose();
     }
-    const litepgo::InterpolatedField<litepgo::HexQ1Basis, 2> material_parameters(theta);
+    const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 2> material_parameters(theta);
 
     for (const Eigen::Vector3d xi : {Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(0.83, 0.17, 0.61)}) {
         const Eigen::Vector3d position = origin + J * xi;
@@ -179,23 +179,23 @@ TEST(InterpolatedField, SeparateRestGeometryDisplacementPlasticDisplacementAndMa
     }
 }
 
-TEST(InterpolatedField, ValueAndGradientMatricesDifferentiateLocalCoefficients) {
+TEST(FieldInterpolation, ValueAndGradientMatricesDifferentiateLocalCoefficients) {
     check_coefficient_derivatives<1>();
     check_coefficient_derivatives<2>();
     check_coefficient_derivatives<3>();
 }
 
-TEST(InterpolatedField, AcceptsEitherMatrixStorageOrder) {
+TEST(FieldInterpolation, AcceptsEitherMatrixStorageOrder) {
     const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis> mapping(corners());
     const Eigen::Matrix<double, 8, 3, Eigen::RowMajor> coefficients = corners();
     const auto point = mapping.evaluate(Eigen::Vector3d(0.2, 0.3, 0.4));
-    const auto sample_value = litepgo::InterpolatedField<litepgo::HexQ1Basis, 3>(coefficients).value(point);
-    const auto sample_gradient = litepgo::InterpolatedField<litepgo::HexQ1Basis, 3>(coefficients).gradient(point);
+    const auto sample_value = litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3>(coefficients).value(point);
+    const auto sample_gradient = litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3>(coefficients).gradient(point);
     EXPECT_TRUE(sample_value.isApprox(point.position, 1e-14));
     EXPECT_TRUE(sample_gradient.isIdentity(1e-14));
 }
 
-TEST(InterpolatedField, GradientMatchesPhysicalFiniteDifferencesOnWarpedHex) {
+TEST(FieldInterpolation, GradientMatchesPhysicalFiniteDifferencesOnWarpedHex) {
     const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis> mapping(warped_geometry());
     Eigen::Matrix<double, 8, 3> b;
     for (int i = 0; i < b.rows(); ++i) {
@@ -203,7 +203,7 @@ TEST(InterpolatedField, GradientMatchesPhysicalFiniteDifferencesOnWarpedHex) {
             b(i, c) = std::sin(0.37 * (3 * i + c + 1));
         }
     }
-    const litepgo::InterpolatedField<litepgo::HexQ1Basis, 3> plastic_displacement(b);
+    const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3> plastic_displacement(b);
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
     const auto sample_gradient = plastic_displacement.gradient(mapping.evaluate(xi));
     const Eigen::Vector3d position = warped_position(xi);
@@ -219,7 +219,7 @@ TEST(InterpolatedField, GradientMatchesPhysicalFiniteDifferencesOnWarpedHex) {
     }
 }
 
-TEST(InterpolatedField, DirectAndCachedGeometryPointsGiveTheSameFields) {
+TEST(FieldInterpolation, DirectAndCachedGeometryPointsGiveTheSameFields) {
     const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis> mapping(warped_geometry());
     const litepgo::VolumeQuadratureCache<litepgo::HexQ1Basis, litepgo::GaussLegendre3D<2>> cache(mapping);
     Eigen::Matrix<double, 8, 3> a;
@@ -236,9 +236,9 @@ TEST(InterpolatedField, DirectAndCachedGeometryPointsGiveTheSameFields) {
             theta(i, c) = 2.0 + 0.1 * (2 * i + c);
         }
     }
-    const litepgo::InterpolatedField<litepgo::HexQ1Basis, 3> displacement(a);
-    const litepgo::InterpolatedField<litepgo::HexQ1Basis, 3> plastic_displacement(b);
-    const litepgo::InterpolatedField<litepgo::HexQ1Basis, 2> material_parameters(theta);
+    const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3> displacement(a);
+    const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3> plastic_displacement(b);
+    const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 2> material_parameters(theta);
 
     for (int q = 0;
          q < litepgo::VolumeQuadratureCache<litepgo::HexQ1Basis, litepgo::GaussLegendre3D<2>>::num_quadrature_points;
@@ -267,14 +267,14 @@ TEST(InterpolatedField, DirectAndCachedGeometryPointsGiveTheSameFields) {
     }
 }
 
-TEST(InterpolatedField, CoefficientsAreCopiedAndTranslationHasZeroGradient) {
+TEST(FieldInterpolation, CoefficientsAreCopiedAndTranslationHasZeroGradient) {
     const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis> mapping(corners());
     const Eigen::Vector3d translation(0.7, -0.2, 1.3);
     Eigen::Matrix<double, 8, 3> coefficients;
     for (int i = 0; i < 8; ++i) {
         coefficients.row(i) = translation.transpose();
     }
-    const litepgo::InterpolatedField<litepgo::HexQ1Basis, 3> field(coefficients);
+    const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3> field(coefficients);
     coefficients.setConstant(std::numeric_limits<double>::quiet_NaN());
     const auto sample_value = field.value(mapping.evaluate(Eigen::Vector3d(0.2, 0.3, 0.4)));
     const auto sample_gradient = field.gradient(mapping.evaluate(Eigen::Vector3d(0.2, 0.3, 0.4)));
@@ -282,27 +282,27 @@ TEST(InterpolatedField, CoefficientsAreCopiedAndTranslationHasZeroGradient) {
     EXPECT_TRUE(sample_gradient.isZero(1e-14));
 }
 
-TEST(InterpolatedField, RejectsNonFiniteCoefficients) {
+TEST(FieldInterpolation, RejectsNonFiniteCoefficients) {
     Eigen::Matrix<double, 8, 3> coefficients = Eigen::Matrix<double, 8, 3>::Zero();
     coefficients(1, 1) = std::numeric_limits<double>::quiet_NaN();
-    EXPECT_THROW((litepgo::InterpolatedField<litepgo::HexQ1Basis, 3>(coefficients)), std::invalid_argument);
+    EXPECT_THROW((litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3>(coefficients)), std::invalid_argument);
 }
 
-TEST(InterpolatedField, ValueAndGradientEvaluateAndValidateIndependently) {
+TEST(FieldInterpolation, ValueAndGradientEvaluateAndValidateIndependently) {
     const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis> mapping(corners());
     const auto point = mapping.evaluate(Eigen::Vector3d(0.2, 0.3, 0.4));
-    const litepgo::InterpolatedField<litepgo::HexQ1Basis, 3> field(corners());
+    const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3> field(corners());
     auto bad_values = point;
     bad_values.basis_values.setConstant(std::numeric_limits<double>::quiet_NaN());
     EXPECT_THROW(field.value(bad_values), std::invalid_argument);
     EXPECT_TRUE(field.gradient(bad_values).isApprox(field.gradient(point)));
-    EXPECT_TRUE((litepgo::InterpolatedField<litepgo::HexQ1Basis, 3>::gradient_matrix(bad_values)
-                     .isApprox(litepgo::InterpolatedField<litepgo::HexQ1Basis, 3>::gradient_matrix(point))));
+    EXPECT_TRUE((litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3>::gradient_matrix(bad_values)
+                     .isApprox(litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3>::gradient_matrix(point))));
 
     auto bad_gradients = point;
     bad_gradients.basis_gradients.setConstant(std::numeric_limits<double>::quiet_NaN());
     EXPECT_THROW(field.gradient(bad_gradients), std::invalid_argument);
     EXPECT_TRUE(field.value(bad_gradients).isApprox(field.value(point)));
-    EXPECT_TRUE((litepgo::InterpolatedField<litepgo::HexQ1Basis, 3>::value_matrix(bad_gradients)
-                     .isApprox(litepgo::InterpolatedField<litepgo::HexQ1Basis, 3>::value_matrix(point))));
+    EXPECT_TRUE((litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3>::value_matrix(bad_gradients)
+                     .isApprox(litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3>::value_matrix(point))));
 }

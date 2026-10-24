@@ -13,7 +13,7 @@ namespace litepgo {
 // PointData must be evaluated from the reference geometry of these coefficients.
 template <Basis3D Basis, int Components>
     requires(Components > 0)
-class InterpolatedField final {
+class FieldInterpolation final {
   public:
     static constexpr int num_basis_functions = Basis::num_basis_functions;
     static constexpr int num_dofs = Components * num_basis_functions;
@@ -26,24 +26,24 @@ class InterpolatedField final {
                                        Eigen::Matrix<double, Components, Components>::Identity());
     }
 
-    // vec(gradient) is column-major; DofJacobian columns use i * Components + c.
+    // vec(gradient) is column-major; Jacobian columns use i * Components + c.
     static Eigen::Matrix<double, 3 * Components, num_dofs>
     gradient_matrix(const typename VolumeReferenceGeometry<Basis>::PointData& point) {
         return Eigen::kroneckerProduct(point.basis_gradients.transpose(),
                                        Eigen::Matrix<double, Components, Components>::Identity());
     }
 
-    explicit InterpolatedField(const Eigen::Matrix<double, num_basis_functions, Components>& coefficients)
+    explicit FieldInterpolation(const Eigen::Matrix<double, num_basis_functions, Components>& coefficients)
         : coefficients_(coefficients) {
         if (!coefficients_.allFinite()) {
-            throw std::invalid_argument("InterpolatedField requires finite coefficients");
+            throw std::invalid_argument("FieldInterpolation requires finite coefficients");
         }
     }
 
     Eigen::Matrix<double, Components, 1> value(const typename VolumeReferenceGeometry<Basis>::PointData& point) const {
         const Eigen::Matrix<double, Components, 1> result = coefficients_.transpose() * point.basis_values;
         if (!result.allFinite()) {
-            throw std::invalid_argument("InterpolatedField::value: non-finite field value");
+            throw std::invalid_argument("FieldInterpolation::value: non-finite field value");
         }
         return result;
     }
@@ -53,7 +53,7 @@ class InterpolatedField final {
     gradient(const typename VolumeReferenceGeometry<Basis>::PointData& point) const {
         const Eigen::Matrix<double, Components, 3> result = coefficients_.transpose() * point.basis_gradients;
         if (!result.allFinite()) {
-            throw std::invalid_argument("InterpolatedField::gradient: non-finite field gradient");
+            throw std::invalid_argument("FieldInterpolation::gradient: non-finite field gradient");
         }
         return result;
     }

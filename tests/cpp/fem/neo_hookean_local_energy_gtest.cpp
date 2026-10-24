@@ -1,4 +1,5 @@
-#include "litepgo/fem/direct_local_field.hpp"
+#include "litepgo/fem/constant_field.hpp"
+#include "litepgo/fem/element_field.hpp"
 #include "litepgo/fem/neo_hookean_local_energy.hpp"
 #include "litepgo/fem/volume_field_inputs.hpp"
 
@@ -12,17 +13,15 @@ concept CanBindAll = requires {
     typename NeoHookeanLocalEnergyFp<Fields>;
     typename NeoHookeanLocalEnergyTheta<Fields>;
 };
-static_assert(
-    CanBindAll<VolumeFieldInputs<DirectLocalField<Mat3>, DirectLocalField<Mat3>, DirectLocalField<Eigen::Vector2d>>>);
-static_assert(
-    !CanBindAll<VolumeFieldInputs<DirectLocalField<Mat3>, DirectLocalField<Mat3>, DirectLocalField<Eigen::Vector3d>>>);
+static_assert(CanBindAll<VolumeFieldInputs<ElementField<Mat3>, ElementField<Mat3>, ConstantField<Eigen::Vector2d>>>);
+static_assert(!CanBindAll<VolumeFieldInputs<ElementField<Mat3>, ElementField<Mat3>, ConstantField<Eigen::Vector3d>>>);
 
 TEST(NeoHookeanLocalEnergy, DirectFieldsBindCorrectDerivativesAndOwnSnapshots) {
     Mat3 F, Fp;
     F << 1.2, 0.1, -0.03, 0.04, 0.9, 0.02, -0.01, 0.04, 1.1;
     Fp << 0.95, -0.02, 0.05, 0.01, 1.1, -0.04, 0.03, 0.01, 1.05;
-    VolumeFieldInputs fields{DirectLocalField<Mat3>(F), DirectLocalField<Mat3>(Fp),
-                             DirectLocalField<Eigen::Vector2d>(Eigen::Vector2d(2, 3))};
+    VolumeFieldInputs fields{ElementField<Mat3>(F), ElementField<Mat3>(Fp),
+                             ConstantField<Eigen::Vector2d>(Eigen::Vector2d(2, 3))};
     const NeoHookeanLocalEnergyF deformation(fields);
     const NeoHookeanLocalEnergyFp plastic(fields);
     const NeoHookeanLocalEnergyTheta parameters(fields);
@@ -45,16 +44,16 @@ TEST(NeoHookeanLocalEnergy, DirectFieldsBindCorrectDerivativesAndOwnSnapshots) {
     EXPECT_EQ(deformation.hessian(0.3), NeoHookeanEnergyF{}.hessian(inputs));
     EXPECT_EQ(plastic.hessian(0.3), NeoHookeanEnergyFp{}.hessian(inputs));
     EXPECT_EQ(parameters.hessian(0.3), NeoHookeanEnergyTheta{}.hessian(inputs));
-    fields.F = DirectLocalField<Mat3>(1.2 * F);
-    fields.Fp = DirectLocalField<Mat3>(0.9 * Fp);
-    fields.theta = DirectLocalField<Eigen::Vector2d>(Eigen::Vector2d(4, 5));
+    fields.F = ElementField<Mat3>(1.2 * F);
+    fields.Fp = ElementField<Mat3>(0.9 * Fp);
+    fields.theta = ConstantField<Eigen::Vector2d>(Eigen::Vector2d(4, 5));
     EXPECT_DOUBLE_EQ(deformation.value(0.3), expected);
     EXPECT_DOUBLE_EQ(plastic.value(0.3), expected);
     EXPECT_DOUBLE_EQ(parameters.value(0.3), expected);
     EXPECT_NE(NeoHookeanLocalEnergyF(fields).value(0.3), expected);
     const auto owned = [&] {
-        VolumeFieldInputs local{DirectLocalField<Mat3>(F), DirectLocalField<Mat3>(Fp),
-                                DirectLocalField<Eigen::Vector2d>(Eigen::Vector2d(2, 3))};
+        VolumeFieldInputs local{ElementField<Mat3>(F), ElementField<Mat3>(Fp),
+                                ConstantField<Eigen::Vector2d>(Eigen::Vector2d(2, 3))};
         return NeoHookeanLocalEnergyF(std::move(local));
     }();
     EXPECT_DOUBLE_EQ(owned.value(0.3), expected);

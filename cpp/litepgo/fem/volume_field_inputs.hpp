@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/fem/field_value.hpp"
+#include "litepgo/fem/field.hpp"
 #include "litepgo/fem/material_inputs.hpp"
 
 namespace litepgo {
@@ -17,12 +17,7 @@ struct VolumeFieldInputs {
 
     static constexpr int num_parameters = ThetaField::FieldValue::RowsAtCompileTime;
     template <class GeometryPoint>
-        requires requires(const FField& deformation, const FpField& plastic, const ThetaField& parameters,
-                          const GeometryPoint& point) {
-            { deformation.value(point) } -> std::same_as<Mat3>;
-            { plastic.value(point) } -> std::same_as<Mat3>;
-            { parameters.value(point) } -> std::same_as<typename ThetaField::FieldValue>;
-        }
+        requires Field<FField, GeometryPoint> && Field<FpField, GeometryPoint> && Field<ThetaField, GeometryPoint>
     MaterialInputs<num_parameters> evaluate(const GeometryPoint& point) const {
         return {F.value(point), Fp.value(point), theta.value(point)};
     }

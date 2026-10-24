@@ -1,48 +1,35 @@
 #pragma once
 
-#include "litepgo/core/types.hpp"
-#include "litepgo/fem/field_value.hpp"
+#include "litepgo/fem/constant_dof_data.hpp"
 
-#include <array>
+#include <stdexcept>
 
 namespace litepgo {
 
-// One spatially constant, globally shared value. It can still be optimized.
-// Column-major vec ordering; every element uses the same field-local indices.
-// Non-finite storage is allowed; local evaluation validates it.
+// Owns a globally shared value snapshot, without global DOF numbering.
+// Local DOFs and vec(value) use column-major order, regardless of input storage order.
 template <FixedFieldValue Value> class ConstantField final {
   public:
-    static constexpr int num_dofs = Value::SizeAtCompileTime;
+    using FieldValue = Eigen::Matrix<double, Value::RowsAtCompileTime, Value::ColsAtCompileTime>;
+    static constexpr int num_dofs = FieldValue::SizeAtCompileTime;
 
-    explicit ConstantField(const Value& value) {
-        set_value(value);
-    }
-
-    Value value() const {
-        return Eigen::Map<const Eigen::Matrix<double, Value::RowsAtCompileTime, Value::ColsAtCompileTime>>(
-            values_.data());
-    }
-    void set_value(const Value& value) {
-        Eigen::Map<Eigen::Matrix<double, Value::RowsAtCompileTime, Value::ColsAtCompileTime>> block(values_.data());
-        block = value;
-    }
-    std::array<int, num_dofs> dof_indices() const {
-        std::array<int, num_dofs> result;
-        for (int i = 0; i < num_dofs; ++i)
-            result[static_cast<std::size_t>(i)] = i;
-        return result;
+    explicit ConstantField(const Value& value) : value_(value) {
+        if (!value_.allFinite())
+            throw std::invalid_argument("ConstantField requires finite values");
     }
 
-    // Non-resizable views; the object must outlive them.
-    ConstVecRef values() const {
-        return values_;
+    explicit ConstantField(const ConstantDofData<Value>& data) : ConstantField(data.value()) {}
+
+    template <class GeometryPoint> FieldValue value(const GeometryPoint&) const {
+        return value_;
     }
-    VecRef values() {
-        return values_;
+
+    template <class GeometryPoint> static Eigen::Matrix<double, num_dofs, num_dofs> jacobian(const GeometryPoint&) {
+        return Eigen::Matrix<double, num_dofs, num_dofs>::Identity();
     }
 
   private:
-    Eigen::Matrix<double, num_dofs, 1> values_;
+    FieldValue value_;
 };
 
 } // namespace litepgo

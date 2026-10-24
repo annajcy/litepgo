@@ -1,6 +1,7 @@
 #pragma once
 
 #include "litepgo/fem/detail/dof_derivatives.hpp"
+#include "litepgo/fem/field.hpp"
 #include "litepgo/fem/neo_hookean.hpp"
 
 #include <type_traits>
@@ -31,23 +32,26 @@ class NeoHookeanLocalEnergyF final {
     }
 
     template <class GeometryPoint>
-        requires requires(const Fields& fields, const GeometryPoint& point) {
-            {
-                detail::gradient_wrt_dofs(fields.F.jacobian(point),
-                                          NeoHookeanEnergyF{}.gradient(fields.evaluate(point)))
-            } -> std::same_as<Eigen::Matrix<double, num_dofs, 1>>;
-        }
+        requires AffineField<std::remove_cvref_t<decltype(std::declval<Fields>().F)>, GeometryPoint> &&
+                 requires(const Fields& fields, const GeometryPoint& point) {
+                     {
+                         detail::gradient_wrt_dofs(fields.F.jacobian(point),
+                                                   NeoHookeanEnergyF{}.gradient(fields.evaluate(point)))
+                     } -> std::same_as<Eigen::Matrix<double, num_dofs, 1>>;
+                 }
     Eigen::Matrix<double, num_dofs, 1> gradient(const GeometryPoint& point) const {
         return detail::gradient_wrt_dofs(fields_.F.jacobian(point),
                                          NeoHookeanEnergyF{}.gradient(fields_.evaluate(point)));
     }
 
     template <class GeometryPoint>
-        requires requires(const Fields& fields, const GeometryPoint& point) {
-            {
-                detail::hessian_wrt_dofs(fields.F.jacobian(point), NeoHookeanEnergyF{}.hessian(fields.evaluate(point)))
-            } -> std::same_as<Eigen::Matrix<double, num_dofs, num_dofs>>;
-        }
+        requires AffineField<std::remove_cvref_t<decltype(std::declval<Fields>().F)>, GeometryPoint> &&
+                 requires(const Fields& fields, const GeometryPoint& point) {
+                     {
+                         detail::hessian_wrt_dofs(fields.F.jacobian(point),
+                                                  NeoHookeanEnergyF{}.hessian(fields.evaluate(point)))
+                     } -> std::same_as<Eigen::Matrix<double, num_dofs, num_dofs>>;
+                 }
     Eigen::Matrix<double, num_dofs, num_dofs> hessian(const GeometryPoint& point) const {
         return detail::hessian_wrt_dofs(fields_.F.jacobian(point),
                                         NeoHookeanEnergyF{}.hessian(fields_.evaluate(point)));
@@ -77,24 +81,26 @@ class NeoHookeanLocalEnergyFp final {
     }
 
     template <class GeometryPoint>
-        requires requires(const Fields& fields, const GeometryPoint& point) {
-            {
-                detail::gradient_wrt_dofs(fields.Fp.jacobian(point),
-                                          NeoHookeanEnergyFp{}.gradient(fields.evaluate(point)))
-            } -> std::same_as<Eigen::Matrix<double, num_dofs, 1>>;
-        }
+        requires AffineField<std::remove_cvref_t<decltype(std::declval<Fields>().Fp)>, GeometryPoint> &&
+                 requires(const Fields& fields, const GeometryPoint& point) {
+                     {
+                         detail::gradient_wrt_dofs(fields.Fp.jacobian(point),
+                                                   NeoHookeanEnergyFp{}.gradient(fields.evaluate(point)))
+                     } -> std::same_as<Eigen::Matrix<double, num_dofs, 1>>;
+                 }
     Eigen::Matrix<double, num_dofs, 1> gradient(const GeometryPoint& point) const {
         return detail::gradient_wrt_dofs(fields_.Fp.jacobian(point),
                                          NeoHookeanEnergyFp{}.gradient(fields_.evaluate(point)));
     }
 
     template <class GeometryPoint>
-        requires requires(const Fields& fields, const GeometryPoint& point) {
-            {
-                detail::hessian_wrt_dofs(fields.Fp.jacobian(point),
-                                         NeoHookeanEnergyFp{}.hessian(fields.evaluate(point)))
-            } -> std::same_as<Eigen::Matrix<double, num_dofs, num_dofs>>;
-        }
+        requires AffineField<std::remove_cvref_t<decltype(std::declval<Fields>().Fp)>, GeometryPoint> &&
+                 requires(const Fields& fields, const GeometryPoint& point) {
+                     {
+                         detail::hessian_wrt_dofs(fields.Fp.jacobian(point),
+                                                  NeoHookeanEnergyFp{}.hessian(fields.evaluate(point)))
+                     } -> std::same_as<Eigen::Matrix<double, num_dofs, num_dofs>>;
+                 }
     Eigen::Matrix<double, num_dofs, num_dofs> hessian(const GeometryPoint& point) const {
         return detail::hessian_wrt_dofs(fields_.Fp.jacobian(point),
                                         NeoHookeanEnergyFp{}.hessian(fields_.evaluate(point)));
@@ -124,24 +130,26 @@ class NeoHookeanLocalEnergyTheta final {
     }
 
     template <class GeometryPoint>
-        requires requires(const Fields& fields, const GeometryPoint& point) {
-            {
-                detail::gradient_wrt_dofs(fields.theta.jacobian(point),
-                                          NeoHookeanEnergyTheta{}.gradient(fields.evaluate(point)))
-            } -> std::same_as<Eigen::Matrix<double, num_dofs, 1>>;
-        }
+        requires AffineField<std::remove_cvref_t<decltype(std::declval<Fields>().theta)>, GeometryPoint> &&
+                 requires(const Fields& fields, const GeometryPoint& point) {
+                     {
+                         detail::gradient_wrt_dofs(fields.theta.jacobian(point),
+                                                   NeoHookeanEnergyTheta{}.gradient(fields.evaluate(point)))
+                     } -> std::same_as<Eigen::Matrix<double, num_dofs, 1>>;
+                 }
     Eigen::Matrix<double, num_dofs, 1> gradient(const GeometryPoint& point) const {
         return detail::gradient_wrt_dofs(fields_.theta.jacobian(point),
                                          NeoHookeanEnergyTheta{}.gradient(fields_.evaluate(point)));
     }
 
     template <class GeometryPoint>
-        requires requires(const Fields& fields, const GeometryPoint& point) {
-            {
-                detail::hessian_wrt_dofs(fields.theta.jacobian(point),
-                                         NeoHookeanEnergyTheta{}.hessian(fields.evaluate(point)))
-            } -> std::same_as<Eigen::Matrix<double, num_dofs, num_dofs>>;
-        }
+        requires AffineField<std::remove_cvref_t<decltype(std::declval<Fields>().theta)>, GeometryPoint> &&
+                 requires(const Fields& fields, const GeometryPoint& point) {
+                     {
+                         detail::hessian_wrt_dofs(fields.theta.jacobian(point),
+                                                  NeoHookeanEnergyTheta{}.hessian(fields.evaluate(point)))
+                     } -> std::same_as<Eigen::Matrix<double, num_dofs, num_dofs>>;
+                 }
     Eigen::Matrix<double, num_dofs, num_dofs> hessian(const GeometryPoint& point) const {
         return detail::hessian_wrt_dofs(fields_.theta.jacobian(point),
                                         NeoHookeanEnergyTheta{}.hessian(fields_.evaluate(point)));

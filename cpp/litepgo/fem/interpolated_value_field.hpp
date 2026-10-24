@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/fem/interpolated_field.hpp"
+#include "litepgo/fem/field_interpolation.hpp"
 
 namespace litepgo {
 
@@ -11,7 +11,7 @@ template <Basis3D Basis, int Components>
 class InterpolatedValueField final {
   public:
     using FieldValue = Eigen::Matrix<double, Components, 1>;
-    static constexpr int num_dofs = InterpolatedField<Basis, Components>::num_dofs;
+    static constexpr int num_dofs = FieldInterpolation<Basis, Components>::num_dofs;
 
     explicit InterpolatedValueField(const Eigen::Matrix<double, Basis::num_basis_functions, Components>& coefficients)
         : interpolation_(coefficients) {}
@@ -21,11 +21,11 @@ class InterpolatedValueField final {
     }
     static Eigen::Matrix<double, Components, num_dofs>
     jacobian(const typename VolumeReferenceGeometry<Basis>::PointData& point) {
-        return InterpolatedField<Basis, Components>::value_matrix(point);
+        return FieldInterpolation<Basis, Components>::value_matrix(point);
     }
 
   private:
-    InterpolatedField<Basis, Components> interpolation_;
+    FieldInterpolation<Basis, Components> interpolation_;
 };
 
 } // namespace litepgo

@@ -7,7 +7,8 @@
 
 namespace litepgo {
 
-// Integrates local energies. Geometry and chain rules belong to the energy.
+// Integrates local energies using cached geometry points and weights.
+// The local energy handles field evaluation and chain rules.
 template <class QuadratureCache>
     requires requires(const QuadratureCache& cache) {
         cache.sample(0).point;
