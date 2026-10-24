@@ -4,15 +4,17 @@ add_library(litepgo STATIC
     energy/energy.cpp
     energy/quadratic_energy.cpp
     energy/weighted_energy_sum.cpp
-    fem/multiplicative_kinematics.cpp
-    fem/neo_hookean.cpp
-    fem/neo_hookean_local_energy.cpp
-    fem/field_interpolation.cpp
-    fem/deformation_gradient_field.cpp
-    fem/interpolated_value_field.cpp
-    fem/material_fields.cpp
-    fem/local_kernel.cpp
-    fem/hex_q1_basis.cpp
+    fem/material/multiplicative_kinematics.cpp
+    fem/material/neo_hookean.cpp
+    fem/local/neo_hookean_local_energy.cpp
+    fem/field/field_interpolation.cpp
+    fem/field/deformation_gradient_field.cpp
+    fem/field/interpolated_value_field.cpp
+    fem/material/material_fields.cpp
+    fem/local/dof_derivatives.cpp
+    fem/local/local_energy.cpp
+    fem/local/local_kernel.cpp
+    fem/basis/hex_q1_basis.cpp
     linalg/dof_reduction.cpp
     linalg/eigen_ldlt.cpp
     linalg/eigen_sparse_lu.cpp
