@@ -1,6 +1,6 @@
 #include "litepgo/linalg/reduced_matrix.hpp"
 
-#include "litepgo/linalg/dof_reduction.hpp"
+#include "litepgo/dof/dof_reduction.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <Eigen/Dense>

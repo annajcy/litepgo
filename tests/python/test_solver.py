@@ -3,7 +3,7 @@ import pytest
 import scipy.sparse as sp
 
 from litepgo.energy import AffineMappedEnergy, HessianKind, QuadraticEnergy, WeightedEnergySum
-from litepgo.linalg import AutoIndefiniteSparseSolver, EigenLDLT
+from litepgo.linalg.sparse_solver import AutoIndefiniteSparseSolver, EigenLDLT
 from litepgo.solver import NewtonOptions, NewtonStatus, newton_solve
 
 

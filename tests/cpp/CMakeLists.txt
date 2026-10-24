@@ -17,7 +17,7 @@ add_executable(litepgo_tests
     dof/constant_dof_map_gtest.cpp
     fem/field/field_gtest.cpp
     fem/field/local_field_gtest.cpp
-    fem/material/material_fields_gtest.cpp
+    fem/field/material_fields_gtest.cpp
     fem/quadrature/gauss_legendre_1d_gtest.cpp
     fem/basis/hex_q1_basis_gtest.cpp
     fem/field/field_interpolation_gtest.cpp
@@ -35,10 +35,10 @@ add_executable(litepgo_tests
     fem/local/volume_integration_gtest.cpp
     fem/geometry/volume_quadrature_cache_gtest.cpp
     fem/geometry/volume_reference_geometry_gtest.cpp
-    linalg/dof_reduction_gtest.cpp
+    dof/dof_reduction_gtest.cpp
     linalg/reduced_matrix_gtest.cpp
     linalg/sparse_pattern_gtest.cpp
-    linalg/sparse_solver_gtest.cpp
+    linalg/sparse_solver/sparse_solver_gtest.cpp
     mesh/mesh_topology_gtest.cpp
     solver/newton_gtest.cpp)
 target_link_libraries(litepgo_tests PRIVATE litepgo::litepgo litepgo::warnings GTest::gtest_main)

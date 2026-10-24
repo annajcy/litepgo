@@ -1,9 +1,9 @@
 #include "litepgo/fem/basis/hex_q1_basis.hpp"
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
+#include "litepgo/fem/field/material_fields.hpp"
 #include "litepgo/fem/local/local_energy.hpp"
 #include "litepgo/fem/local/neo_hookean_local_energy.hpp"
-#include "litepgo/fem/material/material_fields.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
 
 #include "litepgo/fem/geometry/volume_reference_geometry.hpp"

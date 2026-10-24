@@ -1,4 +1,4 @@
-#include "litepgo/linalg/sparse_solver.hpp"
+#include "litepgo/linalg/sparse_solver/sparse_solver.hpp"
 
 #include "litepgo/core/busy_scope.hpp"
 #include "litepgo/core/memory.hpp"

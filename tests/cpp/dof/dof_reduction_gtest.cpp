@@ -1,4 +1,4 @@
-#include "litepgo/linalg/dof_reduction.hpp"
+#include "litepgo/dof/dof_reduction.hpp"
 
 #include <Eigen/Dense>
 #include <gtest/gtest.h>

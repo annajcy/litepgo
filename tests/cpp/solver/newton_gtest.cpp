@@ -2,7 +2,7 @@
 
 #include "litepgo/energy/quadratic_energy.hpp"
 #include "litepgo/energy/weighted_energy_sum.hpp"
-#include "litepgo/linalg/auto_sparse_solver.hpp"
+#include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 
 #include "../testing/test_energies.hpp"
 

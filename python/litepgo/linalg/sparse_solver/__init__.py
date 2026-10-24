@@ -1,6 +1,6 @@
-"""Sparse linear solvers and DOF reduction, mirroring cpp/litepgo/linalg.
+"""Sparse linear solvers, mirroring cpp/litepgo/linalg/sparse_solver.
 
-Solvers and DofReduction take scipy.sparse matrices. AccelerateLLT and AccelerateLDLT exist only
+Solvers take scipy.sparse matrices. AccelerateLLT and AccelerateLDLT exist only
 in builds with Apple Accelerate; AutoSparseSolver and AutoIndefiniteSparseSolver
 are the platform defaults, as in auto_sparse_solver.hpp.
 """
@@ -12,10 +12,9 @@ EigenLDLT = _native.EigenLDLT
 EigenSparseLU = _native.EigenSparseLU
 AutoSparseSolver = _native.AutoSparseSolver
 AutoIndefiniteSparseSolver = _native.AutoIndefiniteSparseSolver
-DofReduction = _native.DofReduction
 
 __all__ = [
-    "SparseSolver", "EigenLDLT", "EigenSparseLU", "AutoSparseSolver", "AutoIndefiniteSparseSolver", "DofReduction"
+    "SparseSolver", "EigenLDLT", "EigenSparseLU", "AutoSparseSolver", "AutoIndefiniteSparseSolver"
 ]
 
 if hasattr(_native, "AccelerateLLT"):

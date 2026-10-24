@@ -1,4 +1,4 @@
-#include "litepgo/linalg/dof_reduction.hpp"
+#include "litepgo/dof/dof_reduction.hpp"
 
 #include "litepgo/core/memory.hpp"
 #include "litepgo/linalg/reduced_matrix.hpp"

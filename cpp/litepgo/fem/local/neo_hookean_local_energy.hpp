@@ -1,7 +1,7 @@
 #pragma once
 
+#include "litepgo/fem/field/material_fields.hpp"
 #include "litepgo/fem/local/local_energy.hpp"
-#include "litepgo/fem/material/material_fields.hpp"
 
 namespace litepgo {
 

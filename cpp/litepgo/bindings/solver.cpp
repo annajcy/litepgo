@@ -1,7 +1,7 @@
 #include "litepgo/bindings/bindings.hpp"
+#include "litepgo/dof/dof_reduction.hpp"
 #include "litepgo/energy/energy.hpp"
-#include "litepgo/linalg/auto_sparse_solver.hpp"
-#include "litepgo/linalg/dof_reduction.hpp"
+#include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include "litepgo/solver/newton.hpp"
 
 #include <nanobind/eigen/dense.h>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/linalg/sparse_solver.hpp"
+#include "litepgo/linalg/sparse_solver/sparse_solver.hpp"
 
 #include <memory>
 

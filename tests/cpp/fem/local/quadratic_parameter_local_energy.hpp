@@ -1,7 +1,7 @@
 #pragma once
+#include "litepgo/fem/field/material_fields.hpp"
 #include "litepgo/fem/local/dof_derivatives.hpp"
 #include "litepgo/fem/local/local_energy.hpp"
-#include "litepgo/fem/material/material_fields.hpp"
 
 // Nonzero parameter Hessian complements NeoHookean's linear theta dependence.
 class QuadraticParameterLocalEnergy : public litepgo::LocalEnergy {

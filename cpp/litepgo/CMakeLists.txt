@@ -12,22 +12,22 @@ add_library(litepgo STATIC
     fem/field/field_interpolation.cpp
     fem/field/deformation_gradient_field.cpp
     fem/field/interpolated_value_field.cpp
-    fem/material/material_fields.cpp
+    fem/field/material_fields.cpp
     fem/local/dof_derivatives.cpp
     fem/local/local_energy.cpp
     fem/local/local_kernel.cpp
     fem/basis/hex_q1_basis.cpp
-    linalg/dof_reduction.cpp
-    linalg/eigen_ldlt.cpp
-    linalg/eigen_sparse_lu.cpp
+    dof/dof_reduction.cpp
+    linalg/sparse_solver/eigen_ldlt.cpp
+    linalg/sparse_solver/eigen_sparse_lu.cpp
     linalg/reduced_matrix.cpp
     linalg/sparse_pattern.cpp
-    linalg/sparse_solver.cpp
+    linalg/sparse_solver/sparse_solver.cpp
     solver/newton.cpp)
 add_library(litepgo::litepgo ALIAS litepgo)
 
 if(LITEPGO_WITH_ACCELERATE)
-    target_sources(litepgo PRIVATE linalg/accelerate_llt.cpp linalg/accelerate_ldlt.cpp)
+    target_sources(litepgo PRIVATE linalg/sparse_solver/accelerate_llt.cpp linalg/sparse_solver/accelerate_ldlt.cpp)
 endif()
 
 target_include_directories(litepgo PUBLIC "${PROJECT_SOURCE_DIR}/cpp")
