@@ -3,7 +3,6 @@
 #include "litepgo/fem/point_energy.hpp"
 
 #include <Eigen/Core>
-#include <type_traits>
 #include <utility>
 
 namespace litepgo {
@@ -35,13 +34,24 @@ class LocalKernel final {
         : cache_(std::move(cache)), mapping_(std::move(mapping)), energy_(std::move(energy)) {}
 
     double value(const Fields& fields) const {
-        return integrate<0>(fields);
+        double result = 0.0;
+        for_each_point(fields, [&](const auto& sample, const auto& input) {
+            result += sample.volume_weight * energy_.value(input);
+        });
+        return result;
     }
 
     Gradient gradient(const Fields& fields) const
         requires PointFirstOrderEnergy<E> && std::same_as<typename E::Gradient, typename Mapping::PointGradient>
     {
-        return integrate<1>(fields);
+        Gradient result = Gradient::Zero();
+        for_each_point(fields, [&](const auto& sample, const auto& input) {
+            const auto B = mapping_.active_jacobian(sample.point);
+            const typename Mapping::PointGradient g = energy_.gradient(input);
+            const Eigen::Map<const Eigen::Matrix<double, Mapping::point_dofs, 1>> vector(g.data());
+            result.noalias() += sample.volume_weight * B.transpose() * vector;
+        });
+        return result;
     }
 
     // Exact Hessian of the active block, without projection or mixed blocks.
@@ -49,35 +59,22 @@ class LocalKernel final {
     Hessian hessian(const Fields& fields) const
         requires PointSecondOrderEnergy<E> && std::same_as<typename E::Hessian, typename Mapping::PointHessian>
     {
-        return integrate<2>(fields);
+        Hessian result = Hessian::Zero();
+        for_each_point(fields, [&](const auto& sample, const auto& input) {
+            const auto B = mapping_.active_jacobian(sample.point);
+            const typename Mapping::PointHessian H = energy_.hessian(input);
+            result.noalias() += sample.volume_weight * B.transpose() * H * B;
+        });
+        return result;
     }
 
   private:
-    template <int Order> auto integrate(const Fields& fields) const {
-        using Result = std::conditional_t<Order == 0, double, std::conditional_t<Order == 1, Gradient, Hessian>>;
-        Result result;
-        if constexpr (Order == 0)
-            result = 0.0;
-        else
-            result.setZero();
+    template <class Visitor> void for_each_point(const Fields& fields, Visitor&& visitor) const {
         for (int q = 0; q < Cache::num_quadrature_points; ++q) {
             const auto& sample = cache_.sample(q);
             const auto input = mapping_.point_input(fields, sample.point);
-            const double weight = sample.volume_weight;
-            if constexpr (Order == 0) {
-                result += weight * energy_.value(input);
-            } else {
-                const auto B = mapping_.active_jacobian(sample.point);
-                if constexpr (Order == 1) {
-                    const typename Mapping::PointGradient g = energy_.gradient(input);
-                    const Eigen::Map<const Eigen::Matrix<double, Mapping::point_dofs, 1>> vector(g.data());
-                    result.noalias() += weight * B.transpose() * vector;
-                } else {
-                    result.noalias() += weight * B.transpose() * energy_.hessian(input) * B;
-                }
-            }
+            visitor(sample, input);
         }
-        return result;
     }
 
     Cache cache_;
