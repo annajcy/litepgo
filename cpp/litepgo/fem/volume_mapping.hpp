@@ -1,6 +1,9 @@
 #pragma once
 
-#include "litepgo/fem/interpolated_field.hpp"
+#include "litepgo/fem/direct_local_field.hpp"
+#include "litepgo/fem/displacement_gradient_field.hpp"
+#include "litepgo/fem/interpolated_value_field.hpp"
+#include "litepgo/fem/volume_field_mapping.hpp"
 #include "litepgo/fem/volume_local_fields.hpp"
 #include "litepgo/fem/volumetric_point.hpp"
 
@@ -11,15 +14,18 @@ namespace detail {
 template <Basis3D Basis, int NumParameters>
 VolumetricPoint<NumParameters> volume_point(const VolumeLocalFields<Basis, NumParameters>& fields,
                                             const typename VolumeReferenceGeometry<Basis>::PointData& reference_point) {
-    const InterpolatedField<Basis, 3> u(fields.u), up(fields.up);
-    VolumetricPoint<NumParameters> result;
-    result.F = Mat3::Identity() + u.gradient(reference_point);
-    result.Fp = Mat3::Identity() + up.gradient(reference_point);
+    using VectorField = DisplacementGradientField<Basis>;
     if constexpr (NumParameters > 0) {
-        const InterpolatedField<Basis, NumParameters> parameters(fields.theta);
-        result.theta = parameters.value(reference_point);
+        using ParameterField = InterpolatedValueField<Basis, NumParameters>;
+        const VolumeFieldInputs<VectorField, VectorField, ParameterField> inputs{
+            VectorField(fields.u), VectorField(fields.up), ParameterField(fields.theta)};
+        return volume_field_point(inputs, reference_point);
+    } else {
+        using ParameterField = DirectLocalField<MaterialParameterTypes<0>::Parameters>;
+        const VolumeFieldInputs<VectorField, VectorField, ParameterField> inputs{
+            VectorField(fields.u), VectorField(fields.up), ParameterField({})};
+        return volume_field_point(inputs, reference_point);
     }
-    return result;
 }
 
 } // namespace detail
@@ -45,7 +51,7 @@ class VolumeVectorGradientMapping final {
     }
 
     Jacobian active_jacobian(const ReferencePoint& reference_point) const {
-        return InterpolatedField<Basis, 3>::gradient_matrix(reference_point);
+        return DisplacementGradientField<Basis>::jacobian(reference_point);
     }
 };
 
@@ -74,7 +80,7 @@ class VolumeThetaMapping final {
 
     Jacobian active_jacobian(const ReferencePoint& reference_point) const {
         if constexpr (NumParameters > 0) {
-            return InterpolatedField<Basis, NumParameters>::value_matrix(reference_point);
+            return InterpolatedValueField<Basis, NumParameters>::jacobian(reference_point);
         } else {
             return Jacobian::Zero();
         }

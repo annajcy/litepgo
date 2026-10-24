@@ -11,6 +11,10 @@ add_executable(litepgo_tests
     energy/quadratic_energy_gtest.cpp
     energy/weighted_energy_sum_gtest.cpp
     fem/basis_gtest.cpp
+    fem/element_field_gtest.cpp
+    fem/constant_field_gtest.cpp
+    fem/local_field_gtest.cpp
+    fem/volume_field_mapping_gtest.cpp
     fem/gauss_legendre_1d_gtest.cpp
     fem/hex_q1_basis_gtest.cpp
     fem/interpolated_field_gtest.cpp
