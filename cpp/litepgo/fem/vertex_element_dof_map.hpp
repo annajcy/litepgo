@@ -28,10 +28,6 @@ class VertexElementDofMap final {
     template <int DofsPerVertex>
         requires(DofsPerVertex > 0 && VerticesPerCell <= std::numeric_limits<int>::max() / DofsPerVertex)
     using LocalCoefficients = Eigen::Matrix<double, VerticesPerCell, DofsPerVertex>;
-    template <int DofsPerVertex>
-    using CoefficientMatrix = Eigen::Matrix<double, num_element_dofs<DofsPerVertex>, num_element_dofs<DofsPerVertex>>;
-    template <int DofsPerVertex> using CoefficientJacobian = decltype(CoefficientMatrix<DofsPerVertex>::Identity());
-
     explicit VertexElementDofMap(const MeshTopology<VerticesPerCell>& topology) : topology_(topology) {}
 
     VertexElementDofMap(const MeshTopology<VerticesPerCell>&&) = delete;
@@ -64,16 +60,6 @@ class VertexElementDofMap final {
             }
         }
         return result;
-    }
-
-    // d(flatten_rows(c_e)) / d(data.values()[dof_indices(element, data)]):
-    // an identity expression, without allocating or storing a dense matrix.
-    template <int DofsPerVertex>
-    CoefficientJacobian<DofsPerVertex> coefficient_jacobian(int element,
-                                                            const VertexDofData<DofsPerVertex>& data) const {
-        check_vertex_count(data);
-        topology_.cell_vertices(element);
-        return CoefficientMatrix<DofsPerVertex>::Identity();
     }
 
   private:

@@ -30,7 +30,6 @@ template <int D>
 concept CanGather = requires(const HexMap& map, const VertexDofData<D>& data) {
     map.gather(0, data);
     map.dof_indices(0, data);
-    map.coefficient_jacobian(0, data);
 };
 
 static_assert(CanFormMap<8>);
@@ -111,8 +110,6 @@ TEST(VertexElementDofMap, GathersThreeIndependentFieldsInCellAndSlotOrder) {
                 EXPECT_DOUBLE_EQ(theta_e(i, c), theta.values()[global]);
             }
         }
-        EXPECT_TRUE(map.coefficient_jacobian(e, a).isIdentity());
-        EXPECT_TRUE(map.coefficient_jacobian(e, theta).isIdentity());
     }
 
     const auto snapshot = map.gather(0, a);
@@ -204,7 +201,6 @@ TEST(VertexElementDofMap, RejectsMismatchedDataOnEveryCall) {
         data = VertexDofData<3>(count);
         EXPECT_THROW(map.gather(0, data), std::invalid_argument);
         EXPECT_THROW(map.dof_indices(0, data), std::invalid_argument);
-        EXPECT_THROW(map.coefficient_jacobian(0, data), std::invalid_argument);
         const VertexDofData<2> parameters(count);
         EXPECT_THROW(map.gather(0, parameters), std::invalid_argument);
         EXPECT_THROW(map.dof_indices(0, parameters), std::invalid_argument);
@@ -220,7 +216,6 @@ TEST(VertexElementDofMap, ChecksElementIndices) {
     for (int e : {-1, 2}) {
         EXPECT_THROW(map.dof_indices(e, data), std::out_of_range);
         EXPECT_THROW(map.gather(e, data), std::out_of_range);
-        EXPECT_THROW(map.coefficient_jacobian(e, data), std::out_of_range);
     }
 }
 

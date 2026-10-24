@@ -24,11 +24,12 @@ VolumetricPoint<NumParameters> volume_point(const VolumeLocalFields<Basis, NumPa
 
 } // namespace detail
 
-// Affine mapping with fields.u active and the other fields fixed.
+// Shared affine vector-gradient mapping for either fields.u or fields.up.
+// The paired point energy selects F or Fp; the other fields are held fixed.
 // Local coefficients are flattened by row; point gradients by column.
 template <Basis3D Basis, int NumParameters>
     requires requires { typename VolumeLocalFields<Basis, NumParameters>; }
-class VolumeFMapping final {
+class VolumeVectorGradientMapping final {
   public:
     using Fields = VolumeLocalFields<Basis, NumParameters>;
     using ReferencePoint = typename VolumeReferenceGeometry<Basis>::PointData;
@@ -48,29 +49,9 @@ class VolumeFMapping final {
     }
 };
 
-// Affine mapping with fields.up active and the other fields fixed.
-// Local coefficients are flattened by row; point gradients by column.
-template <Basis3D Basis, int NumParameters>
-    requires requires { typename VolumeLocalFields<Basis, NumParameters>; }
-class VolumeFpMapping final {
-  public:
-    using Fields = VolumeLocalFields<Basis, NumParameters>;
-    using ReferencePoint = typename VolumeReferenceGeometry<Basis>::PointData;
-    using Point = VolumetricPoint<NumParameters>;
-    static constexpr int num_dofs = 3 * Basis::num_basis_functions;
-    static constexpr int point_dofs = 9;
-    using PointGradient = Mat3;
-    using PointHessian = Eigen::Matrix<double, point_dofs, point_dofs>;
-    using Jacobian = Eigen::Matrix<double, point_dofs, num_dofs>;
+template <Basis3D Basis, int NumParameters> using VolumeFMapping = VolumeVectorGradientMapping<Basis, NumParameters>;
 
-    Point point_input(const Fields& fields, const ReferencePoint& reference_point) const {
-        return detail::volume_point<Basis, NumParameters>(fields, reference_point);
-    }
-
-    Jacobian active_jacobian(const ReferencePoint& reference_point) const {
-        return InterpolatedField<Basis, 3>::gradient_matrix(reference_point);
-    }
-};
+template <Basis3D Basis, int NumParameters> using VolumeFpMapping = VolumeVectorGradientMapping<Basis, NumParameters>;
 
 // Affine mapping with fields.theta active and the other fields fixed.
 // Local coefficients are flattened by row; point gradients by column.

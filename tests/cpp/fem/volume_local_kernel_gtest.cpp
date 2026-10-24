@@ -20,6 +20,7 @@ using FK = VolumeFKernel<Basis, Quad, 2, NeoHookeanEnergyF>;
 using PK = VolumeFpKernel<Basis, Quad, 2, NeoHookeanEnergyFp>;
 using TK = VolumeThetaKernel<Basis, Quad, 2, NeoHookeanEnergyTheta>;
 
+static_assert(std::same_as<VolumeFMapping<Basis, 2>, VolumeFpMapping<Basis, 2>>);
 static_assert(FK::num_dofs == 24 && PK::num_dofs == 24 && TK::num_dofs == 16);
 static_assert(std::same_as<Fields::VectorCoefficients, Eigen::Matrix<double, 8, 3>>);
 static_assert(std::same_as<Fields::ParameterCoefficients, Eigen::Matrix<double, 8, 2>>);
