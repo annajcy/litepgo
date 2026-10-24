@@ -1,8 +1,8 @@
 #pragma once
 
-#include "litepgo/core/types.h"
-#include "litepgo/fem/vertex_dof_data.h"
-#include "litepgo/mesh/mesh_topology.h"
+#include "litepgo/core/types.hpp"
+#include "litepgo/fem/vertex_dof_data.hpp"
+#include "litepgo/mesh/mesh_topology.hpp"
 
 #include <array>
 #include <cstddef>

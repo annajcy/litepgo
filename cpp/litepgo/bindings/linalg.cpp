@@ -1,14 +1,14 @@
-#include "litepgo/bindings/bindings.h"
-#include "litepgo/bindings/sparse_matrix.h"
-#include "litepgo/linalg/auto_sparse_solver.h"
-#include "litepgo/linalg/dof_reduction.h"
-#include "litepgo/linalg/eigen_ldlt.h"
-#include "litepgo/linalg/eigen_sparse_lu.h"
-#include "litepgo/linalg/sparse_solver.h"
+#include "litepgo/bindings/bindings.hpp"
+#include "litepgo/bindings/sparse_matrix.hpp"
+#include "litepgo/linalg/auto_sparse_solver.hpp"
+#include "litepgo/linalg/dof_reduction.hpp"
+#include "litepgo/linalg/eigen_ldlt.hpp"
+#include "litepgo/linalg/eigen_sparse_lu.hpp"
+#include "litepgo/linalg/sparse_solver.hpp"
 
 #if defined(LITEPGO_HAS_ACCELERATE)
-#include "litepgo/linalg/accelerate_ldlt.h"
-#include "litepgo/linalg/accelerate_llt.h"
+#include "litepgo/linalg/accelerate_ldlt.hpp"
+#include "litepgo/linalg/accelerate_llt.hpp"
 #endif
 
 #include <nanobind/eigen/dense.h>

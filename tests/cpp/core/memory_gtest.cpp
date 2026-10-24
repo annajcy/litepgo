@@ -1,4 +1,4 @@
-#include "litepgo/core/memory.h"
+#include "litepgo/core/memory.hpp"
 
 #include <gtest/gtest.h>
 

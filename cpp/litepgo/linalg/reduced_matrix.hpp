@@ -1,7 +1,7 @@
 #pragma once
 
-#include "litepgo/core/types.h"
-#include "litepgo/linalg/dof_reduction.h"
+#include "litepgo/core/types.hpp"
+#include "litepgo/linalg/dof_reduction.hpp"
 
 #include <vector>
 

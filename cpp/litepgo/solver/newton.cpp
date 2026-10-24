@@ -1,6 +1,6 @@
-#include "litepgo/solver/newton.h"
+#include "litepgo/solver/newton.hpp"
 
-#include "litepgo/linalg/reduced_matrix.h"
+#include "litepgo/linalg/reduced_matrix.hpp"
 
 #include <algorithm>
 #include <cmath>

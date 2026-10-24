@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/energy/energy.h"
+#include "litepgo/energy/energy.hpp"
 
 namespace litepgo {
 

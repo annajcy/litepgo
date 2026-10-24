@@ -1,6 +1,6 @@
-#include "litepgo/energy/affine_mapped_energy.h"
+#include "litepgo/energy/affine_mapped_energy.hpp"
 
-#include "litepgo/linalg/sparse_pattern.h"
+#include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <algorithm>
 #include <stdexcept>

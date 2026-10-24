@@ -1,7 +1,7 @@
 #pragma once
 
-#include "litepgo/fem/quadrature.h"
-#include "litepgo/fem/volume_reference_geometry.h"
+#include "litepgo/fem/quadrature.hpp"
+#include "litepgo/fem/volume_reference_geometry.hpp"
 
 #include <array>
 #include <cmath>

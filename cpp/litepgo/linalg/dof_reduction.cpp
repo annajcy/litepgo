@@ -1,7 +1,7 @@
-#include "litepgo/linalg/dof_reduction.h"
+#include "litepgo/linalg/dof_reduction.hpp"
 
-#include "litepgo/core/memory.h"
-#include "litepgo/linalg/reduced_matrix.h"
+#include "litepgo/core/memory.hpp"
+#include "litepgo/linalg/reduced_matrix.hpp"
 
 #include <algorithm>
 #include <stdexcept>

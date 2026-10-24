@@ -2,8 +2,8 @@
 
 // Small energies for testing the energy framework and its composites.
 
-#include "litepgo/energy/dynamic_pattern_energy.h"
-#include "litepgo/energy/fixed_pattern_energy.h"
+#include "litepgo/energy/dynamic_pattern_energy.hpp"
+#include "litepgo/energy/fixed_pattern_energy.hpp"
 
 #include <algorithm>
 #include <cmath>

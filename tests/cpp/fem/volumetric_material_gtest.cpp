@@ -1,4 +1,4 @@
-#include "litepgo/fem/volumetric_material.h"
+#include "litepgo/fem/volumetric_material.hpp"
 
 namespace {
 

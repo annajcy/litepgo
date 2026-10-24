@@ -1,7 +1,7 @@
-#include "litepgo/energy/energy.h"
+#include "litepgo/energy/energy.hpp"
 
-#include "litepgo/core/busy_scope.h"
-#include "litepgo/linalg/sparse_pattern.h"
+#include "litepgo/core/busy_scope.hpp"
+#include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <cmath>
 #include <stdexcept>

@@ -1,6 +1,6 @@
-#include "litepgo/energy/quadratic_energy.h"
+#include "litepgo/energy/quadratic_energy.hpp"
 
-#include "litepgo/linalg/sparse_pattern.h"
+#include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <algorithm>
 #include <cmath>

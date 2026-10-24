@@ -1,6 +1,6 @@
-#include "litepgo/energy/dynamic_pattern_energy.h"
+#include "litepgo/energy/dynamic_pattern_energy.hpp"
 
-#include "litepgo/linalg/sparse_pattern.h"
+#include "litepgo/linalg/sparse_pattern.hpp"
 
 namespace litepgo {
 

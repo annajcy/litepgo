@@ -34,6 +34,8 @@ Configuring a preset links `compile_commands.json` at the repository root to tha
 
 ## Formatting
 
+C++ headers use the `.hpp` extension.
+
 ```bash
 git ls-files '*.h' '*.hpp' '*.cpp' | xargs uv run --no-sync clang-format -i
 ```

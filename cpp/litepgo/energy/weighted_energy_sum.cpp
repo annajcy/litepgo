@@ -1,6 +1,6 @@
-#include "litepgo/energy/weighted_energy_sum.h"
+#include "litepgo/energy/weighted_energy_sum.hpp"
 
-#include "litepgo/linalg/sparse_pattern.h"
+#include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <algorithm>
 #include <cmath>

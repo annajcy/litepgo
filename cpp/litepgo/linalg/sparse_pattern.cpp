@@ -1,4 +1,4 @@
-#include "litepgo/linalg/sparse_pattern.h"
+#include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <algorithm>
 

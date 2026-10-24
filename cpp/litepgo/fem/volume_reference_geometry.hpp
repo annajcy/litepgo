@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/fem/basis.h"
+#include "litepgo/fem/basis.hpp"
 
 #include <Eigen/Core>
 #include <Eigen/LU>

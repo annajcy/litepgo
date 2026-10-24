@@ -1,8 +1,8 @@
-#include "litepgo/energy/fixed_pattern_energy.h"
+#include "litepgo/energy/fixed_pattern_energy.hpp"
 
-#include "litepgo/linalg/sparse_pattern.h"
+#include "litepgo/linalg/sparse_pattern.hpp"
 
-#include "../testing/test_energies.h"
+#include "../testing/test_energies.hpp"
 
 #include <gtest/gtest.h>
 

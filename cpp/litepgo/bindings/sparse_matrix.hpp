@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/core/types.h"
+#include "litepgo/core/types.hpp"
 
 #include <nanobind/eigen/sparse.h>
 #include <nanobind/nanobind.h>

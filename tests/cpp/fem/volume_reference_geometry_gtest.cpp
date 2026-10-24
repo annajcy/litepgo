@@ -1,5 +1,5 @@
-#include "litepgo/fem/hex_q1_basis.h"
-#include "litepgo/fem/volume_reference_geometry.h"
+#include "litepgo/fem/hex_q1_basis.hpp"
+#include "litepgo/fem/volume_reference_geometry.hpp"
 
 #include <gtest/gtest.h>
 

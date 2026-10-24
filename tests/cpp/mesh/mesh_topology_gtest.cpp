@@ -1,4 +1,4 @@
-#include "litepgo/mesh/mesh_topology.h"
+#include "litepgo/mesh/mesh_topology.hpp"
 
 #include <gtest/gtest.h>
 

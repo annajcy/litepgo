@@ -1,7 +1,7 @@
-#include "litepgo/energy/affine_mapped_energy.h"
+#include "litepgo/energy/affine_mapped_energy.hpp"
 
-#include "../testing/finite_difference.h"
-#include "../testing/test_energies.h"
+#include "../testing/finite_difference.hpp"
+#include "../testing/test_energies.hpp"
 
 #include <gtest/gtest.h>
 

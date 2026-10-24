@@ -1,4 +1,4 @@
-#include "litepgo/fem/lagrange_basis.h"
+#include "litepgo/fem/lagrange_basis.hpp"
 
 #include <gtest/gtest.h>
 

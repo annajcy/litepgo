@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/fem/quadrature.h"
+#include "litepgo/fem/quadrature.hpp"
 
 #include <Eigen/Core>
 #include <unsupported/Eigen/KroneckerProduct>

@@ -1,9 +1,9 @@
-#include "litepgo/energy/energy.h"
-#include "litepgo/bindings/bindings.h"
-#include "litepgo/bindings/sparse_matrix.h"
-#include "litepgo/energy/affine_mapped_energy.h"
-#include "litepgo/energy/quadratic_energy.h"
-#include "litepgo/energy/weighted_energy_sum.h"
+#include "litepgo/energy/energy.hpp"
+#include "litepgo/bindings/bindings.hpp"
+#include "litepgo/bindings/sparse_matrix.hpp"
+#include "litepgo/energy/affine_mapped_energy.hpp"
+#include "litepgo/energy/quadratic_energy.hpp"
+#include "litepgo/energy/weighted_energy_sum.hpp"
 
 #include <nanobind/eigen/dense.h>
 #include <nanobind/stl/optional.h>

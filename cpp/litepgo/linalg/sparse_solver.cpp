@@ -1,8 +1,8 @@
-#include "litepgo/linalg/sparse_solver.h"
+#include "litepgo/linalg/sparse_solver.hpp"
 
-#include "litepgo/core/busy_scope.h"
-#include "litepgo/core/memory.h"
-#include "litepgo/linalg/sparse_pattern.h"
+#include "litepgo/core/busy_scope.hpp"
+#include "litepgo/core/memory.hpp"
+#include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <algorithm>
 #include <stdexcept>

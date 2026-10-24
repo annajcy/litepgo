@@ -1,8 +1,8 @@
-#include "litepgo/bindings/bindings.h"
-#include "litepgo/energy/energy.h"
-#include "litepgo/linalg/auto_sparse_solver.h"
-#include "litepgo/linalg/dof_reduction.h"
-#include "litepgo/solver/newton.h"
+#include "litepgo/bindings/bindings.hpp"
+#include "litepgo/energy/energy.hpp"
+#include "litepgo/linalg/auto_sparse_solver.hpp"
+#include "litepgo/linalg/dof_reduction.hpp"
+#include "litepgo/solver/newton.hpp"
 
 #include <nanobind/eigen/dense.h>
 #include <nanobind/stl/function.h>

@@ -1,4 +1,4 @@
-#include "litepgo/core/types.h"
+#include "litepgo/core/types.hpp"
 
 #include <gtest/gtest.h>
 

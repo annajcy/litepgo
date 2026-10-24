@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/fem/volume_reference_geometry.h"
+#include "litepgo/fem/volume_reference_geometry.hpp"
 
 #include <Eigen/Core>
 #include <unsupported/Eigen/KroneckerProduct>

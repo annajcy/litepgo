@@ -1,4 +1,4 @@
-#include "litepgo/fem/gauss_legendre_1d.h"
+#include "litepgo/fem/gauss_legendre_1d.hpp"
 
 #include <gtest/gtest.h>
 

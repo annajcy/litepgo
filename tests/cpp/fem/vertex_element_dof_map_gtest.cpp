@@ -1,6 +1,6 @@
-#include "litepgo/fem/hex_q1_basis.h"
-#include "litepgo/fem/interpolated_field.h"
-#include "litepgo/fem/vertex_element_dof_map.h"
+#include "litepgo/fem/hex_q1_basis.hpp"
+#include "litepgo/fem/interpolated_field.hpp"
+#include "litepgo/fem/vertex_element_dof_map.hpp"
 
 #include <gtest/gtest.h>
 

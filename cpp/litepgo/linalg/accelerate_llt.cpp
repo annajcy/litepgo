@@ -1,4 +1,4 @@
-#include "litepgo/linalg/accelerate_llt.h"
+#include "litepgo/linalg/accelerate_llt.hpp"
 
 #include <Eigen/AccelerateSupport>
 

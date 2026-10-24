@@ -1,5 +1,5 @@
-#include "litepgo/fem/vertex_dof_data.h"
-#include "litepgo/fem/vertex_element_dof_map.h"
+#include "litepgo/fem/vertex_dof_data.hpp"
+#include "litepgo/fem/vertex_element_dof_map.hpp"
 
 #include <gtest/gtest.h>
 

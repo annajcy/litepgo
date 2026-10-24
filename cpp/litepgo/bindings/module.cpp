@@ -1,5 +1,5 @@
-#include "litepgo/bindings/bindings.h"
-#include "litepgo/core/build_info.h"
+#include "litepgo/bindings/bindings.hpp"
+#include "litepgo/core/build_info.hpp"
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>

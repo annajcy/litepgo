@@ -1,7 +1,7 @@
 #pragma once
 
-#include "litepgo/fem/lagrange_basis.h"
-#include "litepgo/fem/tensor_product_basis.h"
+#include "litepgo/fem/lagrange_basis.hpp"
+#include "litepgo/fem/tensor_product_basis.hpp"
 
 namespace litepgo {
 

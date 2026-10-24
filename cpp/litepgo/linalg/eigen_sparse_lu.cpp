@@ -1,4 +1,4 @@
-#include "litepgo/linalg/eigen_sparse_lu.h"
+#include "litepgo/linalg/eigen_sparse_lu.hpp"
 
 #include <stdexcept>
 

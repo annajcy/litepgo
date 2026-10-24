@@ -1,4 +1,4 @@
-#include "litepgo/fem/hex_q1_basis.h"
+#include "litepgo/fem/hex_q1_basis.hpp"
 
 #include <array>
 #include <cstddef>

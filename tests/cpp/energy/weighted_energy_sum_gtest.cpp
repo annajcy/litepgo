@@ -1,9 +1,9 @@
-#include "litepgo/energy/weighted_energy_sum.h"
+#include "litepgo/energy/weighted_energy_sum.hpp"
 
-#include "litepgo/energy/quadratic_energy.h"
+#include "litepgo/energy/quadratic_energy.hpp"
 
-#include "../testing/finite_difference.h"
-#include "../testing/test_energies.h"
+#include "../testing/finite_difference.hpp"
+#include "../testing/test_energies.hpp"
 
 #include <gtest/gtest.h>
 

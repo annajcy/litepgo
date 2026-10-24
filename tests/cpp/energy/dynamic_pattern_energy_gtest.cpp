@@ -1,6 +1,6 @@
-#include "litepgo/energy/dynamic_pattern_energy.h"
+#include "litepgo/energy/dynamic_pattern_energy.hpp"
 
-#include "../testing/test_energies.h"
+#include "../testing/test_energies.hpp"
 
 #include <gtest/gtest.h>
 

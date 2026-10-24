@@ -1,11 +1,11 @@
-#include "litepgo/linalg/auto_sparse_solver.h"
-#include "litepgo/linalg/eigen_ldlt.h"
-#include "litepgo/linalg/eigen_sparse_lu.h"
-#include "litepgo/linalg/sparse_solver.h"
+#include "litepgo/linalg/auto_sparse_solver.hpp"
+#include "litepgo/linalg/eigen_ldlt.hpp"
+#include "litepgo/linalg/eigen_sparse_lu.hpp"
+#include "litepgo/linalg/sparse_solver.hpp"
 
 #if defined(LITEPGO_HAS_ACCELERATE)
-#include "litepgo/linalg/accelerate_ldlt.h"
-#include "litepgo/linalg/accelerate_llt.h"
+#include "litepgo/linalg/accelerate_ldlt.hpp"
+#include "litepgo/linalg/accelerate_llt.hpp"
 #endif
 
 #include <Eigen/Dense>

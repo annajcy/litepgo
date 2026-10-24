@@ -1,4 +1,4 @@
-#include "litepgo/core/busy_scope.h"
+#include "litepgo/core/busy_scope.hpp"
 
 #include <gtest/gtest.h>
 

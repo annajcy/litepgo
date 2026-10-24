@@ -1,4 +1,4 @@
-#include "litepgo/linalg/eigen_ldlt.h"
+#include "litepgo/linalg/eigen_ldlt.hpp"
 
 #include <stdexcept>
 

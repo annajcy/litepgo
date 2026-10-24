@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/core/types.h"
+#include "litepgo/core/types.hpp"
 
 #include <span>
 #include <vector>

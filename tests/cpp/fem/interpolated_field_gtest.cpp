@@ -1,7 +1,7 @@
-#include "litepgo/fem/gauss_legendre_3d.h"
-#include "litepgo/fem/hex_q1_basis.h"
-#include "litepgo/fem/interpolated_field.h"
-#include "litepgo/fem/volume_quadrature_cache.h"
+#include "litepgo/fem/gauss_legendre_3d.hpp"
+#include "litepgo/fem/hex_q1_basis.hpp"
+#include "litepgo/fem/interpolated_field.hpp"
+#include "litepgo/fem/volume_quadrature_cache.hpp"
 
 #include <gtest/gtest.h>
 

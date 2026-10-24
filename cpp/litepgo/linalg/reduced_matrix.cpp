@@ -1,4 +1,4 @@
-#include "litepgo/linalg/reduced_matrix.h"
+#include "litepgo/linalg/reduced_matrix.hpp"
 
 #include <algorithm>
 #include <stdexcept>

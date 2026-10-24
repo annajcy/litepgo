@@ -1,17 +1,17 @@
 #pragma once
 
-#include "litepgo/linalg/sparse_solver.h"
+#include "litepgo/linalg/sparse_solver.hpp"
 
 #include <memory>
 
 namespace litepgo {
 
-// Apple Accelerate's sparse Cholesky. For symmetric positive definite matrices;
-// an indefinite matrix fails to factorize. It reads the lower triangle.
-class AccelerateLLT final : public SparseSolver {
+// Apple Accelerate's pivoted sparse LDLT, for symmetric indefinite matrices.
+// It reads the lower triangle.
+class AccelerateLDLT final : public SparseSolver {
   public:
-    AccelerateLLT();
-    ~AccelerateLLT() override;
+    AccelerateLDLT();
+    ~AccelerateLDLT() override;
 
   private:
     bool analyze_pattern(const SpMat& A) override;

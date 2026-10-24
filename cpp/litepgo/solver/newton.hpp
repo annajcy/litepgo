@@ -1,9 +1,9 @@
 #pragma once
 
-#include "litepgo/core/types.h"
-#include "litepgo/energy/energy.h"
-#include "litepgo/linalg/dof_reduction.h"
-#include "litepgo/linalg/sparse_solver.h"
+#include "litepgo/core/types.hpp"
+#include "litepgo/energy/energy.hpp"
+#include "litepgo/linalg/dof_reduction.hpp"
+#include "litepgo/linalg/sparse_solver.hpp"
 
 #include <functional>
 #include <limits>

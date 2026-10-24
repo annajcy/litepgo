@@ -2,7 +2,7 @@
 
 Solvers and DofReduction take scipy.sparse matrices. AccelerateLLT and AccelerateLDLT exist only
 in builds with Apple Accelerate; AutoSparseSolver and AutoIndefiniteSparseSolver
-are the platform defaults, as in auto_sparse_solver.h.
+are the platform defaults, as in auto_sparse_solver.hpp.
 """
 
 from litepgo._core import linalg as _native

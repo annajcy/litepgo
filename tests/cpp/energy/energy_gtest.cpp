@@ -1,10 +1,10 @@
-#include "litepgo/energy/energy.h"
+#include "litepgo/energy/energy.hpp"
 
-#include "../testing/finite_difference.h"
-#include "litepgo/energy/affine_mapped_energy.h"
-#include "litepgo/energy/weighted_energy_sum.h"
+#include "../testing/finite_difference.hpp"
+#include "litepgo/energy/affine_mapped_energy.hpp"
+#include "litepgo/energy/weighted_energy_sum.hpp"
 
-#include "../testing/test_energies.h"
+#include "../testing/test_energies.hpp"
 
 #include <gtest/gtest.h>
 

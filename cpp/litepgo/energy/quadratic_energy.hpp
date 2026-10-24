@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/energy/fixed_pattern_energy.h"
+#include "litepgo/energy/fixed_pattern_energy.hpp"
 
 namespace litepgo {
 

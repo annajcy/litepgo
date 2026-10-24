@@ -1,7 +1,7 @@
-#include "litepgo/linalg/reduced_matrix.h"
+#include "litepgo/linalg/reduced_matrix.hpp"
 
-#include "litepgo/linalg/dof_reduction.h"
-#include "litepgo/linalg/sparse_pattern.h"
+#include "litepgo/linalg/dof_reduction.hpp"
+#include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <Eigen/Dense>
 #include <gtest/gtest.h>

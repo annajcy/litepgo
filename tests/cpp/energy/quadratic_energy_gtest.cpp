@@ -1,6 +1,6 @@
-#include "litepgo/energy/quadratic_energy.h"
+#include "litepgo/energy/quadratic_energy.hpp"
 
-#include "../testing/finite_difference.h"
+#include "../testing/finite_difference.hpp"
 
 #include <gtest/gtest.h>
 

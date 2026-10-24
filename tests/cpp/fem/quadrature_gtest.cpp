@@ -1,5 +1,5 @@
-#include "litepgo/fem/gauss_legendre_3d.h"
-#include "litepgo/fem/quadrature.h"
+#include "litepgo/fem/gauss_legendre_3d.hpp"
+#include "litepgo/fem/quadrature.hpp"
 
 namespace {
 

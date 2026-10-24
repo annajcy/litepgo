@@ -1,4 +1,4 @@
-#include "litepgo/fem/material_types.h"
+#include "litepgo/fem/material_types.hpp"
 
 #include <concepts>
 

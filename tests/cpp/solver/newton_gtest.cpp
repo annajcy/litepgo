@@ -1,10 +1,10 @@
-#include "litepgo/solver/newton.h"
+#include "litepgo/solver/newton.hpp"
 
-#include "litepgo/energy/quadratic_energy.h"
-#include "litepgo/energy/weighted_energy_sum.h"
-#include "litepgo/linalg/auto_sparse_solver.h"
+#include "litepgo/energy/quadratic_energy.hpp"
+#include "litepgo/energy/weighted_energy_sum.hpp"
+#include "litepgo/linalg/auto_sparse_solver.hpp"
 
-#include "../testing/test_energies.h"
+#include "../testing/test_energies.hpp"
 
 #include <Eigen/Dense>
 #include <gtest/gtest.h>
