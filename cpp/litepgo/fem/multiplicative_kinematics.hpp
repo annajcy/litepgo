@@ -26,6 +26,12 @@ class MultiplicativeKinematics final {
     Mat3 reference_gradient_F(const Mat3& Pe) const;
     Mat9 reference_hessian_F(const Mat9& He) const;
 
+    // Hold F and material parameters fixed. psi must depend on Fp only through
+    // Fe; all elastic inputs must be evaluated at this snapshot's Fe.
+    // Includes derivatives of both det(Fp) and Fp^-1. Same vec convention above.
+    Mat3 reference_gradient_Fp(double psi, const Mat3& Pe) const;
+    Mat9 reference_hessian_Fp(double psi, const Mat3& Pe, const Mat9& He) const;
+
   private:
     Mat3 inverse_Fp_;
     Mat3 Fe_;

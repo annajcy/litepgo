@@ -61,6 +61,53 @@ TEST(MultiplicativeKinematics, PullbackMatchesFiniteDifferences) {
     }
 }
 
+TEST(MultiplicativeKinematics, PlasticPullbackMatchesFiniteDifferences) {
+    using Vec9 = Eigen::Matrix<double, 9, 1>;
+    Mat3 F, Fp;
+    F << 1.1, 0.3, -0.2, 0.2, 0.9, 0.1, -0.1, 0.2, 1.3;
+    Fp << 1.4, 0.2, -0.1, 0.1, 0.8, 0.3, 0.0, -0.2, 1.2;
+    Vec9 v;
+    v << 1, -2, 3, 1, 2, -1, 3, -2, 1;
+    const Mat9 He = Mat9::Identity() + v * v.transpose();
+    // A nonzero constant isolates the determinant derivative as well.
+    for (bool constant_only : {true, false}) {
+        SCOPED_TRACE(constant_only);
+        const Mat9 H = constant_only ? Mat9(Mat9::Zero()) : He;
+        const auto energy = [&](const Mat3& p) {
+            const Mat3 Fe = F * p.inverse();
+            const Eigen::Map<const Vec9> x(Fe.data());
+            return p.determinant() * (2.3 + 0.5 * x.dot(H * x));
+        };
+        const auto gradient = [&](const Mat3& p) {
+            const MultiplicativeKinematics k(F, p);
+            const Eigen::Map<const Vec9> x(k.elastic_gradient().data());
+            const Vec9 pe = H * x;
+            return k.reference_gradient_Fp(2.3 + 0.5 * x.dot(pe), Eigen::Map<const Mat3>(pe.data()));
+        };
+        const MultiplicativeKinematics k(F, Fp);
+        const Eigen::Map<const Vec9> x(k.elastic_gradient().data());
+        const Vec9 pe = H * x;
+        const Mat3 G = gradient(Fp);
+        const Mat9 Hp = k.reference_hessian_Fp(2.3 + 0.5 * x.dot(pe), Eigen::Map<const Mat3>(pe.data()), H);
+        EXPECT_LT((Hp - Hp.transpose()).norm(), 1e-12 * (1 + Hp.norm()));
+        for (double h : {1e-3, 3e-4, 1e-4}) {
+            SCOPED_TRACE(h);
+            Mat3 fdG;
+            Mat9 fdH;
+            for (int j = 0; j < 9; ++j) {
+                Mat3 plus = Fp, minus = Fp;
+                plus.data()[j] += h;
+                minus.data()[j] -= h;
+                fdG.data()[j] = (energy(plus) - energy(minus)) / (2 * h);
+                const Mat3 dG = (gradient(plus) - gradient(minus)) / (2 * h);
+                fdH.col(j) = Eigen::Map<const Vec9>(dG.data());
+            }
+            EXPECT_LT((G - fdG).norm() / (1 + G.norm()), 20 * h * h + 1e-9);
+            EXPECT_LT((Hp - fdH).norm() / (1 + Hp.norm()), 20 * h * h + 1e-9);
+        }
+    }
+}
+
 TEST(MultiplicativeKinematics, ValidatesPlasticButLeavesElasticDomainToMaterial) {
     const Mat3 I = Mat3::Identity();
     Mat3 bad = I;
