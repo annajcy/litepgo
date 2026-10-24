@@ -45,13 +45,12 @@ class VertexDofMap final {
     template <int DofsPerVertex>
     Eigen::Matrix<double, Eigen::Dynamic, DofsPerVertex> gather(int element,
                                                                 const VertexDofData<DofsPerVertex>& data) const {
-        const auto indices = dof_indices(element, data);
+        check(element, data);
         const auto values = data.values();
         Eigen::Matrix<double, Eigen::Dynamic, DofsPerVertex> result(cells_.cols(), DofsPerVertex);
         for (int i = 0; i < cells_.cols(); ++i) {
-            for (int slot = 0; slot < DofsPerVertex; ++slot) {
-                result(i, slot) = values[indices[static_cast<std::size_t>(i * DofsPerVertex + slot)]];
-            }
+            const int vertex = cells_(element, i);
+            result.row(i) = values.template segment<DofsPerVertex>(vertex * DofsPerVertex).transpose();
         }
         return result;
     }
