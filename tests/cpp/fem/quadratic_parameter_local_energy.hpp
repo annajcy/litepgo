@@ -1,25 +1,32 @@
 #pragma once
-
 #include "litepgo/fem/detail/dof_derivatives.hpp"
+#include "litepgo/fem/local_energy.hpp"
+#include "litepgo/fem/material_fields.hpp"
 
-#include <type_traits>
-#include <utility>
-
-// Test energy with a nonzero theta Hessian (NeoHookean is linear in theta).
-template <class Fields> class QuadraticParameterLocalEnergy {
+// Nonzero parameter Hessian complements NeoHookean's linear theta dependence.
+class QuadraticParameterLocalEnergy : public litepgo::LocalValue,
+                                      public litepgo::LocalGradient,
+                                      public litepgo::LocalHessian {
   public:
-    static constexpr int num_dofs = std::remove_cvref_t<decltype(std::declval<Fields>().theta)>::num_dofs;
-    explicit QuadraticParameterLocalEnergy(Fields fields) : fields_(std::move(fields)) {}
-    template <class Point> double value(const Point& point) const {
-        return 0.5 * fields_.theta.value(point).squaredNorm();
+    explicit QuadraticParameterLocalEnergy(litepgo::MaterialFields fields)
+        : theta_(std::dynamic_pointer_cast<const litepgo::AffineField<Eigen::VectorXd>>(fields.theta)) {
+        if (!theta_)
+            throw std::invalid_argument("QuadraticParameterLocalEnergy requires affine parameters");
     }
-    template <class Point> Eigen::Matrix<double, num_dofs, 1> gradient(const Point& point) const {
-        return litepgo::detail::gradient_wrt_dofs(fields_.theta.jacobian(point), fields_.theta.value(point));
+    int num_dofs() const override {
+        return theta_->num_dofs();
     }
-    template <class Point> Eigen::Matrix<double, num_dofs, num_dofs> hessian(const Point& point) const {
-        return litepgo::detail::hessian_wrt_dofs(fields_.theta.jacobian(point), Eigen::Matrix2d::Identity());
+    double value(const litepgo::VolumePointData& point) const override {
+        return 0.5 * theta_->value(point).squaredNorm();
+    }
+    Eigen::VectorXd gradient(const litepgo::VolumePointData& point) const override {
+        return litepgo::detail::gradient_wrt_dofs(theta_->jacobian(point), theta_->value(point));
+    }
+    Eigen::MatrixXd hessian(const litepgo::VolumePointData& point) const override {
+        const auto J = theta_->jacobian(point);
+        return J.transpose() * J;
     }
 
   private:
-    Fields fields_;
+    std::shared_ptr<const litepgo::AffineField<Eigen::VectorXd>> theta_;
 };

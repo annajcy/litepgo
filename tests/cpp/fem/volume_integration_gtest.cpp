@@ -6,11 +6,13 @@
 #include "litepgo/fem/interpolated_value_field.hpp"
 #include "litepgo/fem/local_kernel.hpp"
 #include "litepgo/fem/material_fields.hpp"
+#include "litepgo/fem/neo_hookean.hpp"
 #include "litepgo/fem/neo_hookean_local_energy.hpp"
 #include "litepgo/fem/tensor_product_quadrature.hpp"
 #include "litepgo/fem/volume_quadrature_cache.hpp"
 #include "quadratic_parameter_local_energy.hpp"
 
+#include "litepgo/fem/volume_reference_geometry.hpp"
 #include <Eigen/LU>
 #include <cmath>
 #include <gtest/gtest.h>
@@ -53,9 +55,9 @@ NodalCoefficients fields(int seed = 0) {
 }
 
 auto evaluate_fields(const NodalCoefficients& coefficients) {
-    return MaterialFields{DeformationGradientField<HexQ1Basis>(coefficients.u),
-                          DeformationGradientField<HexQ1Basis>(coefficients.up),
-                          InterpolatedValueField<HexQ1Basis, 2>(coefficients.theta)};
+    return MaterialFields{std::make_shared<DeformationGradientField>(coefficients.u),
+                          std::make_shared<DeformationGradientField>(coefficients.up),
+                          std::make_shared<InterpolatedValueField>(coefficients.theta)};
 }
 
 template <class Kernel, class Member, class BindEnergy>
@@ -110,8 +112,8 @@ void check_fd(const Kernel& kernel, const NodalCoefficients& f, Member member, B
 }
 
 TEST(VolumeIntegration, HexQ1LocalDofFiniteDifferencesForAllThreeFields) {
-    const VolumeQuadratureCache<HexQ1Basis, litepgo::GaussLegendre3D<2>> cache{
-        VolumeReferenceGeometry<HexQ1Basis>(coordinates())};
+    const litepgo::VolumeQuadratureCache cache{VolumeReferenceGeometry<HexQ1Basis>(coordinates()),
+                                               litepgo::GaussLegendre3D<2>{}};
     const litepgo::LocalKernel kernel(cache);
     for (int seed = 0; seed < 3; ++seed) {
         SCOPED_TRACE(seed);
@@ -131,7 +133,7 @@ TEST(VolumeIntegration, HexQ1LocalDofFiniteDifferencesForAllThreeFields) {
 
 TEST(VolumeIntegration, AffineFieldsHaveExpectedVolumeWeightedEnergyAndTranslationNullModes) {
     const auto X = coordinates(false);
-    const VolumeQuadratureCache<HexQ1Basis, litepgo::GaussLegendre3D<2>> cache{VolumeReferenceGeometry<HexQ1Basis>(X)};
+    const litepgo::VolumeQuadratureCache cache{VolumeReferenceGeometry<HexQ1Basis>(X), litepgo::GaussLegendre3D<2>{}};
     const litepgo::LocalKernel kernel(cache);
     Eigen::Matrix3d A, P;
     A << 0.1, 0.02, -0.03, 0.04, -0.05, 0.02, 0.01, 0.03, 0.08;
@@ -148,7 +150,7 @@ TEST(VolumeIntegration, AffineFieldsHaveExpectedVolumeWeightedEnergyAndTranslati
     J.col(2) = X.row(4) - X.row(0);
     const double expected =
         J.determinant() *
-        NeoHookean{}.value({Eigen::Matrix3d::Identity() + A, Eigen::Matrix3d::Identity() + P, {2, 3}});
+        NeoHookean{}.value({Eigen::Matrix3d::Identity() + A, Eigen::Matrix3d::Identity() + P, Eigen::Vector2d(2, 3)});
     EXPECT_NEAR(kernel.value(NeoHookeanLocalEnergyF(evaluate_fields(f))), expected, 1e-12);
     for (int c = 0; c < 3; ++c) {
         Eigen::Matrix<double, 24, 1> translation = Eigen::Matrix<double, 24, 1>::Zero();
@@ -164,8 +166,8 @@ TEST(VolumeIntegration, AffineFieldsHaveExpectedVolumeWeightedEnergyAndTranslati
 }
 
 TEST(VolumeIntegration, NonzeroParameterHessian) {
-    const VolumeQuadratureCache<HexQ1Basis, litepgo::GaussLegendre3D<2>> cache{
-        VolumeReferenceGeometry<HexQ1Basis>(coordinates())};
+    const litepgo::VolumeQuadratureCache cache{VolumeReferenceGeometry<HexQ1Basis>(coordinates()),
+                                               litepgo::GaussLegendre3D<2>{}};
     const LocalKernel kernel(cache);
     const auto coefficients = fields();
     const QuadraticParameterLocalEnergy energy(evaluate_fields(coefficients));
@@ -175,8 +177,8 @@ TEST(VolumeIntegration, NonzeroParameterHessian) {
 }
 
 TEST(VolumeIntegration, PropagatesInvalidFieldsAndInfeasibleStates) {
-    const VolumeQuadratureCache<HexQ1Basis, litepgo::GaussLegendre3D<2>> cache{
-        VolumeReferenceGeometry<HexQ1Basis>(coordinates(false))};
+    const litepgo::VolumeQuadratureCache cache{VolumeReferenceGeometry<HexQ1Basis>(coordinates(false)),
+                                               litepgo::GaussLegendre3D<2>{}};
     const litepgo::LocalKernel kernel(cache);
     const auto check = [&](const auto& kernel, auto bind_energy) {
         for (int which = 0; which < 3; ++which) {

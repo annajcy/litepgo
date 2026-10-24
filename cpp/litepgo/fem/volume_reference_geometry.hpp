@@ -1,6 +1,7 @@
 #pragma once
 
 #include "litepgo/fem/basis.hpp"
+#include "litepgo/fem/volume_point_data.hpp"
 
 #include <Eigen/Core>
 #include <Eigen/LU>
@@ -16,16 +17,6 @@ template <Basis3D BasisType> class VolumeReferenceGeometry final {
   public:
     static constexpr int num_basis_functions = BasisType::num_basis_functions;
 
-    struct PointData {
-        Eigen::Vector3d position;
-        // dX/dxi, with columns corresponding to the three parameter axes.
-        Eigen::Matrix3d jacobian;
-        Eigen::Matrix<double, num_basis_functions, 1> basis_values; // N_i(xi), in basis order
-        // Row i is dN_i/dX in physical reference coordinates, not parameters xi.
-        Eigen::Matrix<double, num_basis_functions, 3> basis_gradients;
-        double jacobian_determinant;
-    };
-
     // Row i contains the geometry coefficient of basis function i (rest vertex positions for Q1).
     // Copies the coefficients. Non-finite inputs throw std::invalid_argument.
     // Jacobian validity is checked when evaluating a point, not at construction.
@@ -38,7 +29,7 @@ template <Basis3D BasisType> class VolumeReferenceGeometry final {
 
     // Does not clamp parameters or cache results. Throws std::invalid_argument
     // for non-finite parameters/data or det(J0) <= 0 at the requested point.
-    PointData evaluate(const Eigen::Vector3d& xi) const {
+    VolumePointData evaluate(const Eigen::Vector3d& xi) const {
         if (!xi.allFinite()) {
             throw std::invalid_argument("VolumeReferenceGeometry::evaluate requires finite parameters");
         }
@@ -50,7 +41,7 @@ template <Basis3D BasisType> class VolumeReferenceGeometry final {
             throw std::invalid_argument("VolumeReferenceGeometry::evaluate: invalid reference mapping");
         }
 
-        PointData result{position, J0, basis.values, basis.gradients * J0.inverse(), determinant};
+        VolumePointData result{position, J0, basis.values, basis.gradients * J0.inverse(), determinant};
         if (!result.basis_values.allFinite() || !result.basis_gradients.allFinite()) {
             throw std::invalid_argument("VolumeReferenceGeometry::evaluate: non-finite reference data");
         }

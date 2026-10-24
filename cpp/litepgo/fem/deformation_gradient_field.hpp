@@ -1,29 +1,20 @@
 #pragma once
 
+#include "litepgo/fem/field.hpp"
 #include "litepgo/fem/field_interpolation.hpp"
 
 namespace litepgo {
 
-// Converts nodal displacement coefficients into I + grad_X u (F or Fp).
-// Owns a coefficient snapshot; local DOFs are flattened by row.
-template <Basis3D Basis> class DeformationGradientField final {
+// Owns displacement coefficients; returns I + grad_X u (F or Fp).
+class DeformationGradientField final : public AffineField<Eigen::Matrix3d> {
   public:
-    using FieldValue = Eigen::Matrix3d;
-    static constexpr int num_dofs = FieldInterpolation<Basis, 3>::num_dofs;
-
-    explicit DeformationGradientField(const Eigen::Matrix<double, Basis::num_basis_functions, 3>& displacement)
-        : interpolation_(displacement) {}
-
-    FieldValue value(const typename VolumeReferenceGeometry<Basis>::PointData& point) const {
-        return FieldValue::Identity() + interpolation_.gradient(point);
-    }
-    static Eigen::Matrix<double, 9, num_dofs>
-    jacobian(const typename VolumeReferenceGeometry<Basis>::PointData& point) {
-        return FieldInterpolation<Basis, 3>::gradient_matrix(point);
-    }
+    explicit DeformationGradientField(Eigen::MatrixXd displacement);
+    int num_dofs() const override;
+    Eigen::Matrix3d value(const VolumePointData& point) const override;
+    Eigen::MatrixXd jacobian(const VolumePointData& point) const override;
 
   private:
-    FieldInterpolation<Basis, 3> interpolation_;
+    FieldInterpolation interpolation_;
 };
 
 } // namespace litepgo

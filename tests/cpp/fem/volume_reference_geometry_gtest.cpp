@@ -21,7 +21,7 @@ static_assert(litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::num_basis_f
 static_assert(std::same_as<Eigen::Matrix<double, 8, 3>, Eigen::Matrix<double, 8, 3>>);
 static_assert(std::same_as<decltype(std::declval<const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>&>()
                                         .evaluate(Eigen::Vector3d::Zero())),
-                           litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData>);
+                           litepgo::VolumePointData>);
 
 // Interior points, corners, a face, and an exterior point, independent of quadrature.
 const std::array<Eigen::Vector3d, 7> parameters{{Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(0.83, 0.17, 0.61),

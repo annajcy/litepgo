@@ -1,6 +1,7 @@
 #include "litepgo/fem/field_interpolation.hpp"
 #include "litepgo/fem/hex_q1_basis.hpp"
 #include "litepgo/fem/vertex_element_dof_map.hpp"
+#include "litepgo/fem/volume_reference_geometry.hpp"
 
 #include <gtest/gtest.h>
 
@@ -155,9 +156,9 @@ TEST(VertexElementDofMap, ThreeGatheredFieldsReproduceAffineValuesAndPhysicalGra
             X_e.row(i) = X.row(vertices[static_cast<std::size_t>(i)]);
         }
         const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis> geometry(X_e);
-        const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3> u(map.gather(e, a));
-        const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 3> up(map.gather(e, b));
-        const litepgo::FieldInterpolation<litepgo::HexQ1Basis, 2> parameters(map.gather(e, theta));
+        const litepgo::FieldInterpolation u(map.gather(e, a));
+        const litepgo::FieldInterpolation up(map.gather(e, b));
+        const litepgo::FieldInterpolation parameters(map.gather(e, theta));
         for (const Eigen::Vector3d xi : {Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(0.76, 0.11, 0.64)}) {
             const auto point = geometry.evaluate(xi);
             const Eigen::Vector3d position =

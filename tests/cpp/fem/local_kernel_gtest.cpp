@@ -1,101 +1,111 @@
+#include "litepgo/fem/hex_q1_basis.hpp"
 #include "litepgo/fem/local_kernel.hpp"
-
-#include <array>
 #include <gtest/gtest.h>
+#include <type_traits>
 
 namespace {
-struct Cache {
-    struct Sample {
-        double point;
-        double volume_weight;
-    };
-    static constexpr int num_quadrature_points = 2;
-    std::array<Sample, 2> samples{{{0.2, 0.4}, {0.8, 0.6}}};
-    const Sample& sample(int q) const {
-        return samples.at(static_cast<std::size_t>(q));
+using namespace litepgo;
+struct Rule {
+    static constexpr int num_points = 2;
+    static const Eigen::Matrix<double, 2, 3>& points() {
+        static const Eigen::Matrix<double, 2, 3> p =
+            (Eigen::Matrix<double, 2, 3>() << 0.2, 0.3, 0.4, 0.8, 0.3, 0.4).finished();
+        return p;
+    }
+    static const Eigen::Vector2d& weights() {
+        static const Eigen::Vector2d w(0.4, 0.6);
+        return w;
     }
 };
-// Pure local energy: the integration layer never sees fields or constitutive inputs.
-struct ValueOnly {
+VolumeQuadratureCache cache(double scale = 1) {
+    Eigen::Matrix<double, 8, 3> X;
+    for (int i = 0; i < 8; ++i)
+        X.row(i) = scale * HexQ1Basis::reference_node(i);
+    return VolumeQuadratureCache(VolumeReferenceGeometry<HexQ1Basis>(X), Rule{});
+}
+struct ValueOnly : LocalValue {
     Eigen::Vector3d coefficients{0.2, -0.4, 0.6};
-    double value(double point) const {
-        return 0.5 * (1 + point) * coefficients.squaredNorm();
+    double value(const VolumePointData& p) const override {
+        return 0.5 * (1 + p.position.x()) * coefficients.squaredNorm();
     }
 };
-struct FirstOnly : ValueOnly {
-    static constexpr int num_dofs = 3;
-    Eigen::Vector3d gradient(double point) const {
-        return (1 + point) * coefficients;
+struct FirstOnly : LocalGradient {
+    Eigen::Vector3d coefficients{0.2, -0.4, 0.6};
+    int num_dofs() const override {
+        return 3;
+    }
+    Eigen::VectorXd gradient(const VolumePointData& p) const override {
+        return (1 + p.position.x()) * coefficients;
     }
 };
-struct SecondOnly : ValueOnly {
-    static constexpr int num_dofs = 3;
-    Eigen::Matrix3d hessian(double point) const {
-        return (1 + point) * Eigen::Matrix3d::Identity();
+struct SecondOnly : LocalHessian {
+    int num_dofs() const override {
+        return 3;
+    }
+    Eigen::MatrixXd hessian(const VolumePointData& p) const override {
+        return (1 + p.position.x()) * Eigen::Matrix3d::Identity();
     }
 };
-struct FullEnergy : FirstOnly {
-    Eigen::Matrix3d hessian(double point) const {
-        return (1 + point) * Eigen::Matrix3d::Identity();
+struct FullEnergy : ValueOnly, LocalGradient, LocalHessian {
+    int num_dofs() const override {
+        return 3;
+    }
+    Eigen::VectorXd gradient(const VolumePointData& p) const override {
+        return (1 + p.position.x()) * coefficients;
+    }
+    Eigen::MatrixXd hessian(const VolumePointData& p) const override {
+        return (1 + p.position.x()) * Eigen::Matrix3d::Identity();
     }
 };
-struct WrongGradient : FullEnergy {
-    Eigen::Vector2d gradient(double) const;
-};
-struct WrongHessian : FullEnergy {
-    Eigen::Matrix2d hessian(double) const;
-};
-struct WrongPoint {
-    double value(const Eigen::Vector3d&) const;
-};
-struct MissingValue {
-    [[maybe_unused]] static constexpr int num_dofs = 3;
-    Eigen::Matrix3d hessian(double) const;
-};
-struct WrongValue {
-    float value(double) const;
-};
-struct ZeroDofs : FullEnergy {
-    static constexpr int num_dofs = 0;
-};
-
-template <class Energy>
-concept HasValue = requires(const litepgo::LocalKernel<Cache>& k, const Energy& e) { k.value(e); };
-template <class Energy>
-concept HasGradient = requires(const litepgo::LocalKernel<Cache>& k, const Energy& e) { k.gradient(e); };
-template <class Energy>
-concept HasHessian = requires(const litepgo::LocalKernel<Cache>& k, const Energy& e) { k.hessian(e); };
-static_assert(HasValue<ValueOnly> && !HasGradient<ValueOnly> && !HasHessian<ValueOnly>);
-static_assert(HasGradient<FirstOnly> && !HasHessian<FirstOnly>);
-static_assert(!HasGradient<SecondOnly> && HasHessian<SecondOnly>);
-static_assert(HasGradient<FullEnergy> && HasHessian<FullEnergy>);
-static_assert(!HasGradient<WrongGradient> && HasHessian<WrongGradient>);
-static_assert(HasGradient<WrongHessian> && !HasHessian<WrongHessian>);
-static_assert(!HasValue<WrongPoint> && !HasValue<WrongValue> && !HasHessian<MissingValue>);
-static_assert(!HasGradient<ZeroDofs> && !HasHessian<ZeroDofs>);
-
+static_assert(!std::is_base_of_v<LocalHessian, FirstOnly>);
+static_assert(!std::is_base_of_v<LocalGradient, SecondOnly>);
+static_assert(!std::is_base_of_v<LocalValue, SecondOnly>);
 TEST(LocalKernel, IntegratesIndependentCapabilitiesAndOwnsCache) {
-    Cache cache;
-    const litepgo::LocalKernel kernel(cache);
+    auto original = cache();
+    const LocalKernel kernel(original);
+    original = cache(2);
     FullEnergy energy;
     const double factor = 0.4 * 1.2 + 0.6 * 1.8;
-    cache.samples[0].volume_weight = 100;
     EXPECT_NEAR(kernel.value(energy), factor * 0.5 * energy.coefficients.squaredNorm(), 1e-13);
     EXPECT_TRUE(kernel.gradient(energy).isApprox(factor * energy.coefficients, 1e-13));
     EXPECT_TRUE(kernel.hessian(energy).isApprox(factor * Eigen::Matrix3d::Identity(), 1e-13));
     EXPECT_DOUBLE_EQ(kernel.value(ValueOnly{}), kernel.value(energy));
     EXPECT_EQ(kernel.gradient(FirstOnly{}), kernel.gradient(energy));
     EXPECT_EQ(kernel.hessian(SecondOnly{}), kernel.hessian(energy));
-    constexpr double h = 1e-4;
     for (int j = 0; j < 3; ++j) {
         auto plus = energy, minus = energy;
-        plus.coefficients[j] += h;
-        minus.coefficients[j] -= h;
-        EXPECT_NEAR(kernel.gradient(energy)[j], (kernel.value(plus) - kernel.value(minus)) / (2 * h), 1e-10);
+        plus.coefficients[j] += 1e-4;
+        minus.coefficients[j] -= 1e-4;
+        EXPECT_NEAR(kernel.gradient(energy)[j], (kernel.value(plus) - kernel.value(minus)) / 2e-4, 1e-10);
         EXPECT_TRUE(
-            kernel.hessian(energy).col(j).isApprox((kernel.gradient(plus) - kernel.gradient(minus)) / (2 * h), 1e-10));
+            kernel.hessian(energy).col(j).isApprox((kernel.gradient(plus) - kernel.gradient(minus)) / 2e-4, 1e-10));
     }
-    energy.coefficients *= 2;
-    EXPECT_TRUE(kernel.gradient(energy).isApprox(factor * energy.coefficients, 1e-13));
+    const LocalKernel temporary(cache());
+    EXPECT_EQ(temporary.hessian(energy), kernel.hessian(energy));
+}
+struct BadGradient : LocalGradient {
+    int n = 3;
+    int num_dofs() const override {
+        return n;
+    }
+    Eigen::VectorXd gradient(const VolumePointData&) const override {
+        return Eigen::Vector2d::Zero();
+    }
+};
+struct BadHessian : LocalHessian {
+    int num_dofs() const override {
+        return 3;
+    }
+    Eigen::MatrixXd hessian(const VolumePointData&) const override {
+        return Eigen::MatrixXd::Zero(3, 2);
+    }
+};
+TEST(LocalKernel, RejectsInvalidRuntimeDerivativeSizes) {
+    const LocalKernel kernel(cache());
+    BadGradient bad;
+    EXPECT_THROW(kernel.gradient(bad), std::invalid_argument);
+    bad.n = 0;
+    EXPECT_THROW(kernel.gradient(bad), std::invalid_argument);
+    EXPECT_THROW(kernel.hessian(BadHessian{}), std::invalid_argument);
 }
 } // namespace

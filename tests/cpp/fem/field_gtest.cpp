@@ -1,100 +1,88 @@
 #include "litepgo/fem/constant_field.hpp"
 #include "litepgo/fem/deformation_gradient_field.hpp"
 #include "litepgo/fem/element_field.hpp"
-#include "litepgo/fem/field.hpp"
-#include "litepgo/fem/hex_q1_basis.hpp"
 #include "litepgo/fem/interpolated_value_field.hpp"
-#include "litepgo/fem/local_energy.hpp"
-#include "litepgo/fem/material_fields.hpp"
 #include "litepgo/fem/neo_hookean_local_energy.hpp"
-
 #include <gtest/gtest.h>
+#include <limits>
+#include <type_traits>
 
 namespace {
-struct ValueOnlyParameters {
-    using FieldValue = Eigen::Vector2d;
-    template <class Point> FieldValue value(const Point&) const {
-        return {2, 3};
+using namespace litepgo;
+struct ValueOnlyParameters final : Field<Eigen::VectorXd> {
+    Eigen::VectorXd value(const VolumePointData&) const override {
+        return Eigen::Vector2d(2, 3);
     }
 };
-struct ValueOnlyDeformation {
-    using FieldValue = Eigen::Matrix3d;
-    static constexpr int num_dofs = 9;
-    FieldValue value(const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData&) const {
+struct ValueOnlyDeformation final : Field<Eigen::Matrix3d> {
+    Eigen::Matrix3d value(const VolumePointData&) const override {
         return Eigen::Matrix3d::Identity();
     }
 };
-struct WrongValue {
-    using FieldValue = Eigen::Vector2d;
-    double value(int) const;
-};
-struct WrongJacobian {
-    using FieldValue = Eigen::Vector2d;
-    static constexpr int num_dofs = 2;
-    FieldValue value(int) const;
-    Eigen::Matrix3d jacobian(int) const;
-};
-struct ZeroDofs {
-    using FieldValue = Eigen::Vector2d;
-    static constexpr int num_dofs = 0;
-    FieldValue value(int) const;
-    Eigen::Matrix<double, 2, 0> jacobian(int) const;
-};
-struct DynamicValue {
-    using FieldValue = Eigen::VectorXd;
-    FieldValue value(int) const;
-};
-static_assert(litepgo::Field<ValueOnlyParameters, int>);
-static_assert(!litepgo::AffineField<ValueOnlyParameters, int>);
-static_assert(!litepgo::Field<int, int>);
-static_assert(!litepgo::Field<WrongValue, int>);
-static_assert(!litepgo::Field<DynamicValue, int>);
-static_assert(litepgo::Field<WrongJacobian, int>);
-static_assert(!litepgo::AffineField<WrongJacobian, int>);
-static_assert(!litepgo::AffineField<ZeroDofs, int>);
-static_assert(!litepgo::Field<litepgo::ElementDofData<Eigen::Matrix3d>, int>);
-static_assert(!litepgo::Field<litepgo::ConstantDofData<Eigen::Vector2d>, int>);
-static_assert(litepgo::AffineField<litepgo::ElementField<Eigen::Matrix3d>, int>);
-static_assert(litepgo::AffineField<litepgo::ConstantField<Eigen::Vector2d>, int>);
-static_assert(litepgo::AffineField<litepgo::DeformationGradientField<litepgo::HexQ1Basis>,
-                                   litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData>);
-static_assert(litepgo::AffineField<litepgo::InterpolatedValueField<litepgo::HexQ1Basis, 2>,
-                                   litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData>);
-static_assert(!litepgo::Field<litepgo::DeformationGradientField<litepgo::HexQ1Basis>, int>);
+static_assert(std::is_base_of_v<AffineField<Eigen::Matrix3d>, DeformationGradientField>);
+static_assert(std::is_base_of_v<AffineField<Eigen::VectorXd>, InterpolatedValueField>);
+static_assert(std::is_base_of_v<AffineField<Eigen::Matrix3d>, ElementField<Eigen::Matrix3d>>);
+static_assert(std::is_base_of_v<AffineField<Eigen::VectorXd>, ConstantField<Eigen::VectorXd>>);
+static_assert(!std::is_base_of_v<AffineField<Eigen::VectorXd>, ValueOnlyParameters>);
 
-TEST(Field, InactiveFieldNeedsOnlyValue) {
-    Eigen::Matrix<double, 8, 3> rest;
-    for (int i = 0; i < 8; ++i)
-        rest.row(i) = litepgo::HexQ1Basis::reference_node(i).transpose();
-    const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis> geometry(rest);
-    const auto point = geometry.evaluate({0.2, 0.3, 0.4});
-
-    const litepgo::MaterialFields fields{litepgo::ElementField<Eigen::Matrix3d>(Eigen::Matrix3d::Identity()),
-                                         litepgo::ElementField<Eigen::Matrix3d>(Eigen::Matrix3d::Identity()),
-                                         ValueOnlyParameters{}};
-    const litepgo::NeoHookeanLocalEnergyF deformation(fields);
-    const litepgo::NeoHookeanLocalEnergyFp plastic(fields);
-    static_assert(litepgo::LocalFirstOrderEnergy<decltype(deformation),
-                                                 litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData>);
-    static_assert(litepgo::LocalSecondOrderEnergy<decltype(deformation),
-                                                  litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData>);
-    static_assert(litepgo::LocalFirstOrderEnergy<decltype(plastic),
-                                                 litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData>);
-    static_assert(litepgo::LocalSecondOrderEnergy<decltype(plastic),
-                                                  litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData>);
+TEST(Field, InactiveFieldsNeedOnlyValuesAndActiveCapabilitiesAreCheckedAtConstruction) {
+    MaterialFields fields{std::make_shared<ElementField<Eigen::Matrix3d>>(Eigen::Matrix3d::Identity()),
+                          std::make_shared<ElementField<Eigen::Matrix3d>>(Eigen::Matrix3d::Identity()),
+                          std::make_shared<ValueOnlyParameters>()};
+    VolumePointData point{};
+    NeoHookeanLocalEnergyF deformation(fields);
+    NeoHookeanLocalEnergyFp plastic(fields);
     EXPECT_DOUBLE_EQ(deformation.value(point), 0);
-    EXPECT_TRUE(deformation.gradient(point).isZero());
-    EXPECT_TRUE(deformation.hessian(point).allFinite());
-    EXPECT_TRUE(plastic.gradient(point).isZero());
-    EXPECT_TRUE(plastic.hessian(point).allFinite());
-    const litepgo::MaterialFields value_fields{ValueOnlyDeformation{}, fields.Fp, fields.theta};
-    const litepgo::NeoHookeanLocalEnergyF value_only(value_fields);
-    static_assert(
-        litepgo::LocalValue<decltype(value_only), litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData>);
-    static_assert(!litepgo::LocalFirstOrderEnergy<decltype(value_only),
-                                                  litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData>);
-    static_assert(!litepgo::LocalSecondOrderEnergy<decltype(value_only),
-                                                   litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis>::PointData>);
-    EXPECT_DOUBLE_EQ(value_only.value(point), 0);
+    EXPECT_EQ(deformation.gradient(point).size(), 9);
+    EXPECT_EQ(plastic.hessian(point).rows(), 9);
+    EXPECT_THROW((NeoHookeanLocalEnergyTheta{fields}), std::invalid_argument);
+    fields.F = std::make_shared<ValueOnlyDeformation>();
+    EXPECT_THROW((NeoHookeanLocalEnergyF{fields}), std::invalid_argument);
+    EXPECT_NO_THROW((NeoHookeanLocalEnergyFp{fields}));
+    fields.Fp.reset();
+    EXPECT_THROW(fields.evaluate(point), std::invalid_argument);
+    EXPECT_THROW((NeoHookeanLocalEnergyFp{fields}), std::invalid_argument);
+}
+
+struct BadJacobian final : AffineField<Eigen::Matrix3d> {
+    int n = 9;
+    int rows = 9;
+    int columns = 8;
+    int num_dofs() const override {
+        return n;
+    }
+    Eigen::Matrix3d value(const VolumePointData&) const override {
+        return Eigen::Matrix3d::Identity();
+    }
+    Eigen::MatrixXd jacobian(const VolumePointData&) const override {
+        return Eigen::MatrixXd::Zero(rows, columns);
+    }
+};
+TEST(Field, ActiveJacobianShapeAndPositiveDofCountAreValidated) {
+    auto bad = std::make_shared<BadJacobian>();
+    MaterialFields fields{bad, std::make_shared<ElementField<Eigen::Matrix3d>>(Eigen::Matrix3d::Identity()),
+                          std::make_shared<ConstantField<Eigen::VectorXd>>(Eigen::Vector2d(2, 3))};
+    VolumePointData point{};
+    EXPECT_THROW(NeoHookeanLocalEnergyF(fields).gradient(point), std::invalid_argument);
+    EXPECT_THROW(NeoHookeanLocalEnergyF(fields).hessian(point), std::invalid_argument);
+    bad->columns = 9;
+    bad->rows = 8;
+    EXPECT_THROW(NeoHookeanLocalEnergyF(fields).gradient(point), std::invalid_argument);
+    bad->n = 0;
+    EXPECT_THROW((NeoHookeanLocalEnergyF{fields}), std::invalid_argument);
+}
+struct InvalidParameters final : Field<Eigen::VectorXd> {
+    Eigen::VectorXd parameters;
+    Eigen::VectorXd value(const VolumePointData&) const override {
+        return parameters;
+    }
+};
+TEST(Field, MaterialFieldsRejectEmptyAndNonFiniteRuntimeOutputs) {
+    auto parameters = std::make_shared<InvalidParameters>();
+    MaterialFields fields{std::make_shared<ElementField<Eigen::Matrix3d>>(Eigen::Matrix3d::Identity()),
+                          std::make_shared<ElementField<Eigen::Matrix3d>>(Eigen::Matrix3d::Identity()), parameters};
+    EXPECT_THROW(fields.evaluate(VolumePointData{}), std::invalid_argument);
+    parameters->parameters = Eigen::Vector2d(2, std::numeric_limits<double>::infinity());
+    EXPECT_THROW(fields.evaluate(VolumePointData{}), std::invalid_argument);
 }
 } // namespace

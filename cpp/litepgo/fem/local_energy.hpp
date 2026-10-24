@@ -1,28 +1,28 @@
 #pragma once
 
-#include <Eigen/Core>
-#include <concepts>
+#include "litepgo/fem/volume_point_data.hpp"
 
 namespace litepgo {
 
-template <class Energy, class GeometryPoint>
-concept LocalValue = requires(const Energy& energy, const GeometryPoint& point) {
-    { energy.value(point) } -> std::same_as<double>;
+class LocalValue {
+  public:
+    virtual ~LocalValue() = default;
+    virtual double value(const VolumePointData& point) const = 0;
 };
 
-template <class Energy, class GeometryPoint>
-concept LocalFirstOrderEnergy =
-    LocalValue<Energy, GeometryPoint> && requires(const Energy& energy, const GeometryPoint& point) {
-        requires(Energy::num_dofs > 0);
-        { energy.gradient(point) } -> std::same_as<Eigen::Matrix<double, Energy::num_dofs, 1>>;
-    };
+// Independent capabilities: computing a Hessian does not require a gradient API.
+class LocalGradient {
+  public:
+    virtual ~LocalGradient() = default;
+    virtual int num_dofs() const = 0;
+    virtual Eigen::VectorXd gradient(const VolumePointData& point) const = 0;
+};
 
-// Deliberately independent of LocalFirstOrderEnergy.
-template <class Energy, class GeometryPoint>
-concept LocalSecondOrderEnergy =
-    LocalValue<Energy, GeometryPoint> && requires(const Energy& energy, const GeometryPoint& point) {
-        requires(Energy::num_dofs > 0);
-        { energy.hessian(point) } -> std::same_as<Eigen::Matrix<double, Energy::num_dofs, Energy::num_dofs>>;
-    };
+class LocalHessian {
+  public:
+    virtual ~LocalHessian() = default;
+    virtual int num_dofs() const = 0;
+    virtual Eigen::MatrixXd hessian(const VolumePointData& point) const = 0;
+};
 
 } // namespace litepgo

@@ -3,15 +3,6 @@
 #include <gtest/gtest.h>
 
 namespace {
-template <class J, class G>
-concept CanConvertGradient = requires(const J& j, const G& g) { litepgo::detail::gradient_wrt_dofs(j, g); };
-template <class J, class H>
-concept CanConvertHessian = requires(const J& j, const H& h) { litepgo::detail::hessian_wrt_dofs(j, h); };
-static_assert(CanConvertGradient<Eigen::Matrix<double, 4, 3>, Eigen::Matrix2d>);
-static_assert(!CanConvertGradient<Eigen::Matrix3d, Eigen::Matrix2d>);
-static_assert(!CanConvertHessian<Eigen::Matrix<double, 4, 3>, Eigen::Matrix3d>);
-static_assert(!CanConvertGradient<Eigen::MatrixXd, Eigen::VectorXd>);
-
 TEST(DofDerivatives, AffineChainRuleMatchesFiniteDifferences) {
     Eigen::Matrix<double, 4, 3> J;
     J << 1, 0.2, -0.3, 0.1, 2, 0.4, -0.2, 0.3, 0.8, 0.7, -0.4, 1.2;
@@ -44,3 +35,9 @@ TEST(DofDerivatives, AffineChainRuleMatchesFiniteDifferences) {
     EXPECT_TRUE(copied.isApprox(8 * hessian, 1e-13));
 }
 } // namespace
+
+TEST(DofDerivatives, RejectsMismatchedDynamicSizes) {
+    Eigen::MatrixXd J = Eigen::MatrixXd::Zero(4, 3);
+    EXPECT_THROW(litepgo::detail::gradient_wrt_dofs(J, Eigen::Vector3d::Zero()), std::invalid_argument);
+    EXPECT_THROW(litepgo::detail::hessian_wrt_dofs(J, Eigen::Matrix3d::Zero()), std::invalid_argument);
+}

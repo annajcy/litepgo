@@ -1,23 +1,22 @@
 #pragma once
 
-#include "litepgo/fem/field_value.hpp"
+#include "litepgo/fem/volume_point_data.hpp"
 
 namespace litepgo {
 
-// A local field snapshot evaluated at a reference geometry point.
-template <class T, class GeometryPoint>
-concept Field = requires(const T& field, const GeometryPoint& point) {
-    typename T::FieldValue;
-    requires FixedFieldValue<typename T::FieldValue>;
-    { field.value(point) } -> std::same_as<typename T::FieldValue>;
+// Local immutable field snapshot, independent of global DOF numbering.
+template <class Value> class Field {
+  public:
+    virtual ~Field() = default;
+    virtual Value value(const VolumePointData& point) const = 0;
 };
 
-// At fixed geometry, vec(value) = jacobian(point) * local_dofs + offset(point).
-// vec uses column-major order. Affineness is a mathematical contract, not checked by C++.
-template <class T, class GeometryPoint>
-concept AffineField = Field<T, GeometryPoint> && requires(const T& field, const GeometryPoint& point) {
-    requires(T::num_dofs > 0);
-    { field.jacobian(point) } -> std::same_as<Eigen::Matrix<double, T::FieldValue::SizeAtCompileTime, T::num_dofs>>;
+// At fixed geometry, vec(value) = J * local_dofs + offset.
+// vec is column-major. Affineness is a mathematical contract.
+template <class Value> class AffineField : public Field<Value> {
+  public:
+    virtual int num_dofs() const = 0;
+    virtual Eigen::MatrixXd jacobian(const VolumePointData& point) const = 0;
 };
 
 } // namespace litepgo

@@ -1,6 +1,8 @@
 #include "litepgo/energy/energy.hpp"
+#include "litepgo/fem/constant_dof_data.hpp"
 #include "litepgo/fem/constant_field.hpp"
 #include "litepgo/fem/deformation_gradient_field.hpp"
+#include "litepgo/fem/element_dof_data.hpp"
 #include "litepgo/fem/element_field.hpp"
 #include "litepgo/fem/gauss_legendre_1d.hpp"
 #include "litepgo/fem/gauss_legendre_3d.hpp"
@@ -8,12 +10,14 @@
 #include "litepgo/fem/interpolated_value_field.hpp"
 #include "litepgo/fem/local_kernel.hpp"
 #include "litepgo/fem/material_fields.hpp"
+#include "litepgo/fem/neo_hookean.hpp"
 #include "litepgo/fem/neo_hookean_local_energy.hpp"
 #include "litepgo/fem/tensor_product_quadrature.hpp"
 #include "litepgo/fem/vertex_element_dof_map.hpp"
 #include "litepgo/fem/volume_quadrature_cache.hpp"
 #include "quadratic_parameter_local_energy.hpp"
 
+#include "litepgo/fem/volume_reference_geometry.hpp"
 #include <array>
 #include <cmath>
 #include <gtest/gtest.h>
@@ -42,18 +46,19 @@ struct Fixture {
         for (int j = 0; j < u.num_dofs(); ++j)
             u.values()[j] = 0.04 * std::sin(0.7 * (j + 1));
     }
-    VolumeQuadratureCache<HexQ1Basis, litepgo::GaussLegendre3D<2>> cache(int e) const {
+    litepgo::VolumeQuadratureCache cache(int e) const {
         Eigen::Matrix<double, 8, 3> local;
         const auto& v = topology.cell_vertices(e);
         for (int i = 0; i < 8; ++i)
             local.row(i) = X.row(v[static_cast<std::size_t>(i)]);
-        return VolumeQuadratureCache<HexQ1Basis, litepgo::GaussLegendre3D<2>>(
-            VolumeReferenceGeometry<HexQ1Basis>(local));
+        return litepgo::VolumeQuadratureCache(VolumeReferenceGeometry<HexQ1Basis>(local),
+                                              litepgo::GaussLegendre3D<2>{});
     }
     auto fields(int e) const {
         const VertexElementDofMap map(topology);
-        return MaterialFields{DeformationGradientField<HexQ1Basis>(map.gather(e, u)), ElementField(fp, e),
-                              ConstantField(theta)};
+        return MaterialFields{std::make_shared<DeformationGradientField>(map.gather(e, u)),
+                              std::make_shared<ElementField<Eigen::Matrix3d>>(fp.value(e)),
+                              std::make_shared<ConstantField<Eigen::VectorXd>>(theta.value())};
     }
 };
 
@@ -105,16 +110,17 @@ TEST(MaterialFields, MixedRepresentationsPointInputsAndLocalFiniteDifferences) {
         const auto cache = f.cache(e);
         const auto fields = f.fields(e);
         const auto ue = map.gather(e, f.u);
-        for (int q = 0; q < VolumeQuadratureCache<HexQ1Basis, litepgo::GaussLegendre3D<2>>::num_quadrature_points;
-             ++q) {
+        for (int q = 0; q < cache.num_quadrature_points(); ++q) {
             const auto& ref = cache.sample(q).point;
             const auto point = fields.evaluate(ref);
-            EXPECT_TRUE(
-                point.F.isApprox(Eigen::Matrix3d::Identity() + FieldInterpolation<HexQ1Basis, 3>(ue).gradient(ref)));
+            EXPECT_TRUE(point.F.isApprox(Eigen::Matrix3d::Identity() + FieldInterpolation(ue).gradient(ref)));
             EXPECT_EQ(point.Fp, f.fp.value(e));
             EXPECT_EQ(point.theta, f.theta.value());
-            EXPECT_TRUE(fields.Fp.jacobian(ref).isIdentity());
-            EXPECT_TRUE(fields.theta.jacobian(ref).isIdentity());
+            EXPECT_TRUE(
+                std::dynamic_pointer_cast<const AffineField<Eigen::Matrix3d>>(fields.Fp)->jacobian(ref).isIdentity());
+            EXPECT_TRUE(std::dynamic_pointer_cast<const AffineField<Eigen::VectorXd>>(fields.theta)
+                            ->jacobian(ref)
+                            .isIdentity());
         }
         const litepgo::LocalKernel kernel(cache);
         EXPECT_DOUBLE_EQ(kernel.value(NeoHookeanLocalEnergyF(fields)), kernel.value(NeoHookeanLocalEnergyFp(fields)));
@@ -127,8 +133,9 @@ TEST(MaterialFields, MixedRepresentationsPointInputsAndLocalFiniteDifferences) {
                 Eigen::Matrix<double, 8, 3> c;
                 for (int j = 0; j < 24; ++j)
                     c(j / 3, j % 3) = x[j];
-                return MaterialFields{DeformationGradientField<HexQ1Basis>(c), ElementField(f.fp, e),
-                                      ConstantField(f.theta)};
+                return MaterialFields{std::make_shared<DeformationGradientField>(c),
+                                      std::make_shared<ElementField<Eigen::Matrix3d>>(f.fp.value(e)),
+                                      std::make_shared<ConstantField<Eigen::VectorXd>>(f.theta.value())};
             },
             [](const auto& local_fields) { return NeoHookeanLocalEnergyF(local_fields); });
         const Eigen::Matrix3d fp = f.fp.value(e);
@@ -136,16 +143,18 @@ TEST(MaterialFields, MixedRepresentationsPointInputsAndLocalFiniteDifferences) {
         check_fd(
             kernel, pvec,
             [&](const Eigen::Matrix<double, 9, 1>& x) {
-                return MaterialFields{DeformationGradientField<HexQ1Basis>(ue),
-                                      ElementField<Eigen::Matrix3d>(Eigen::Map<const Eigen::Matrix3d>(x.data())),
-                                      ConstantField(f.theta)};
+                return MaterialFields{
+                    std::make_shared<DeformationGradientField>(ue),
+                    std::make_shared<ElementField<Eigen::Matrix3d>>(Eigen::Map<const Eigen::Matrix3d>(x.data())),
+                    std::make_shared<ConstantField<Eigen::VectorXd>>(f.theta.value())};
             },
             [](const auto& local_fields) { return NeoHookeanLocalEnergyFp(local_fields); });
         check_fd(
             kernel, f.theta.value(),
             [&](const Eigen::Matrix<double, 2, 1>& x) {
-                return MaterialFields{DeformationGradientField<HexQ1Basis>(ue), ElementField<Eigen::Matrix3d>(fp),
-                                      ConstantField<Eigen::Vector2d>(x)};
+                return MaterialFields{std::make_shared<DeformationGradientField>(ue),
+                                      std::make_shared<ElementField<Eigen::Matrix3d>>(fp),
+                                      std::make_shared<ConstantField<Eigen::VectorXd>>(x)};
             },
             [](const auto& local_fields) { return NeoHookeanLocalEnergyTheta(local_fields); });
     }
@@ -156,22 +165,23 @@ TEST(MaterialFields, SameKernelAcceptsDifferentActiveDofCounts) {
     fixture.u.values().setZero();
     const auto cache = fixture.cache(0);
     const auto nodal = fixture.fields(0);
-    const MaterialFields direct{ElementField<Eigen::Matrix3d>(Eigen::Matrix3d::Identity()), nodal.Fp, nodal.theta};
+    const MaterialFields direct{std::make_shared<ElementField<Eigen::Matrix3d>>(Eigen::Matrix3d::Identity()), nodal.Fp,
+                                nodal.theta};
     const LocalKernel kernel(cache);
     const auto nodal_gradient = kernel.gradient(NeoHookeanLocalEnergyF(nodal));
     const auto direct_gradient = kernel.gradient(NeoHookeanLocalEnergyF(direct));
-    static_assert(decltype(nodal_gradient)::RowsAtCompileTime == 24);
-    static_assert(decltype(direct_gradient)::RowsAtCompileTime == 9);
+    EXPECT_EQ(nodal_gradient.size(), 24);
+    EXPECT_EQ(direct_gradient.size(), 9);
     EXPECT_DOUBLE_EQ(kernel.value(NeoHookeanLocalEnergyF(nodal)), kernel.value(NeoHookeanLocalEnergyF(direct)));
     Eigen::Matrix<double, 24, 1> expected_gradient = Eigen::Matrix<double, 24, 1>::Zero();
     Eigen::Matrix<double, 24, 24> expected_hessian = Eigen::Matrix<double, 24, 24>::Zero();
     Eigen::Matrix<double, 9, 9> direct_hessian = Eigen::Matrix<double, 9, 9>::Zero();
-    for (int q = 0; q < decltype(cache)::num_quadrature_points; ++q) {
+    for (int q = 0; q < cache.num_quadrature_points(); ++q) {
         const auto& sample = cache.sample(q);
         const auto inputs = nodal.evaluate(sample.point);
-        const auto J = nodal.F.jacobian(sample.point);
-        const auto stress = NeoHookeanEnergyF{}.gradient(inputs);
-        const auto tangent = NeoHookeanEnergyF{}.hessian(inputs);
+        const auto J = std::dynamic_pointer_cast<const AffineField<Eigen::Matrix3d>>(nodal.F)->jacobian(sample.point);
+        const auto stress = NeoHookean{}.gradient_F(inputs);
+        const auto tangent = NeoHookean{}.hessian_F(inputs);
         expected_gradient +=
             sample.volume_weight * J.transpose() * Eigen::Map<const Eigen::Matrix<double, 9, 1>>(stress.data());
         expected_hessian += sample.volume_weight * J.transpose() * tangent * J;
@@ -185,8 +195,9 @@ TEST(MaterialFields, SameKernelAcceptsDifferentActiveDofCounts) {
     check_fd(
         kernel, identity,
         [&](const Eigen::Matrix<double, 9, 1>& x) {
-            return MaterialFields{ElementField<Eigen::Matrix3d>(Eigen::Map<const Eigen::Matrix3d>(x.data())), nodal.Fp,
-                                  nodal.theta};
+            return MaterialFields{
+                std::make_shared<ElementField<Eigen::Matrix3d>>(Eigen::Map<const Eigen::Matrix3d>(x.data())), nodal.Fp,
+                nodal.theta};
         },
         [](const auto& fields) { return NeoHookeanLocalEnergyF(fields); });
 }
@@ -256,10 +267,10 @@ TEST(MaterialFields, ElementAndSharedDofNumbersAccumulateIntoDifferentGlobalBloc
     const Eigen::Matrix3d original = f.fp.value(0);
     f.fp.set_value(0, 1.1 * original);
     f.theta.set_value({4, 5});
-    EXPECT_EQ(before.Fp.value(caches[0].sample(0).point), original);
-    EXPECT_EQ(before.theta.value(caches[0].sample(0).point), Eigen::Vector2d(2, 3));
-    EXPECT_NE(f.fields(0).Fp.value(caches[0].sample(0).point), original);
-    EXPECT_EQ(f.fields(1).theta.value(caches[1].sample(0).point), Eigen::Vector2d(4, 5));
+    EXPECT_EQ(before.Fp->value(caches[0].sample(0).point), original);
+    EXPECT_EQ(before.theta->value(caches[0].sample(0).point), Eigen::Vector2d(2, 3));
+    EXPECT_NE(f.fields(0).Fp->value(caches[0].sample(0).point), original);
+    EXPECT_EQ(f.fields(1).theta->value(caches[1].sample(0).point), Eigen::Vector2d(4, 5));
 }
 
 TEST(MaterialFields, SharedParameterHessianIncludesBothElements) {
@@ -271,12 +282,12 @@ TEST(MaterialFields, SharedParameterHessianIncludesBothElements) {
         const litepgo::LocalKernel kernel(cache);
         const auto fields = f.fields(e);
         H += kernel.hessian(QuadraticParameterLocalEnergy(fields));
-        for (int q = 0; q < VolumeQuadratureCache<HexQ1Basis, litepgo::GaussLegendre3D<2>>::num_quadrature_points; ++q)
+        for (int q = 0; q < cache.num_quadrature_points(); ++q)
             volume += cache.sample(q).volume_weight;
         check_fd(
             kernel, f.theta.value(),
             [&](const Eigen::Vector2d& theta) {
-                return MaterialFields{fields.F, fields.Fp, ConstantField<Eigen::Vector2d>(theta)};
+                return MaterialFields{fields.F, fields.Fp, std::make_shared<ConstantField<Eigen::VectorXd>>(theta)};
             },
             [](const auto& local_fields) { return QuadraticParameterLocalEnergy(local_fields); });
     }
@@ -288,7 +299,7 @@ TEST(MaterialFields, DirectInfeasiblePlasticStateReachesMaterialValidation) {
     auto fields = f.fields(0);
     Eigen::Matrix3d inverted = Eigen::Matrix3d::Identity();
     inverted(0, 0) = -1;
-    fields.Fp = ElementField<Eigen::Matrix3d>(inverted);
+    fields.Fp = std::make_shared<ElementField<Eigen::Matrix3d>>(inverted);
     const litepgo::LocalKernel kernel(f.cache(0));
     EXPECT_THROW(kernel.value(NeoHookeanLocalEnergyFp(fields)), InfeasibleState);
     EXPECT_THROW(kernel.gradient(NeoHookeanLocalEnergyFp(fields)), InfeasibleState);

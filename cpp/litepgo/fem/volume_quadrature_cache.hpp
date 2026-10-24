@@ -3,21 +3,24 @@
 #include "litepgo/fem/quadrature.hpp"
 #include "litepgo/fem/volume_reference_geometry.hpp"
 
-#include <array>
 #include <cmath>
 #include <cstddef>
 #include <stdexcept>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace litepgo {
 
 // The basis and quadrature must use the same parameter domain.
-template <Basis3D BasisType, Quadrature3D QuadratureType> class VolumeQuadratureCache final {
+class VolumeQuadratureCache final {
   public:
-    static constexpr int num_quadrature_points = QuadratureType::num_points;
+    int num_quadrature_points() const {
+        return static_cast<int>(samples_.size());
+    }
 
     struct Sample {
-        typename VolumeReferenceGeometry<BasisType>::PointData point;
+        VolumePointData point;
         // w_q * det(J0(xi_q))
         double volume_weight;
     };
@@ -25,10 +28,12 @@ template <Basis3D BasisType, Quadrature3D QuadratureType> class VolumeQuadrature
     // Owns the evaluated samples; retains no reference to reference_geometry.
     // Propagates point evaluation errors. A non-finite volume weight throws
     // std::invalid_argument. Validity is checked at quadrature points only.
-    explicit VolumeQuadratureCache(const VolumeReferenceGeometry<BasisType>& reference_geometry) {
+    template <Basis3D BasisType, Quadrature3D QuadratureType>
+    explicit VolumeQuadratureCache(const VolumeReferenceGeometry<BasisType>& reference_geometry, QuadratureType)
+        : samples_(QuadratureType::num_points) {
         const auto& points = QuadratureType::points();
         const auto& weights = QuadratureType::weights();
-        for (int q = 0; q < num_quadrature_points; ++q) {
+        for (int q = 0; q < num_quadrature_points(); ++q) {
             const Eigen::Vector3d xi = points.row(q).transpose();
             auto& result = samples_[static_cast<std::size_t>(q)];
             result.point = reference_geometry.evaluate(xi);
@@ -42,14 +47,14 @@ template <Basis3D BasisType, Quadrature3D QuadratureType> class VolumeQuadrature
 
     // Throws std::out_of_range for an invalid quadrature point index.
     const Sample& sample(int quadrature_point) const {
-        if (quadrature_point < 0 || quadrature_point >= num_quadrature_points) {
+        if (quadrature_point < 0 || quadrature_point >= num_quadrature_points()) {
             throw std::out_of_range("VolumeQuadratureCache::sample: quadrature point is out of range");
         }
         return samples_[static_cast<std::size_t>(quadrature_point)];
     }
 
   private:
-    std::array<Sample, num_quadrature_points> samples_;
+    std::vector<Sample> samples_;
 };
 
 } // namespace litepgo

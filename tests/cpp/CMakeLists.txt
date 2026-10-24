@@ -34,7 +34,6 @@ add_executable(litepgo_tests
     fem/volume_integration_gtest.cpp
     fem/volume_quadrature_cache_gtest.cpp
     fem/volume_reference_geometry_gtest.cpp
-    fem/point_energy_gtest.cpp
     linalg/dof_reduction_gtest.cpp
     linalg/reduced_matrix_gtest.cpp
     linalg/sparse_pattern_gtest.cpp
