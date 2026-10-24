@@ -16,6 +16,8 @@ add_executable(litepgo_tests
     fem/interpolated_field_gtest.cpp
     fem/lagrange_basis_gtest.cpp
     fem/material_types_gtest.cpp
+    fem/multiplicative_kinematics_gtest.cpp
+    fem/neo_hookean_gtest.cpp
     fem/quadrature_gtest.cpp
     fem/tensor_product_basis_gtest.cpp
     fem/tensor_product_quadrature_gtest.cpp
