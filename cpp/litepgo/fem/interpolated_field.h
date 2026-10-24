@@ -9,7 +9,7 @@
 
 namespace litepgo {
 
-// Coefficients are ordered [basis0.component0, ..., basis1.component0, ...].
+// Coefficient rows follow basis order; columns are field components.
 // PointData must be evaluated from the reference geometry of these coefficients.
 template <Basis3D BasisType, int Components>
     requires(Components > 0)
@@ -19,7 +19,7 @@ class InterpolatedField final {
     static constexpr int num_basis_functions = BasisType::num_basis_functions;
     static constexpr int num_dofs = Components * num_basis_functions;
 
-    using LocalCoefficients = Eigen::Matrix<double, num_dofs, 1>;
+    using LocalCoefficients = Eigen::Matrix<double, num_basis_functions, Components>;
     using Value = Eigen::Matrix<double, Components, 1>;
     using Gradient = Eigen::Matrix<double, Components, 3>;
     using ValueMatrix = Eigen::Matrix<double, Components, num_dofs>;
@@ -33,13 +33,15 @@ class InterpolatedField final {
         Values basis_values;
         Gradients basis_gradients; // dN/dX, in the same order as the coefficients
 
-        // value = value_matrix() * coefficients.
+        // value = value_matrix() * flatten_rows(coefficients).
+        // Column i * Components + c differentiates coefficient (i, c).
         ValueMatrix value_matrix() const {
             return Eigen::kroneckerProduct(basis_values.transpose(),
                                            Eigen::Matrix<double, Components, Components>::Identity());
         }
 
-        // vec(gradient) = gradient_matrix() * coefficients; column-major vec.
+        // vec(gradient) = gradient_matrix() * flatten_rows(coefficients).
+        // vec(gradient) is column-major; Jacobian columns use i * Components + c.
         GradientMatrix gradient_matrix() const {
             return Eigen::kroneckerProduct(basis_gradients.transpose(),
                                            Eigen::Matrix<double, Components, Components>::Identity());
@@ -53,10 +55,8 @@ class InterpolatedField final {
     }
 
     Sample evaluate(const ReferencePoint& point) const {
-        const Eigen::Map<const Eigen::Matrix<double, Components, num_basis_functions>> coefficients(
-            coefficients_.data());
-        Sample result{coefficients * point.basis_values, coefficients * point.basis_gradients, point.basis_values,
-                      point.basis_gradients};
+        Sample result{coefficients_.transpose() * point.basis_values, coefficients_.transpose() * point.basis_gradients,
+                      point.basis_values, point.basis_gradients};
         if (!result.value.allFinite() || !result.gradient.allFinite()) {
             throw std::invalid_argument("InterpolatedField::evaluate: non-finite field value or gradient");
         }

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "litepgo/core/types.h"
-#include "litepgo/fem/vertex_dof_layout.h"
+#include "litepgo/fem/vertex_dof_data.h"
 #include "litepgo/mesh/mesh_topology.h"
 
 #include <array>
@@ -12,41 +12,39 @@
 namespace litepgo {
 
 // Extracts each cell's vertex blocks in connectivity order, then slot order.
-// Indices address one field vector, without offsets into a multi-field solver vector.
-// The topology must outlive the map; the layout is copied.
-template <int VerticesPerCell, int DofsPerVertex>
-    requires(VerticesPerCell > 0 && DofsPerVertex > 0 &&
-             VerticesPerCell <= std::numeric_limits<int>::max() / DofsPerVertex)
+// Indices address the supplied data, without offsets into a multi-field solver vector.
+// The topology must outlive the map.
+template <int VerticesPerCell>
+    requires(VerticesPerCell > 0)
 class VertexElementDofMap final {
   public:
     using Topology = MeshTopology<VerticesPerCell>;
+
+    template <int DofsPerVertex>
+        requires(DofsPerVertex > 0 && VerticesPerCell <= std::numeric_limits<int>::max() / DofsPerVertex)
     static constexpr int num_element_dofs = VerticesPerCell * DofsPerVertex;
-    static constexpr int num_local_coefficients = num_element_dofs;
 
-    using Indices = std::array<int, num_element_dofs>;
-    using LocalCoefficients = Eigen::Matrix<double, num_local_coefficients, 1>;
-    using CoefficientMatrix = Eigen::Matrix<double, num_local_coefficients, num_element_dofs>;
-    using CoefficientJacobian = decltype(CoefficientMatrix::Identity());
+    template <int DofsPerVertex> using Indices = std::array<int, num_element_dofs<DofsPerVertex>>;
+    template <int DofsPerVertex>
+        requires(DofsPerVertex > 0 && VerticesPerCell <= std::numeric_limits<int>::max() / DofsPerVertex)
+    using LocalCoefficients = Eigen::Matrix<double, VerticesPerCell, DofsPerVertex>;
+    template <int DofsPerVertex>
+    using CoefficientMatrix = Eigen::Matrix<double, num_element_dofs<DofsPerVertex>, num_element_dofs<DofsPerVertex>>;
+    template <int DofsPerVertex> using CoefficientJacobian = decltype(CoefficientMatrix<DofsPerVertex>::Identity());
 
-    VertexElementDofMap(const MeshTopology<VerticesPerCell>& topology, VertexDofLayout<DofsPerVertex> layout)
-        : topology_(topology), layout_(layout) {
-        if (topology_.num_vertices() != layout_.num_vertices()) {
-            throw std::invalid_argument("VertexElementDofMap requires matching topology and layout vertex counts");
-        }
-    }
+    explicit VertexElementDofMap(const MeshTopology<VerticesPerCell>& topology) : topology_(topology) {}
 
-    VertexElementDofMap(const MeshTopology<VerticesPerCell>&&, VertexDofLayout<DofsPerVertex>) = delete;
+    VertexElementDofMap(const MeshTopology<VerticesPerCell>&&) = delete;
 
-    int num_field_dofs() const noexcept {
-        return layout_.num_dofs();
-    }
-
-    // Invalid element indices throw std::out_of_range.
-    Indices dof_indices(int element) const {
+    // A mismatched vertex count throws std::invalid_argument; an invalid
+    // element index throws std::out_of_range. Checks are repeated for each data object.
+    template <int DofsPerVertex>
+    Indices<DofsPerVertex> dof_indices(int element, const VertexDofData<DofsPerVertex>& data) const {
+        check_vertex_count(data);
         const auto& vertices = topology_.cell_vertices(element);
-        Indices result;
+        Indices<DofsPerVertex> result;
         for (int i = 0; i < VerticesPerCell; ++i) {
-            const int first = layout_.dof(vertices[static_cast<std::size_t>(i)], 0);
+            const int first = data.dof(vertices[static_cast<std::size_t>(i)], 0);
             for (int slot = 0; slot < DofsPerVertex; ++slot) {
                 result[static_cast<std::size_t>(i * DofsPerVertex + slot)] = first + slot;
             }
@@ -54,30 +52,38 @@ class VertexElementDofMap final {
         return result;
     }
 
-    // Copies coefficients without interpreting their values. A field vector of
-    // another size throws std::invalid_argument; element bounds are checked too.
-    LocalCoefficients gather(int element, const ConstVecRef& field_values) const {
-        if (field_values.size() != num_field_dofs()) {
-            throw std::invalid_argument("VertexElementDofMap::gather: field vector has the wrong size");
-        }
-        const auto indices = dof_indices(element);
-        LocalCoefficients result;
-        for (int i = 0; i < num_local_coefficients; ++i) {
-            result[i] = field_values[indices[static_cast<std::size_t>(i)]];
+    // Returns an independent copy: rows follow cell connectivity, columns are vertex slots.
+    template <int DofsPerVertex>
+    LocalCoefficients<DofsPerVertex> gather(int element, const VertexDofData<DofsPerVertex>& data) const {
+        const auto indices = dof_indices(element, data);
+        const auto values = data.values();
+        LocalCoefficients<DofsPerVertex> result;
+        for (int i = 0; i < VerticesPerCell; ++i) {
+            for (int slot = 0; slot < DofsPerVertex; ++slot) {
+                result(i, slot) = values[indices[static_cast<std::size_t>(i * DofsPerVertex + slot)]];
+            }
         }
         return result;
     }
 
-    // dc_e / d(field_values[dof_indices(element)]): an identity expression,
-    // without allocating or storing a dense matrix.
-    CoefficientJacobian coefficient_jacobian(int element) const {
+    // d(flatten_rows(c_e)) / d(data.values()[dof_indices(element, data)]):
+    // an identity expression, without allocating or storing a dense matrix.
+    template <int DofsPerVertex>
+    CoefficientJacobian<DofsPerVertex> coefficient_jacobian(int element,
+                                                            const VertexDofData<DofsPerVertex>& data) const {
+        check_vertex_count(data);
         topology_.cell_vertices(element);
-        return CoefficientMatrix::Identity();
+        return CoefficientMatrix<DofsPerVertex>::Identity();
     }
 
   private:
+    template <int DofsPerVertex> void check_vertex_count(const VertexDofData<DofsPerVertex>& data) const {
+        if (topology_.num_vertices() != data.num_vertices()) {
+            throw std::invalid_argument("VertexElementDofMap requires matching topology and data vertex counts");
+        }
+    }
+
     const Topology& topology_;
-    VertexDofLayout<DofsPerVertex> layout_;
 };
 
 } // namespace litepgo

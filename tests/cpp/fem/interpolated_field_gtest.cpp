@@ -32,6 +32,8 @@ static_assert(!CanFormField<Basis, 0>);
 static_assert(!CanFormField<litepgo::LagrangeBasis, 3>);
 static_assert(VectorField::num_dofs == 24);
 static_assert(MaterialField::num_dofs == 16);
+static_assert(std::same_as<VectorField::LocalCoefficients, Eigen::Matrix<double, 8, 3>>);
+static_assert(std::same_as<MaterialField::LocalCoefficients, Eigen::Matrix<double, 8, 2>>);
 static_assert(
     std::same_as<decltype(std::declval<const VectorField&>().evaluate(std::declval<const Mapping::PointData&>())),
                  VectorField::Sample>);
@@ -45,7 +47,7 @@ Geometry corners() {
 VectorField::LocalCoefficients affine_field(const Geometry& X, const Mat3& A, const Vec3& offset) {
     VectorField::LocalCoefficients coefficients;
     for (int i = 0; i < 8; ++i) {
-        coefficients.segment<3>(3 * i) = A * X.row(i).transpose() + offset;
+        coefficients.row(i) = (A * X.row(i).transpose() + offset).transpose();
     }
     return coefficients;
 }
@@ -68,6 +70,46 @@ Geometry warped_geometry() {
         X.row(i) = warped_position(X.row(i).transpose()).transpose();
     }
     return X;
+}
+
+template <int Components> void check_coefficient_derivatives() {
+    SCOPED_TRACE(Components);
+    using Field = litepgo::InterpolatedField<Basis, Components>;
+    const Mapping mapping(corners() * Vec3(2.0, 3.0, 4.0).asDiagonal());
+    typename Field::LocalCoefficients coefficients;
+    for (int i = 0; i < coefficients.rows(); ++i) {
+        for (int c = 0; c < Components; ++c) {
+            coefficients(i, c) = std::sin(0.37 * (i * Components + c + 1));
+        }
+    }
+    const auto point = mapping.evaluate(Vec3(0.2, 0.3, 0.4));
+    const auto sample = Field(coefficients).evaluate(point);
+    const Eigen::Matrix<double, Field::num_dofs, 1> flattened = coefficients.template reshaped<Eigen::RowMajor>();
+    EXPECT_TRUE((sample.value_matrix() * flattened).isApprox(sample.value, 1e-14));
+    const Eigen::Map<const Eigen::Matrix<double, 3 * Components, 1>> gradient_vector(sample.gradient.data());
+    EXPECT_TRUE((sample.gradient_matrix() * flattened).isApprox(gradient_vector, 1e-14));
+
+    constexpr double h = 1e-4;
+    for (int i = 0; i < coefficients.rows(); ++i) {
+        for (int c = 0; c < Components; ++c) {
+            auto plus = coefficients;
+            auto minus = coefficients;
+            plus(i, c) += h;
+            minus(i, c) -= h;
+            const auto sample_plus = Field(plus).evaluate(point);
+            const auto sample_minus = Field(minus).evaluate(point);
+            const int column = i * Components + c;
+            EXPECT_TRUE(
+                ((sample_plus.value - sample_minus.value) / (2 * h)).isApprox(sample.value_matrix().col(column), 1e-9))
+                << "coefficient (" << i << ", " << c << ")";
+            const Eigen::Map<const Eigen::Matrix<double, 3 * Components, 1>> gradient_plus(sample_plus.gradient.data());
+            const Eigen::Map<const Eigen::Matrix<double, 3 * Components, 1>> gradient_minus(
+                sample_minus.gradient.data());
+            EXPECT_TRUE(
+                ((gradient_plus - gradient_minus) / (2 * h)).isApprox(sample.gradient_matrix().col(column), 1e-9))
+                << "coefficient (" << i << ", " << c << ")";
+        }
+    }
 }
 
 } // namespace
@@ -94,7 +136,7 @@ TEST(InterpolatedField, SeparateRestGeometryDisplacementPlasticDisplacementAndMa
     const Eigen::Vector2d material_offset(2.0, 3.0);
     MaterialField::LocalCoefficients theta;
     for (int i = 0; i < 8; ++i) {
-        theta.segment<2>(2 * i) = material_gradient * X.row(i).transpose() + material_offset;
+        theta.row(i) = (material_gradient * X.row(i).transpose() + material_offset).transpose();
     }
     const MaterialField material_parameters(theta);
 
@@ -116,34 +158,27 @@ TEST(InterpolatedField, SeparateRestGeometryDisplacementPlasticDisplacementAndMa
 }
 
 TEST(InterpolatedField, ValueAndGradientMatricesDifferentiateLocalCoefficients) {
-    const Mapping mapping(corners() * Vec3(2.0, 3.0, 4.0).asDiagonal());
-    VectorField::LocalCoefficients a;
-    for (int i = 0; i < a.size(); ++i) {
-        a[i] = std::sin(0.37 * (i + 1));
-    }
-    const Vec3 xi(0.2, 0.3, 0.4);
-    const auto point = mapping.evaluate(xi);
-    const auto sample = VectorField(a).evaluate(point);
-    EXPECT_TRUE((sample.value_matrix() * a).isApprox(sample.value, 1e-14));
-    const Eigen::Map<const Eigen::Matrix<double, 9, 1>> gradient_vector(sample.gradient.data());
-    EXPECT_TRUE((sample.gradient_matrix() * a).isApprox(gradient_vector, 1e-14));
+    check_coefficient_derivatives<1>();
+    check_coefficient_derivatives<2>();
+    check_coefficient_derivatives<3>();
+}
 
-    constexpr double h = 1e-6;
-    for (int i : {0, 7, 23}) {
-        auto perturbed = a;
-        perturbed[i] += h;
-        const auto changed = VectorField(perturbed).evaluate(point);
-        EXPECT_TRUE(((changed.value - sample.value) / h).isApprox(sample.value_matrix().col(i), 1e-9));
-        const Eigen::Map<const Eigen::Matrix<double, 9, 1>> changed_gradient(changed.gradient.data());
-        EXPECT_TRUE(((changed_gradient - gradient_vector) / h).isApprox(sample.gradient_matrix().col(i), 1e-9));
-    }
+TEST(InterpolatedField, AcceptsEitherMatrixStorageOrder) {
+    const Mapping mapping(corners());
+    const Eigen::Matrix<double, 8, 3, Eigen::RowMajor> coefficients = corners();
+    const auto point = mapping.evaluate(Vec3(0.2, 0.3, 0.4));
+    const auto sample = VectorField(coefficients).evaluate(point);
+    EXPECT_TRUE(sample.value.isApprox(point.position, 1e-14));
+    EXPECT_TRUE(sample.gradient.isIdentity(1e-14));
 }
 
 TEST(InterpolatedField, GradientMatchesPhysicalFiniteDifferencesOnWarpedHex) {
     const Mapping mapping(warped_geometry());
     VectorField::LocalCoefficients b;
-    for (int i = 0; i < b.size(); ++i) {
-        b[i] = std::sin(0.37 * (i + 1));
+    for (int i = 0; i < b.rows(); ++i) {
+        for (int c = 0; c < b.cols(); ++c) {
+            b(i, c) = std::sin(0.37 * (3 * i + c + 1));
+        }
     }
     const VectorField plastic_displacement(b);
     const Vec3 xi(0.2, 0.3, 0.4);
@@ -167,12 +202,16 @@ TEST(InterpolatedField, DirectAndCachedGeometryPointsGiveTheSameFields) {
     VectorField::LocalCoefficients a;
     VectorField::LocalCoefficients b;
     MaterialField::LocalCoefficients theta;
-    for (int i = 0; i < a.size(); ++i) {
-        a[i] = std::sin(0.37 * (i + 1));
-        b[i] = std::cos(0.23 * (i + 1));
+    for (int i = 0; i < a.rows(); ++i) {
+        for (int c = 0; c < a.cols(); ++c) {
+            a(i, c) = std::sin(0.37 * (3 * i + c + 1));
+            b(i, c) = std::cos(0.23 * (3 * i + c + 1));
+        }
     }
-    for (int i = 0; i < theta.size(); ++i) {
-        theta[i] = 2.0 + 0.1 * i;
+    for (int i = 0; i < theta.rows(); ++i) {
+        for (int c = 0; c < theta.cols(); ++c) {
+            theta(i, c) = 2.0 + 0.1 * (2 * i + c);
+        }
     }
     const VectorField displacement(a);
     const VectorField plastic_displacement(b);
@@ -202,7 +241,7 @@ TEST(InterpolatedField, CoefficientsAreCopiedAndTranslationHasZeroGradient) {
     const Vec3 translation(0.7, -0.2, 1.3);
     VectorField::LocalCoefficients coefficients;
     for (int i = 0; i < 8; ++i) {
-        coefficients.segment<3>(3 * i) = translation;
+        coefficients.row(i) = translation.transpose();
     }
     const VectorField field(coefficients);
     coefficients.setConstant(std::numeric_limits<double>::quiet_NaN());
@@ -213,6 +252,6 @@ TEST(InterpolatedField, CoefficientsAreCopiedAndTranslationHasZeroGradient) {
 
 TEST(InterpolatedField, RejectsNonFiniteCoefficients) {
     VectorField::LocalCoefficients coefficients = VectorField::LocalCoefficients::Zero();
-    coefficients[4] = std::numeric_limits<double>::quiet_NaN();
+    coefficients(1, 1) = std::numeric_limits<double>::quiet_NaN();
     EXPECT_THROW((VectorField(coefficients)), std::invalid_argument);
 }

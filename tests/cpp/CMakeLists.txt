@@ -18,7 +18,7 @@ add_executable(litepgo_tests
     fem/quadrature_gtest.cpp
     fem/tensor_product_basis_gtest.cpp
     fem/tensor_product_quadrature_gtest.cpp
-    fem/vertex_dof_layout_gtest.cpp
+    fem/vertex_dof_data_gtest.cpp
     fem/vertex_element_dof_map_gtest.cpp
     fem/volume_quadrature_cache_gtest.cpp
     fem/volume_reference_geometry_gtest.cpp
