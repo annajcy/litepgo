@@ -70,11 +70,11 @@ TEST(VolumeQuadratureCache, MatchesDirectPointEvaluationAndIntegratesUnitVolume)
     for (int q = 0; q < Cache::num_quadrature_points; ++q) {
         const auto expected = reference.evaluate(Quadrature::points().row(q).transpose());
         const auto& sample = cache.sample(q);
-        EXPECT_EQ(sample.point.values, expected.values);
-        EXPECT_EQ(sample.point.gradients, expected.gradients);
+        EXPECT_EQ(sample.point.position, expected.position);
+        EXPECT_EQ(sample.point.jacobian, expected.jacobian);
+        EXPECT_EQ(sample.point.basis_values, expected.basis_values);
+        EXPECT_EQ(sample.point.basis_gradients, expected.basis_gradients);
         EXPECT_EQ(sample.point.jacobian_determinant, expected.jacobian_determinant);
-        EXPECT_EQ(sample.point.B(), expected.B());
-        EXPECT_EQ(sample.point.BF(), expected.BF());
         EXPECT_NEAR(sample.volume_weight, 0.125, 1e-15);
         volume += sample.volume_weight;
     }
@@ -126,8 +126,8 @@ TEST(VolumeQuadratureCache, OwnsSamplesAfterReferenceGeometryIsDestroyed) {
     const auto& sample = cache.sample(0);
     EXPECT_NEAR(sample.point.jacobian_determinant, 1.0, 1e-14);
     EXPECT_NEAR(sample.volume_weight, 0.125, 1e-15);
-    EXPECT_TRUE(sample.point.B().allFinite());
-    EXPECT_TRUE(sample.point.BF().allFinite());
+    EXPECT_TRUE(sample.point.position.allFinite());
+    EXPECT_TRUE(sample.point.jacobian.allFinite());
 }
 
 TEST(VolumeQuadratureCache, ChecksQuadraturePointIndices) {
@@ -156,8 +156,8 @@ TEST(VolumeQuadratureCache, SupportsOtherQuadratureRules) {
     const Reference reference(corners());
     const OtherCache cache(reference);
     const auto expected = reference.evaluate(Eigen::Vector3d(0.2, 0.3, 0.4));
-    EXPECT_EQ(cache.sample(0).point.values, expected.values);
-    EXPECT_EQ(cache.sample(0).point.gradients, expected.gradients);
+    EXPECT_EQ(cache.sample(0).point.basis_values, expected.basis_values);
+    EXPECT_EQ(cache.sample(0).point.basis_gradients, expected.basis_gradients);
     EXPECT_NEAR(cache.sample(0).volume_weight, 0.75, 1e-14);
 }
 

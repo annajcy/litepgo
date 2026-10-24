@@ -11,8 +11,8 @@
 
 namespace litepgo {
 
-// Fixed-arity connectivity. Reference-cell type and local numbering conventions
-// belong to the element space; the vertex count alone does not determine them.
+// Fixed-arity connectivity. Cell vertices must be ordered to match the chosen
+// basis; the vertex count alone does not determine the local numbering.
 template <int VerticesPerCell>
     requires(VerticesPerCell > 0)
 class MeshTopology final {
