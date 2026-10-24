@@ -11,14 +11,11 @@
 namespace litepgo {
 
 // Owns one independent value per element. Each block is column-major vec(value),
-// regardless of Value's storage order. Indices are local to this field's vector.
+// regardless of Value's storage order. std::array<int, dofs_per_element> are local to this field's vector.
 // Storage permits non-finite values, like VertexDofData; local evaluation validates them.
-template <FixedFieldValue Value>
-    requires(Value::SizeAtCompileTime > 0)
-class ElementField final {
+template <FixedFieldValue Value> class ElementField final {
   public:
     static constexpr int dofs_per_element = Value::SizeAtCompileTime;
-    using Indices = std::array<int, dofs_per_element>;
 
     explicit ElementField(int num_elements) : values_(Vec::Zero(checked_num_dofs(num_elements))) {}
 
@@ -36,17 +33,19 @@ class ElementField final {
     }
 
     Value value(int element) const {
-        return Eigen::Map<const PackedValue>(values_.data() + offset(element));
+        return Eigen::Map<const Eigen::Matrix<double, Value::RowsAtCompileTime, Value::ColsAtCompileTime>>(
+            values_.data() + offset(element));
     }
 
     void set_value(int element, const Value& value) {
-        Eigen::Map<PackedValue> block(values_.data() + offset(element));
+        Eigen::Map<Eigen::Matrix<double, Value::RowsAtCompileTime, Value::ColsAtCompileTime>> block(values_.data() +
+                                                                                                    offset(element));
         block = value;
     }
 
-    Indices dof_indices(int element) const {
+    std::array<int, dofs_per_element> dof_indices(int element) const {
         const int first = offset(element);
-        Indices result;
+        std::array<int, dofs_per_element> result;
         for (int i = 0; i < dofs_per_element; ++i)
             result[static_cast<std::size_t>(i)] = first + i;
         return result;
@@ -61,7 +60,6 @@ class ElementField final {
     }
 
   private:
-    using PackedValue = Eigen::Matrix<double, Value::RowsAtCompileTime, Value::ColsAtCompileTime>;
     static int checked_num_dofs(int count) {
         if (count < 0 || count > std::numeric_limits<int>::max() / dofs_per_element)
             throw std::invalid_argument(

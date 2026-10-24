@@ -20,7 +20,7 @@ static_assert(PointFirstOrderEnergy<NeoHookeanEnergyTheta> && PointSecondOrderEn
 
 TEST(NeoHookean, StressFreeAndLinearElasticTangent) {
     const NeoHookean m;
-    const NeoHookean::Parameters theta(2.0, 3.0);
+    const Eigen::Vector2d theta(2.0, 3.0);
     const Mat3 I = Mat3::Identity();
     Mat3 Fp;
     Fp << 1.3, 0.2, 0.1, 0.0, 0.9, -0.1, 0.1, 0.2, 1.2;
@@ -42,7 +42,7 @@ TEST(NeoHookean, StressFreeAndLinearElasticTangent) {
 
 TEST(NeoHookean, AnalyticDilationAndObjectivity) {
     const NeoHookean m;
-    const NeoHookean::Parameters theta(2, 3);
+    const Eigen::Vector2d theta(2, 3);
     const Mat3 I = Mat3::Identity();
     const double s = 1.25, p = 1.3, logJ = 3 * std::log(s);
     const double psi = 1.5 * theta[1] * (s * s - 1) - theta[1] * logJ + 0.5 * theta[0] * logJ * logJ;
@@ -73,11 +73,11 @@ TEST(NeoHookean, FullGradientAndHessianFiniteDifferences) {
         const Mat3 F = Fe * Fp;
         ASSERT_GT(Fp.determinant(), 0);
         ASSERT_GT(Fe.determinant(), 0);
-        const NeoHookean::Point point{F, Fp, NeoHookean::Parameters(2, 3)};
+        const NeoHookean::Point point{F, Fp, Eigen::Vector2d(2, 3)};
         EXPECT_DOUBLE_EQ(NeoHookeanEnergyF{}.value(point), m.value(point));
         EXPECT_DOUBLE_EQ(NeoHookeanEnergyFp{}.value(point), m.value(point));
         EXPECT_DOUBLE_EQ(NeoHookeanEnergyTheta{}.value(point), m.value(point));
-        const NeoHookean::Parameters theta(0.5 * sample, 0.7 + sample);
+        const Eigen::Vector2d theta(0.5 * sample, 0.7 + sample);
         const Mat3 P = NeoHookeanEnergyF{}.gradient({F, Fp, theta});
         const Mat9 H = NeoHookeanEnergyF{}.hessian({F, Fp, theta});
         EXPECT_LT((H - H.transpose()).norm(), 1e-12 * (1 + H.norm()));
@@ -130,11 +130,11 @@ TEST(NeoHookean, FpGradientAndHessianFiniteDifferences) {
         const Mat3 F = Fe * Fp;
         ASSERT_GT(Fp.determinant(), 0);
         ASSERT_GT(Fe.determinant(), 0);
-        const NeoHookean::Point point{F, Fp, NeoHookean::Parameters(2, 3)};
+        const NeoHookean::Point point{F, Fp, Eigen::Vector2d(2, 3)};
         EXPECT_DOUBLE_EQ(NeoHookeanEnergyF{}.value(point), m.value(point));
         EXPECT_DOUBLE_EQ(NeoHookeanEnergyFp{}.value(point), m.value(point));
         EXPECT_DOUBLE_EQ(NeoHookeanEnergyTheta{}.value(point), m.value(point));
-        const NeoHookean::Parameters theta(0.5 * sample, 0.7 + sample);
+        const Eigen::Vector2d theta(0.5 * sample, 0.7 + sample);
         const Mat3 P = NeoHookeanEnergyFp{}.gradient({F, Fp, theta});
         const Mat9 H = NeoHookeanEnergyFp{}.hessian({F, Fp, theta});
         EXPECT_LT((H - H.transpose()).norm(), 1e-12 * (1 + H.norm()));
@@ -184,7 +184,7 @@ TEST(NeoHookean, ParameterDerivativesMatchFiniteDifferences) {
         Fp.diagonal().array() += 0.8 + 0.06 * sample;
         Fe.diagonal().array() += 0.7 + 0.05 * sample;
         const Mat3 F = Fe * Fp;
-        const NeoHookean::Parameters theta(0.5 + sample, 0.7 + sample);
+        const Eigen::Vector2d theta(0.5 + sample, 0.7 + sample);
         const auto G = NeoHookeanEnergyTheta{}.gradient({F, Fp, theta});
         const auto H = NeoHookeanEnergyTheta{}.hessian({F, Fp, theta});
         EXPECT_TRUE(H.isZero(0.0));
@@ -196,15 +196,15 @@ TEST(NeoHookean, ParameterDerivativesMatchFiniteDifferences) {
                 minus[j] -= h;
                 const double fd = (m.value({F, Fp, plus}) - m.value({F, Fp, minus})) / (2 * h);
                 EXPECT_NEAR(G[j], fd, 1e-9 * (1 + G.norm()));
-                const NeoHookean::Parameters dG = (NeoHookeanEnergyTheta{}.gradient({F, Fp, plus}) -
-                                                   NeoHookeanEnergyTheta{}.gradient({F, Fp, minus})) /
-                                                  (2 * h);
+                const Eigen::Vector2d dG = (NeoHookeanEnergyTheta{}.gradient({F, Fp, plus}) -
+                                            NeoHookeanEnergyTheta{}.gradient({F, Fp, minus})) /
+                                           (2 * h);
                 EXPECT_LT((H.col(j) - dG).norm(), 1e-12);
             }
             // Second differences of energy independently check diagonal and off-diagonal entries.
             for (int i = 0; i < 2; ++i) {
                 for (int j = 0; j < 2; ++j) {
-                    NeoHookean::Parameters u = NeoHookean::Parameters::Zero(), v = u;
+                    Eigen::Vector2d u = Eigen::Vector2d::Zero(), v = u;
                     u[i] = h;
                     v[j] = h;
                     const double fd = (m.value({F, Fp, theta + u + v}) - m.value({F, Fp, theta + u - v}) -
@@ -220,7 +220,7 @@ TEST(NeoHookean, ParameterDerivativesMatchFiniteDifferences) {
 TEST(NeoHookean, ParameterDerivativesAtRestAndZeroLambda) {
     const NeoHookean m;
     const Mat3 I = Mat3::Identity();
-    const NeoHookean::Parameters theta(0, 3);
+    const Eigen::Vector2d theta(0, 3);
     EXPECT_TRUE(NeoHookeanEnergyTheta{}.gradient({I, I, theta}).isZero(0.0));
     EXPECT_TRUE(NeoHookeanEnergyTheta{}.hessian({I, I, theta}).isZero(0.0));
     const Mat3 F = 1.4 * I, Fp = 1.2 * I;
@@ -235,7 +235,7 @@ TEST(NeoHookean, ParameterDerivativesAtRestAndZeroLambda) {
 TEST(NeoHookean, RejectsInvalidStatesAndParametersInEveryEntryPoint) {
     const NeoHookean m;
     const Mat3 I = Mat3::Identity();
-    const NeoHookean::Parameters theta(2, 3);
+    const Eigen::Vector2d theta(2, 3);
     const auto bad_state = [&](const Mat3& F, const Mat3& Fp) {
         EXPECT_THROW(m.value({F, Fp, theta}), InfeasibleState);
         EXPECT_THROW(NeoHookeanEnergyF{}.gradient({F, Fp, theta}), InfeasibleState);
@@ -251,10 +251,9 @@ TEST(NeoHookean, RejectsInvalidStatesAndParametersInEveryEntryPoint) {
         bad_state(bad, I);
         bad_state(I, bad);
     }
-    for (const NeoHookean::Parameters& bad :
-         {NeoHookean::Parameters(-1, 3), NeoHookean::Parameters(2, 0), NeoHookean::Parameters(2, -1),
-          NeoHookean::Parameters(std::numeric_limits<double>::quiet_NaN(), 3),
-          NeoHookean::Parameters(2, std::numeric_limits<double>::infinity())}) {
+    for (const Eigen::Vector2d& bad : {Eigen::Vector2d(-1, 3), Eigen::Vector2d(2, 0), Eigen::Vector2d(2, -1),
+                                       Eigen::Vector2d(std::numeric_limits<double>::quiet_NaN(), 3),
+                                       Eigen::Vector2d(2, std::numeric_limits<double>::infinity())}) {
         EXPECT_THROW(m.value({I, I, bad}), std::invalid_argument);
         EXPECT_THROW(NeoHookeanEnergyF{}.gradient({I, I, bad}), std::invalid_argument);
         EXPECT_THROW(NeoHookeanEnergyF{}.hessian({I, I, bad}), std::invalid_argument);

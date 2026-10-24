@@ -9,7 +9,7 @@
 namespace litepgo {
 namespace {
 
-double log_elastic_determinant(const Mat3& Fe, const NeoHookean::Parameters& theta) {
+double log_elastic_determinant(const Mat3& Fe, const Eigen::Vector2d& theta) {
     if (!theta.allFinite() || theta[0] < 0.0 || theta[1] <= 0.0) {
         throw std::invalid_argument("NeoHookean requires finite lambda >= 0 and mu > 0");
     }
@@ -28,16 +28,16 @@ Mat3 inverse_transpose(const Mat3& Fe) {
     return Q;
 }
 
-double elastic_value(const Mat3& Fe, const NeoHookean::Parameters& theta, double logJ) {
+double elastic_value(const Mat3& Fe, const Eigen::Vector2d& theta, double logJ) {
     const double lambda = theta[0], mu = theta[1];
     return 0.5 * mu * (Fe.squaredNorm() - 3.0) - mu * logJ + 0.5 * lambda * logJ * logJ;
 }
 
-Mat3 elastic_gradient(const Mat3& Fe, const NeoHookean::Parameters& theta, double logJ, const Mat3& Q) {
+Mat3 elastic_gradient(const Mat3& Fe, const Eigen::Vector2d& theta, double logJ, const Mat3& Q) {
     return theta[1] * Fe + (theta[0] * logJ - theta[1]) * Q;
 }
 
-Mat9 elastic_hessian(const NeoHookean::Parameters& theta, double logJ, const Mat3& Q) {
+Mat9 elastic_hessian(const Eigen::Vector2d& theta, double logJ, const Mat3& Q) {
     const double lambda = theta[0], mu = theta[1];
     const double pressure = lambda * logJ - mu;
     Mat9 He;

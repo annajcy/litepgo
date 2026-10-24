@@ -14,15 +14,17 @@ add_executable(litepgo_tests
     fem/element_field_gtest.cpp
     fem/constant_field_gtest.cpp
     fem/local_field_gtest.cpp
-    fem/volume_field_mapping_gtest.cpp
+    fem/volume_field_inputs_gtest.cpp
     fem/gauss_legendre_1d_gtest.cpp
     fem/hex_q1_basis_gtest.cpp
     fem/interpolated_field_gtest.cpp
     fem/lagrange_basis_gtest.cpp
     fem/local_kernel_gtest.cpp
+    fem/dof_derivatives_gtest.cpp
     fem/material_parameter_types_gtest.cpp
     fem/multiplicative_kinematics_gtest.cpp
     fem/neo_hookean_gtest.cpp
+    fem/neo_hookean_local_energy_gtest.cpp
     fem/quadrature_gtest.cpp
     fem/tensor_product_basis_gtest.cpp
     fem/tensor_product_quadrature_gtest.cpp

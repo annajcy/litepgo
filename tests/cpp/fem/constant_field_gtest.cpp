@@ -26,10 +26,9 @@ TEST(ConstantField, SharedIndicesAndIndependentSnapshot) {
     EXPECT_EQ(field.value(), Eigen::Vector2d(7, 8));
 }
 TEST(ConstantField, MatrixValuesUseColumnMajorDofs) {
-    using RowMatrix = Eigen::Matrix<double, 2, 2, Eigen::RowMajor>;
-    RowMatrix matrix;
+    Eigen::Matrix<double, 2, 2, Eigen::RowMajor> matrix;
     matrix << 1, 2, 3, 4;
-    ConstantField<RowMatrix> field(matrix);
+    ConstantField<Eigen::Matrix<double, 2, 2, Eigen::RowMajor>> field(matrix);
     EXPECT_EQ(field.value(), matrix);
     EXPECT_DOUBLE_EQ(field.values()[1], 3);
     field.values()[2] = 9;

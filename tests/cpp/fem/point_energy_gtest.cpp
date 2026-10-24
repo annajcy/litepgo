@@ -1,5 +1,5 @@
+#include "litepgo/fem/material_inputs.hpp"
 #include "litepgo/fem/point_energy.hpp"
-#include "litepgo/fem/volumetric_point.hpp"
 
 namespace {
 
@@ -75,17 +75,16 @@ static_assert(PointFirstOrderEnergy<MutableHessian> && !PointSecondOrderEnergy<M
 static_assert(!PointFirstOrderEnergy<MissingGradientType>);
 static_assert(!PointSecondOrderEnergy<MissingHessianType>);
 
-// Zero-parameter volume inputs remain valid, without granting any derivative capability.
+// Parameter presence does not grant derivative capabilities.
 template <int N>
-concept HasPoint = requires { typename VolumetricPoint<N>; };
-static_assert(HasPoint<0> && HasPoint<2> && !HasPoint<-1>);
-static_assert(std::same_as<decltype(VolumetricPoint<0>::theta), MaterialParameterTypes<0>::Parameters>);
-static_assert(std::same_as<decltype(VolumetricPoint<2>::theta), Eigen::Vector2d>);
-struct ZeroParameterValue {
-    using Point = VolumetricPoint<0>;
+concept HasPoint = requires { typename MaterialInputs<N>; };
+static_assert(!HasPoint<0> && HasPoint<1> && HasPoint<2> && !HasPoint<-1>);
+static_assert(std::same_as<decltype(MaterialInputs<2>::theta), Eigen::Vector2d>);
+struct VolumeValueOnly {
+    using Point = MaterialInputs<2>;
     double value(const Point&) const;
 };
-static_assert(PointValue<ZeroParameterValue>);
-static_assert(!PointFirstOrderEnergy<ZeroParameterValue> && !PointSecondOrderEnergy<ZeroParameterValue>);
+static_assert(PointValue<VolumeValueOnly>);
+static_assert(!PointFirstOrderEnergy<VolumeValueOnly> && !PointSecondOrderEnergy<VolumeValueOnly>);
 
 } // namespace

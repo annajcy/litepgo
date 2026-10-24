@@ -6,8 +6,8 @@ namespace litepgo {
 
 // Owns the pointwise inputs; no geometry, interpolation, or DOF layout.
 template <int NumParameters>
-    requires(NumParameters >= 0)
-struct VolumetricPoint {
+    requires(NumParameters > 0)
+struct MaterialInputs {
     Mat3 F;
     Mat3 Fp;
     typename MaterialParameterTypes<NumParameters>::Parameters theta;

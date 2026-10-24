@@ -8,24 +8,22 @@ namespace litepgo {
 // Owns a coefficient snapshot; local DOFs are flattened by row.
 template <Basis3D Basis> class DisplacementGradientField final {
   public:
-    using Interpolation = InterpolatedField<Basis, 3>;
-    using Coefficients = typename Interpolation::LocalCoefficients;
-    using ReferencePoint = typename Interpolation::ReferencePoint;
-    using Value = Eigen::Matrix3d;
-    static constexpr int num_dofs = Interpolation::num_dofs;
-    using Jacobian = typename Interpolation::GradientMatrix;
+    using FieldValue = Eigen::Matrix3d;
+    static constexpr int num_dofs = InterpolatedField<Basis, 3>::num_dofs;
 
-    explicit DisplacementGradientField(const Coefficients& displacement) : interpolation_(displacement) {}
+    explicit DisplacementGradientField(const Eigen::Matrix<double, Basis::num_basis_functions, 3>& displacement)
+        : interpolation_(displacement) {}
 
-    Value value(const ReferencePoint& point) const {
-        return Value::Identity() + interpolation_.gradient(point);
+    FieldValue value(const typename VolumeReferenceGeometry<Basis>::PointData& point) const {
+        return FieldValue::Identity() + interpolation_.gradient(point);
     }
-    static Jacobian jacobian(const ReferencePoint& point) {
-        return Interpolation::gradient_matrix(point);
+    static Eigen::Matrix<double, 9, num_dofs>
+    jacobian(const typename VolumeReferenceGeometry<Basis>::PointData& point) {
+        return InterpolatedField<Basis, 3>::gradient_matrix(point);
     }
 
   private:
-    Interpolation interpolation_;
+    InterpolatedField<Basis, 3> interpolation_;
 };
 
 } // namespace litepgo

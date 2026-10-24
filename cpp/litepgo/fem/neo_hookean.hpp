@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/fem/volumetric_point.hpp"
+#include "litepgo/fem/material_inputs.hpp"
 
 namespace litepgo {
 
@@ -12,8 +12,7 @@ namespace litepgo {
 class NeoHookean final {
   public:
     static constexpr int num_parameters = 2;
-    using Parameters = MaterialParameterTypes<num_parameters>::Parameters;
-    using Point = VolumetricPoint<num_parameters>;
+    using Point = MaterialInputs<num_parameters>;
 
     double value(const Point& point) const;
 };
@@ -49,7 +48,7 @@ class NeoHookeanEnergyFp final {
 class NeoHookeanEnergyTheta final {
   public:
     using Point = NeoHookean::Point;
-    using Gradient = NeoHookean::Parameters;
+    using Gradient = Eigen::Vector2d;
     using Hessian = MaterialParameterTypes<NeoHookean::num_parameters>::ParameterHessian;
 
     double value(const Point& point) const {
