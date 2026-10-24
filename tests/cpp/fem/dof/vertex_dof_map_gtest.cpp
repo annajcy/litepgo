@@ -4,6 +4,7 @@
 #include "litepgo/fem/geometry/volume_reference_geometry.hpp"
 
 #include <gtest/gtest.h>
+#include <limits>
 
 #include <array>
 #include <concepts>
@@ -16,20 +17,12 @@ namespace {
 
 using litepgo::HexTopology;
 using litepgo::Vec;
-using litepgo::VertexDofData;
 using litepgo::VertexDofMap;
 
-static_assert(std::same_as<
-              decltype(std::declval<const VertexDofMap&>().gather(0, std::declval<const VertexDofData<3>&>())),
-              Eigen::Matrix<double, Eigen::Dynamic, 3>>);
-static_assert(std::same_as<
-              decltype(std::declval<const VertexDofMap&>().gather(0, std::declval<const VertexDofData<1>&>())),
-              Eigen::Matrix<double, Eigen::Dynamic, 1>>);
-static_assert(std::same_as<decltype(std::declval<const VertexDofMap&>().dof_indices(
-                               0, std::declval<const VertexDofData<3>&>())),
-                           std::vector<int>>);
-static_assert(std::is_constructible_v<VertexDofMap, HexTopology&&>);
-static_assert(!std::is_convertible_v<const HexTopology&, VertexDofMap>);
+static_assert(
+    std::same_as<decltype(std::declval<const VertexDofMap&>().gather(0, std::declval<const Vec&>())), Eigen::MatrixXd>);
+static_assert(std::same_as<decltype(std::declval<const VertexDofMap&>().dof_indices(0)), std::vector<int>>);
+static_assert(std::is_constructible_v<VertexDofMap, HexTopology&&, int>);
 
 // Adjacent cells with a shared face, in Q1 corner order and shuffled global numbering.
 HexTopology two_hexes() {
@@ -52,16 +45,16 @@ Eigen::Matrix<double, 12, 3> rest_positions() {
 
 TEST(VertexDofMap, GathersThreeIndependentFieldsInCellAndSlotOrder) {
     const auto topology = two_hexes();
-    const VertexDofMap map(topology);
+    const VertexDofMap map(topology, 3);
 
-    VertexDofData<3> a(12), b(12);
-    VertexDofData<2> theta(12);
+    Vec a = Vec::Zero(36), b = Vec::Zero(36);
+    Vec theta = Vec::Zero(24);
     for (int i = 0; i < 36; ++i) {
-        a.values()[i] = 100.0 + i;
-        b.values()[i] = -1000.0 - 2.0 * i;
+        a[i] = 100.0 + i;
+        b[i] = -1000.0 - 2.0 * i;
     }
     for (int i = 0; i < 24; ++i) {
-        theta.values()[i] = 2.0 + 0.1 * i;
+        theta[i] = 2.0 + 0.1 * i;
     }
 
     const std::array<std::vector<int>, 2> expected3{{
@@ -74,39 +67,39 @@ TEST(VertexDofMap, GathersThreeIndependentFieldsInCellAndSlotOrder) {
     }};
     for (int e = 0; e < 2; ++e) {
         const auto index = static_cast<std::size_t>(e);
-        EXPECT_EQ(map.dof_indices(e, a), expected3[index]);
-        EXPECT_EQ(map.dof_indices(e, b), expected3[index]);
-        EXPECT_EQ(map.dof_indices(e, theta), expected2[index]);
+        EXPECT_EQ(map.dof_indices(e), expected3[index]);
+        EXPECT_EQ(map.dof_indices(e), expected3[index]);
+        EXPECT_EQ(VertexDofMap(topology, 2).dof_indices(e), expected2[index]);
         const auto a_e = map.gather(e, a);
         const auto b_e = map.gather(e, b);
-        const auto theta_e = map.gather(e, theta);
+        const auto theta_e = VertexDofMap(topology, 2).gather(e, theta);
         for (int i = 0; i < 8; ++i) {
             for (int c = 0; c < 3; ++c) {
                 const int global = expected3[index][static_cast<std::size_t>(3 * i + c)];
-                EXPECT_DOUBLE_EQ(a_e(i, c), a.values()[global]);
-                EXPECT_DOUBLE_EQ(b_e(i, c), b.values()[global]);
+                EXPECT_DOUBLE_EQ(a_e(i, c), a[global]);
+                EXPECT_DOUBLE_EQ(b_e(i, c), b[global]);
             }
             for (int c = 0; c < 2; ++c) {
                 const int global = expected2[index][static_cast<std::size_t>(2 * i + c)];
-                EXPECT_DOUBLE_EQ(theta_e(i, c), theta.values()[global]);
+                EXPECT_DOUBLE_EQ(theta_e(i, c), theta[global]);
             }
         }
     }
 
     const auto snapshot = map.gather(0, a);
-    a.values()[3] += 7.0;
+    a[3] += 7.0;
     EXPECT_DOUBLE_EQ(snapshot(0, 0), 103.0);
     EXPECT_DOUBLE_EQ(map.gather(0, a)(0, 0), 110.0);
-    EXPECT_DOUBLE_EQ(map.gather(0, b)(0, 0), b.values()[3]);
+    EXPECT_DOUBLE_EQ(map.gather(0, b)(0, 0), b[3]);
     auto edited = map.gather(0, a);
     edited(0, 0) = -1.0;
-    EXPECT_DOUBLE_EQ(a(1, 0), 110.0);
+    EXPECT_DOUBLE_EQ(a[3], 110.0);
 }
 
 TEST(VertexDofMap, ThreeGatheredFieldsReproduceAffineValuesAndPhysicalGradients) {
     const auto topology = two_hexes();
     const auto X = rest_positions();
-    const VertexDofMap map(topology);
+    const VertexDofMap map(topology, 3);
 
     Eigen::Matrix3d A, P;
     A << 0.2, -0.1, 0.3, 0.4, 0.2, -0.3, -0.2, 0.5, 0.1;
@@ -115,13 +108,13 @@ TEST(VertexDofMap, ThreeGatheredFieldsReproduceAffineValuesAndPhysicalGradients)
     Eigen::Matrix<double, 2, 3> M;
     M << 0.4, -0.1, 0.2, -0.3, 0.5, 0.1;
     const Eigen::Vector2d theta_offset(2.0, 3.0);
-    VertexDofData<3> a(12), b(12);
-    VertexDofData<2> theta(12);
+    Vec a = Vec::Zero(36), b = Vec::Zero(36);
+    Vec theta = Vec::Zero(24);
     for (int v = 0; v < 12; ++v) {
         const Eigen::Vector3d position = X.row(v).transpose();
-        a.values().segment<3>(3 * v) = A * position + a_offset;
-        b.values().segment<3>(3 * v) = P * position + b_offset;
-        theta.values().segment<2>(2 * v) = M * position + theta_offset;
+        a.segment<3>(3 * v) = A * position + a_offset;
+        b.segment<3>(3 * v) = P * position + b_offset;
+        theta.segment<2>(2 * v) = M * position + theta_offset;
     }
 
     for (int e = 0; e < 2; ++e) {
@@ -133,7 +126,7 @@ TEST(VertexDofMap, ThreeGatheredFieldsReproduceAffineValuesAndPhysicalGradients)
         const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis> geometry(X_e);
         const litepgo::FieldInterpolation u(map.gather(e, a));
         const litepgo::FieldInterpolation up(map.gather(e, b));
-        const litepgo::FieldInterpolation parameters(map.gather(e, theta));
+        const litepgo::FieldInterpolation parameters(VertexDofMap(topology, 2).gather(e, theta));
         for (const Eigen::Vector3d xi : {Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(0.76, 0.11, 0.64)}) {
             const auto point = geometry.evaluate(xi);
             const Eigen::Vector3d position =
@@ -156,9 +149,9 @@ TEST(VertexDofMap, ThreeGatheredFieldsReproduceAffineValuesAndPhysicalGradients)
 
 TEST(VertexDofMap, SupportsTetConnectivityAndEigenVectorViews) {
     const litepgo::TetTopology topology(5, {{4, 1, 3, 0}});
-    const VertexDofMap map(topology);
+    const VertexDofMap map(topology, 2);
     const Vec padded = Vec::LinSpaced(12, -1.0, 10.0);
-    const VertexDofData<2> data(padded.segment(1, 10));
+    const Vec data(padded.segment(1, 10));
     const auto local = map.gather(0, data);
     Eigen::Matrix<double, 4, 2> expected;
     expected << 8, 9, 2, 3, 6, 7, 0, 1;
@@ -167,58 +160,74 @@ TEST(VertexDofMap, SupportsTetConnectivityAndEigenVectorViews) {
 
 TEST(VertexDofMap, GathersScalarVertexDataAsAColumn) {
     const litepgo::TetTopology topology(5, {{4, 1, 3, 0}});
-    const VertexDofMap map(topology);
-    const VertexDofData<1> data(Vec::LinSpaced(5, 10.0, 14.0));
+    const VertexDofMap map(topology, 1);
+    const Vec data(Vec::LinSpaced(5, 10.0, 14.0));
     const Eigen::Vector4d expected(14, 11, 13, 10);
     EXPECT_EQ(map.gather(0, data), expected);
 }
 
 TEST(VertexDofMap, RejectsMismatchedDataOnEveryCall) {
     const auto topology = two_hexes();
-    const VertexDofMap map(topology);
-    VertexDofData<3> data(12);
+    const VertexDofMap map(topology, 3);
+    Vec data = Vec::Zero(36);
     EXPECT_TRUE(map.gather(0, data).isZero());
     for (int count : {11, 13}) {
-        data = VertexDofData<3>(count);
+        data = Vec::Zero(3 * count);
         EXPECT_THROW(map.gather(0, data), std::invalid_argument);
-        EXPECT_THROW(map.dof_indices(0, data), std::invalid_argument);
-        const VertexDofData<2> parameters(count);
+        const Vec parameters = Vec::Zero(2 * count);
         EXPECT_THROW(map.gather(0, parameters), std::invalid_argument);
-        EXPECT_THROW(map.dof_indices(0, parameters), std::invalid_argument);
     }
-    data = VertexDofData<3>(12);
+    data = Vec::Zero(36);
     EXPECT_TRUE(map.gather(0, data).isZero());
 }
 
 TEST(VertexDofMap, ChecksElementIndices) {
     const auto topology = two_hexes();
-    const VertexDofMap map(topology);
-    const VertexDofData<3> data(12);
+    const VertexDofMap map(topology, 3);
+    const Vec data = Vec::Zero(36);
     for (int e : {-1, 2}) {
-        EXPECT_THROW(map.dof_indices(e, data), std::out_of_range);
+        EXPECT_THROW(map.dof_indices(e), std::out_of_range);
         EXPECT_THROW(map.gather(e, data), std::out_of_range);
     }
 }
 
 TEST(VertexDofMap, AllowsEmptyMeshes) {
     const HexTopology topology(0, {});
-    const VertexDofMap map(topology);
-    const VertexDofData<3> data(0);
-    EXPECT_THROW(map.dof_indices(0, data), std::out_of_range);
+    const VertexDofMap map(topology, 3);
+    const Vec data = Vec::Zero(0);
+    EXPECT_THROW(map.dof_indices(0), std::out_of_range);
     EXPECT_THROW(map.gather(0, data), std::out_of_range);
 }
 
 TEST(VertexDofMap, OwnsConnectivitySnapshot) {
     litepgo::TriangleTopology topology(4, {{2, 0, 3}});
-    const VertexDofMap map(topology);
+    const VertexDofMap map(topology, 2);
     topology = litepgo::TriangleTopology(3, {{0, 1, 2}});
-    const VertexDofData<2> data(Vec::LinSpaced(8, 0.0, 7.0));
+    const Vec data(Vec::LinSpaced(8, 0.0, 7.0));
     Eigen::Matrix<double, 3, 2> expected;
     expected << 4, 5, 0, 1, 6, 7;
     EXPECT_EQ(map.gather(0, data), expected);
-    EXPECT_EQ(map.dof_indices(0, data), (std::vector<int>{4, 5, 0, 1, 6, 7}));
+    EXPECT_EQ(map.dof_indices(0), (std::vector<int>{4, 5, 0, 1, 6, 7}));
 
-    const VertexDofMap temporary_map(litepgo::TriangleTopology(4, {{2, 0, 3}}));
+    const VertexDofMap temporary_map(litepgo::TriangleTopology(4, {{2, 0, 3}}), 2);
     EXPECT_EQ(temporary_map.gather(0, data), expected);
-    EXPECT_EQ(temporary_map.dof_indices(0, data), map.dof_indices(0, data));
+    EXPECT_EQ(temporary_map.dof_indices(0), map.dof_indices(0));
+}
+
+TEST(VertexDofMap, OwnsRuntimeLayoutAndChecksWidths) {
+    const litepgo::HexTopology topology(8, {{0, 1, 2, 3, 4, 5, 6, 7}});
+    const litepgo::VertexDofMap map(topology, 4);
+    EXPECT_EQ(map.num_dofs(), 32);
+    EXPECT_EQ(map.num_elements(), 1);
+    EXPECT_EQ(map.dofs_per_vertex(), 4);
+    const litepgo::Vec padded = litepgo::Vec::LinSpaced(34, 0, 33);
+    const auto local_dof_values = map.gather(0, padded.segment(1, 32));
+    EXPECT_EQ(local_dof_values.rows(), 8);
+    EXPECT_EQ(local_dof_values.cols(), 4);
+    EXPECT_EQ(local_dof_values(7, 3), 32);
+    for (int width : {0, -1})
+        EXPECT_THROW((litepgo::VertexDofMap(topology, width)), std::invalid_argument);
+    EXPECT_THROW((litepgo::VertexDofMap(topology, std::numeric_limits<int>::max())), std::invalid_argument);
+    for (int count : {31, 33})
+        EXPECT_THROW(map.gather(0, litepgo::Vec::Zero(count)), std::invalid_argument);
 }

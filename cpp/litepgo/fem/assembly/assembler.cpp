@@ -47,6 +47,14 @@ Assembler::Assembler(int num_dofs, std::vector<std::vector<int>> element_dof_ind
     }
 }
 
+int Assembler::num_elements() const noexcept {
+    return static_cast<int>(element_dof_indices_.size());
+}
+std::span<const int> Assembler::dof_indices(int element) const {
+    check_element(element);
+    return element_dof_indices_[static_cast<std::size_t>(element)];
+}
+
 const SpMat& Assembler::hessian_pattern() const noexcept {
     return pattern_;
 }

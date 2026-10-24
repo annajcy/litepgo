@@ -1,47 +1,48 @@
 #pragma once
-
-#include "litepgo/fem/dof/element_dof_data.hpp"
+#include "litepgo/core/types.hpp"
 #include "litepgo/mesh/mesh_topology.hpp"
-
-#include <array>
+#include <limits>
 #include <stdexcept>
-
+#include <vector>
 namespace litepgo {
-
-// Captures the cell count; retains no topology reference.
-// Indices address this field's vector, in scalar slot order.
+// Owns layout counts; retains no topology or value references.
 class ElementDofMap final {
   public:
     template <int VerticesPerCell>
-    explicit ElementDofMap(const MeshTopology<VerticesPerCell>& topology) : num_elements_(topology.num_cells()) {}
-
-    // Returns an independent value snapshot.
-    template <int DofsPerElement>
-    Eigen::Matrix<double, DofsPerElement, 1> gather(int element, const ElementDofData<DofsPerElement>& data) const {
-        check(element, data);
-        return data.values().template segment<DofsPerElement>(element * DofsPerElement);
+    ElementDofMap(const MeshTopology<VerticesPerCell>& topology, int dofs_per_element)
+        : num_elements_(topology.num_cells()), width_(dofs_per_element) {
+        if (width_ <= 0 || num_elements_ > std::numeric_limits<int>::max() / width_)
+            throw std::invalid_argument("ElementDofMap: invalid DOF count");
     }
-
-    template <int DofsPerElement>
-    std::array<int, DofsPerElement> dof_indices(int element, const ElementDofData<DofsPerElement>& data) const {
-        check(element, data);
-        std::array<int, DofsPerElement> result;
-        for (int i = 0; i < DofsPerElement; ++i)
-            result[static_cast<std::size_t>(i)] = element * DofsPerElement + i;
+    int num_elements() const noexcept {
+        return num_elements_;
+    }
+    int num_dofs() const noexcept {
+        return num_elements_ * width_;
+    }
+    int dofs_per_element() const noexcept {
+        return width_;
+    }
+    std::vector<int> dof_indices(int element) const {
+        check_element(element);
+        std::vector<int> result(static_cast<std::size_t>(width_));
+        for (int i = 0; i < width_; ++i)
+            result[static_cast<std::size_t>(i)] = element * width_ + i;
         return result;
+    }
+    Eigen::VectorXd gather(int element, const ConstVecRef& global_dof_values) const {
+        check_element(element);
+        if (global_dof_values.size() != num_dofs())
+            throw std::invalid_argument("ElementDofMap: incorrect global vector size");
+        return global_dof_values.segment(element * width_, width_);
     }
 
   private:
-    template <int DofsPerElement> void check(int element, const ElementDofData<DofsPerElement>& data) const {
-        if (data.num_elements() != num_elements_)
-            throw std::invalid_argument("ElementDofMap requires matching topology and data element counts");
-        check_element(element);
-    }
     void check_element(int element) const {
         if (element < 0 || element >= num_elements_)
-            throw std::out_of_range("ElementDofMap: element is out of range");
+            throw std::out_of_range("ElementDofMap: element out of range");
     }
     int num_elements_;
+    int width_;
 };
-
 } // namespace litepgo

@@ -1,5 +1,6 @@
 add_library(litepgo STATIC
     fem/assembly/assembler.cpp
+    fem/assembly/mesh_energy.cpp
     energy/affine_mapped_energy.cpp
     energy/dynamic_pattern_energy.cpp
     energy/energy.cpp

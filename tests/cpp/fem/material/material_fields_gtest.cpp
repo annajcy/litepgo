@@ -1,9 +1,7 @@
 #include "../local/quadratic_parameter_local_energy.hpp"
 #include "litepgo/energy/energy.hpp"
 #include "litepgo/fem/basis/hex_q1_basis.hpp"
-#include "litepgo/fem/dof/constant_dof_data.hpp"
 #include "litepgo/fem/dof/constant_dof_map.hpp"
-#include "litepgo/fem/dof/element_dof_data.hpp"
 #include "litepgo/fem/dof/element_dof_map.hpp"
 #include "litepgo/fem/dof/vertex_dof_map.hpp"
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
@@ -28,9 +26,9 @@ using namespace litepgo;
 struct Fixture {
     HexTopology topology{12, {{0, 1, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 2, 5, 10, 11, 6}}};
     Eigen::Matrix<double, 12, 3> X;
-    VertexDofData<3> u{12};
-    ElementDofData<9> fp{2};
-    ConstantDofData<2> theta{Eigen::Vector2d(2, 3)};
+    Vec u = Vec::Zero(36);
+    Vec fp = Vec::Zero(18);
+    Vec theta{Eigen::Vector2d(2, 3)};
 
     Fixture() {
         for (int e = 0; e < 2; ++e) {
@@ -42,10 +40,10 @@ struct Fixture {
             }
             Eigen::Matrix3d p;
             p << 1.1 + 0.1 * e, 0.08, -0.03, 0.02, 0.9 + 0.05 * e, 0.04, -0.01, 0.03, 1.05;
-            fp.values().segment<9>(9 * e) = p.reshaped();
+            fp.segment<9>(9 * e) = p.reshaped();
         }
-        for (int j = 0; j < u.num_dofs(); ++j)
-            u.values()[j] = 0.04 * std::sin(0.7 * (j + 1));
+        for (int j = 0; j < u.size(); ++j)
+            u[j] = 0.04 * std::sin(0.7 * (j + 1));
     }
     litepgo::VolumeQuadratureCache cache(int e) const {
         Eigen::Matrix<double, 8, 3> local;
@@ -56,11 +54,11 @@ struct Fixture {
                                               litepgo::GaussLegendre3D<2>{});
     }
     auto fields(int e) const {
-        const VertexDofMap map(topology);
+        const VertexDofMap map(topology, 3);
         return MaterialFields{
             std::make_shared<DeformationGradientField>(map.gather(e, u)),
-            std::make_shared<IdentityField<Eigen::Matrix3d>>(ElementDofMap(topology).gather(e, fp).reshaped(3, 3)),
-            std::make_shared<IdentityField<Eigen::VectorXd>>(ConstantDofMap(topology).gather(e, theta))};
+            std::make_shared<IdentityField<Eigen::Matrix3d>>(ElementDofMap(topology, 9).gather(e, fp).reshaped(3, 3)),
+            std::make_shared<IdentityField<Eigen::VectorXd>>(ConstantDofMap(topology, 2).gather(e, theta))};
     }
 };
 
@@ -73,9 +71,9 @@ void check_fd(const Kernel& kernel, const Eigen::Matrix<double, NumDofs, 1>& x, 
     EXPECT_LT((H - H.transpose()).norm(), 1e-12 * (1 + H.norm()));
     for (double h : {1e-3, 3e-4, 1e-4}) {
         SCOPED_TRACE(h);
-        Eigen::Matrix<double, NumDofs, 1> dg;
-        Eigen::Matrix<double, NumDofs, NumDofs> dH;
-        for (int j = 0; j < NumDofs; ++j) {
+        Eigen::Matrix<double, NumDofs, 1> dg(x.size());
+        Eigen::Matrix<double, NumDofs, NumDofs> dH(x.size(), x.size());
+        for (int j = 0; j < x.size(); ++j) {
             auto plus = x, minus = x;
             plus[j] += h;
             minus[j] -= h;
@@ -88,8 +86,8 @@ void check_fd(const Kernel& kernel, const Eigen::Matrix<double, NumDofs, 1>& x, 
         EXPECT_LT((g - dg).norm() / (1 + g.norm()), 20 * h * h + 1e-9);
         EXPECT_LT((H - dH).norm() / (1 + H.norm()), 20 * h * h + 1e-9);
     }
-    Eigen::Matrix<double, NumDofs, 1> d, v;
-    for (int j = 0; j < NumDofs; ++j) {
+    Eigen::Matrix<double, NumDofs, 1> d(x.size()), v(x.size());
+    for (int j = 0; j < x.size(); ++j) {
         d[j] = std::sin(j + 0.5);
         v[j] = std::cos(j + 0.2);
     }
@@ -106,7 +104,7 @@ void check_fd(const Kernel& kernel, const Eigen::Matrix<double, NumDofs, 1>& x, 
 
 TEST(MaterialFields, MixedRepresentationsPointInputsAndLocalFiniteDifferences) {
     const Fixture f;
-    const VertexDofMap map(f.topology);
+    const VertexDofMap map(f.topology, 3);
     for (int e = 0; e < 2; ++e) {
         SCOPED_TRACE(e);
         const auto cache = f.cache(e);
@@ -116,8 +114,8 @@ TEST(MaterialFields, MixedRepresentationsPointInputsAndLocalFiniteDifferences) {
             const auto& ref = cache.sample(q).point;
             const auto point = fields.evaluate(ref);
             EXPECT_TRUE(point.F.isApprox(Eigen::Matrix3d::Identity() + FieldInterpolation(ue).gradient(ref)));
-            EXPECT_EQ(point.Fp, f.fp.values().segment<9>(9 * e).reshaped(3, 3));
-            EXPECT_EQ(point.theta, ConstantDofMap(f.topology).gather(0, f.theta));
+            EXPECT_EQ(point.Fp, f.fp.segment<9>(9 * e).reshaped(3, 3));
+            EXPECT_EQ(point.theta, ConstantDofMap(f.topology, 2).gather(0, f.theta));
             EXPECT_TRUE(
                 std::dynamic_pointer_cast<const AffineField<Eigen::Matrix3d>>(fields.Fp)->jacobian(ref).isIdentity());
             EXPECT_TRUE(std::dynamic_pointer_cast<const AffineField<Eigen::VectorXd>>(fields.theta)
@@ -138,11 +136,11 @@ TEST(MaterialFields, MixedRepresentationsPointInputsAndLocalFiniteDifferences) {
                 return MaterialFields{
                     std::make_shared<DeformationGradientField>(c),
                     std::make_shared<IdentityField<Eigen::Matrix3d>>(
-                        ElementDofMap(f.topology).gather(e, f.fp).reshaped(3, 3)),
-                    std::make_shared<IdentityField<Eigen::VectorXd>>(ConstantDofMap(f.topology).gather(e, f.theta))};
+                        ElementDofMap(f.topology, 9).gather(e, f.fp).reshaped(3, 3)),
+                    std::make_shared<IdentityField<Eigen::VectorXd>>(ConstantDofMap(f.topology, 2).gather(e, f.theta))};
             },
             [](const auto& local_fields) { return NeoHookeanLocalEnergyF(local_fields); });
-        const Eigen::Matrix3d fp = f.fp.values().segment<9>(9 * e).reshaped(3, 3);
+        const Eigen::Matrix3d fp = f.fp.segment<9>(9 * e).reshaped(3, 3);
         const Eigen::Matrix<double, 9, 1> pvec = Eigen::Map<const Eigen::Matrix<double, 9, 1>>(fp.data());
         check_fd(
             kernel, pvec,
@@ -150,11 +148,11 @@ TEST(MaterialFields, MixedRepresentationsPointInputsAndLocalFiniteDifferences) {
                 return MaterialFields{
                     std::make_shared<DeformationGradientField>(ue),
                     std::make_shared<IdentityField<Eigen::Matrix3d>>(Eigen::Map<const Eigen::Matrix3d>(x.data())),
-                    std::make_shared<IdentityField<Eigen::VectorXd>>(ConstantDofMap(f.topology).gather(e, f.theta))};
+                    std::make_shared<IdentityField<Eigen::VectorXd>>(ConstantDofMap(f.topology, 2).gather(e, f.theta))};
             },
             [](const auto& local_fields) { return NeoHookeanLocalEnergyFp(local_fields); });
         check_fd(
-            kernel, ConstantDofMap(f.topology).gather(0, f.theta),
+            kernel, ConstantDofMap(f.topology, 2).gather(0, f.theta),
             [&](const Eigen::Matrix<double, 2, 1>& x) {
                 return MaterialFields{std::make_shared<DeformationGradientField>(ue),
                                       std::make_shared<IdentityField<Eigen::Matrix3d>>(fp),
@@ -166,7 +164,7 @@ TEST(MaterialFields, MixedRepresentationsPointInputsAndLocalFiniteDifferences) {
 
 TEST(MaterialFields, SameKernelAcceptsDifferentActiveDofCounts) {
     Fixture fixture;
-    fixture.u.values().setZero();
+    fixture.u.setZero();
     const auto cache = fixture.cache(0);
     const auto nodal = fixture.fields(0);
     const MaterialFields direct{std::make_shared<IdentityField<Eigen::Matrix3d>>(Eigen::Matrix3d::Identity()), nodal.Fp,
@@ -208,7 +206,7 @@ TEST(MaterialFields, SameKernelAcceptsDifferentActiveDofCounts) {
 
 TEST(MaterialFields, ElementAndSharedDofNumbersAccumulateIntoDifferentGlobalBlocks) {
     Fixture f;
-    const VertexDofMap map(f.topology);
+    const VertexDofMap map(f.topology, 3);
     std::array caches{f.cache(0), f.cache(1)};
     const auto total = [&](const Fixture& data) {
         double value = 0;
@@ -222,9 +220,9 @@ TEST(MaterialFields, ElementAndSharedDofNumbersAccumulateIntoDifferentGlobalBloc
     for (int e = 0; e < 2; ++e) {
         const auto& cache = caches[static_cast<std::size_t>(e)];
         const auto fields = f.fields(e);
-        const auto uidx = map.dof_indices(e, f.u);
-        const auto pidx = ElementDofMap(f.topology).dof_indices(e, f.fp);
-        const auto tidx = ConstantDofMap(f.topology).dof_indices(e, f.theta);
+        const auto uidx = map.dof_indices(e);
+        const auto pidx = ElementDofMap(f.topology, 9).dof_indices(e);
+        const auto tidx = ConstantDofMap(f.topology, 2).dof_indices(e);
         const auto ug = LocalKernel(cache).gradient(NeoHookeanLocalEnergyF(fields));
         const litepgo::LocalKernel kernel(cache);
         const auto pg = kernel.gradient(NeoHookeanLocalEnergyFp(fields));
@@ -249,28 +247,28 @@ TEST(MaterialFields, ElementAndSharedDofNumbersAccumulateIntoDifferentGlobalBloc
     const double h = 1e-4;
     for (int j = 0; j < 36; ++j) {
         auto plus = f, minus = f;
-        plus.u.values()[j] += h;
-        minus.u.values()[j] -= h;
+        plus.u[j] += h;
+        minus.u[j] -= h;
         EXPECT_NEAR(gu[j], (total(plus) - total(minus)) / (2 * h), 1e-7 * (1 + gu.norm()));
     }
     for (int j = 0; j < 18; ++j) {
         auto plus = f, minus = f;
-        plus.fp.values()[j] += h;
-        minus.fp.values()[j] -= h;
+        plus.fp[j] += h;
+        minus.fp[j] -= h;
         EXPECT_NEAR(gp[j], (total(plus) - total(minus)) / (2 * h), 1e-7 * (1 + gp.norm()));
     }
     for (int j = 0; j < 2; ++j) {
         auto plus = f, minus = f;
-        plus.theta.values()[j] += h;
-        minus.theta.values()[j] -= h;
+        plus.theta[j] += h;
+        minus.theta[j] -= h;
         EXPECT_NEAR(gt[j], (total(plus) - total(minus)) / (2 * h), 1e-9);
     }
     EXPECT_TRUE(Hp.topRightCorner(9, 9).isZero(0));
     EXPECT_TRUE(Ht.isZero(0));
     const auto before = f.fields(0);
-    const Eigen::Matrix3d original = f.fp.values().head<9>().reshaped(3, 3);
-    f.fp.values().head<9>() = 1.1 * original.reshaped();
-    f.theta.values() << 4, 5;
+    const Eigen::Matrix3d original = f.fp.head<9>().reshaped(3, 3);
+    f.fp.head<9>() = 1.1 * original.reshaped();
+    f.theta << 4, 5;
     EXPECT_EQ(before.Fp->value(caches[0].sample(0).point), original);
     EXPECT_EQ(before.theta->value(caches[0].sample(0).point), Eigen::Vector2d(2, 3));
     EXPECT_NE(f.fields(0).Fp->value(caches[0].sample(0).point), original);
@@ -289,7 +287,7 @@ TEST(MaterialFields, SharedParameterHessianIncludesBothElements) {
         for (int q = 0; q < cache.num_quadrature_points(); ++q)
             volume += cache.sample(q).volume_weight;
         check_fd(
-            kernel, ConstantDofMap(f.topology).gather(0, f.theta),
+            kernel, ConstantDofMap(f.topology, 2).gather(0, f.theta),
             [&](const Eigen::Vector2d& theta) {
                 return MaterialFields{fields.F, fields.Fp, std::make_shared<IdentityField<Eigen::VectorXd>>(theta)};
             },

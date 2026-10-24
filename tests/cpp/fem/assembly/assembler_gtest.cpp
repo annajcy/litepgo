@@ -11,9 +11,9 @@ using namespace litepgo;
 
 TEST(Assembler, SharedHexVerticesMatchDenseScatterAndGlobalFiniteDifferences) {
     const HexTopology topology(12, {{1, 3, 9, 4, 7, 6, 0, 10}, {3, 8, 5, 9, 6, 2, 11, 0}});
-    const VertexDofMap map(topology);
-    const VertexDofData<3> data(Vec::LinSpaced(36, -0.2, 0.4));
-    const Assembler assembler(36, {map.dof_indices(0, data), map.dof_indices(1, data)});
+    const VertexDofMap map(topology, 3);
+    const Vec data(Vec::LinSpaced(36, -0.2, 0.4));
+    const Assembler assembler(36, {map.dof_indices(0), map.dof_indices(1)});
     SpMat hessian = assembler.hessian_pattern();
     EXPECT_TRUE(is_canonical(hessian));
     EXPECT_EQ(hessian.nonZeros(), 2 * 24 * 24 - 12 * 12);
@@ -47,16 +47,15 @@ TEST(Assembler, SharedHexVerticesMatchDenseScatterAndGlobalFiniteDifferences) {
     EXPECT_TRUE(Eigen::MatrixXd(assembler.hessian_pattern()).isZero());
 
     const auto total = [&](const Vec& x) {
-        const VertexDofData<3> state(x);
         double energy = 0;
         for (int e = 0; e < 2; ++e) {
-            const Eigen::MatrixXd coefficients = map.gather(e, state);
+            const Eigen::MatrixXd coefficients = map.gather(e, x);
             const Vec local = coefficients.reshaped<Eigen::RowMajor>();
             energy += 0.5 * local.dot(stiffness(e) * local);
         }
         return energy;
     };
-    const Vec x = data.values();
+    const Vec x = data;
     const double step = 1e-4;
     for (int i = 0; i < 36; ++i) {
         Vec plus = x, minus = x;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "litepgo/core/types.hpp"
+#include <span>
 #include <vector>
 
 namespace litepgo {
@@ -11,6 +12,9 @@ namespace litepgo {
 class Assembler final {
   public:
     Assembler(int num_dofs, std::vector<std::vector<int>> element_dof_indices);
+
+    std::span<const int> dof_indices(int element) const;
+    int num_elements() const noexcept;
 
     const SpMat& hessian_pattern() const noexcept;
 

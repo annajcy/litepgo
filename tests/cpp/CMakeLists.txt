@@ -1,6 +1,7 @@
 # Test files mirror cpp/litepgo: tests/cpp/<dir>/<name>_gtest.cpp covers cpp/litepgo/<dir>/.
 add_executable(litepgo_tests
     fem/assembly/assembler_gtest.cpp
+    fem/assembly/mesh_energy_gtest.cpp
     core/build_info_gtest.cpp
     core/busy_scope_gtest.cpp
     core/memory_gtest.cpp
@@ -14,8 +15,6 @@ add_executable(litepgo_tests
     fem/basis/basis_gtest.cpp
     fem/dof/element_dof_map_gtest.cpp
     fem/dof/constant_dof_map_gtest.cpp
-    fem/dof/element_dof_data_gtest.cpp
-    fem/dof/constant_dof_data_gtest.cpp
     fem/field/field_gtest.cpp
     fem/field/local_field_gtest.cpp
     fem/material/material_fields_gtest.cpp
@@ -32,7 +31,6 @@ add_executable(litepgo_tests
     fem/quadrature/quadrature_gtest.cpp
     fem/basis/tensor_product_basis_gtest.cpp
     fem/quadrature/tensor_product_quadrature_gtest.cpp
-    fem/dof/vertex_dof_data_gtest.cpp
     fem/dof/vertex_dof_map_gtest.cpp
     fem/local/volume_integration_gtest.cpp
     fem/geometry/volume_quadrature_cache_gtest.cpp
