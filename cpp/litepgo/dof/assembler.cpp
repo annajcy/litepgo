@@ -1,4 +1,4 @@
-#include "litepgo/fem/assembly/assembler.hpp"
+#include "litepgo/dof/assembler.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <algorithm>

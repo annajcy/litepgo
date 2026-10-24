@@ -1,5 +1,5 @@
+#include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/fem/basis/hex_q1_basis.hpp"
-#include "litepgo/fem/dof/vertex_dof_map.hpp"
 #include "litepgo/fem/field/field_interpolation.hpp"
 #include "litepgo/fem/geometry/volume_reference_geometry.hpp"
 

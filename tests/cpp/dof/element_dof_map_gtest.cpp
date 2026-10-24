@@ -1,4 +1,4 @@
-#include "litepgo/fem/dof/element_dof_map.hpp"
+#include "litepgo/dof/element_dof_map.hpp"
 #include <gtest/gtest.h>
 #include <limits>
 

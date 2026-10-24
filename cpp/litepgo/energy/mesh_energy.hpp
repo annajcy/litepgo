@@ -1,7 +1,7 @@
 #pragma once
 
+#include "litepgo/dof/assembler.hpp"
 #include "litepgo/energy/fixed_pattern_energy.hpp"
-#include "litepgo/fem/assembly/assembler.hpp"
 #include <functional>
 #include <memory>
 #include <stdexcept>

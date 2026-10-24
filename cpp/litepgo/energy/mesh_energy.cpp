@@ -1,4 +1,4 @@
-#include "litepgo/fem/assembly/mesh_energy.hpp"
+#include "litepgo/energy/mesh_energy.hpp"
 #include <Eigen/Eigenvalues>
 #include <algorithm>
 #include <cmath>

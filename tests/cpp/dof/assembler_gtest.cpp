@@ -1,5 +1,5 @@
-#include "litepgo/fem/assembly/assembler.hpp"
-#include "litepgo/fem/dof/vertex_dof_map.hpp"
+#include "litepgo/dof/assembler.hpp"
+#include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <algorithm>

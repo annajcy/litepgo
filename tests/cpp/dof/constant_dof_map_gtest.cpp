@@ -1,4 +1,4 @@
-#include "litepgo/fem/dof/constant_dof_map.hpp"
+#include "litepgo/dof/constant_dof_map.hpp"
 #include <gtest/gtest.h>
 
 namespace {

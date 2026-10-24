@@ -1,6 +1,6 @@
+#include "litepgo/dof/constant_dof_map.hpp"
+#include "litepgo/dof/element_dof_map.hpp"
 #include "litepgo/fem/basis/hex_q1_basis.hpp"
-#include "litepgo/fem/dof/constant_dof_map.hpp"
-#include "litepgo/fem/dof/element_dof_map.hpp"
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_value_field.hpp"
