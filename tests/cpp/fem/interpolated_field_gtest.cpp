@@ -35,8 +35,15 @@ static_assert(MaterialField::num_dofs == 16);
 static_assert(std::same_as<VectorField::LocalCoefficients, Eigen::Matrix<double, 8, 3>>);
 static_assert(std::same_as<MaterialField::LocalCoefficients, Eigen::Matrix<double, 8, 2>>);
 static_assert(
-    std::same_as<decltype(std::declval<const VectorField&>().evaluate(std::declval<const Mapping::PointData&>())),
-                 VectorField::Sample>);
+    std::same_as<decltype(std::declval<const VectorField&>().value(std::declval<const Mapping::PointData&>())),
+                 VectorField::Value>);
+static_assert(
+    std::same_as<decltype(std::declval<const VectorField&>().gradient(std::declval<const Mapping::PointData&>())),
+                 VectorField::Gradient>);
+static_assert(
+    std::same_as<decltype(&VectorField::value_matrix), VectorField::ValueMatrix (*)(const Mapping::PointData&)>);
+static_assert(
+    std::same_as<decltype(&VectorField::gradient_matrix), VectorField::GradientMatrix (*)(const Mapping::PointData&)>);
 
 Geometry corners() {
     Geometry X;
@@ -83,11 +90,12 @@ template <int Components> void check_coefficient_derivatives() {
         }
     }
     const auto point = mapping.evaluate(Vec3(0.2, 0.3, 0.4));
-    const auto sample = Field(coefficients).evaluate(point);
+    const auto sample_value = Field(coefficients).value(point);
+    const auto sample_gradient = Field(coefficients).gradient(point);
     const Eigen::Matrix<double, Field::num_dofs, 1> flattened = coefficients.template reshaped<Eigen::RowMajor>();
-    EXPECT_TRUE((sample.value_matrix() * flattened).isApprox(sample.value, 1e-14));
-    const Eigen::Map<const Eigen::Matrix<double, 3 * Components, 1>> gradient_vector(sample.gradient.data());
-    EXPECT_TRUE((sample.gradient_matrix() * flattened).isApprox(gradient_vector, 1e-14));
+    EXPECT_TRUE((Field::value_matrix(point) * flattened).isApprox(sample_value, 1e-14));
+    const Eigen::Map<const Eigen::Matrix<double, 3 * Components, 1>> gradient_vector(sample_gradient.data());
+    EXPECT_TRUE((Field::gradient_matrix(point) * flattened).isApprox(gradient_vector, 1e-14));
 
     constexpr double h = 1e-4;
     for (int i = 0; i < coefficients.rows(); ++i) {
@@ -96,17 +104,19 @@ template <int Components> void check_coefficient_derivatives() {
             auto minus = coefficients;
             plus(i, c) += h;
             minus(i, c) -= h;
-            const auto sample_plus = Field(plus).evaluate(point);
-            const auto sample_minus = Field(minus).evaluate(point);
+            const auto sample_plus_value = Field(plus).value(point);
+            const auto sample_plus_gradient = Field(plus).gradient(point);
+            const auto sample_minus_value = Field(minus).value(point);
+            const auto sample_minus_gradient = Field(minus).gradient(point);
             const int column = i * Components + c;
-            EXPECT_TRUE(
-                ((sample_plus.value - sample_minus.value) / (2 * h)).isApprox(sample.value_matrix().col(column), 1e-9))
+            EXPECT_TRUE(((sample_plus_value - sample_minus_value) / (2 * h))
+                            .isApprox(Field::value_matrix(point).col(column), 1e-9))
                 << "coefficient (" << i << ", " << c << ")";
-            const Eigen::Map<const Eigen::Matrix<double, 3 * Components, 1>> gradient_plus(sample_plus.gradient.data());
+            const Eigen::Map<const Eigen::Matrix<double, 3 * Components, 1>> gradient_plus(sample_plus_gradient.data());
             const Eigen::Map<const Eigen::Matrix<double, 3 * Components, 1>> gradient_minus(
-                sample_minus.gradient.data());
+                sample_minus_gradient.data());
             EXPECT_TRUE(
-                ((gradient_plus - gradient_minus) / (2 * h)).isApprox(sample.gradient_matrix().col(column), 1e-9))
+                ((gradient_plus - gradient_minus) / (2 * h)).isApprox(Field::gradient_matrix(point).col(column), 1e-9))
                 << "coefficient (" << i << ", " << c << ")";
         }
     }
@@ -143,17 +153,20 @@ TEST(InterpolatedField, SeparateRestGeometryDisplacementPlasticDisplacementAndMa
     for (const Vec3 xi : {Vec3(0.2, 0.3, 0.4), Vec3(0.83, 0.17, 0.61)}) {
         const Vec3 position = origin + J * xi;
         const auto point = mapping.evaluate(xi);
-        const auto u = displacement.evaluate(point);
-        const auto up = plastic_displacement.evaluate(point);
-        const auto parameters = material_parameters.evaluate(point);
-        EXPECT_TRUE(u.value.isApprox(A * position + a_offset, 1e-13));
-        EXPECT_TRUE(u.gradient.isApprox(A, 1e-13));
-        EXPECT_TRUE(up.value.isApprox(P * position + b_offset, 1e-13));
-        EXPECT_TRUE(up.gradient.isApprox(P, 1e-13));
-        EXPECT_TRUE((Mat3::Identity() + u.gradient).isApprox(Mat3::Identity() + A, 1e-13));
-        EXPECT_TRUE((Mat3::Identity() + up.gradient).isApprox(Mat3::Identity() + P, 1e-13));
-        EXPECT_TRUE(parameters.value.isApprox(material_gradient * position + material_offset, 1e-13));
-        EXPECT_TRUE(parameters.gradient.isApprox(material_gradient, 1e-13));
+        const auto u_value = displacement.value(point);
+        const auto u_gradient = displacement.gradient(point);
+        const auto up_value = plastic_displacement.value(point);
+        const auto up_gradient = plastic_displacement.gradient(point);
+        const auto parameters_value = material_parameters.value(point);
+        const auto parameters_gradient = material_parameters.gradient(point);
+        EXPECT_TRUE(u_value.isApprox(A * position + a_offset, 1e-13));
+        EXPECT_TRUE(u_gradient.isApprox(A, 1e-13));
+        EXPECT_TRUE(up_value.isApprox(P * position + b_offset, 1e-13));
+        EXPECT_TRUE(up_gradient.isApprox(P, 1e-13));
+        EXPECT_TRUE((Mat3::Identity() + u_gradient).isApprox(Mat3::Identity() + A, 1e-13));
+        EXPECT_TRUE((Mat3::Identity() + up_gradient).isApprox(Mat3::Identity() + P, 1e-13));
+        EXPECT_TRUE(parameters_value.isApprox(material_gradient * position + material_offset, 1e-13));
+        EXPECT_TRUE(parameters_gradient.isApprox(material_gradient, 1e-13));
     }
 }
 
@@ -167,9 +180,10 @@ TEST(InterpolatedField, AcceptsEitherMatrixStorageOrder) {
     const Mapping mapping(corners());
     const Eigen::Matrix<double, 8, 3, Eigen::RowMajor> coefficients = corners();
     const auto point = mapping.evaluate(Vec3(0.2, 0.3, 0.4));
-    const auto sample = VectorField(coefficients).evaluate(point);
-    EXPECT_TRUE(sample.value.isApprox(point.position, 1e-14));
-    EXPECT_TRUE(sample.gradient.isIdentity(1e-14));
+    const auto sample_value = VectorField(coefficients).value(point);
+    const auto sample_gradient = VectorField(coefficients).gradient(point);
+    EXPECT_TRUE(sample_value.isApprox(point.position, 1e-14));
+    EXPECT_TRUE(sample_gradient.isIdentity(1e-14));
 }
 
 TEST(InterpolatedField, GradientMatchesPhysicalFiniteDifferencesOnWarpedHex) {
@@ -182,7 +196,7 @@ TEST(InterpolatedField, GradientMatchesPhysicalFiniteDifferencesOnWarpedHex) {
     }
     const VectorField plastic_displacement(b);
     const Vec3 xi(0.2, 0.3, 0.4);
-    const auto sample = plastic_displacement.evaluate(mapping.evaluate(xi));
+    const auto sample_gradient = plastic_displacement.gradient(mapping.evaluate(xi));
     const Vec3 position = warped_position(xi);
     constexpr double h = 1e-6;
     for (int d = 0; d < 3; ++d) {
@@ -190,9 +204,9 @@ TEST(InterpolatedField, GradientMatchesPhysicalFiniteDifferencesOnWarpedHex) {
         Vec3 minus = position;
         plus[d] += h;
         minus[d] -= h;
-        const Vec3 value_plus = plastic_displacement.evaluate(mapping.evaluate(warped_parameter(plus))).value;
-        const Vec3 value_minus = plastic_displacement.evaluate(mapping.evaluate(warped_parameter(minus))).value;
-        EXPECT_TRUE(((value_plus - value_minus) / (2 * h)).isApprox(sample.gradient.col(d), 3e-9));
+        const Vec3 value_plus = plastic_displacement.value(mapping.evaluate(warped_parameter(plus)));
+        const Vec3 value_minus = plastic_displacement.value(mapping.evaluate(warped_parameter(minus)));
+        EXPECT_TRUE(((value_plus - value_minus) / (2 * h)).isApprox(sample_gradient.col(d), 3e-9));
     }
 }
 
@@ -221,18 +235,24 @@ TEST(InterpolatedField, DirectAndCachedGeometryPointsGiveTheSameFields) {
         const Vec3 xi = Quadrature::points().row(q).transpose();
         const auto direct = mapping.evaluate(xi);
         const auto& cached = cache.sample(q).point;
-        const auto direct_u = displacement.evaluate(direct);
-        const auto cached_u = displacement.evaluate(cached);
-        EXPECT_TRUE(cached_u.value.isApprox(direct_u.value, 1e-14));
-        EXPECT_TRUE(cached_u.gradient.isApprox(direct_u.gradient, 1e-14));
-        const auto direct_up = plastic_displacement.evaluate(direct);
-        const auto cached_up = plastic_displacement.evaluate(cached);
-        EXPECT_TRUE(cached_up.value.isApprox(direct_up.value, 1e-14));
-        EXPECT_TRUE(cached_up.gradient.isApprox(direct_up.gradient, 1e-14));
-        const auto direct_theta = material_parameters.evaluate(direct);
-        const auto cached_theta = material_parameters.evaluate(cached);
-        EXPECT_TRUE(cached_theta.value.isApprox(direct_theta.value, 1e-14));
-        EXPECT_TRUE(cached_theta.gradient.isApprox(direct_theta.gradient, 1e-14));
+        const auto direct_u_value = displacement.value(direct);
+        const auto direct_u_gradient = displacement.gradient(direct);
+        const auto cached_u_value = displacement.value(cached);
+        const auto cached_u_gradient = displacement.gradient(cached);
+        EXPECT_TRUE(cached_u_value.isApprox(direct_u_value, 1e-14));
+        EXPECT_TRUE(cached_u_gradient.isApprox(direct_u_gradient, 1e-14));
+        const auto direct_up_value = plastic_displacement.value(direct);
+        const auto direct_up_gradient = plastic_displacement.gradient(direct);
+        const auto cached_up_value = plastic_displacement.value(cached);
+        const auto cached_up_gradient = plastic_displacement.gradient(cached);
+        EXPECT_TRUE(cached_up_value.isApprox(direct_up_value, 1e-14));
+        EXPECT_TRUE(cached_up_gradient.isApprox(direct_up_gradient, 1e-14));
+        const auto direct_theta_value = material_parameters.value(direct);
+        const auto direct_theta_gradient = material_parameters.gradient(direct);
+        const auto cached_theta_value = material_parameters.value(cached);
+        const auto cached_theta_gradient = material_parameters.gradient(cached);
+        EXPECT_TRUE(cached_theta_value.isApprox(direct_theta_value, 1e-14));
+        EXPECT_TRUE(cached_theta_gradient.isApprox(direct_theta_gradient, 1e-14));
     }
 }
 
@@ -245,13 +265,31 @@ TEST(InterpolatedField, CoefficientsAreCopiedAndTranslationHasZeroGradient) {
     }
     const VectorField field(coefficients);
     coefficients.setConstant(std::numeric_limits<double>::quiet_NaN());
-    const auto sample = field.evaluate(mapping.evaluate(Vec3(0.2, 0.3, 0.4)));
-    EXPECT_TRUE(sample.value.isApprox(translation, 1e-14));
-    EXPECT_TRUE(sample.gradient.isZero(1e-14));
+    const auto sample_value = field.value(mapping.evaluate(Vec3(0.2, 0.3, 0.4)));
+    const auto sample_gradient = field.gradient(mapping.evaluate(Vec3(0.2, 0.3, 0.4)));
+    EXPECT_TRUE(sample_value.isApprox(translation, 1e-14));
+    EXPECT_TRUE(sample_gradient.isZero(1e-14));
 }
 
 TEST(InterpolatedField, RejectsNonFiniteCoefficients) {
     VectorField::LocalCoefficients coefficients = VectorField::LocalCoefficients::Zero();
     coefficients(1, 1) = std::numeric_limits<double>::quiet_NaN();
     EXPECT_THROW((VectorField(coefficients)), std::invalid_argument);
+}
+
+TEST(InterpolatedField, ValueAndGradientEvaluateAndValidateIndependently) {
+    const Mapping mapping(corners());
+    const auto point = mapping.evaluate(Vec3(0.2, 0.3, 0.4));
+    const VectorField field(corners());
+    auto bad_values = point;
+    bad_values.basis_values.setConstant(std::numeric_limits<double>::quiet_NaN());
+    EXPECT_THROW(field.value(bad_values), std::invalid_argument);
+    EXPECT_TRUE(field.gradient(bad_values).isApprox(field.gradient(point)));
+    EXPECT_TRUE(VectorField::gradient_matrix(bad_values).isApprox(VectorField::gradient_matrix(point)));
+
+    auto bad_gradients = point;
+    bad_gradients.basis_gradients.setConstant(std::numeric_limits<double>::quiet_NaN());
+    EXPECT_THROW(field.gradient(bad_gradients), std::invalid_argument);
+    EXPECT_TRUE(field.value(bad_gradients).isApprox(field.value(point)));
+    EXPECT_TRUE(VectorField::value_matrix(bad_gradients).isApprox(VectorField::value_matrix(point)));
 }

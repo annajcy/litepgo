@@ -160,15 +160,18 @@ TEST(VertexElementDofMap, ThreeGatheredFieldsReproduceAffineValuesAndPhysicalGra
             const auto point = geometry.evaluate(xi);
             const Eigen::Vector3d position =
                 Eigen::Vector3d(1.2, -0.7, 2.1) + reference_jacobian() * (xi + Eigen::Vector3d(e, 0, 0));
-            const auto u_sample = u.evaluate(point);
-            const auto up_sample = up.evaluate(point);
-            const auto theta_sample = parameters.evaluate(point);
-            EXPECT_TRUE(u_sample.value.isApprox(A * position + a_offset, 1e-13));
-            EXPECT_TRUE(u_sample.gradient.isApprox(A, 1e-13));
-            EXPECT_TRUE(up_sample.value.isApprox(P * position + b_offset, 1e-13));
-            EXPECT_TRUE(up_sample.gradient.isApprox(P, 1e-13));
-            EXPECT_TRUE(theta_sample.value.isApprox(M * position + theta_offset, 1e-13));
-            EXPECT_TRUE(theta_sample.gradient.isApprox(M, 1e-13));
+            const auto u_sample_value = u.value(point);
+            const auto u_sample_gradient = u.gradient(point);
+            const auto up_sample_value = up.value(point);
+            const auto up_sample_gradient = up.gradient(point);
+            const auto theta_sample_value = parameters.value(point);
+            const auto theta_sample_gradient = parameters.gradient(point);
+            EXPECT_TRUE(u_sample_value.isApprox(A * position + a_offset, 1e-13));
+            EXPECT_TRUE(u_sample_gradient.isApprox(A, 1e-13));
+            EXPECT_TRUE(up_sample_value.isApprox(P * position + b_offset, 1e-13));
+            EXPECT_TRUE(up_sample_gradient.isApprox(P, 1e-13));
+            EXPECT_TRUE(theta_sample_value.isApprox(M * position + theta_offset, 1e-13));
+            EXPECT_TRUE(theta_sample_gradient.isApprox(M, 1e-13));
         }
     }
 }
