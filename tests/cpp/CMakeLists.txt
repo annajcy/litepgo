@@ -11,7 +11,6 @@ add_executable(litepgo_tests
     energy/quadratic_energy_gtest.cpp
     energy/weighted_energy_sum_gtest.cpp
     fem/basis_gtest.cpp
-    fem/displacement_dof_layout_gtest.cpp
     fem/gauss_legendre_1d_gtest.cpp
     fem/hex_q1_basis_gtest.cpp
     fem/interpolated_field_gtest.cpp
@@ -20,6 +19,7 @@ add_executable(litepgo_tests
     fem/tensor_product_basis_gtest.cpp
     fem/tensor_product_quadrature_gtest.cpp
     fem/vertex_dof_layout_gtest.cpp
+    fem/vertex_element_dof_map_gtest.cpp
     fem/volume_quadrature_cache_gtest.cpp
     fem/volume_reference_geometry_gtest.cpp
     linalg/dof_reduction_gtest.cpp
