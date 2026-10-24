@@ -20,3 +20,4 @@ dist/
 .idea/
 .cache/
 .DS_Store
+.VSCodeCounter/

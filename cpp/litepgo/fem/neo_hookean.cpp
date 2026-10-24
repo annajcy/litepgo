@@ -56,28 +56,32 @@ Mat9 elastic_hessian(const NeoHookean::Parameters& theta, double logJ, const Mat
 
 } // namespace
 
-double NeoHookean::value(const Mat3& F, const Mat3& Fp, const Parameters& theta) const {
+double NeoHookean::value(const Point& point) const {
+    const auto& [F, Fp, theta] = point;
     const MultiplicativeKinematics k(F, Fp);
     const Mat3& Fe = k.elastic_gradient();
     const double logJ = log_elastic_determinant(Fe, theta);
     return k.reference_energy(elastic_value(Fe, theta, logJ));
 }
 
-Mat3 NeoHookean::gradient_F(const Mat3& F, const Mat3& Fp, const Parameters& theta) const {
+NeoHookeanEnergyF::Gradient NeoHookeanEnergyF::gradient(const Point& point) const {
+    const auto& [F, Fp, theta] = point;
     const MultiplicativeKinematics k(F, Fp);
     const Mat3& Fe = k.elastic_gradient();
     const double logJ = log_elastic_determinant(Fe, theta);
     return k.reference_gradient_F(elastic_gradient(Fe, theta, logJ, inverse_transpose(Fe)));
 }
 
-Mat9 NeoHookean::hessian_F(const Mat3& F, const Mat3& Fp, const Parameters& theta) const {
+NeoHookeanEnergyF::Hessian NeoHookeanEnergyF::hessian(const Point& point) const {
+    const auto& [F, Fp, theta] = point;
     const MultiplicativeKinematics k(F, Fp);
     const Mat3& Fe = k.elastic_gradient();
     const double logJ = log_elastic_determinant(Fe, theta);
     return k.reference_hessian_F(elastic_hessian(theta, logJ, inverse_transpose(Fe)));
 }
 
-Mat3 NeoHookean::gradient_Fp(const Mat3& F, const Mat3& Fp, const Parameters& theta) const {
+NeoHookeanEnergyFp::Gradient NeoHookeanEnergyFp::gradient(const Point& point) const {
+    const auto& [F, Fp, theta] = point;
     const MultiplicativeKinematics k(F, Fp);
     const Mat3& Fe = k.elastic_gradient();
     const double logJ = log_elastic_determinant(Fe, theta);
@@ -85,7 +89,8 @@ Mat3 NeoHookean::gradient_Fp(const Mat3& F, const Mat3& Fp, const Parameters& th
                                    elastic_gradient(Fe, theta, logJ, inverse_transpose(Fe)));
 }
 
-Mat9 NeoHookean::hessian_Fp(const Mat3& F, const Mat3& Fp, const Parameters& theta) const {
+NeoHookeanEnergyFp::Hessian NeoHookeanEnergyFp::hessian(const Point& point) const {
+    const auto& [F, Fp, theta] = point;
     const MultiplicativeKinematics k(F, Fp);
     const Mat3& Fe = k.elastic_gradient();
     const double logJ = log_elastic_determinant(Fe, theta);
@@ -94,19 +99,21 @@ Mat9 NeoHookean::hessian_Fp(const Mat3& F, const Mat3& Fp, const Parameters& the
                                   elastic_hessian(theta, logJ, Q));
 }
 
-NeoHookean::Parameters NeoHookean::gradient_theta(const Mat3& F, const Mat3& Fp, const Parameters& theta) const {
+NeoHookeanEnergyTheta::Gradient NeoHookeanEnergyTheta::gradient(const Point& point) const {
+    const auto& [F, Fp, theta] = point;
     const MultiplicativeKinematics k(F, Fp);
     const Mat3& Fe = k.elastic_gradient();
     const double logJ = log_elastic_determinant(Fe, theta);
-    Parameters gradient;
+    Gradient gradient;
     gradient << 0.5 * logJ * logJ, 0.5 * (Fe.squaredNorm() - 3.0) - logJ;
     return k.plastic_volume_ratio() * gradient;
 }
 
-NeoHookean::ParameterHessian NeoHookean::hessian_theta(const Mat3& F, const Mat3& Fp, const Parameters& theta) const {
+NeoHookeanEnergyTheta::Hessian NeoHookeanEnergyTheta::hessian(const Point& point) const {
+    const auto& [F, Fp, theta] = point;
     const MultiplicativeKinematics k(F, Fp);
     log_elastic_determinant(k.elastic_gradient(), theta);
-    return ParameterHessian::Zero();
+    return Hessian::Zero();
 }
 
 } // namespace litepgo

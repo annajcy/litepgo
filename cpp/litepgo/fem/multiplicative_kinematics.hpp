@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/fem/material_types.hpp"
+#include "litepgo/fem/material_parameter_types.hpp"
 
 namespace litepgo {
 

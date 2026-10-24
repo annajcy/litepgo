@@ -15,7 +15,7 @@ add_executable(litepgo_tests
     fem/hex_q1_basis_gtest.cpp
     fem/interpolated_field_gtest.cpp
     fem/lagrange_basis_gtest.cpp
-    fem/material_types_gtest.cpp
+    fem/material_parameter_types_gtest.cpp
     fem/multiplicative_kinematics_gtest.cpp
     fem/neo_hookean_gtest.cpp
     fem/quadrature_gtest.cpp
@@ -25,7 +25,7 @@ add_executable(litepgo_tests
     fem/vertex_element_dof_map_gtest.cpp
     fem/volume_quadrature_cache_gtest.cpp
     fem/volume_reference_geometry_gtest.cpp
-    fem/volumetric_material_gtest.cpp
+    fem/point_energy_gtest.cpp
     linalg/dof_reduction_gtest.cpp
     linalg/reduced_matrix_gtest.cpp
     linalg/sparse_pattern_gtest.cpp
