@@ -9,6 +9,7 @@
 
 #include "litepgo/fem/geometry/rest.hpp"
 #include <gtest/gtest.h>
+#include <limits>
 
 namespace {
 using namespace litepgo;
@@ -119,6 +120,11 @@ TEST(MaterialLocalEnergy, AnotherMaterialUsesItsOwnParameterCountAndOnlyActiveDe
     const RestPointData point{};
     const auto g = energy.gradient(point);
     const auto H = energy.hessian(point);
+    Eigen::VectorXd accumulated_g = Eigen::VectorXd::Zero(4);
+    Eigen::MatrixXd accumulated_h = Eigen::MatrixXd::Zero(4, 4);
+    EXPECT_DOUBLE_EQ(energy.accumulate(point, 0.3, &accumulated_g, &accumulated_h), 0.3 * energy.value(point));
+    EXPECT_TRUE(accumulated_g.isApprox(0.3 * g, 1e-13));
+    EXPECT_TRUE(accumulated_h.isApprox(0.3 * H, 1e-13));
     EXPECT_EQ(energy.num_dofs(), 4);
     EXPECT_EQ(g.size(), 4);
     EXPECT_EQ(H.rows(), 4);
@@ -136,4 +142,68 @@ TEST(MaterialLocalEnergy, AnotherMaterialUsesItsOwnParameterCountAndOnlyActiveDe
     EXPECT_THROW(incompatible.value(point), std::invalid_argument);
     EXPECT_THROW(incompatible.gradient(point), std::invalid_argument);
     EXPECT_THROW(incompatible.hessian(point), std::invalid_argument);
+}
+
+namespace {
+template <class T> struct CountingMaterialField final : litepgo::AffineField<T> {
+    T data;
+    mutable int value_calls = 0, jacobian_calls = 0;
+    explicit CountingMaterialField(T value) : data(std::move(value)) {}
+    int num_dofs() const override {
+        return static_cast<int>(data.size());
+    }
+    T value(const litepgo::RestPointData&) const override {
+        ++value_calls;
+        return data;
+    }
+    Eigen::MatrixXd jacobian(const litepgo::RestPointData&) const override {
+        ++jacobian_calls;
+        return Eigen::MatrixXd::Identity(data.size(), data.size());
+    }
+    void reset() const {
+        value_calls = jacobian_calls = 0;
+    }
+};
+} // namespace
+
+TEST(MaterialLocalEnergy, AccumulationReusesFieldValuesAndActiveJacobianForAllActiveFields) {
+    const auto F = std::make_shared<CountingMaterialField<Eigen::Matrix3d>>(1.1 * Eigen::Matrix3d::Identity());
+    const auto Fp = std::make_shared<CountingMaterialField<Eigen::Matrix3d>>(0.95 * Eigen::Matrix3d::Identity());
+    const auto theta = std::make_shared<CountingMaterialField<Eigen::VectorXd>>(Eigen::Vector2d(2, 3));
+    const litepgo::MaterialFields fields{F, Fp, theta};
+    const litepgo::MaterialLocalEnergyF<litepgo::NeoHookean> deformation(fields);
+    const litepgo::MaterialLocalEnergyFp<litepgo::NeoHookean> plastic(fields);
+    const litepgo::MaterialLocalEnergyTheta<litepgo::NeoHookean> parameters(fields);
+    const litepgo::RestPointData point{};
+    const litepgo::LocalEnergy* energies[]{&deformation, &plastic, &parameters};
+    for (const auto* energy : energies) {
+        const int n = energy->num_dofs();
+        for (int request = 0; request < 4; ++request) {
+            const bool want_g = request & 1, want_h = request & 2;
+            const double weight = request == 3 ? -0.4 : 0.7;
+            Eigen::VectorXd g = Eigen::VectorXd::Constant(n, 2);
+            Eigen::MatrixXd h = Eigen::MatrixXd::Constant(n, n, 3);
+            const double expected = weight * energy->value(point);
+            Eigen::VectorXd expected_g = g;
+            Eigen::MatrixXd expected_h = h;
+            if (want_g)
+                expected_g += weight * energy->gradient(point);
+            if (want_h)
+                expected_h += weight * energy->hessian(point);
+            F->reset();
+            Fp->reset();
+            theta->reset();
+            EXPECT_DOUBLE_EQ(energy->accumulate(point, weight, want_g ? &g : nullptr, want_h ? &h : nullptr), expected);
+            EXPECT_TRUE(g.isApprox(expected_g, 1e-13));
+            EXPECT_TRUE(h.isApprox(expected_h, 1e-13));
+            EXPECT_EQ(F->value_calls, 1);
+            EXPECT_EQ(Fp->value_calls, 1);
+            EXPECT_EQ(theta->value_calls, 1);
+            EXPECT_EQ(F->jacobian_calls + Fp->jacobian_calls + theta->jacobian_calls, want_g || want_h ? 1 : 0);
+        }
+        Eigen::VectorXd g = Eigen::VectorXd::Constant(n, 7);
+        EXPECT_THROW(energy->accumulate(point, std::numeric_limits<double>::infinity(), &g, nullptr),
+                     std::invalid_argument);
+        EXPECT_EQ(g, Eigen::VectorXd::Constant(n, 7));
+    }
 }

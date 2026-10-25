@@ -20,8 +20,8 @@ double integrate_volume(const Interpolation<B>& geometry, const LocalEnergy& ene
         throw std::logic_error("integrate_volume: energy does not support gradient evaluation");
     if (hessian && !energy.has_hessian())
         throw std::logic_error("integrate_volume: energy does not support Hessian evaluation");
+    const int n = gradient || hessian ? energy.num_dofs() : 0;
     if (gradient || hessian) {
-        const int n = energy.num_dofs();
         if (n <= 0)
             throw std::invalid_argument("integrate_volume requires positive num_dofs");
         if (gradient)
@@ -37,19 +37,12 @@ double integrate_volume(const Interpolation<B>& geometry, const LocalEnergy& ene
         const double weight = weights[q] * point.jacobian_determinant;
         if (!std::isfinite(weight))
             throw std::invalid_argument("integrate_volume: non-finite volume weight");
-        result += weight * energy.value(point);
-        if (gradient) {
-            const auto local = energy.gradient(point);
-            if (local.size() != gradient->size())
-                throw std::invalid_argument("integrate_volume: invalid gradient size");
-            *gradient += weight * local;
-        }
-        if (hessian) {
-            const auto local = energy.hessian(point);
-            if (local.rows() != hessian->rows() || local.cols() != hessian->cols())
-                throw std::invalid_argument("integrate_volume: invalid Hessian size");
-            *hessian += weight * local;
-        }
+        if (gradient || hessian) {
+            result += energy.accumulate(point, weight, gradient, hessian);
+            if ((gradient && gradient->size() != n) || (hessian && (hessian->rows() != n || hessian->cols() != n)))
+                throw std::invalid_argument("integrate_volume: accumulator changed output dimensions");
+        } else
+            result += weight * energy.value(point);
     }
     return result;
 }

@@ -4,6 +4,7 @@
 #include "litepgo/fem/local/dof_derivatives.hpp"
 #include "litepgo/fem/local/local_energy.hpp"
 
+#include <cmath>
 #include <stdexcept>
 #include <utility>
 
@@ -39,6 +40,22 @@ template <class Material> class MaterialLocalEnergyF final : public LocalEnergy 
     Eigen::MatrixXd hessian(const RestPointData& point) const override {
         const auto J = active_jacobian(point);
         return hessian_wrt_dofs(J, Material::hessian_F(fields_.evaluate(point)));
+    }
+
+    double accumulate(const RestPointData& point, double weight, Eigen::VectorXd* gradient,
+                      Eigen::MatrixXd* hessian) const override {
+        if (!std::isfinite(weight))
+            throw std::invalid_argument("MaterialLocalEnergyF::accumulate requires a finite weight");
+        const auto inputs = fields_.evaluate(point);
+        const double result = weight * Material::value(inputs);
+        if (gradient || hessian) {
+            const auto J = active_jacobian(point);
+            if (gradient)
+                add_gradient_wrt_dofs(J, Material::gradient_F(inputs), weight, *gradient);
+            if (hessian)
+                add_hessian_wrt_dofs(J, Material::hessian_F(inputs), weight, *hessian);
+        }
+        return result;
     }
 
   private:
@@ -84,6 +101,22 @@ template <class Material> class MaterialLocalEnergyFp final : public LocalEnergy
         return hessian_wrt_dofs(J, Material::hessian_Fp(fields_.evaluate(point)));
     }
 
+    double accumulate(const RestPointData& point, double weight, Eigen::VectorXd* gradient,
+                      Eigen::MatrixXd* hessian) const override {
+        if (!std::isfinite(weight))
+            throw std::invalid_argument("MaterialLocalEnergyFp::accumulate requires a finite weight");
+        const auto inputs = fields_.evaluate(point);
+        const double result = weight * Material::value(inputs);
+        if (gradient || hessian) {
+            const auto J = active_jacobian(point);
+            if (gradient)
+                add_gradient_wrt_dofs(J, Material::gradient_Fp(inputs), weight, *gradient);
+            if (hessian)
+                add_hessian_wrt_dofs(J, Material::hessian_Fp(inputs), weight, *hessian);
+        }
+        return result;
+    }
+
   private:
     Eigen::MatrixXd active_jacobian(const RestPointData& point) const {
         auto J = active_->jacobian(point);
@@ -125,6 +158,22 @@ template <class Material> class MaterialLocalEnergyTheta final : public LocalEne
     Eigen::MatrixXd hessian(const RestPointData& point) const override {
         const auto J = active_jacobian(point);
         return hessian_wrt_dofs(J, Material::hessian_theta(fields_.evaluate(point)));
+    }
+
+    double accumulate(const RestPointData& point, double weight, Eigen::VectorXd* gradient,
+                      Eigen::MatrixXd* hessian) const override {
+        if (!std::isfinite(weight))
+            throw std::invalid_argument("MaterialLocalEnergyTheta::accumulate requires a finite weight");
+        const auto inputs = fields_.evaluate(point);
+        const double result = weight * Material::value(inputs);
+        if (gradient || hessian) {
+            const auto J = active_jacobian(point);
+            if (gradient)
+                add_gradient_wrt_dofs(J, Material::gradient_theta(inputs), weight, *gradient);
+            if (hessian)
+                add_hessian_wrt_dofs(J, Material::hessian_theta(inputs), weight, *hessian);
+        }
+        return result;
     }
 
   private:
