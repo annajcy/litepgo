@@ -90,6 +90,24 @@ TEST(LocalEnergy, DerivativeCapabilitiesAreIndependent) {
     EXPECT_THROW(value.hessian(point), std::logic_error);
 }
 
+TEST(LocalEnergy, DefaultAccumulationAddsWeightedValuesAndChecksRequests) {
+    FullEnergy full;
+    const auto point = rest_point(geometry(), {0.2, 0.3, 0.4});
+    Eigen::VectorXd g = Eigen::Vector3d::Constant(3);
+    Eigen::MatrixXd h = Eigen::Matrix3d::Constant(5);
+    const double weight = -0.7;
+    EXPECT_DOUBLE_EQ(full.accumulate(point, weight, &g, &h), weight * full.value(point));
+    EXPECT_TRUE(g.isApprox(Eigen::Vector3d::Constant(3) + weight * full.gradient(point), 1e-14));
+    EXPECT_TRUE(h.isApprox(Eigen::Matrix3d::Constant(5) + weight * full.hessian(point), 1e-14));
+    const auto before_g = g;
+    const auto before_h = h;
+    EXPECT_THROW(full.accumulate(point, std::numeric_limits<double>::infinity(), &g, &h), std::invalid_argument);
+    EXPECT_THROW(ValueOnly{}.accumulate(point, 1, &g, nullptr), std::logic_error);
+    EXPECT_THROW(FirstOnly{}.accumulate(point, 1, nullptr, &h), std::logic_error);
+    EXPECT_EQ(g, before_g);
+    EXPECT_EQ(h, before_h);
+}
+
 // Even if derivative methods exist, queries govern whether integration is allowed.
 struct DisabledDerivatives : FullEnergy {
     bool has_gradient() const noexcept override {
@@ -184,6 +202,29 @@ TEST(IntegrateVolume, RejectsInvalidRuntimeDerivativeSizes) {
     EXPECT_THROW(integrate_volume<Rule>(reference, bad, &g), std::invalid_argument);
     EXPECT_NO_THROW(integrate_volume<Rule>(reference, bad));
     EXPECT_THROW(integrate_volume<Rule>(reference, BadHessian{}, nullptr, &h), std::invalid_argument);
+}
+
+struct ResizingAccumulator : FullEnergy {
+    mutable int calls = 0;
+    double accumulate(const RestPointData&, double, Eigen::VectorXd* gradient,
+                      Eigen::MatrixXd* hessian) const override {
+        ++calls;
+        if (gradient)
+            gradient->resize(4);
+        if (hessian)
+            hessian->resize(4, 4);
+        return 0;
+    }
+};
+
+TEST(IntegrateVolume, RejectsResizedAccumulatorOutputsAtTheFirstPoint) {
+    const ResizingAccumulator energy;
+    Eigen::VectorXd g;
+    Eigen::MatrixXd h;
+    EXPECT_THROW(integrate_volume<Rule>(geometry(), energy, &g), std::invalid_argument);
+    EXPECT_EQ(energy.calls, 1);
+    EXPECT_THROW(integrate_volume<Rule>(geometry(), energy, nullptr, &h), std::invalid_argument);
+    EXPECT_EQ(energy.calls, 2);
 }
 } // namespace
 

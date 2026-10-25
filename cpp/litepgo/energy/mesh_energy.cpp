@@ -50,8 +50,11 @@ double MeshEnergy::evaluate_values(const ConstVecRef& x, Vec* gradient, SpMat* h
         if (hessian) {
             if (result.hessian.rows() != n || result.hessian.cols() != n || !result.hessian.allFinite())
                 throw std::logic_error("MeshEnergy: invalid local Hessian");
-            if (kind == HessianKind::Projected)
+            if (kind == HessianKind::Projected) {
                 project_hessian(result.hessian);
+                if (!result.hessian.allFinite())
+                    throw std::logic_error("MeshEnergy: non-finite projected Hessian");
+            }
         }
     });
     if (gradient)
@@ -65,7 +68,7 @@ double MeshEnergy::evaluate_values(const ConstVecRef& x, Vec* gradient, SpMat* h
         if (gradient)
             assembler_.add_gradient(e, result.gradient, *gradient);
         if (hessian)
-            assembler_.add_hessian(e, result.hessian, *hessian);
+            assembler_.scatter_hessian(e, result.hessian, *hessian);
     }
     return value;
 }

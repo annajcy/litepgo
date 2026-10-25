@@ -78,6 +78,11 @@ void Assembler::add_hessian(int element, const Eigen::Ref<const Eigen::MatrixXd>
     const auto n = static_cast<Eigen::Index>(element_dof_indices_[static_cast<std::size_t>(element)].size());
     if (local.rows() != n || local.cols() != n || !local.allFinite() || !same_pattern(global, pattern_))
         throw std::invalid_argument("Assembler: invalid Hessian dimensions, values, or pattern");
+    scatter_hessian(element, local, global);
+}
+
+void Assembler::scatter_hessian(int element, const Eigen::Ref<const Eigen::MatrixXd>& local, SpMat& global) const {
+    const auto n = local.rows();
     const auto& offsets = hessian_offsets_[static_cast<std::size_t>(element)];
     for (Eigen::Index j = 0; j < n; ++j)
         for (Eigen::Index i = 0; i < n; ++i)

@@ -27,18 +27,22 @@ template <Basis3D B> class DeformationGradientField final : public AffineField<E
     }
     Eigen::MatrixXd jacobian(const RestPointData& point) const override {
         check_point(point);
-        Eigen::MatrixXd result =
-            Eigen::kroneckerProduct(point.inverse_jacobian.transpose(), Eigen::Matrix3d::Identity()) *
-            interpolation_.gradient_matrix(point.xi);
-        if (!result.allFinite())
+        const Eigen::Matrix<double, B::num_basis_functions, 3> gradients =
+            B::evaluate(point.xi).gradients * point.inverse_jacobian;
+        if (!gradients.allFinite())
             throw std::invalid_argument("DeformationGradientField::jacobian: non-finite result");
+        Eigen::MatrixXd result = Eigen::MatrixXd::Zero(9, num_dofs());
+        // d F(c,d) / d u(a,c) = d N_a / d X_d; other component pairs are zero.
+        for (int a = 0; a < B::num_basis_functions; ++a)
+            for (int d = 0; d < 3; ++d)
+                result.block<3, 3>(3 * d, 3 * a).diagonal().setConstant(gradients(a, d));
         return result;
     }
 
   private:
     static void check_point(const RestPointData& point) {
         if (!std::isfinite(point.jacobian_determinant) || point.jacobian_determinant <= 0.0 ||
-            !point.inverse_jacobian.allFinite())
+            !point.inverse_jacobian.allFinite() || !point.xi.allFinite())
             throw std::invalid_argument("DeformationGradientField requires valid volume geometry");
     }
     Interpolation<B> interpolation_;

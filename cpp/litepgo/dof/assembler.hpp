@@ -24,6 +24,9 @@ class Assembler final {
     void add_hessian(int element, const Eigen::Ref<const Eigen::MatrixXd>& local, SpMat& global) const;
 
   private:
+    // MeshEnergy validates all local outputs and the global pattern before scatter.
+    friend class MeshEnergy;
+    void scatter_hessian(int element, const Eigen::Ref<const Eigen::MatrixXd>& local, SpMat& global) const;
     void check_element(int element) const;
 
     int num_dofs_;
