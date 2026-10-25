@@ -24,7 +24,10 @@ inline Vec tet_p1_rest_positions() {
 }
 
 inline MeshEnergy make_tet_p1_mesh_energy(const Vec& X) {
-    const VertexDofMap map(TetTopology(5, {{0, 1, 2, 3}, {0, 2, 1, 4}}), 3);
+    // Shared face vertices 0, 1, 2 reuse the same displacement DOFs in both cells.
+    const TetTopology topology(5, {{0, 1, 2, 3}, {0, 2, 1, 4}});
+    // Three physical displacement components per vertex: global index 3*vertex + component.
+    const VertexDofMap map(topology, 3);
     std::vector<Interpolation<TetP1Basis>> geometries;
     for (int e = 0; e < map.num_elements(); ++e)
         geometries.emplace_back(map.gather(e, X));
@@ -34,10 +37,11 @@ inline MeshEnergy make_tet_p1_mesh_energy(const Vec& X) {
     return MeshEnergy(
         map,
         [geometries, Fp, theta](int e, const Eigen::MatrixXd& local_u, Vec* g, Eigen::MatrixXd* h) {
-            // The geometry and local displacement both belong to element e.
-            const MaterialLocalEnergyF<NeoHookean> local(
-                {std::make_shared<DeformationGradientField<TetP1Basis>>(local_u), Fp, theta});
-            return integrate_volume<TetCentroidQuadrature>(geometries[static_cast<std::size_t>(e)], local, g, h);
+            // Geometry and gathered displacement both belong to element e.
+            const auto& geometry = geometries[static_cast<std::size_t>(e)];
+            const auto F = std::make_shared<DeformationGradientField<TetP1Basis>>(local_u);
+            const MaterialLocalEnergyF<NeoHookean> local_energy({F, Fp, theta});
+            return integrate_volume<TetCentroidQuadrature>(geometry, local_energy, g, h);
         },
         [](int, const auto&, const auto&) -> double {
             // shortcut: evaluation only; supply feasible step bounds before using a solver.

@@ -3,6 +3,7 @@ add_executable(litepgo_tests
     dof/assembler_gtest.cpp
     energy/mesh_energy_gtest.cpp
     ../example/fem/hex_q1_mesh_energy_gtest.cpp
+    ../example/fem/hex_hermite_mesh_energy_gtest.cpp
     ../example/fem/tet_p1_mesh_energy_gtest.cpp
     core/build_info_gtest.cpp
     core/busy_scope_gtest.cpp

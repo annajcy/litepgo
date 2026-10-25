@@ -1,4 +1,5 @@
 #include "litepgo/fem/quadrature/gauss_legendre_1d.hpp"
+#include "litepgo/fem/quadrature/quadrature.hpp"
 
 #include <gtest/gtest.h>
 
@@ -10,6 +11,7 @@ namespace {
 static_assert(litepgo::GaussLegendre1D<2>::num_points == 2);
 static_assert(std::same_as<decltype(litepgo::GaussLegendre1D<2>::points()), const Eigen::Vector2d&>);
 static_assert(std::same_as<decltype(litepgo::GaussLegendre1D<2>::weights()), const Eigen::Vector2d&>);
+static_assert(litepgo::Quadrature1D<litepgo::GaussLegendre1D<4>>);
 
 } // namespace
 
@@ -35,5 +37,23 @@ TEST(GaussLegendre1D, IntegratesMonomialsThroughDegreeThree) {
                 litepgo::GaussLegendre1D<2>::weights()[q] * std::pow(litepgo::GaussLegendre1D<2>::points()[q], degree);
         }
         EXPECT_NEAR(integral, 1.0 / (degree + 1), 1e-15);
+    }
+}
+
+TEST(GaussLegendre1D, FourPointsIntegrateMonomialsThroughDegreeSeven) {
+    const auto& points = litepgo::GaussLegendre1D<4>::points();
+    const auto& weights = litepgo::GaussLegendre1D<4>::weights();
+    EXPECT_GT(points[0], 0);
+    EXPECT_LT(points[3], 1);
+    EXPECT_GT(weights.minCoeff(), 0);
+    for (int q = 0; q < 4; ++q) {
+        EXPECT_NEAR(points[q] + points[3 - q], 1, 1e-15);
+        EXPECT_DOUBLE_EQ(weights[q], weights[3 - q]);
+        if (q > 0)
+            EXPECT_GT(points[q], points[q - 1]);
+    }
+    for (int degree = 0; degree <= 7; ++degree) {
+        SCOPED_TRACE(degree);
+        EXPECT_NEAR(weights.dot(points.array().pow(degree).matrix()), 1.0 / (degree + 1), 1e-15);
     }
 }
