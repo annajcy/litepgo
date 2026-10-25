@@ -7,7 +7,7 @@
             "hidden": true,
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
-            "cacheVariables": {"LITEPGO_BUILD_TESTS": "ON", "LITEPGO_BUILD_PYTHON": "OFF"}
+            "cacheVariables": {"LITEPGO_BUILD_TESTS": "ON", "LITEPGO_BUILD_PYTHON": "ON"}
         },
         {"name": "debug", "inherits": "base", "cacheVariables": {"CMAKE_BUILD_TYPE": "Debug"}},
         {"name": "release", "inherits": "base", "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"}},
@@ -16,6 +16,8 @@
             "name": "asan",
             "inherits": "debug",
             "cacheVariables": {
+                "LITEPGO_BUILD_PYTHON": "OFF",
+                "LITEPGO_LINK_COMPILE_COMMANDS": "OFF",
                 "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
                 "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
             }

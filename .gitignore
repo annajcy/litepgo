@@ -12,6 +12,7 @@ __pycache__/
 *.egg-info/
 .venv/
 .pytest_cache/
+.mypy_cache/
 dist/
 
 # Editors and OS
@@ -19,3 +20,4 @@ dist/
 .idea/
 .cache/
 .DS_Store
+.VSCodeCounter/

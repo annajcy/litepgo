@@ -1,4 +1,53 @@
-add_executable(litepgo_tests smoke_gtest.cpp)
+# Test files mirror cpp/litepgo: tests/cpp/<dir>/<name>_gtest.cpp covers cpp/litepgo/<dir>/.
+add_executable(litepgo_tests
+    dof/assembler_gtest.cpp
+    energy/mesh_energy_gtest.cpp
+    ../example/fem/hex_q1_mesh_energy_gtest.cpp
+    ../example/fem/hex_hermite_mesh_energy_gtest.cpp
+    ../example/fem/tet_p1_mesh_energy_gtest.cpp
+    core/build_info_gtest.cpp
+    core/busy_scope_gtest.cpp
+    core/memory_gtest.cpp
+    core/types_gtest.cpp
+    energy/affine_mapped_energy_gtest.cpp
+    energy/dynamic_pattern_energy_gtest.cpp
+    energy/energy_gtest.cpp
+    energy/fixed_pattern_energy_gtest.cpp
+    energy/quadratic_energy_gtest.cpp
+    energy/weighted_energy_sum_gtest.cpp
+    fem/basis/basis_gtest.cpp
+    fem/basis/cubic_hermite_basis_gtest.cpp
+    dof/element_dof_map_gtest.cpp
+    dof/constant_dof_map_gtest.cpp
+    fem/field/field_gtest.cpp
+    fem/field/local_field_gtest.cpp
+    fem/field/material_fields_gtest.cpp
+    fem/quadrature/gauss_legendre_1d_gtest.cpp
+    fem/basis/hex_q1_basis_gtest.cpp
+    fem/basis/hex_hermite_basis_gtest.cpp
+    fem/basis/tet_p1_basis_gtest.cpp
+    fem/geometry/interpolation_gtest.cpp
+    fem/basis/lagrange_basis_gtest.cpp
+    fem/local/integrate_volume_gtest.cpp
+    fem/local/dof_derivatives_gtest.cpp
+    fem/material/material_inputs_gtest.cpp
+    fem/material/multiplicative_kinematics_gtest.cpp
+    fem/material/neo_hookean_gtest.cpp
+    fem/local/material_local_energy_gtest.cpp
+    fem/quadrature/quadrature_gtest.cpp
+    fem/quadrature/tet_centroid_quadrature_gtest.cpp
+    fem/basis/tensor_product_basis_gtest.cpp
+    fem/quadrature/tensor_product_quadrature_gtest.cpp
+    dof/vertex_dof_map_gtest.cpp
+    fem/local/volume_integration_gtest.cpp
+    fem/local/tet_p1_integration_gtest.cpp
+    fem/geometry/rest_gtest.cpp
+    dof/dof_reduction_gtest.cpp
+    linalg/reduced_matrix_gtest.cpp
+    linalg/sparse_pattern_gtest.cpp
+    linalg/sparse_solver/sparse_solver_gtest.cpp
+    mesh/mesh_topology_gtest.cpp
+    solver/newton_gtest.cpp)
 target_link_libraries(litepgo_tests PRIVATE litepgo::litepgo litepgo::warnings GTest::gtest_main)
 
 gtest_discover_tests(litepgo_tests DISCOVERY_MODE PRE_TEST)

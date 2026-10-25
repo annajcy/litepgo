@@ -22,7 +22,7 @@ jobs:
           uv sync --locked --only-group dev --no-install-project
           git ls-files '*.h' '*.hpp' '*.cpp' | xargs --no-run-if-empty uv run --no-sync clang-format --dry-run --Werror
 
-  cpp:
+  build:
     strategy:
       fail-fast: false
       matrix:
@@ -37,21 +37,10 @@ jobs:
       - name: Install Ninja (macOS)
         if: runner.os == 'macOS'
         run: brew install ninja
-      - name: Configure, build, and test
-        run: cmake --workflow --preset ${{ matrix.preset }}
-
-  python:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
-      - name: Build and install
+      - name: Create the virtual environment
         run: uv sync --locked
-      - name: Run pytest
-        run: uv run --no-sync python -m pytest -q
+      - name: Configure, build, and test (GoogleTest and pytest)
+        run: cmake --workflow --preset ${{ matrix.preset }}
