@@ -39,6 +39,29 @@ template <Basis3D B> class DeformationGradientField final : public AffineField<E
         return result;
     }
 
+    void accumulate_derivatives(const RestPointData& point, const Eigen::Ref<const Eigen::MatrixXd>& value_gradient,
+                                const Eigen::Ref<const Eigen::MatrixXd>& value_hessian, double weight,
+                                Eigen::VectorXd* gradient, Eigen::MatrixXd* hessian) const override {
+        if (hessian) {
+            AffineField<Eigen::Matrix3d>::accumulate_derivatives(point, value_gradient, value_hessian, weight, gradient,
+                                                                 hessian);
+            return;
+        }
+        if (!std::isfinite(weight) ||
+            (gradient && (gradient->size() != num_dofs() || value_gradient.rows() != 3 || value_gradient.cols() != 3)))
+            throw std::invalid_argument(
+                "DeformationGradientField::accumulate_derivatives: invalid dimensions or weight");
+        if (!gradient)
+            return;
+        check_point(point);
+        const Eigen::Matrix<double, B::num_basis_functions, 3> gradients =
+            B::evaluate(point.xi).gradients * point.inverse_jacobian;
+        if (!gradients.allFinite())
+            throw std::invalid_argument("DeformationGradientField::accumulate_derivatives: non-finite gradients");
+        Eigen::Map<Eigen::Matrix<double, 3, Eigen::Dynamic>> output(gradient->data(), 3, B::num_basis_functions);
+        output.noalias() += weight * (value_gradient * gradients.transpose());
+    }
+
   private:
     static void check_point(const RestPointData& point) {
         if (!std::isfinite(point.jacobian_determinant) || point.jacobian_determinant <= 0.0 ||

@@ -55,6 +55,62 @@ TEST(LocalField, DeformationJacobiansMatchFiniteDifferencesForAllBases) {
     check_deformation_jacobian<HexHermiteBasis>();
 }
 
+template <class B> void check_deformation_pullback() {
+    auto X = nodes();
+    X(6, 0) += 0.3;
+    const Interpolation<HexQ1Basis> geometry(X);
+    const DeformationGradientField<B> field(Eigen::MatrixXd::Zero(B::num_basis_functions, 3));
+    Eigen::Matrix3d P;
+    P << 1, -2, 0.3, 0.4, 2, -0.7, 0.8, 0.1, -3;
+    Eigen::Matrix<double, 9, 9> H;
+    for (int j = 0; j < H.size(); ++j)
+        H.data()[j] = std::sin(0.7 * j + 0.2); // Deliberately nonsymmetric.
+    for (const Eigen::Vector3d xi : {Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(-0.2, 1.1, 0.1)}) {
+        const auto point = rest_point(geometry, xi);
+        const auto J = field.jacobian(point);
+        for (double weight : {-0.4, 0., 0.7}) {
+            for (int request = 0; request < 4; ++request) {
+                Eigen::VectorXd g = Eigen::VectorXd::Constant(field.num_dofs(), 2);
+                Eigen::MatrixXd h = Eigen::MatrixXd::Constant(field.num_dofs(), field.num_dofs(), 3);
+                const Eigen::VectorXd expected_g = request & 1 ? (g + weight * J.transpose() * P.reshaped()).eval() : g;
+                const Eigen::MatrixXd expected_h = request & 2 ? (h + weight * J.transpose() * H * J).eval() : h;
+                field.accumulate_derivatives(point, P, H, weight, request & 1 ? &g : nullptr,
+                                             request & 2 ? &h : nullptr);
+                EXPECT_TRUE(g.isApprox(expected_g, 1e-13));
+                EXPECT_TRUE(h.isApprox(expected_h, 1e-13));
+            }
+        }
+    }
+}
+
+TEST(LocalField, DeformationPullbacksMatchDenseContractionsForAllBases) {
+    check_deformation_pullback<HexQ1Basis>();
+    check_deformation_pullback<TetP1Basis>();
+    check_deformation_pullback<HexHermiteBasis>();
+}
+
+TEST(LocalField, DeformationPullbackRejectsInvalidDimensionsWeightsAndGeometry) {
+    const DeformationGradientField<HexQ1Basis> field(Eigen::MatrixXd::Zero(8, 3));
+    auto point = rest_point(Interpolation<HexQ1Basis>(nodes()), {0.2, 0.3, 0.4});
+    Eigen::VectorXd g = Eigen::VectorXd::Constant(24, 2);
+    Eigen::MatrixXd h = Eigen::MatrixXd::Constant(24, 24, 3);
+    const Eigen::MatrixXd P = Eigen::Matrix3d::Identity(), H = Eigen::Matrix<double, 9, 9>::Identity();
+    EXPECT_THROW(field.accumulate_derivatives(point, Eigen::VectorXd::Ones(8), H, 1, &g, nullptr),
+                 std::invalid_argument);
+    EXPECT_THROW(field.accumulate_derivatives(point, P, Eigen::Matrix3d::Identity(), 1, &g, &h), std::invalid_argument);
+    EXPECT_THROW(field.accumulate_derivatives(point, P, H, std::numeric_limits<double>::infinity(), &g, &h),
+                 std::invalid_argument);
+    EXPECT_EQ(g, Eigen::VectorXd::Constant(24, 2));
+    EXPECT_EQ(h, Eigen::MatrixXd::Constant(24, 24, 3));
+    g.resize(23);
+    EXPECT_THROW(field.accumulate_derivatives(point, P, H, 1, &g, nullptr), std::invalid_argument);
+    g.resize(24);
+    h.resize(23, 24);
+    EXPECT_THROW(field.accumulate_derivatives(point, P, H, 1, nullptr, &h), std::invalid_argument);
+    point.inverse_jacobian(0, 0) = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_THROW(field.accumulate_derivatives(point, P, H, 1, &g, nullptr), std::invalid_argument);
+}
+
 template <bool InvalidGradient> struct InvalidFieldBasis {
     static constexpr int num_basis_functions = HexQ1Basis::num_basis_functions;
     using Sample = HexQ1Basis::Sample;
