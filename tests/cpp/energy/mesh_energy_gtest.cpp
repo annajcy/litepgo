@@ -10,6 +10,7 @@
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/gauss_legendre_3d.hpp"
+#include <atomic>
 #include <cmath>
 #include <gtest/gtest.h>
 #include <limits>
@@ -260,6 +261,7 @@ TEST(MeshEnergy, EmptyMeshProducesZeroOutputs) {
     EXPECT_EQ(energy.value(Vec::Zero(6)), 0);
     EXPECT_TRUE(energy.gradient(Vec::Zero(6)).isZero());
     EXPECT_EQ(energy.hessian(Vec::Zero(6)).nonZeros(), 0);
+    EXPECT_DOUBLE_EQ(energy.max_feasible_step(Vec::Zero(6), Vec::Ones(6)), 1);
 }
 
 TEST(MeshEnergy, RejectsWrongSparsePatternBeforeCallbacksOrOutputWrites) {
@@ -290,5 +292,136 @@ TEST(MeshEnergy, RejectsProjectionOverflowBeforeScatter) {
     const Vec x = Vec::Zero(2);
     EXPECT_TRUE(Eigen::MatrixXd(energy.hessian(x)).allFinite());
     EXPECT_THROW(energy.hessian(x, HessianKind::Projected), std::logic_error);
+}
+
+struct SharedDofMap {
+    std::vector<std::vector<int>> indices;
+    SharedDofMap() {
+        for (int e = 0; e < 513; ++e)
+            indices.push_back(e % 13 == 0 ? std::vector<int>{}
+                                          : std::vector<int>{e % 256, (e + 1) % 256, (7 * e) % 256, e % 256});
+    }
+    int num_dofs() const {
+        return 257; // The last DOF is unused.
+    }
+    int num_elements() const {
+        return static_cast<int>(indices.size());
+    }
+    std::vector<int> dof_indices(int e) const {
+        return indices[static_cast<std::size_t>(e)];
+    }
+    Vec gather(int e, const ConstVecRef& x) const {
+        const auto& dofs = indices[static_cast<std::size_t>(e)];
+        Vec local(dofs.size());
+        for (std::size_t j = 0; j < dofs.size(); ++j)
+            local[static_cast<Eigen::Index>(j)] = x[dofs[j]];
+        return local;
+    }
+};
+
+TEST(MeshEnergy, ParallelAssemblyMatchesSerialWithSharedRepeatedAndUnusedDofs) {
+    const SharedDofMap map;
+    const auto local = [](int e, const Vec& q, Vec* g, Eigen::MatrixXd* h) {
+        Eigen::MatrixXd A = Eigen::MatrixXd::Constant(q.size(), q.size(), 0.01 * (e % 3));
+        A.diagonal().array() += 1 + e % 5;
+        const Vec derivative = A * q;
+        if (g)
+            *g = derivative;
+        if (h)
+            *h = A;
+        return 0.5 * q.dot(derivative);
+    };
+    MeshEnergy energy(map, local);
+    const Assembler serial(map.num_dofs(), map.indices);
+    for (int state = 0; state < 3; ++state) {
+        const Vec x = Vec::LinSpaced(map.num_dofs(), -0.4 + state, 0.7 + state);
+        Vec expected_g = Vec::Zero(map.num_dofs());
+        SpMat expected_h = serial.hessian_pattern();
+        double expected_value = 0;
+        for (int e = 0; e < map.num_elements(); ++e) {
+            Vec g;
+            Eigen::MatrixXd h;
+            expected_value += local(e, map.gather(e, x), &g, &h);
+            serial.add_gradient(e, g, expected_g);
+            serial.add_hessian(e, h, expected_h);
+        }
+        for (int threads : {1, 2, 4, 8}) {
+            tbb::global_control limit(tbb::global_control::max_allowed_parallelism, threads);
+            for (int request = 0; request < 4; ++request) {
+                SCOPED_TRACE(::testing::Message()
+                             << "state=" << state << " threads=" << threads << " request=" << request);
+                Vec g;
+                SpMat h = energy.hessian_pattern();
+                EXPECT_EQ(energy.evaluate(x, request & 1 ? &g : nullptr, request & 2 ? &h : nullptr), expected_value);
+                if (request & 1)
+                    EXPECT_EQ(g, expected_g);
+                if (request & 2)
+                    EXPECT_EQ(Eigen::MatrixXd(h), Eigen::MatrixXd(expected_h));
+            }
+        }
+    }
+}
+
+TEST(MeshEnergy, ReusedBuffersRejectIncompleteWritesAndRecoverAfterExceptions) {
+    bool write = true;
+    MeshEnergy energy(ConstantDofMap(TriangleTopology(3, {{0, 1, 2}, {0, 1, 2}}), 2),
+                      [&write](int e, const Vec& q, Vec* g, Eigen::MatrixXd* h) {
+                          if (write && g)
+                              *g = 2 * (e + 1) * q;
+                          if (write && h)
+                              *h = 2 * (e + 1) * Eigen::Matrix2d::Identity();
+                          return (e + 1) * q.squaredNorm();
+                      });
+    Vec x = Eigen::Vector2d(0.2, 0.4), g;
+    SpMat h = energy.hessian_pattern();
+    for (int request : {1, 2, 3}) {
+        EXPECT_DOUBLE_EQ(energy.evaluate(x, request & 1 ? &g : nullptr, request & 2 ? &h : nullptr),
+                         3 * x.squaredNorm());
+        write = false;
+        EXPECT_THROW(energy.evaluate(x, request & 1 ? &g : nullptr, request & 2 ? &h : nullptr), std::logic_error);
+        write = true;
+        x.array() += 0.1;
+        EXPECT_DOUBLE_EQ(energy.evaluate(x, &g, &h), 3 * x.squaredNorm());
+        EXPECT_EQ(g, 6 * x);
+        EXPECT_EQ(Eigen::MatrixXd(h), 6 * Eigen::Matrix2d::Identity());
+    }
+}
+
+TEST(MeshEnergy, ParallelFeasibleStepMatchesSerialAndPropagatesErrors) {
+    const SharedDofMap map;
+    std::atomic<int> calls = 0;
+    bool bad_bound = false;
+    const auto step = [&calls, &bad_bound](int e, const Vec& q, const Vec& dq) {
+        ++calls;
+        if (bad_bound && e == 500)
+            return std::numeric_limits<double>::quiet_NaN();
+        double alpha = 1;
+        for (Eigen::Index j = 0; j < q.size(); ++j) {
+            if (q[j] <= 0)
+                throw InfeasibleState("positive DOFs required");
+            if (dq[j] < 0)
+                alpha = std::min(alpha, 0.8 * q[j] / -dq[j]);
+        }
+        return alpha;
+    };
+    MeshEnergy energy(map, [](int, const Vec&, Vec*, Eigen::MatrixXd*) { return 0.; }, step);
+    Vec x = Vec::LinSpaced(map.num_dofs(), 1, 2);
+    const Vec dx = -Vec::LinSpaced(map.num_dofs(), 0.1, 3);
+    double expected = 1;
+    for (int e = 0; e < map.num_elements(); ++e)
+        expected = std::min(expected, step(e, map.gather(e, x), map.gather(e, dx)));
+    for (int threads : {1, 2, 4, 8}) {
+        tbb::global_control limit(tbb::global_control::max_allowed_parallelism, threads);
+        calls = 0;
+        EXPECT_DOUBLE_EQ(energy.max_feasible_step(x, dx), expected);
+        EXPECT_EQ(calls, map.num_elements());
+        bad_bound = true;
+        EXPECT_THROW(energy.max_feasible_step(x, dx), std::logic_error);
+        bad_bound = false;
+        x[0] = -1;
+        EXPECT_THROW(energy.max_feasible_step(x, dx), InfeasibleState);
+        x[0] = 1;
+        EXPECT_DOUBLE_EQ(energy.max_feasible_step(x, dx), expected);
+    }
 }
 } // namespace
