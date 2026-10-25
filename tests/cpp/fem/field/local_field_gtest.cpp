@@ -1,11 +1,14 @@
 #include "litepgo/dof/constant_dof_map.hpp"
 #include "litepgo/dof/element_dof_map.hpp"
+#include "litepgo/fem/basis/hex_hermite_basis.hpp"
 #include "litepgo/fem/basis/hex_q1_basis.hpp"
+#include "litepgo/fem/basis/tet_p1_basis.hpp"
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_value_field.hpp"
 #include "litepgo/fem/geometry/rest.hpp"
 #include "litepgo/fem/quadrature/gauss_legendre_3d.hpp"
+#include <cmath>
 #include <gtest/gtest.h>
 #include <limits>
 
@@ -16,6 +19,63 @@ Eigen::Matrix<double, 8, 3> nodes() {
     for (int i = 0; i < 8; ++i)
         X.row(i) = HexQ1Basis::reference_node(i).transpose();
     return X;
+}
+
+template <class B> void check_deformation_jacobian() {
+    auto X = nodes();
+    X(6, 0) += 0.3;
+    const Interpolation<HexQ1Basis> geometry(X);
+    Eigen::MatrixXd u(B::num_basis_functions, 3);
+    for (int j = 0; j < u.size(); ++j)
+        u(j / 3, j % 3) = 0.02 * std::sin(j + 0.3);
+    const DeformationGradientField<B> field(u);
+    constexpr double step = 1e-5;
+    for (const Eigen::Vector3d xi : {Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(-0.2, 1.1, 0.1)}) {
+        const auto point = rest_point(geometry, xi);
+        const auto J = field.jacobian(point);
+        const Eigen::MatrixXd previous =
+            Eigen::kroneckerProduct(point.inverse_jacobian.transpose(), Eigen::Matrix3d::Identity()) *
+            Interpolation<B>(u).gradient_matrix(xi);
+        EXPECT_TRUE(J.isApprox(previous, 1e-14));
+        for (int j = 0; j < u.size(); ++j) {
+            auto plus = u, minus = u;
+            plus(j / 3, j % 3) += step;
+            minus(j / 3, j % 3) -= step;
+            const Eigen::Matrix3d fd =
+                (DeformationGradientField<B>(plus).value(point) - DeformationGradientField<B>(minus).value(point)) /
+                (2 * step);
+            EXPECT_LT((fd.reshaped() - J.col(j)).norm(), 1e-9 * (1 + J.col(j).norm())) << "DOF " << j;
+        }
+    }
+}
+
+TEST(LocalField, DeformationJacobiansMatchFiniteDifferencesForAllBases) {
+    check_deformation_jacobian<HexQ1Basis>();
+    check_deformation_jacobian<TetP1Basis>();
+    check_deformation_jacobian<HexHermiteBasis>();
+}
+
+template <bool InvalidGradient> struct InvalidFieldBasis {
+    static constexpr int num_basis_functions = HexQ1Basis::num_basis_functions;
+    using Sample = HexQ1Basis::Sample;
+    static Sample evaluate(const Eigen::Vector3d& xi) {
+        auto sample = HexQ1Basis::evaluate(xi);
+        if constexpr (InvalidGradient)
+            sample.gradients(0, 0) = std::numeric_limits<double>::quiet_NaN();
+        else
+            sample.values[0] = std::numeric_limits<double>::quiet_NaN();
+        return sample;
+    }
+};
+
+TEST(LocalField, DeformationJacobianValidatesGradientsAndOverflowIndependentlyOfBasisValues) {
+    auto point = rest_point(Interpolation<HexQ1Basis>(nodes()), {0.2, 0.3, 0.4});
+    const DeformationGradientField<InvalidFieldBasis<true>> bad(Eigen::MatrixXd::Zero(8, 3));
+    const DeformationGradientField<InvalidFieldBasis<false>> valid(Eigen::MatrixXd::Zero(8, 3));
+    EXPECT_THROW(bad.jacobian(point), std::invalid_argument);
+    EXPECT_NO_THROW(valid.jacobian(point));
+    point.inverse_jacobian.setConstant(std::numeric_limits<double>::max());
+    EXPECT_THROW(valid.jacobian(point), std::invalid_argument);
 }
 TEST(LocalField, AffineValuesAndCoefficientJacobians) {
     const auto X = nodes();
@@ -159,6 +219,8 @@ TEST(LocalField, FieldsRejectIncompatibleShapesAndNonFiniteParameters) {
     const litepgo::InterpolatedValueField<litepgo::HexQ1Basis> parameters(Eigen::MatrixXd::Zero(8, 4));
     const litepgo::AffineField<Eigen::Matrix3d>& deformation_interface = deformation;
     const litepgo::AffineField<Eigen::VectorXd>& parameter_interface = parameters;
+    EXPECT_THROW(deformation_interface.value(litepgo::RestPointData{}), std::invalid_argument);
+    EXPECT_THROW(deformation_interface.jacobian(litepgo::RestPointData{}), std::invalid_argument);
     auto point = litepgo::rest_point(litepgo::Interpolation<litepgo::HexQ1Basis>(nodes()), {0.2, 0.3, 0.4});
     EXPECT_EQ(deformation_interface.num_dofs(), 24);
     EXPECT_EQ(parameter_interface.num_dofs(), 32);
