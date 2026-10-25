@@ -3,7 +3,10 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <numeric>
+#include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
+#include <tbb/parallel_reduce.h>
 
 namespace litepgo {
 namespace {
@@ -26,63 +29,65 @@ MeshEnergy::MeshEnergy(Assembler assembler)
 double MeshEnergy::evaluate_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const {
     if (!x.allFinite())
         throw std::invalid_argument("MeshEnergy requires finite DOFs");
-    struct Result {
-        double value;
-        Vec gradient;
-        Eigen::MatrixXd hessian;
-    };
-    std::vector<Result> results(static_cast<std::size_t>(assembler_.num_elements()));
-    tbb::parallel_for(0, assembler_.num_elements(), [&](int e) {
-        auto& result = results[static_cast<std::size_t>(e)];
-        const auto n = static_cast<Eigen::Index>(assembler_.dof_indices(e).size());
-        // Unwritten output entries must fail validation rather than read uninitialized memory.
-        const double nan = std::numeric_limits<double>::quiet_NaN();
-        if (gradient)
-            result.gradient = Vec::Constant(n, nan);
-        if (hessian)
-            result.hessian = Eigen::MatrixXd::Constant(n, n, nan);
-        result.value =
-            evaluate_local_(e, x, gradient ? &result.gradient : nullptr, hessian ? &result.hessian : nullptr);
-        if (!std::isfinite(result.value))
-            throw std::logic_error("MeshEnergy: non-finite local energy");
-        if (gradient && (result.gradient.size() != n || !result.gradient.allFinite()))
-            throw std::logic_error("MeshEnergy: invalid local gradient");
-        if (hessian) {
-            if (result.hessian.rows() != n || result.hessian.cols() != n || !result.hessian.allFinite())
-                throw std::logic_error("MeshEnergy: invalid local Hessian");
-            if (kind == HessianKind::Projected) {
-                project_hessian(result.hessian);
-                if (!result.hessian.allFinite())
-                    throw std::logic_error("MeshEnergy: non-finite projected Hessian");
-            }
-        }
-    });
+    const auto count = static_cast<std::size_t>(assembler_.num_elements());
+    local_values_.resize(count);
     if (gradient)
-        gradient->setZero();
+        local_gradients_.resize(count);
     if (hessian)
-        std::fill_n(hessian->valuePtr(), hessian->nonZeros(), 0.0);
-    double value = 0;
-    for (int e = 0; e < assembler_.num_elements(); ++e) {
-        const auto& result = results[static_cast<std::size_t>(e)];
-        value += result.value;
-        if (gradient)
-            assembler_.add_gradient(e, result.gradient, *gradient);
-        if (hessian)
-            assembler_.scatter_hessian(e, result.hessian, *hessian);
+        local_hessians_.resize(count);
+    try {
+        tbb::parallel_for(0, assembler_.num_elements(), [&](int e) {
+            const auto index = static_cast<std::size_t>(e);
+            auto* g = gradient ? &local_gradients_[index] : nullptr;
+            auto* h = hessian ? &local_hessians_[index] : nullptr;
+            const auto n = static_cast<Eigen::Index>(assembler_.dof_indices(e).size());
+            // Reused buffers must still detect incomplete callback writes.
+            const double nan = std::numeric_limits<double>::quiet_NaN();
+            if (g)
+                g->setConstant(n, nan);
+            if (h)
+                h->setConstant(n, n, nan);
+            const double value = evaluate_local_(e, x, g, h);
+            if (!std::isfinite(value))
+                throw std::logic_error("MeshEnergy: non-finite local energy");
+            if (g && (g->size() != n || !g->allFinite()))
+                throw std::logic_error("MeshEnergy: invalid local gradient");
+            if (h) {
+                if (h->rows() != n || h->cols() != n || !h->allFinite())
+                    throw std::logic_error("MeshEnergy: invalid local Hessian");
+                if (kind == HessianKind::Projected) {
+                    project_hessian(*h);
+                    if (!h->allFinite())
+                        throw std::logic_error("MeshEnergy: non-finite projected Hessian");
+                }
+            }
+            local_values_[index] = value;
+        });
+    } catch (...) {
+        local_gradients_.clear();
+        local_hessians_.clear();
+        throw;
     }
+    assembler_.assemble(local_gradients_, local_hessians_, gradient, hessian);
+    // Retain the original element order for the scalar energy sum.
+    const double value = std::accumulate(local_values_.begin(), local_values_.end(), 0.0);
     return value;
 }
 
 double MeshEnergy::feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const {
     if (!x.allFinite() || !dx.allFinite())
         throw std::invalid_argument("MeshEnergy requires finite DOFs and DOF deltas");
-    double result = 1;
-    for (int e = 0; e < assembler_.num_elements(); ++e) {
-        const double step = local_step_(e, x, dx);
-        if (!(step >= 0 && step <= 1))
-            throw std::logic_error("MeshEnergy: local feasible step outside [0,1]");
-        result = std::min(result, step);
-    }
-    return result;
+    return tbb::parallel_reduce(
+        tbb::blocked_range<int>(0, assembler_.num_elements(), 16), 1.0,
+        [&](const auto& range, double result) {
+            for (int e = range.begin(); e < range.end(); ++e) {
+                const double step = local_step_(e, x, dx);
+                if (!(step >= 0 && step <= 1))
+                    throw std::logic_error("MeshEnergy: local feasible step outside [0,1]");
+                result = std::min(result, step);
+            }
+            return result;
+        },
+        [](double a, double b) { return std::min(a, b); });
 }
 } // namespace litepgo

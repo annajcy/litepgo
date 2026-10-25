@@ -27,6 +27,7 @@ class MeshEnergy final : public FixedPatternEnergy {
     // step(e, local_dof_values, local_dof_delta) returns a safe inclusive bound in [0,1].
     // Trial values are local_dof_values + alpha * local_dof_delta (delta is unscaled).
     // It must reject infeasible starting states, e.g. by throwing InfeasibleState.
+    // Like evaluate_local, step may run concurrently on different elements.
     template <class DofMap, class Lambda, class Step>
     MeshEnergy(const DofMap& map, Lambda evaluate_local, Step step) : MeshEnergy(make_assembler(map)) {
         auto owned_map = std::make_shared<const DofMap>(map);
@@ -57,5 +58,8 @@ class MeshEnergy final : public FixedPatternEnergy {
     Assembler assembler_;
     std::function<double(int, const ConstVecRef&, Vec*, Eigen::MatrixXd*)> evaluate_local_;
     std::function<double(int, const ConstVecRef&, const ConstVecRef&)> local_step_;
+    mutable std::vector<double> local_values_;
+    mutable std::vector<Vec> local_gradients_;
+    mutable std::vector<Eigen::MatrixXd> local_hessians_;
 };
 } // namespace litepgo

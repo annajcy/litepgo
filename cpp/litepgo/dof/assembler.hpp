@@ -26,13 +26,20 @@ class Assembler final {
   private:
     // MeshEnergy validates all local outputs and the global pattern before scatter.
     friend class MeshEnergy;
-    void scatter_hessian(int element, const Eigen::Ref<const Eigen::MatrixXd>& local, SpMat& global) const;
+    void assemble(std::span<const Vec> gradients, std::span<const Eigen::MatrixXd> hessians, Vec* gradient,
+                  SpMat* hessian) const;
     void check_element(int element) const;
+
+    struct Contribution {
+        int element;
+        int local_dof;
+    };
 
     int num_dofs_;
     std::vector<std::vector<int>> element_dof_indices_;
     SpMat pattern_;
     std::vector<std::vector<int>> hessian_offsets_;
+    std::vector<std::vector<Contribution>> dof_contributions_;
 };
 
 } // namespace litepgo
