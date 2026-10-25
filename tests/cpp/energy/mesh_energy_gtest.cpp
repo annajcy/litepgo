@@ -261,4 +261,34 @@ TEST(MeshEnergy, EmptyMeshProducesZeroOutputs) {
     EXPECT_TRUE(energy.gradient(Vec::Zero(6)).isZero());
     EXPECT_EQ(energy.hessian(Vec::Zero(6)).nonZeros(), 0);
 }
+
+TEST(MeshEnergy, RejectsWrongSparsePatternBeforeCallbacksOrOutputWrites) {
+    int calls = 0;
+    const ElementDofMap map(TriangleTopology(3, {{0, 1, 2}}), 2);
+    MeshEnergy energy(map, [&calls](int, const auto&, Vec*, Eigen::MatrixXd*) {
+        ++calls;
+        return 0.;
+    });
+    Vec gradient = Vec::Constant(1, 7);
+    SpMat hessian(2, 2);
+    hessian.insert(0, 0) = 9;
+    hessian.makeCompressed();
+    const SpMat before = hessian;
+    EXPECT_THROW(energy.evaluate(Vec::Zero(2), &gradient, &hessian), std::invalid_argument);
+    EXPECT_EQ(calls, 0);
+    EXPECT_EQ(gradient, Vec::Constant(1, 7));
+    EXPECT_EQ(Eigen::MatrixXd(hessian), Eigen::MatrixXd(before));
+}
+
+TEST(MeshEnergy, RejectsProjectionOverflowBeforeScatter) {
+    const ConstantDofMap map(TriangleTopology(3, {{0, 1, 2}}), 2);
+    MeshEnergy energy(map, [](int, const auto&, Vec*, Eigen::MatrixXd* h) {
+        if (h)
+            *h = Eigen::Matrix2d::Constant(std::numeric_limits<double>::max());
+        return 0.;
+    });
+    const Vec x = Vec::Zero(2);
+    EXPECT_TRUE(Eigen::MatrixXd(energy.hessian(x)).allFinite());
+    EXPECT_THROW(energy.hessian(x, HessianKind::Projected), std::logic_error);
+}
 } // namespace
