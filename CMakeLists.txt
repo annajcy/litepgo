@@ -35,6 +35,7 @@ include(cmake/litepgo_warnings.cmake)
 include(cmake/litepgo_dependencies.cmake)
 
 add_subdirectory(cpp/litepgo)
+add_subdirectory(example/fem EXCLUDE_FROM_ALL)
 
 if(LITEPGO_BUILD_TESTS)
     enable_testing()

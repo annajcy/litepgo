@@ -6,8 +6,9 @@
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_value_field.hpp"
-#include "litepgo/fem/local/local_kernel.hpp"
-#include "litepgo/fem/local/neo_hookean_local_energy.hpp"
+#include "litepgo/fem/local/integrate_volume.hpp"
+#include "litepgo/fem/local/material_local_energy.hpp"
+#include "litepgo/fem/material/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/gauss_legendre_3d.hpp"
 #include <cmath>
 #include <gtest/gtest.h>
@@ -20,11 +21,11 @@ using namespace litepgo;
 HexTopology two_hexes() {
     return HexTopology(12, {{1, 3, 9, 4, 7, 6, 0, 10}, {3, 8, 5, 9, 6, 2, 11, 0}});
 }
-LocalKernel kernel() {
+Interpolation<HexQ1Basis> geometry() {
     Eigen::Matrix<double, 8, 3> nodes;
     for (int i = 0; i < 8; ++i)
         nodes.row(i) = HexQ1Basis::reference_node(i).transpose();
-    return LocalKernel(VolumeQuadratureCache(VolumeReferenceGeometry<HexQ1Basis>(nodes), GaussLegendre3D<2>{}));
+    return Interpolation<HexQ1Basis>(nodes);
 }
 MaterialFields passive_fields() {
     Eigen::Matrix3d F;
@@ -71,14 +72,9 @@ void check_fd(MeshEnergy& energy, const Vec& x) {
 
 template <class Map, class Fields, class Bind>
 void check_material_path(const Map& map, const Vec& data, Fields fields, Bind bind) {
-    const auto local_kernel = kernel();
-    MeshEnergy energy(map, [local_kernel, fields, bind](int, const auto& local_dof_values, Vec* g, Eigen::MatrixXd* h) {
-        auto local_energy = bind(fields(local_dof_values));
-        if (g)
-            *g = local_kernel.gradient(local_energy);
-        if (h)
-            *h = local_kernel.hessian(local_energy);
-        return local_kernel.value(local_energy);
+    const auto reference = geometry();
+    MeshEnergy energy(map, [reference, fields, bind](int, const auto& local_dof_values, Vec* g, Eigen::MatrixXd* h) {
+        return integrate_volume<GaussLegendre3D<2>>(reference, bind(fields(local_dof_values)), g, h);
     });
     // This test only evaluates nearby feasible states; it does not use the default step for a solver.
     check_fd(energy, data);
@@ -96,18 +92,18 @@ TEST(MeshEnergy, HexNodeDisplacementAndPlasticDisplacement) {
             EXPECT_EQ(local_dof_values.rows(), 8);
             EXPECT_EQ(local_dof_values.cols(), 3);
             auto fields = passive_fields();
-            fields.F = std::make_shared<DeformationGradientField>(local_dof_values);
+            fields.F = std::make_shared<DeformationGradientField<litepgo::HexQ1Basis>>(local_dof_values);
             return fields;
         },
-        [](auto fields) { return NeoHookeanLocalEnergyF(std::move(fields)); });
+        [](auto fields) { return MaterialLocalEnergyF<NeoHookean>(std::move(fields)); });
     check_material_path(
         map, data,
         [](const auto& local_dof_values) {
             auto fields = passive_fields();
-            fields.Fp = std::make_shared<DeformationGradientField>(local_dof_values);
+            fields.Fp = std::make_shared<DeformationGradientField<litepgo::HexQ1Basis>>(local_dof_values);
             return fields;
         },
-        [](auto fields) { return NeoHookeanLocalEnergyFp(std::move(fields)); });
+        [](auto fields) { return MaterialLocalEnergyFp<NeoHookean>(std::move(fields)); });
 }
 
 TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
@@ -126,7 +122,7 @@ TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
             fields.Fp = std::make_shared<IdentityField<Eigen::Matrix3d>>(local_dof_values.reshaped(3, 3));
             return fields;
         },
-        [](auto fields) { return NeoHookeanLocalEnergyFp(std::move(fields)); });
+        [](auto fields) { return MaterialLocalEnergyFp<NeoHookean>(std::move(fields)); });
     Vec nodal = Vec::Zero(24);
     for (int i = 0; i < 12; ++i) {
         nodal[2 * i] = 2 + 0.01 * i;
@@ -136,10 +132,10 @@ TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
         VertexDofMap(topology, 2), nodal,
         [](const auto& local_dof_values) {
             auto fields = passive_fields();
-            fields.theta = std::make_shared<InterpolatedValueField>(local_dof_values);
+            fields.theta = std::make_shared<InterpolatedValueField<litepgo::HexQ1Basis>>(local_dof_values);
             return fields;
         },
-        [](auto fields) { return NeoHookeanLocalEnergyTheta(std::move(fields)); });
+        [](auto fields) { return MaterialLocalEnergyTheta<NeoHookean>(std::move(fields)); });
     Vec shared(Eigen::Vector2d(2, 3));
     check_material_path(
         ConstantDofMap(topology, 2), shared,
@@ -148,7 +144,7 @@ TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
             fields.theta = std::make_shared<IdentityField<Eigen::VectorXd>>(local_dof_values);
             return fields;
         },
-        [](auto fields) { return NeoHookeanLocalEnergyTheta(std::move(fields)); });
+        [](auto fields) { return MaterialLocalEnergyTheta<NeoHookean>(std::move(fields)); });
 }
 
 TEST(MeshEnergy, OwnsPlanUsesCurrentXAndSupportsTriangleAndTet) {

@@ -14,7 +14,7 @@ struct MaterialFields {
     std::shared_ptr<const Field<Eigen::VectorXd>> theta;
 
     void validate() const;
-    MaterialInputs evaluate(const VolumePointData& point) const;
+    MaterialInputs evaluate(const RestPointData& point) const;
 };
 
 } // namespace litepgo

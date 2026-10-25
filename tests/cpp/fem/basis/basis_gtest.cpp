@@ -16,6 +16,17 @@ struct ConstantBasis {
     }
 };
 
+struct InstanceOnly1D : ConstantBasis {
+    Sample evaluate(double) const;
+};
+struct InstanceOnly3D {
+    static constexpr int num_basis_functions = 8;
+    using Sample = litepgo::HexQ1Basis::Sample;
+    Sample evaluate(const Eigen::Vector3d&) const;
+};
+static_assert(!litepgo::Basis1D<InstanceOnly1D>);
+static_assert(!litepgo::Basis3D<InstanceOnly3D>);
+
 struct MissingSample {};
 
 struct MissingEvaluate {

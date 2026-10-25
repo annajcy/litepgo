@@ -21,10 +21,10 @@ template <class Value> class IdentityField final : public AffineField<Value> {
     int num_dofs() const override {
         return static_cast<int>(value_.size());
     }
-    Value value(const VolumePointData&) const override {
+    Value value(const RestPointData&) const override {
         return value_;
     }
-    Eigen::MatrixXd jacobian(const VolumePointData&) const override {
+    Eigen::MatrixXd jacobian(const RestPointData&) const override {
         return Eigen::MatrixXd::Identity(num_dofs(), num_dofs());
     }
 

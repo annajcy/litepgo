@@ -1,7 +1,7 @@
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/fem/basis/hex_q1_basis.hpp"
-#include "litepgo/fem/field/field_interpolation.hpp"
-#include "litepgo/fem/geometry/volume_reference_geometry.hpp"
+#include "litepgo/fem/geometry/rest.hpp"
+#include "litepgo/fem/geometry/interpolation.hpp"
 
 #include <gtest/gtest.h>
 #include <limits>
@@ -123,20 +123,20 @@ TEST(VertexDofMap, ThreeGatheredFieldsReproduceAffineValuesAndPhysicalGradients)
         for (int i = 0; i < 8; ++i) {
             X_e.row(i) = X.row(vertices[static_cast<std::size_t>(i)]);
         }
-        const litepgo::VolumeReferenceGeometry<litepgo::HexQ1Basis> geometry(X_e);
-        const litepgo::FieldInterpolation u(map.gather(e, a));
-        const litepgo::FieldInterpolation up(map.gather(e, b));
-        const litepgo::FieldInterpolation parameters(VertexDofMap(topology, 2).gather(e, theta));
+        const litepgo::Interpolation<litepgo::HexQ1Basis> geometry(X_e);
+        const litepgo::Interpolation<litepgo::HexQ1Basis> u(map.gather(e, a));
+        const litepgo::Interpolation<litepgo::HexQ1Basis> up(map.gather(e, b));
+        const litepgo::Interpolation<litepgo::HexQ1Basis> parameters(VertexDofMap(topology, 2).gather(e, theta));
         for (const Eigen::Vector3d xi : {Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(0.76, 0.11, 0.64)}) {
-            const auto point = geometry.evaluate(xi);
+            const auto point = litepgo::rest_point(geometry, xi);
             const Eigen::Vector3d position =
                 Eigen::Vector3d(1.2, -0.7, 2.1) + reference_jacobian() * (xi + Eigen::Vector3d(e, 0, 0));
-            const auto u_sample_value = u.value(point);
-            const auto u_sample_gradient = u.gradient(point);
-            const auto up_sample_value = up.value(point);
-            const auto up_sample_gradient = up.gradient(point);
-            const auto theta_sample_value = parameters.value(point);
-            const auto theta_sample_gradient = parameters.gradient(point);
+            const auto u_sample_value = u.value(point.xi);
+            const auto u_sample_gradient = (u.gradient(point.xi) * point.inverse_jacobian).eval();
+            const auto up_sample_value = up.value(point.xi);
+            const auto up_sample_gradient = (up.gradient(point.xi) * point.inverse_jacobian).eval();
+            const auto theta_sample_value = parameters.value(point.xi);
+            const auto theta_sample_gradient = (parameters.gradient(point.xi) * point.inverse_jacobian).eval();
             EXPECT_TRUE(u_sample_value.isApprox(A * position + a_offset, 1e-13));
             EXPECT_TRUE(u_sample_gradient.isApprox(A, 1e-13));
             EXPECT_TRUE(up_sample_value.isApprox(P * position + b_offset, 1e-13));

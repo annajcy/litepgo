@@ -57,7 +57,7 @@ Eigen::Matrix<double, 9, 9> elastic_hessian(const Eigen::VectorXd& theta, double
 
 } // namespace
 
-double NeoHookean::value(const MaterialInputs& inputs) const {
+double NeoHookean::value(const MaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics k(F, Fp);
     const Eigen::Matrix3d& Fe = k.elastic_gradient();
@@ -65,7 +65,7 @@ double NeoHookean::value(const MaterialInputs& inputs) const {
     return k.reference_energy(elastic_value(Fe, theta, logJ));
 }
 
-Eigen::Matrix3d NeoHookean::gradient_F(const MaterialInputs& inputs) const {
+Eigen::Matrix3d NeoHookean::gradient_F(const MaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics k(F, Fp);
     const Eigen::Matrix3d& Fe = k.elastic_gradient();
@@ -73,7 +73,7 @@ Eigen::Matrix3d NeoHookean::gradient_F(const MaterialInputs& inputs) const {
     return k.reference_gradient_F(elastic_gradient(Fe, theta, logJ, inverse_transpose(Fe)));
 }
 
-Eigen::Matrix<double, 9, 9> NeoHookean::hessian_F(const MaterialInputs& inputs) const {
+Eigen::Matrix<double, 9, 9> NeoHookean::hessian_F(const MaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics k(F, Fp);
     const Eigen::Matrix3d& Fe = k.elastic_gradient();
@@ -81,7 +81,7 @@ Eigen::Matrix<double, 9, 9> NeoHookean::hessian_F(const MaterialInputs& inputs) 
     return k.reference_hessian_F(elastic_hessian(theta, logJ, inverse_transpose(Fe)));
 }
 
-Eigen::Matrix3d NeoHookean::gradient_Fp(const MaterialInputs& inputs) const {
+Eigen::Matrix3d NeoHookean::gradient_Fp(const MaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics k(F, Fp);
     const Eigen::Matrix3d& Fe = k.elastic_gradient();
@@ -90,7 +90,7 @@ Eigen::Matrix3d NeoHookean::gradient_Fp(const MaterialInputs& inputs) const {
                                    elastic_gradient(Fe, theta, logJ, inverse_transpose(Fe)));
 }
 
-Eigen::Matrix<double, 9, 9> NeoHookean::hessian_Fp(const MaterialInputs& inputs) const {
+Eigen::Matrix<double, 9, 9> NeoHookean::hessian_Fp(const MaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics k(F, Fp);
     const Eigen::Matrix3d& Fe = k.elastic_gradient();
@@ -100,7 +100,7 @@ Eigen::Matrix<double, 9, 9> NeoHookean::hessian_Fp(const MaterialInputs& inputs)
                                   elastic_hessian(theta, logJ, Q));
 }
 
-Eigen::Vector2d NeoHookean::gradient_theta(const MaterialInputs& inputs) const {
+Eigen::Vector2d NeoHookean::gradient_theta(const MaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics k(F, Fp);
     const Eigen::Matrix3d& Fe = k.elastic_gradient();
@@ -110,7 +110,7 @@ Eigen::Vector2d NeoHookean::gradient_theta(const MaterialInputs& inputs) const {
     return k.plastic_volume_ratio() * gradient;
 }
 
-Eigen::Matrix2d NeoHookean::hessian_theta(const MaterialInputs& inputs) const {
+Eigen::Matrix2d NeoHookean::hessian_theta(const MaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics k(F, Fp);
     log_elastic_determinant(k.elastic_gradient(), theta);

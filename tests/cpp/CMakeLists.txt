@@ -2,6 +2,7 @@
 add_executable(litepgo_tests
     dof/assembler_gtest.cpp
     energy/mesh_energy_gtest.cpp
+    ../example/fem/hex_q1_mesh_energy_gtest.cpp
     core/build_info_gtest.cpp
     core/busy_scope_gtest.cpp
     core/memory_gtest.cpp
@@ -20,21 +21,20 @@ add_executable(litepgo_tests
     fem/field/material_fields_gtest.cpp
     fem/quadrature/gauss_legendre_1d_gtest.cpp
     fem/basis/hex_q1_basis_gtest.cpp
-    fem/field/field_interpolation_gtest.cpp
+    fem/geometry/interpolation_gtest.cpp
     fem/basis/lagrange_basis_gtest.cpp
-    fem/local/local_kernel_gtest.cpp
+    fem/local/integrate_volume_gtest.cpp
     fem/local/dof_derivatives_gtest.cpp
     fem/material/material_inputs_gtest.cpp
     fem/material/multiplicative_kinematics_gtest.cpp
     fem/material/neo_hookean_gtest.cpp
-    fem/local/neo_hookean_local_energy_gtest.cpp
+    fem/local/material_local_energy_gtest.cpp
     fem/quadrature/quadrature_gtest.cpp
     fem/basis/tensor_product_basis_gtest.cpp
     fem/quadrature/tensor_product_quadrature_gtest.cpp
     dof/vertex_dof_map_gtest.cpp
     fem/local/volume_integration_gtest.cpp
-    fem/geometry/volume_quadrature_cache_gtest.cpp
-    fem/geometry/volume_reference_geometry_gtest.cpp
+    fem/geometry/rest_gtest.cpp
     dof/dof_reduction_gtest.cpp
     linalg/reduced_matrix_gtest.cpp
     linalg/sparse_pattern_gtest.cpp

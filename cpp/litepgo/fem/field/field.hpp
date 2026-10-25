@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/fem/geometry/volume_point_data.hpp"
+#include "litepgo/fem/geometry/rest.hpp"
 
 namespace litepgo {
 
@@ -8,7 +8,7 @@ namespace litepgo {
 template <class Value> class Field {
   public:
     virtual ~Field() = default;
-    virtual Value value(const VolumePointData& point) const = 0;
+    virtual Value value(const RestPointData& point) const = 0;
 };
 
 // At fixed geometry, vec(value) = J * local_dofs + offset.
@@ -16,7 +16,7 @@ template <class Value> class Field {
 template <class Value> class AffineField : public Field<Value> {
   public:
     virtual int num_dofs() const = 0;
-    virtual Eigen::MatrixXd jacobian(const VolumePointData& point) const = 0;
+    virtual Eigen::MatrixXd jacobian(const RestPointData& point) const = 0;
 };
 
 } // namespace litepgo

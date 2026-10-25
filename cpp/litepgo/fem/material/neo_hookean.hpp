@@ -14,13 +14,13 @@ class NeoHookean final {
   public:
     static constexpr int num_parameters = 2;
 
-    double value(const MaterialInputs& inputs) const;
-    Eigen::Matrix3d gradient_F(const MaterialInputs& inputs) const;
-    Eigen::Matrix<double, 9, 9> hessian_F(const MaterialInputs& inputs) const;
-    Eigen::Matrix3d gradient_Fp(const MaterialInputs& inputs) const;
-    Eigen::Matrix<double, 9, 9> hessian_Fp(const MaterialInputs& inputs) const;
-    Eigen::Vector2d gradient_theta(const MaterialInputs& inputs) const;
-    Eigen::Matrix2d hessian_theta(const MaterialInputs& inputs) const;
+    static double value(const MaterialInputs& inputs);
+    static Eigen::Matrix3d gradient_F(const MaterialInputs& inputs);
+    static Eigen::Matrix<double, 9, 9> hessian_F(const MaterialInputs& inputs);
+    static Eigen::Matrix3d gradient_Fp(const MaterialInputs& inputs);
+    static Eigen::Matrix<double, 9, 9> hessian_Fp(const MaterialInputs& inputs);
+    static Eigen::Vector2d gradient_theta(const MaterialInputs& inputs);
+    static Eigen::Matrix2d hessian_theta(const MaterialInputs& inputs);
 };
 
 } // namespace litepgo

@@ -9,7 +9,7 @@ void MaterialFields::validate() const {
         throw std::invalid_argument("MaterialFields requires three non-null fields");
 }
 
-MaterialInputs MaterialFields::evaluate(const VolumePointData& point) const {
+MaterialInputs MaterialFields::evaluate(const RestPointData& point) const {
     validate();
     MaterialInputs inputs{F->value(point), Fp->value(point), theta->value(point)};
     if (inputs.theta.size() == 0 || !inputs.F.allFinite() || !inputs.Fp.allFinite() || !inputs.theta.allFinite())
