@@ -1,6 +1,6 @@
 #include "litepgo/fem/basis/hex_q1_basis.hpp"
-#include "litepgo/fem/geometry/rest.hpp"
 #include "litepgo/fem/geometry/interpolation.hpp"
+#include "litepgo/fem/geometry/rest.hpp"
 
 #include <cmath>
 #include <gtest/gtest.h>

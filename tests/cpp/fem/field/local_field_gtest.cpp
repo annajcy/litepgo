@@ -76,15 +76,14 @@ TEST(LocalField, DirectValuesIgnoreLocationAndOwnData) {
         perturbed.data()[j] += 1e-4;
         const Eigen::Matrix3d fd =
             (IdentityField<Eigen::Matrix3d>(perturbed).value(litepgo::RestPointData{}) - original) / 1e-4;
-        EXPECT_LT((Eigen::Map<const Eigen::Matrix<double, 9, 1>>(fd.data()) -
-                   field.jacobian(litepgo::RestPointData{}).col(j))
-                      .norm(),
-                  1e-10);
+        EXPECT_LT(
+            (Eigen::Map<const Eigen::Matrix<double, 9, 1>>(fd.data()) - field.jacobian(litepgo::RestPointData{}).col(j))
+                .norm(),
+            1e-10);
     }
     const Eigen::Matrix<double, 3, 3, Eigen::RowMajor> row_major = original;
-    EXPECT_EQ(
-        (IdentityField<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(row_major).value(litepgo::RestPointData{})),
-        original);
+    EXPECT_EQ((IdentityField<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(row_major).value(litepgo::RestPointData{})),
+              original);
     input(0, 0) = std::numeric_limits<double>::quiet_NaN();
     EXPECT_THROW((IdentityField<Eigen::Matrix3d>(input)), std::invalid_argument);
 }
