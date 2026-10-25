@@ -19,8 +19,9 @@ template <Basis3D B> class DeformationGradientField final : public AffineField<E
     }
     Eigen::Matrix3d value(const RestPointData& point) const override {
         check_point(point);
-        Eigen::Matrix3d result =
-            Eigen::Matrix3d::Identity() + interpolation_.gradient(point.xi) * point.inverse_jacobian;
+        Eigen::Matrix3d reference_gradient;
+        interpolation_.gradient(point.xi, reference_gradient);
+        Eigen::Matrix3d result = Eigen::Matrix3d::Identity() + reference_gradient * point.inverse_jacobian;
         if (!result.allFinite())
             throw std::invalid_argument("DeformationGradientField::value: non-finite result");
         return result;

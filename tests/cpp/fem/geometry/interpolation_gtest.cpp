@@ -122,6 +122,44 @@ TEST(Interpolation, CoefficientsAreCopiedAndTranslationHasZeroGradient) {
     EXPECT_EQ(field.num_components(), 3);
 }
 
+TEST(Interpolation, WritesFixedSizeAndStridedOutputBuffers) {
+    const Interpolation<HexQ1Basis> field(corners());
+    const Eigen::Vector3d xi(0.2, 0.3, 0.4);
+    Eigen::Vector3d value;
+    Eigen::Matrix3d gradient;
+    field.value(xi, value);
+    field.gradient(xi, gradient);
+    EXPECT_EQ(value, field.value(xi));
+    EXPECT_EQ(gradient, field.gradient(xi));
+    Eigen::MatrixXd storage = Eigen::MatrixXd::Constant(5, 5, -7);
+    field.value(xi, storage.block(1, 0, 3, 1));
+    field.gradient(xi, storage.block(1, 1, 3, 3));
+    EXPECT_EQ(storage.block(1, 0, 3, 1), value);
+    EXPECT_EQ(storage.block(1, 1, 3, 3), gradient);
+    EXPECT_TRUE((storage.row(0).array() == -7).all());
+    EXPECT_TRUE((storage.row(4).array() == -7).all());
+    EXPECT_TRUE((storage.col(4).array() == -7).all());
+}
+
+TEST(Interpolation, OutputBuffersRetainDimensionAndFiniteDataChecks) {
+    const Interpolation<HexQ1Basis> field(corners());
+    const Eigen::Vector3d xi(0.2, 0.3, 0.4);
+    Eigen::VectorXd value = Eigen::VectorXd::Constant(2, -7);
+    Eigen::MatrixXd gradient = Eigen::MatrixXd::Constant(3, 2, -7);
+    EXPECT_THROW(field.value(xi, value), std::invalid_argument);
+    EXPECT_THROW(field.gradient(xi, gradient), std::invalid_argument);
+    EXPECT_TRUE((value.array() == -7).all());
+    EXPECT_TRUE((gradient.array() == -7).all());
+    value.resize(3);
+    gradient.resize(3, 3);
+    EXPECT_THROW(field.value(Eigen::Vector3d::Constant(std::numeric_limits<double>::infinity()), value),
+                 std::invalid_argument);
+    EXPECT_THROW(Interpolation<InvalidBasis<true>>(corners()).value(xi, value), std::invalid_argument);
+    EXPECT_NO_THROW(Interpolation<InvalidBasis<true>>(corners()).gradient(xi, gradient));
+    EXPECT_THROW(Interpolation<InvalidBasis<false>>(corners()).gradient(xi, gradient), std::invalid_argument);
+    EXPECT_NO_THROW(Interpolation<InvalidBasis<false>>(corners()).value(xi, value));
+}
+
 TEST(Interpolation, ValueAndGradientValidateIndependently) {
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
     const Interpolation<InvalidBasis<true>> bad_values(corners());

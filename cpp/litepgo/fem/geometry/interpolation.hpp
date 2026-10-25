@@ -29,19 +29,34 @@ template <Basis3D B> class Interpolation final {
     }
 
     Eigen::VectorXd value(const Eigen::Vector3d& xi) const {
-        const auto values = basis_sample(xi).values;
-        Eigen::VectorXd result = coefficients_.transpose() * values;
-        if (!values.allFinite() || !result.allFinite())
-            throw std::invalid_argument("Interpolation::value: non-finite data");
+        Eigen::VectorXd result(num_components());
+        value(xi, result);
         return result;
     }
 
+    // Write into an existing buffer, including fixed-size vectors and matrices.
+    void value(const Eigen::Vector3d& xi, Eigen::Ref<Eigen::VectorXd> result) const {
+        if (result.size() != num_components())
+            throw std::invalid_argument("Interpolation::value: incompatible output size");
+        const auto values = basis_sample(xi).values;
+        result.noalias() = coefficients_.transpose() * values;
+        if (!values.allFinite() || !result.allFinite())
+            throw std::invalid_argument("Interpolation::value: non-finite data");
+    }
+
     Eigen::Matrix<double, Eigen::Dynamic, 3> gradient(const Eigen::Vector3d& xi) const {
+        Eigen::Matrix<double, Eigen::Dynamic, 3> result(num_components(), 3);
+        gradient(xi, result);
+        return result;
+    }
+
+    void gradient(const Eigen::Vector3d& xi, Eigen::Ref<Eigen::MatrixXd> result) const {
+        if (result.rows() != num_components() || result.cols() != 3)
+            throw std::invalid_argument("Interpolation::gradient: incompatible output dimensions");
         const auto gradients = basis_sample(xi).gradients;
-        Eigen::Matrix<double, Eigen::Dynamic, 3> result = coefficients_.transpose() * gradients;
+        result.noalias() = coefficients_.transpose() * gradients;
         if (!gradients.allFinite() || !result.allFinite())
             throw std::invalid_argument("Interpolation::gradient: non-finite data");
-        return result;
     }
 
     Eigen::MatrixXd value_matrix(const Eigen::Vector3d& xi) const {

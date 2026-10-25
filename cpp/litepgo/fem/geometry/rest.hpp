@@ -23,8 +23,8 @@ template <Basis3D B> RestPointData rest_point(const Interpolation<B>& geometry, 
         throw std::invalid_argument("rest_point requires three geometry components");
     RestPointData point;
     point.xi = xi;
-    point.position = geometry.value(xi);
-    point.jacobian = geometry.gradient(xi);
+    geometry.value(xi, point.position);
+    geometry.gradient(xi, point.jacobian);
     point.jacobian_determinant = point.jacobian.determinant();
     if (!std::isfinite(point.jacobian_determinant) || point.jacobian_determinant <= 0.0)
         throw std::invalid_argument("rest_point: invalid reference mapping");
