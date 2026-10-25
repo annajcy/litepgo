@@ -3,6 +3,7 @@ add_executable(litepgo_tests
     dof/assembler_gtest.cpp
     energy/mesh_energy_gtest.cpp
     ../example/fem/hex_q1_mesh_energy_gtest.cpp
+    ../example/fem/tet_p1_mesh_energy_gtest.cpp
     core/build_info_gtest.cpp
     core/busy_scope_gtest.cpp
     core/memory_gtest.cpp
@@ -21,6 +22,7 @@ add_executable(litepgo_tests
     fem/field/material_fields_gtest.cpp
     fem/quadrature/gauss_legendre_1d_gtest.cpp
     fem/basis/hex_q1_basis_gtest.cpp
+    fem/basis/tet_p1_basis_gtest.cpp
     fem/geometry/interpolation_gtest.cpp
     fem/basis/lagrange_basis_gtest.cpp
     fem/local/integrate_volume_gtest.cpp
@@ -30,10 +32,12 @@ add_executable(litepgo_tests
     fem/material/neo_hookean_gtest.cpp
     fem/local/material_local_energy_gtest.cpp
     fem/quadrature/quadrature_gtest.cpp
+    fem/quadrature/tet_centroid_quadrature_gtest.cpp
     fem/basis/tensor_product_basis_gtest.cpp
     fem/quadrature/tensor_product_quadrature_gtest.cpp
     dof/vertex_dof_map_gtest.cpp
     fem/local/volume_integration_gtest.cpp
+    fem/local/tet_p1_integration_gtest.cpp
     fem/geometry/rest_gtest.cpp
     dof/dof_reduction_gtest.cpp
     linalg/reduced_matrix_gtest.cpp
