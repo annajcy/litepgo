@@ -74,8 +74,11 @@ template <class B> void check_deformation_pullback() {
                 Eigen::MatrixXd h = Eigen::MatrixXd::Constant(field.num_dofs(), field.num_dofs(), 3);
                 const Eigen::VectorXd expected_g = request & 1 ? (g + weight * J.transpose() * P.reshaped()).eval() : g;
                 const Eigen::MatrixXd expected_h = request & 2 ? (h + weight * J.transpose() * H * J).eval() : h;
-                field.accumulate_derivatives(point, P, H, weight, request & 1 ? &g : nullptr,
-                                             request & 2 ? &h : nullptr);
+                if (request == 1)
+                    field.accumulate_derivatives(point, P.reshaped().eval(), H, weight, &g, nullptr);
+                else
+                    field.accumulate_derivatives(point, P, H, weight, request & 1 ? &g : nullptr,
+                                                 request & 2 ? &h : nullptr);
                 EXPECT_TRUE(g.isApprox(expected_g, 1e-13));
                 EXPECT_TRUE(h.isApprox(expected_h, 1e-13));
             }
@@ -130,8 +133,15 @@ TEST(LocalField, DeformationJacobianValidatesGradientsAndOverflowIndependentlyOf
     const DeformationGradientField<InvalidFieldBasis<false>> valid(Eigen::MatrixXd::Zero(8, 3));
     EXPECT_THROW(bad.jacobian(point), std::invalid_argument);
     EXPECT_NO_THROW(valid.jacobian(point));
+    Eigen::VectorXd g = Eigen::VectorXd::Zero(24);
+    Eigen::MatrixXd h = Eigen::MatrixXd::Zero(24, 24);
+    const Eigen::Matrix3d P = Eigen::Matrix3d::Identity();
+    const Eigen::Matrix<double, 9, 9> H = Eigen::Matrix<double, 9, 9>::Identity();
+    EXPECT_THROW(bad.accumulate_derivatives(point, P, H, 1, &g, &h), std::invalid_argument);
+    EXPECT_NO_THROW(valid.accumulate_derivatives(point, P, H, 1, &g, &h));
     point.inverse_jacobian.setConstant(std::numeric_limits<double>::max());
     EXPECT_THROW(valid.jacobian(point), std::invalid_argument);
+    EXPECT_THROW(valid.accumulate_derivatives(point, P, H, 1, nullptr, &h), std::invalid_argument);
 }
 TEST(LocalField, AffineValuesAndCoefficientJacobians) {
     const auto X = nodes();

@@ -103,7 +103,48 @@ struct MappedParameters : AffineField<Eigen::VectorXd> {
         return J;
     }
 };
+
+struct PackedMatrixMaterial {
+    static double value(const MaterialInputs& inputs) {
+        return 0.5 * (inputs.F.squaredNorm() + inputs.Fp.squaredNorm());
+    }
+    static Eigen::VectorXd gradient_F(const MaterialInputs& inputs) {
+        return inputs.F.reshaped();
+    }
+    static Eigen::VectorXd gradient_Fp(const MaterialInputs& inputs) {
+        return inputs.Fp.reshaped();
+    }
+    static Eigen::MatrixXd hessian_F(const MaterialInputs&) {
+        return Eigen::MatrixXd::Identity(9, 9);
+    }
+    static Eigen::MatrixXd hessian_Fp(const MaterialInputs& inputs) {
+        return hessian_F(inputs);
+    }
+};
 } // namespace
+
+TEST(MaterialLocalEnergy, AcceptsPackedGradientsAndDynamicHessiansForMatrixFields) {
+    Eigen::Matrix<double, 8, 3> X;
+    for (int i = 0; i < 8; ++i)
+        X.row(i) = HexQ1Basis::reference_node(i).transpose();
+    const auto point = rest_point(Interpolation<HexQ1Basis>(X), {0.2, 0.3, 0.4});
+    const auto field = std::make_shared<DeformationGradientField<HexQ1Basis>>(0.1 * X);
+    const MaterialFields fields{field, field, std::make_shared<IdentityField<Eigen::VectorXd>>(Eigen::Vector2d(2, 3))};
+    const MaterialLocalEnergyF<PackedMatrixMaterial> F(fields);
+    const MaterialLocalEnergyFp<PackedMatrixMaterial> Fp(fields);
+    const auto J = field->jacobian(point);
+    const Eigen::VectorXd expected_g = J.transpose() * field->value(point).reshaped();
+    const Eigen::MatrixXd expected_h = J.transpose() * J;
+    for (const LocalEnergy* energy : {static_cast<const LocalEnergy*>(&F), static_cast<const LocalEnergy*>(&Fp)}) {
+        EXPECT_TRUE(energy->gradient(point).isApprox(expected_g, 1e-13));
+        EXPECT_TRUE(energy->hessian(point).isApprox(expected_h, 1e-13));
+        Eigen::VectorXd g = Eigen::VectorXd::Zero(24);
+        Eigen::MatrixXd h = Eigen::MatrixXd::Zero(24, 24);
+        EXPECT_DOUBLE_EQ(energy->accumulate(point, 0.3, &g, &h), 0.3 * energy->value(point));
+        EXPECT_TRUE(g.isApprox(0.3 * expected_g, 1e-13));
+        EXPECT_TRUE(h.isApprox(0.3 * expected_h, 1e-13));
+    }
+}
 
 TEST(MaterialLocalEnergy, AnotherMaterialUsesItsOwnParameterCountAndOnlyActiveDerivatives) {
     // This material has no F/Fp derivative methods and has three parameters, unlike NeoHookean.

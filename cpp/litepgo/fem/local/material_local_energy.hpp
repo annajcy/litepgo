@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 
 namespace litepgo {
@@ -52,8 +53,8 @@ template <class Material> class MaterialLocalEnergyF final : public LocalEnergy 
         const auto inputs = fields_.evaluate(point);
         const double result = weight * Material::value(inputs);
         if (gradient || hessian) {
-            Eigen::Matrix3d stress;
-            Eigen::Matrix<double, 9, 9> tangent;
+            typename std::decay_t<decltype(Material::gradient_F(inputs))>::PlainObject stress;
+            typename std::decay_t<decltype(Material::hessian_F(inputs))>::PlainObject tangent;
             if (gradient)
                 stress = Material::gradient_F(inputs);
             if (hessian)
@@ -110,8 +111,8 @@ template <class Material> class MaterialLocalEnergyFp final : public LocalEnergy
         const auto inputs = fields_.evaluate(point);
         const double result = weight * Material::value(inputs);
         if (gradient || hessian) {
-            Eigen::Matrix3d stress;
-            Eigen::Matrix<double, 9, 9> tangent;
+            typename std::decay_t<decltype(Material::gradient_Fp(inputs))>::PlainObject stress;
+            typename std::decay_t<decltype(Material::hessian_Fp(inputs))>::PlainObject tangent;
             if (gradient)
                 stress = Material::gradient_Fp(inputs);
             if (hessian)
@@ -168,8 +169,8 @@ template <class Material> class MaterialLocalEnergyTheta final : public LocalEne
         const auto inputs = fields_.evaluate(point);
         const double result = weight * Material::value(inputs);
         if (gradient || hessian) {
-            Eigen::VectorXd stress;
-            Eigen::MatrixXd tangent;
+            typename std::decay_t<decltype(Material::gradient_theta(inputs))>::PlainObject stress;
+            typename std::decay_t<decltype(Material::hessian_theta(inputs))>::PlainObject tangent;
             if (gradient)
                 stress = Material::gradient_theta(inputs);
             if (hessian)
