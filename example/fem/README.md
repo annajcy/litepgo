@@ -39,7 +39,9 @@ The FD test in `tests/example/fem` shares the example setup and checks all 15 di
 
 Two boxes of sizes `(1,2,3)` and `(2,2,3)` share a face. Geometry uses Hex Q1; displacement uses 64 Hermite coefficients per component. Each vertex has 24 physical DOFs: the three components of `u, u_X, u_Y, u_Z, u_XY, u_XZ, u_YZ, u_XYZ`.
 
-The lambda converts physical derivatives to reference coefficients using the rest Q1 Jacobian, integrates with `GaussLegendre3D<4>`, then returns `S^T g` and `S^T H S`. Shared vertex DOFs enforce C1 continuity on conforming axis-aligned boxes in consistent Hex corner order. Other geometries are rejected. No interface changes are needed.
+The lambda converts physical derivatives to reference coefficients using the rest Q1 Jacobian, integrates with `GaussLegendre3D<4>`, then returns `S^T g` and `S^T H S`. Shared vertex DOFs enforce C1 continuity on conforming axis-aligned rest boxes in consistent Hex corner order. No interface changes are needed.
+
+Each rest element must be an axis-aligned rectangular box with positive dimensions; rotated, sheared, or warped rest hexes are rejected. The whole rest mesh need not form a box. This restriction applies only to the rest geometry: the deformed configuration `x(X) = X + u(X)` may rotate, stretch, shear, or bend, subject to the material's validity requirements. The DOF derivatives are with respect to fixed rest coordinates `X`, and their scales are computed once from the rest geometry. Supporting general rest hexes requires a different Hermite DOF mapping and compatible shared-face continuity conditions.
 
 ```sh
 cmake --build --preset debug --target hex_hermite_mesh_energy litepgo_tests

@@ -30,6 +30,8 @@ inline Vec hex_hermite_rest_positions() {
     return rest.reshaped<Eigen::RowMajor>();
 }
 
+// shortcut: axis-aligned rest boxes only, replace this DOF mapping to support general rest hexes.
+// geometry is the fixed rest map; deformed elements may rotate, shear, or bend without changing these scales.
 inline Vec hex_hermite_dof_scales(const Interpolation<HexQ1Basis>& geometry) {
     const Eigen::Vector3d lengths = rest_point(geometry, Eigen::Vector3d::Zero()).jacobian.diagonal();
     if ((lengths.array() <= 0).any())
