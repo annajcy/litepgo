@@ -57,13 +57,21 @@ template <Basis3D B> class DeformationGradientField final : public AffineField<E
                 const Eigen::Matrix<double, 9, 3> right = weight * (gradients(b, 0) * value_hessian.leftCols<3>() +
                                                                     gradients(b, 1) * value_hessian.middleCols<3>(3) +
                                                                     gradients(b, 2) * value_hessian.rightCols<3>());
-                // Complete columns let the inner basis loop vectorize.
-                for (int c = 0; c < 3; ++c) {
-                    double* column = hessian->col(3 * b + c).data();
+                // Small elements benefit from fixed-size block unrolling.
+                if constexpr (B::num_basis_functions <= 8) {
                     for (int a = 0; a < B::num_basis_functions; ++a)
-                        for (int i = 0; i < 3; ++i)
-                            column[3 * a + i] += gradients(a, 0) * right(i, c) + gradients(a, 1) * right(i + 3, c) +
-                                                 gradients(a, 2) * right(i + 6, c);
+                        hessian->block<3, 3>(3 * a, 3 * b) += gradients(a, 0) * right.topRows<3>() +
+                                                              gradients(a, 1) * right.middleRows<3>(3) +
+                                                              gradients(a, 2) * right.bottomRows<3>();
+                } else {
+                    // Complete columns let the inner basis loop vectorize.
+                    for (int c = 0; c < 3; ++c) {
+                        double* column = hessian->col(3 * b + c).data();
+                        for (int a = 0; a < B::num_basis_functions; ++a)
+                            for (int i = 0; i < 3; ++i)
+                                column[3 * a + i] += gradients(a, 0) * right(i, c) + gradients(a, 1) * right(i + 3, c) +
+                                                     gradients(a, 2) * right(i + 6, c);
+                    }
                 }
             }
         }
