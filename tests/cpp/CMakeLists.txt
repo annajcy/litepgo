@@ -15,6 +15,7 @@ add_executable(litepgo_tests
     energy/quadratic_energy_gtest.cpp
     energy/weighted_energy_sum_gtest.cpp
     fem/basis/basis_gtest.cpp
+    fem/basis/cubic_hermite_basis_gtest.cpp
     dof/element_dof_map_gtest.cpp
     dof/constant_dof_map_gtest.cpp
     fem/field/field_gtest.cpp
@@ -22,6 +23,7 @@ add_executable(litepgo_tests
     fem/field/material_fields_gtest.cpp
     fem/quadrature/gauss_legendre_1d_gtest.cpp
     fem/basis/hex_q1_basis_gtest.cpp
+    fem/basis/hex_hermite_basis_gtest.cpp
     fem/basis/tet_p1_basis_gtest.cpp
     fem/geometry/interpolation_gtest.cpp
     fem/basis/lagrange_basis_gtest.cpp

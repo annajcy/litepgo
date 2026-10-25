@@ -12,6 +12,7 @@ add_library(litepgo STATIC
     fem/local/dof_derivatives.cpp
     fem/local/local_energy.cpp
     fem/basis/hex_q1_basis.cpp
+    fem/basis/hex_hermite_basis.cpp
     fem/basis/tet_p1_basis.cpp
     dof/dof_reduction.cpp
     linalg/sparse_solver/eigen_ldlt.cpp
