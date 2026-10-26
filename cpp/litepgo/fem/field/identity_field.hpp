@@ -8,7 +8,7 @@
 
 namespace litepgo {
 
-// Owns a position-independent value snapshot: vec(value) equals the local DOFs.
+// Owns a position-independent value snapshot: vec(value) equals flattened x_local.
 // Matrix DOFs use column-major ordering, regardless of Value storage order.
 template <class Value> class IdentityField final : public AffineField<Value> {
     static_assert(std::is_same_v<Value, typename Value::PlainObject> && std::is_same_v<typename Value::Scalar, double>);
@@ -24,7 +24,7 @@ template <class Value> class IdentityField final : public AffineField<Value> {
     Value value(const RestPointData&) const override {
         return value_;
     }
-    Eigen::MatrixXd jacobian(const RestPointData&) const override {
+    Eigen::MatrixXd dvalue_dx_local(const RestPointData&) const override {
         return Eigen::MatrixXd::Identity(num_dofs(), num_dofs());
     }
 

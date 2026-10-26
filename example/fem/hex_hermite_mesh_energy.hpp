@@ -25,20 +25,21 @@ inline HexTopology hex_hermite_topology() {
 
 inline Vec hex_hermite_rest_positions() {
     // Two boxes of sizes (1,2,3) and (2,2,3) share the face at X = 1.
-    Eigen::Matrix<double, 12, 3> rest;
-    rest << 0, 0, 0, 1, 0, 0, 1, 2, 0, 0, 2, 0, 0, 0, 3, 1, 0, 3, 1, 2, 3, 0, 2, 3, 3, 0, 0, 3, 2, 0, 3, 0, 3, 3, 2, 3;
-    return rest.reshaped<Eigen::RowMajor>();
+    Eigen::Matrix<double, 12, 3> X_nodes;
+    X_nodes << 0, 0, 0, 1, 0, 0, 1, 2, 0, 0, 2, 0, 0, 0, 3, 1, 0, 3, 1, 2, 3, 0, 2, 3, 3, 0, 0, 3, 2, 0, 3, 0, 3, 3, 2,
+        3;
+    return X_nodes.reshaped<Eigen::RowMajor>();
 }
 
 // shortcut: axis-aligned rest boxes only, replace this DOF mapping to support general rest hexes.
 // geometry is the fixed rest map; deformed elements may rotate, shear, or bend without changing these scales.
 inline Vec hex_hermite_dof_scales(const Interpolation<HexQ1Basis>& geometry) {
-    const Eigen::Vector3d lengths = rest_point(geometry, Eigen::Vector3d::Zero()).jacobian.diagonal();
+    const Eigen::Vector3d lengths = rest_point(geometry, Eigen::Vector3d::Zero()).dX_dxi.diagonal();
     if ((lengths.array() <= 0).any())
         throw std::invalid_argument("Hex Hermite example requires positive axis-aligned box dimensions");
     for (int v = 0; v < 8; ++v) {
         const Eigen::Matrix3d normalized =
-            geometry.gradient(HexQ1Basis::reference_node(v)) * lengths.cwiseInverse().asDiagonal();
+            geometry.dvalue_dxi(HexQ1Basis::reference_node(v)) * lengths.cwiseInverse().asDiagonal();
         if (!normalized.isIdentity(1e-12))
             throw std::invalid_argument("Hex Hermite example requires axis-aligned boxes in Hex corner order");
     }
@@ -53,16 +54,16 @@ inline Vec hex_hermite_dof_scales(const Interpolation<HexQ1Basis>& geometry) {
     return scales;
 }
 
-inline Eigen::MatrixXd hex_hermite_reference_coefficients(const Eigen::MatrixXd& physical_dofs, const Vec& scales) {
-    if (physical_dofs.rows() != 8 || physical_dofs.cols() != 24 || scales.size() != 192)
+inline Eigen::MatrixXd hex_hermite_reference_coefficients(const Eigen::MatrixXd& x_local, const Vec& scales) {
+    if (x_local.rows() != 8 || x_local.cols() != 24 || scales.size() != 192)
         throw std::invalid_argument("Hex Hermite example requires 8x24 physical DOFs and 192 scales");
-    Eigen::MatrixXd reference_coefficients = physical_dofs.reshaped<Eigen::RowMajor>(64, 3);
+    Eigen::MatrixXd reference_coefficients = x_local.reshaped<Eigen::RowMajor>(64, 3);
     for (int row = 0; row < 64; ++row)
         reference_coefficients.row(row) *= scales[3 * row];
     return reference_coefficients;
 }
 
-inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X) {
+inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X_nodes) {
     const auto topology = hex_hermite_topology();
     // Each vertex stores [u, u_X, u_Y, u_Z, u_XY, u_XZ, u_YZ, u_XYZ], each a 3-vector.
     // Global index: 24*vertex + 3*slot + component; shared vertices use the same indices.
@@ -70,29 +71,31 @@ inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X) {
     std::vector<Interpolation<HexQ1Basis>> geometries;
     std::vector<Vec> scales;
     for (int e = 0; e < geometry_map.num_elements(); ++e) {
-        geometries.emplace_back(geometry_map.gather(e, X));
+        geometries.emplace_back(geometry_map.gather(e, X_nodes));
         scales.push_back(hex_hermite_dof_scales(geometries.back()));
     }
     const auto Fp = std::make_shared<IdentityField<Eigen::Matrix3d>>(Eigen::Matrix3d::Identity());
     const auto theta = std::make_shared<IdentityField<Eigen::VectorXd>>(Eigen::Vector2d(2, 3));
     return MeshEnergy(
         displacement_map,
-        [geometries, scales, Fp, theta](int e, const Eigen::MatrixXd& physical_dofs, Vec* g, Eigen::MatrixXd* h) {
+        [geometries, scales, Fp, theta](int e, const Eigen::MatrixXd& x_local, Vec* dE_dx_local,
+                                        Eigen::MatrixXd* d2E_dx_local2) {
             const auto index = static_cast<std::size_t>(e);
             const auto& geometry = geometries[index];
             const auto& dof_scales = scales[index];
-            const auto reference_coefficients = hex_hermite_reference_coefficients(physical_dofs, dof_scales);
+            const auto reference_coefficients = hex_hermite_reference_coefficients(x_local, dof_scales);
             const auto F = std::make_shared<DeformationGradientField<HexHermiteBasis>>(reference_coefficients);
             const MaterialLocalEnergyF<NeoHookean> local_energy({F, Fp, theta});
-            const double value = integrate_volume<GaussLegendre3D<4>>(geometry, local_energy, g, h);
-            // c = S*q: return S^T*g and S^T*H*S for assembly at shared physical DOF indices.
-            if (g)
-                g->array() *= dof_scales.array();
-            if (h) {
-                h->array().colwise() *= dof_scales.array();
-                h->array().rowwise() *= dof_scales.transpose().array();
+            const double E_element =
+                integrate_volume<GaussLegendre3D<4>>(geometry, local_energy, dE_dx_local, d2E_dx_local2);
+            // c = S*x_local: pull coefficient derivatives back as S^T*g_c and S^T*H_c*S.
+            if (dE_dx_local)
+                dE_dx_local->array() *= dof_scales.array();
+            if (d2E_dx_local2) {
+                d2E_dx_local2->array().colwise() *= dof_scales.array();
+                d2E_dx_local2->array().rowwise() *= dof_scales.transpose().array();
             }
-            return value;
+            return E_element;
         },
         [](int, const auto&, const auto&) -> double {
             // shortcut: evaluation only; supply feasible step bounds before using a solver.

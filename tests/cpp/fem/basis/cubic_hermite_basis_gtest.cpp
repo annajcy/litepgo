@@ -13,8 +13,8 @@ static_assert(CubicHermiteBasis::num_basis_functions == 4);
 TEST(CubicHermiteBasis, InterpolatesEndpointValuesAndDerivatives) {
     for (int endpoint : {0, 1}) {
         const auto sample = CubicHermiteBasis::evaluate(endpoint);
-        EXPECT_EQ(sample.values, Eigen::Vector4d::Unit(2 * endpoint));
-        EXPECT_EQ(sample.gradients, Eigen::Vector4d::Unit(2 * endpoint + 1));
+        EXPECT_EQ(sample.N, Eigen::Vector4d::Unit(2 * endpoint));
+        EXPECT_EQ(sample.dN_dxi, Eigen::Vector4d::Unit(2 * endpoint + 1));
     }
 }
 
@@ -25,8 +25,8 @@ TEST(CubicHermiteBasis, ReproducesAllCubicMonomialsAndDerivatives) {
         for (double t : {-0.5, 0.0, 0.13, 0.5, 0.61, 1.0, 1.5}) {
             SCOPED_TRACE(t);
             const auto sample = CubicHermiteBasis::evaluate(t);
-            EXPECT_NEAR(coefficients.dot(sample.values), std::pow(t, degree), 1e-14);
-            EXPECT_NEAR(coefficients.dot(sample.gradients), degree == 0 ? 0 : degree * std::pow(t, degree - 1), 1e-14);
+            EXPECT_NEAR(coefficients.dot(sample.N), std::pow(t, degree), 1e-14);
+            EXPECT_NEAR(coefficients.dot(sample.dN_dxi), degree == 0 ? 0 : degree * std::pow(t, degree - 1), 1e-14);
         }
     }
 }
@@ -35,7 +35,7 @@ TEST(CubicHermiteBasis, GradientsMatchFiniteDifferences) {
     constexpr double h = 1e-6;
     for (double t : {-0.5, 0.0, 0.13, 0.5, 0.61, 1.0, 1.5}) {
         const Eigen::Vector4d fd =
-            (CubicHermiteBasis::evaluate(t + h).values - CubicHermiteBasis::evaluate(t - h).values) / (2 * h);
-        EXPECT_TRUE((fd - CubicHermiteBasis::evaluate(t).gradients).isZero(2e-9));
+            (CubicHermiteBasis::evaluate(t + h).N - CubicHermiteBasis::evaluate(t - h).N) / (2 * h);
+        EXPECT_TRUE((fd - CubicHermiteBasis::evaluate(t).dN_dxi).isZero(2e-9));
     }
 }

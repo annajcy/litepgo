@@ -28,11 +28,11 @@ class ConstantDofMap final {
             result[static_cast<std::size_t>(i)] = 0 + i;
         return result;
     }
-    Eigen::VectorXd gather(int element, const ConstVecRef& global_dof_values) const {
+    Eigen::VectorXd gather(int element, const ConstVecRef& x) const {
         check_element(element);
-        if (global_dof_values.size() != num_dofs())
+        if (x.size() != num_dofs())
             throw std::invalid_argument("ConstantDofMap: incorrect global vector size");
-        return global_dof_values.segment(0, width_);
+        return x.segment(0, width_);
     }
 
   private:

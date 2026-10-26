@@ -10,8 +10,8 @@ class LagrangeBasis {
     static constexpr int num_basis_functions = 2;
 
     struct Sample {
-        Eigen::Matrix<double, num_basis_functions, 1> values;
-        Eigen::Matrix<double, num_basis_functions, 1> gradients;
+        Eigen::Matrix<double, num_basis_functions, 1> N;
+        Eigen::Matrix<double, num_basis_functions, 1> dN_dxi;
     };
 
     // Evaluates the polynomials without clamping the parameter to the interval.

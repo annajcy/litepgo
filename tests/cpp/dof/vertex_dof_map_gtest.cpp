@@ -98,7 +98,7 @@ TEST(VertexDofMap, GathersThreeIndependentFieldsInCellAndSlotOrder) {
 
 TEST(VertexDofMap, ThreeGatheredFieldsReproduceAffineValuesAndPhysicalGradients) {
     const auto topology = two_hexes();
-    const auto X = rest_positions();
+    const auto X_nodes = rest_positions();
     const VertexDofMap map(topology, 3);
 
     Eigen::Matrix3d A, P;
@@ -111,7 +111,7 @@ TEST(VertexDofMap, ThreeGatheredFieldsReproduceAffineValuesAndPhysicalGradients)
     Vec a = Vec::Zero(36), b = Vec::Zero(36);
     Vec theta = Vec::Zero(24);
     for (int v = 0; v < 12; ++v) {
-        const Eigen::Vector3d position = X.row(v).transpose();
+        const Eigen::Vector3d position = X_nodes.row(v).transpose();
         a.segment<3>(3 * v) = A * position + a_offset;
         b.segment<3>(3 * v) = P * position + b_offset;
         theta.segment<2>(2 * v) = M * position + theta_offset;
@@ -121,7 +121,7 @@ TEST(VertexDofMap, ThreeGatheredFieldsReproduceAffineValuesAndPhysicalGradients)
         Eigen::Matrix<double, 8, 3> X_e;
         const auto& vertices = topology.cell_vertices(e);
         for (int i = 0; i < 8; ++i) {
-            X_e.row(i) = X.row(vertices[static_cast<std::size_t>(i)]);
+            X_e.row(i) = X_nodes.row(vertices[static_cast<std::size_t>(i)]);
         }
         const litepgo::Interpolation<litepgo::HexQ1Basis> geometry(X_e);
         const litepgo::Interpolation<litepgo::HexQ1Basis> u(map.gather(e, a));
@@ -132,11 +132,11 @@ TEST(VertexDofMap, ThreeGatheredFieldsReproduceAffineValuesAndPhysicalGradients)
             const Eigen::Vector3d position =
                 Eigen::Vector3d(1.2, -0.7, 2.1) + reference_jacobian() * (xi + Eigen::Vector3d(e, 0, 0));
             const auto u_sample_value = u.value(point.xi);
-            const auto u_sample_gradient = (u.gradient(point.xi) * point.inverse_jacobian).eval();
+            const auto u_sample_gradient = (u.dvalue_dxi(point.xi) * point.dxi_dX).eval();
             const auto up_sample_value = up.value(point.xi);
-            const auto up_sample_gradient = (up.gradient(point.xi) * point.inverse_jacobian).eval();
+            const auto up_sample_gradient = (up.dvalue_dxi(point.xi) * point.dxi_dX).eval();
             const auto theta_sample_value = parameters.value(point.xi);
-            const auto theta_sample_gradient = (parameters.gradient(point.xi) * point.inverse_jacobian).eval();
+            const auto theta_sample_gradient = (parameters.dvalue_dxi(point.xi) * point.dxi_dX).eval();
             EXPECT_TRUE(u_sample_value.isApprox(A * position + a_offset, 1e-13));
             EXPECT_TRUE(u_sample_gradient.isApprox(A, 1e-13));
             EXPECT_TRUE(up_sample_value.isApprox(P * position + b_offset, 1e-13));
@@ -221,10 +221,10 @@ TEST(VertexDofMap, OwnsRuntimeLayoutAndChecksWidths) {
     EXPECT_EQ(map.num_elements(), 1);
     EXPECT_EQ(map.dofs_per_vertex(), 4);
     const litepgo::Vec padded = litepgo::Vec::LinSpaced(34, 0, 33);
-    const auto local_dof_values = map.gather(0, padded.segment(1, 32));
-    EXPECT_EQ(local_dof_values.rows(), 8);
-    EXPECT_EQ(local_dof_values.cols(), 4);
-    EXPECT_EQ(local_dof_values(7, 3), 32);
+    const auto x_local = map.gather(0, padded.segment(1, 32));
+    EXPECT_EQ(x_local.rows(), 8);
+    EXPECT_EQ(x_local.cols(), 4);
+    EXPECT_EQ(x_local(7, 3), 32);
     for (int width : {0, -1})
         EXPECT_THROW((litepgo::VertexDofMap(topology, width)), std::invalid_argument);
     EXPECT_THROW((litepgo::VertexDofMap(topology, std::numeric_limits<int>::max())), std::invalid_argument);

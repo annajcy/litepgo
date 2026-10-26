@@ -4,7 +4,7 @@
 
 namespace litepgo {
 
-// A pointwise snapshot of Fe = F Fp^-1 and Jp = det(Fp).
+// A pointwise snapshot of Fe = F Fp^-1 and det_Fp = det(Fp).
 class MultiplicativeKinematics final {
   public:
     // Non-finite inputs throw invalid_argument. Non-positive det(Fp), or
@@ -16,27 +16,28 @@ class MultiplicativeKinematics final {
         return Fe_;
     }
     double plastic_volume_ratio() const {
-        return Jp_;
+        return det_Fp_;
     }
 
     // Convert density per plastic volume to density per original reference
-    // volume. Derivatives hold Fp fixed and assume dependence on F through Fe.
-    // Hessians are exact and use column-major vec(A)[i + 3*j] = A(i,j).
+    // volume: W = det_Fp * psi. Derivatives hold Fp fixed and assume dependence on F through Fe.
+    // dpsi_dFe retains matrix shape; d2psi_dFe2 uses column-major vec(Fe).
+    // Returned gradients retain matrix shape; Hessians use column-major vec(F) or vec(Fp).
     double reference_energy(double psi) const;
-    Eigen::Matrix3d reference_gradient_F(const Eigen::Matrix3d& Pe) const;
-    Eigen::Matrix<double, 9, 9> reference_hessian_F(const Eigen::Matrix<double, 9, 9>& He) const;
+    Eigen::Matrix3d dW_dF(const Eigen::Matrix3d& dpsi_dFe) const;
+    Eigen::Matrix<double, 9, 9> d2W_dF2(const Eigen::Matrix<double, 9, 9>& d2psi_dFe2) const;
 
     // Hold F and material parameters fixed. psi must depend on Fp only through
     // Fe; all elastic inputs must be evaluated at this snapshot's Fe.
     // Includes derivatives of both det(Fp) and Fp^-1. Same vec convention above.
-    Eigen::Matrix3d reference_gradient_Fp(double psi, const Eigen::Matrix3d& Pe) const;
-    Eigen::Matrix<double, 9, 9> reference_hessian_Fp(double psi, const Eigen::Matrix3d& Pe,
-                                                     const Eigen::Matrix<double, 9, 9>& He) const;
+    Eigen::Matrix3d dW_dFp(double psi, const Eigen::Matrix3d& dpsi_dFe) const;
+    Eigen::Matrix<double, 9, 9> d2W_dFp2(double psi, const Eigen::Matrix3d& dpsi_dFe,
+                                         const Eigen::Matrix<double, 9, 9>& d2psi_dFe2) const;
 
   private:
-    Eigen::Matrix3d inverse_Fp_;
+    Eigen::Matrix3d inv_Fp_;
     Eigen::Matrix3d Fe_;
-    double Jp_;
+    double det_Fp_;
 };
 
 } // namespace litepgo

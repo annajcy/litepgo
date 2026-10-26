@@ -13,8 +13,8 @@ class HexQ1Basis final {
     static constexpr int num_basis_functions = 8;
     using Sample = TensorProductBasis3D<LagrangeBasis>::Sample;
 
-    // Values and gradient rows both follow Hex corner order. Gradients are with
-    // respect to parameter coordinates. Outside [0,1]^3, extrapolates without clamping.
+    // N and dN_dxi rows follow Hex corner order; derivatives use parameter coordinates.
+    // Outside [0,1]^3, extrapolates without clamping.
     static Sample evaluate(const Eigen::Vector3d& xi);
 
     // Reference interpolation node for the given basis function.

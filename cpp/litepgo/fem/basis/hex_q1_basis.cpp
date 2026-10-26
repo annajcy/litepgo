@@ -27,8 +27,8 @@ namespace litepgo {
 HexQ1Basis::Sample HexQ1Basis::evaluate(const Eigen::Vector3d& xi) {
     const auto tensor = TensorProductBasis3D<LagrangeBasis>::evaluate(xi);
     Sample result;
-    result.values = tensor.values(hex_to_tensor);
-    result.gradients = tensor.gradients(hex_to_tensor, Eigen::placeholders::all);
+    result.N = tensor.N(hex_to_tensor);
+    result.dN_dxi = tensor.dN_dxi(hex_to_tensor, Eigen::placeholders::all);
     return result;
 }
 

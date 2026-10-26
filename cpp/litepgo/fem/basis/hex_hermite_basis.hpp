@@ -14,8 +14,8 @@ class HexHermiteBasis final {
     static constexpr int num_basis_functions = 64;
     using Sample = TensorProductBasis3D<CubicHermiteBasis>::Sample;
 
-    // Values and gradient rows use the same slot order; gradients are with
-    // respect to xi, eta, zeta. Extrapolates without clamping.
+    // N and dN_dxi rows use the same slot order; derivatives are with respect
+    // to xi, eta, zeta. Extrapolates without clamping.
     static Sample evaluate(const Eigen::Vector3d& xi);
 
     // Reference corner of the basis function, repeated for each of its eight slots.

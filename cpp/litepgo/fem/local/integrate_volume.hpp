@@ -29,22 +29,22 @@ double integrate_volume(const Interpolation<B>& geometry, const LocalEnergy& ene
         if (hessian)
             hessian->setZero(n, n);
     }
-    double result = 0;
+    double E_element = 0;
     const auto& points = Q::points();
     const auto& weights = Q::weights();
     for (int q = 0; q < Q::num_points; ++q) {
         const auto point = rest_point(geometry, points.row(q).transpose());
-        const double weight = weights[q] * point.jacobian_determinant;
-        if (!std::isfinite(weight))
+        const double dV = weights[q] * point.det_dX_dxi;
+        if (!std::isfinite(dV))
             throw std::invalid_argument("integrate_volume: non-finite volume weight");
         if (gradient || hessian) {
-            result += energy.accumulate(point, weight, gradient, hessian);
+            E_element += energy.accumulate(point, dV, gradient, hessian);
             if ((gradient && gradient->size() != n) || (hessian && (hessian->rows() != n || hessian->cols() != n)))
                 throw std::invalid_argument("integrate_volume: accumulator changed output dimensions");
         } else
-            result += weight * energy.value(point);
+            E_element += dV * energy.value(point);
     }
-    return result;
+    return E_element;
 }
 
 } // namespace litepgo

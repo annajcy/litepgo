@@ -12,9 +12,9 @@ TEST(MaterialInputs, NeoHookeanRejectsWrongParameterCountsBeforeIndexing) {
         litepgo::MaterialInputs inputs{Eigen::Matrix3d::Identity(), Eigen::Matrix3d::Identity(),
                                        Eigen::VectorXd::Ones(n)};
         EXPECT_THROW(litepgo::NeoHookean::value(inputs), std::invalid_argument);
-        EXPECT_THROW(litepgo::NeoHookean::gradient_F(inputs), std::invalid_argument);
-        EXPECT_THROW(litepgo::NeoHookean::hessian_Fp(inputs), std::invalid_argument);
-        EXPECT_THROW(litepgo::NeoHookean::gradient_theta(inputs), std::invalid_argument);
-        EXPECT_THROW(litepgo::NeoHookean::hessian_theta(inputs), std::invalid_argument);
+        EXPECT_THROW(litepgo::NeoHookean::dW_dF(inputs), std::invalid_argument);
+        EXPECT_THROW(litepgo::NeoHookean::d2W_dFp2(inputs), std::invalid_argument);
+        EXPECT_THROW(litepgo::NeoHookean::dW_dtheta(inputs), std::invalid_argument);
+        EXPECT_THROW(litepgo::NeoHookean::d2W_dtheta2(inputs), std::invalid_argument);
     }
 }

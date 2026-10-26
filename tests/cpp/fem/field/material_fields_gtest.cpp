@@ -114,13 +114,14 @@ TEST(MaterialFields, MixedRepresentationsPointInputsAndLocalFiniteDifferences) {
             const auto ref = rest_point(geometry, GaussLegendre3D<2>::points().row(q).transpose());
             const auto point = fields.evaluate(ref);
             EXPECT_TRUE(point.F.isApprox(Eigen::Matrix3d::Identity() +
-                                         Interpolation<HexQ1Basis>(ue).gradient(ref.xi) * ref.inverse_jacobian));
+                                         Interpolation<HexQ1Basis>(ue).dvalue_dxi(ref.xi) * ref.dxi_dX));
             EXPECT_EQ(point.Fp, f.fp.segment<9>(9 * e).reshaped(3, 3));
             EXPECT_EQ(point.theta, ConstantDofMap(f.topology, 2).gather(0, f.theta));
-            EXPECT_TRUE(
-                std::dynamic_pointer_cast<const AffineField<Eigen::Matrix3d>>(fields.Fp)->jacobian(ref).isIdentity());
+            EXPECT_TRUE(std::dynamic_pointer_cast<const AffineField<Eigen::Matrix3d>>(fields.Fp)
+                            ->dvalue_dx_local(ref)
+                            .isIdentity());
             EXPECT_TRUE(std::dynamic_pointer_cast<const AffineField<Eigen::VectorXd>>(fields.theta)
-                            ->jacobian(ref)
+                            ->dvalue_dx_local(ref)
                             .isIdentity());
         }
         EXPECT_DOUBLE_EQ(integrate_volume<GaussLegendre3D<2>>(geometry, MaterialLocalEnergyF<NeoHookean>(fields)),
@@ -184,13 +185,15 @@ TEST(MaterialFields, SameQuadratureAcceptsDifferentActiveDofCounts) {
     Eigen::Matrix<double, 9, 9> expected_direct_hessian = Eigen::Matrix<double, 9, 9>::Zero();
     for (int q = 0; q < GaussLegendre3D<2>::num_points; ++q) {
         const auto point = rest_point(geometry, GaussLegendre3D<2>::points().row(q).transpose());
-        const double weight = GaussLegendre3D<2>::weights()[q] * point.jacobian_determinant;
+        const double weight = GaussLegendre3D<2>::weights()[q] * point.det_dX_dxi;
         const auto inputs = nodal.evaluate(point);
-        const auto J = std::dynamic_pointer_cast<const AffineField<Eigen::Matrix3d>>(nodal.F)->jacobian(point);
-        const auto stress = NeoHookean::gradient_F(inputs);
-        const auto tangent = NeoHookean::hessian_F(inputs);
-        expected_gradient += weight * J.transpose() * Eigen::Map<const Eigen::Matrix<double, 9, 1>>(stress.data());
-        expected_hessian += weight * J.transpose() * tangent * J;
+        const auto dvalue_dx_local =
+            std::dynamic_pointer_cast<const AffineField<Eigen::Matrix3d>>(nodal.F)->dvalue_dx_local(point);
+        const auto stress = NeoHookean::dW_dF(inputs);
+        const auto tangent = NeoHookean::d2W_dF2(inputs);
+        expected_gradient +=
+            weight * dvalue_dx_local.transpose() * Eigen::Map<const Eigen::Matrix<double, 9, 1>>(stress.data());
+        expected_hessian += weight * dvalue_dx_local.transpose() * tangent * dvalue_dx_local;
         expected_direct_hessian += weight * tangent;
     }
     EXPECT_TRUE(nodal_gradient.isApprox(expected_gradient, 1e-13));
@@ -295,7 +298,7 @@ TEST(MaterialFields, SharedParameterHessianIncludesBothElements) {
         H += local_hessian;
         for (int q = 0; q < GaussLegendre3D<2>::num_points; ++q)
             volume += GaussLegendre3D<2>::weights()[q] *
-                      rest_point(geometry, GaussLegendre3D<2>::points().row(q).transpose()).jacobian_determinant;
+                      rest_point(geometry, GaussLegendre3D<2>::points().row(q).transpose()).det_dX_dxi;
         check_fd(
             geometry, ConstantDofMap(f.topology, 2).gather(0, f.theta),
             [&](const Eigen::Vector2d& theta) {

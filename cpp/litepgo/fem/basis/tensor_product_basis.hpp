@@ -15,9 +15,9 @@ template <Basis1D B> class TensorProductBasis3D {
     static constexpr int num_basis_functions = n * n * n;
 
     struct Sample {
-        Eigen::Matrix<double, num_basis_functions, 1> values;
+        Eigen::Matrix<double, num_basis_functions, 1> N;
         // Row a contains dN_a/dxi, dN_a/deta, dN_a/dzeta.
-        Eigen::Matrix<double, num_basis_functions, 3> gradients;
+        Eigen::Matrix<double, num_basis_functions, 3> dN_dxi;
     };
 
     static Sample evaluate(const Eigen::Vector3d& xi) {
@@ -26,10 +26,10 @@ template <Basis1D B> class TensorProductBasis3D {
         const auto z = B::evaluate(xi.z());
 
         Sample result;
-        result.values = tensor_product(x.values, y.values, z.values);
-        result.gradients.col(0) = tensor_product(x.gradients, y.values, z.values);
-        result.gradients.col(1) = tensor_product(x.values, y.gradients, z.values);
-        result.gradients.col(2) = tensor_product(x.values, y.values, z.gradients);
+        result.N = tensor_product(x.N, y.N, z.N);
+        result.dN_dxi.col(0) = tensor_product(x.dN_dxi, y.N, z.N);
+        result.dN_dxi.col(1) = tensor_product(x.N, y.dN_dxi, z.N);
+        result.dN_dxi.col(2) = tensor_product(x.N, y.N, z.dN_dxi);
         return result;
     }
 

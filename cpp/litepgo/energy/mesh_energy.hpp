@@ -12,20 +12,20 @@ namespace litepgo {
 // Owns a fixed DOF plan and callbacks, not references to the supplied map. Every call
 // uses x's current values. Callbacks must support concurrent calls on different
 // elements and own (or safely share) their captures. Callbacks must be copyable.
-// Built-in maps use vertex-major matrices or column vectors; local_dof_values preserves
-// those shapes. Derivatives use the corresponding flattened scalar-slot order.
+// x_local = map.gather(e, x) preserves the map's matrix or vector shape.
+// Derivatives use the corresponding flattened scalar-slot order, without repacking.
 class MeshEnergy final : public FixedPatternEnergy {
   public:
     // Only for energies feasible along every finite segment: step defaults to 1.
-    // evaluate_local(e, local_dof_values, gradient*, hessian*) returns integrated energy.
+    // evaluate_local(e, x_local, gradient*, hessian*) returns integrated energy.
     // Non-null outputs must be overwritten, in the map's local DOF order.
     // Unsupported derivative requests must throw; pointers are independently nullable.
     template <class DofMap, class Lambda>
     MeshEnergy(const DofMap& map, Lambda evaluate_local)
         : MeshEnergy(map, std::move(evaluate_local), [](int, const auto&, const auto&) { return 1.0; }) {}
 
-    // step(e, local_dof_values, local_dof_delta) returns a safe inclusive bound in [0,1].
-    // Trial values are local_dof_values + alpha * local_dof_delta (delta is unscaled).
+    // step(e, x_local, dx_local) returns a safe inclusive bound in [0,1].
+    // Trial values are x_local + alpha * dx_local (delta is unscaled).
     // It must reject infeasible starting states, e.g. by throwing InfeasibleState.
     // Like evaluate_local, step may run concurrently on different elements.
     template <class DofMap, class Lambda, class Step>
@@ -33,13 +33,13 @@ class MeshEnergy final : public FixedPatternEnergy {
         auto owned_map = std::make_shared<const DofMap>(map);
         evaluate_local_ = [owned_map, evaluate_local = std::move(evaluate_local)](
                               int element, const ConstVecRef& x, Vec* gradient, Eigen::MatrixXd* hessian) {
-            const auto local_dof_values = owned_map->gather(element, x);
-            return evaluate_local(element, local_dof_values, gradient, hessian);
+            const auto x_local = owned_map->gather(element, x);
+            return evaluate_local(element, x_local, gradient, hessian);
         };
         local_step_ = [owned_map, step = std::move(step)](int element, const ConstVecRef& x, const ConstVecRef& dx) {
-            const auto local_dof_values = owned_map->gather(element, x);
-            const auto local_dof_delta = owned_map->gather(element, dx);
-            return step(element, local_dof_values, local_dof_delta);
+            const auto x_local = owned_map->gather(element, x);
+            const auto dx_local = owned_map->gather(element, dx);
+            return step(element, x_local, dx_local);
         };
     }
 

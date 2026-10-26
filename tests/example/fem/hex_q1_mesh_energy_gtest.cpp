@@ -6,12 +6,12 @@
 
 TEST(HexQ1Example, GradientAndHessianMatchFiniteDifferences) {
     using namespace litepgo;
-    const Vec X = example::hex_q1_rest_positions();
-    auto energy = example::make_hex_q1_mesh_energy(X);
-    ASSERT_EQ(X.size(), 36);
+    const Vec X_nodes = example::hex_q1_rest_positions();
+    auto energy = example::make_hex_q1_mesh_energy(X_nodes);
+    ASSERT_EQ(X_nodes.size(), 36);
     for (int state : {0, 1, 2}) {
         SCOPED_TRACE(state);
-        Vec x = 0.1 * X;
+        Vec x = 0.1 * X_nodes;
         if (state == 0)
             x.setZero();
         if (state == 2)

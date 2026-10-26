@@ -55,7 +55,7 @@ struct BadJacobian final : AffineField<Eigen::Matrix3d> {
     Eigen::Matrix3d value(const RestPointData&) const override {
         return Eigen::Matrix3d::Identity();
     }
-    Eigen::MatrixXd jacobian(const RestPointData&) const override {
+    Eigen::MatrixXd dvalue_dx_local(const RestPointData&) const override {
         return Eigen::MatrixXd::Zero(rows, columns);
     }
 };

@@ -20,7 +20,7 @@ TEST(TetP1Basis, InterpolatesReferenceNodes) {
     for (int a = 0; a < 4; ++a) {
         EXPECT_EQ(TetP1Basis::reference_node(a), nodes.row(a).transpose());
         const auto sample = TetP1Basis::evaluate(nodes.row(a).transpose());
-        EXPECT_EQ(sample.values, Eigen::Vector4d::Unit(a));
+        EXPECT_EQ(sample.N, Eigen::Vector4d::Unit(a));
     }
     EXPECT_THROW(TetP1Basis::reference_node(-1), std::out_of_range);
     EXPECT_THROW(TetP1Basis::reference_node(4), std::out_of_range);
@@ -34,10 +34,10 @@ TEST(TetP1Basis, ReproducesAffineFunctionsAndPartitionsUnity) {
     const Eigen::Vector4d coefficients = (nodes * slope).array() + 0.4;
     for (const auto& xi : samples) {
         const auto sample = TetP1Basis::evaluate(xi);
-        EXPECT_NEAR(sample.values.sum(), 1, 1e-15);
-        EXPECT_TRUE(sample.gradients.colwise().sum().isZero());
-        EXPECT_NEAR(coefficients.dot(sample.values), 0.4 + slope.dot(xi), 1e-15);
-        EXPECT_TRUE((sample.gradients.transpose() * coefficients).isApprox(slope, 1e-14));
+        EXPECT_NEAR(sample.N.sum(), 1, 1e-15);
+        EXPECT_TRUE(sample.dN_dxi.colwise().sum().isZero());
+        EXPECT_NEAR(coefficients.dot(sample.N), 0.4 + slope.dot(xi), 1e-15);
+        EXPECT_TRUE((sample.dN_dxi.transpose() * coefficients).isApprox(slope, 1e-14));
     }
 }
 
@@ -49,9 +49,8 @@ TEST(TetP1Basis, GradientsMatchFiniteDifferences) {
             Eigen::Vector3d plus = xi, minus = xi;
             plus[d] += h;
             minus[d] -= h;
-            const Eigen::Vector4d fd =
-                (TetP1Basis::evaluate(plus).values - TetP1Basis::evaluate(minus).values) / (2 * h);
-            EXPECT_TRUE((fd - sample.gradients.col(d)).isZero(3e-10));
+            const Eigen::Vector4d fd = (TetP1Basis::evaluate(plus).N - TetP1Basis::evaluate(minus).N) / (2 * h);
+            EXPECT_TRUE((fd - sample.dN_dxi.col(d)).isZero(3e-10));
         }
     }
 }

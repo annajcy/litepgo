@@ -6,12 +6,12 @@
 
 TEST(TetP1Example, GradientAndHessianMatchFiniteDifferences) {
     using namespace litepgo;
-    const Vec X = example::tet_p1_rest_positions();
-    auto energy = example::make_tet_p1_mesh_energy(X);
-    ASSERT_EQ(X.size(), 15);
+    const Vec X_nodes = example::tet_p1_rest_positions();
+    auto energy = example::make_tet_p1_mesh_energy(X_nodes);
+    ASSERT_EQ(X_nodes.size(), 15);
     for (int state : {0, 1, 2}) {
         SCOPED_TRACE(state);
-        Vec x = 0.1 * X;
+        Vec x = 0.1 * X_nodes;
         if (state == 0)
             x.setZero();
         if (state == 2)
@@ -31,7 +31,8 @@ TEST(TetP1Example, GradientAndHessianMatchFiniteDifferences) {
         for (const auto& cell : {TetTopology::Cell{0, 1, 2, 3}, TetTopology::Cell{0, 2, 1, 4}}) {
             Eigen::Matrix3d Dm, Du;
             for (int c = 0; c < 3; ++c) {
-                Dm.col(c) = X.segment<3>(3 * cell[static_cast<std::size_t>(c + 1)]) - X.segment<3>(3 * cell[0]);
+                Dm.col(c) =
+                    X_nodes.segment<3>(3 * cell[static_cast<std::size_t>(c + 1)]) - X_nodes.segment<3>(3 * cell[0]);
                 Du.col(c) = x.segment<3>(3 * cell[static_cast<std::size_t>(c + 1)]) - x.segment<3>(3 * cell[0]);
             }
             expected += Dm.determinant() / 6 *

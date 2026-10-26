@@ -9,8 +9,8 @@
 
 namespace litepgo {
 
-// Rows are basis coefficients, columns are components; DOFs flatten by row.
-// Gradients are with respect to xi; their output vectors flatten by column.
+// Rows are basis coefficients, columns are components; x_local flattens by row.
+// For n basis functions and m components, value has m entries and dvalue_dxi is m-by-3.
 template <Basis3D B> class Interpolation final {
   public:
     static constexpr int num_basis_functions = B::num_basis_functions;
@@ -29,34 +29,35 @@ template <Basis3D B> class Interpolation final {
     }
 
     Eigen::VectorXd value(const Eigen::Vector3d& xi) const {
-        const auto values = basis_sample(xi).values;
-        Eigen::VectorXd result = coefficients_.transpose() * values;
-        if (!values.allFinite() || !result.allFinite())
+        const auto N = basis_sample(xi).N;
+        Eigen::VectorXd result = coefficients_.transpose() * N;
+        if (!N.allFinite() || !result.allFinite())
             throw std::invalid_argument("Interpolation::value: non-finite data");
         return result;
     }
 
-    Eigen::Matrix<double, Eigen::Dynamic, 3> gradient(const Eigen::Vector3d& xi) const {
-        const auto gradients = basis_sample(xi).gradients;
-        Eigen::Matrix<double, Eigen::Dynamic, 3> result = coefficients_.transpose() * gradients;
-        if (!gradients.allFinite() || !result.allFinite())
-            throw std::invalid_argument("Interpolation::gradient: non-finite data");
+    Eigen::Matrix<double, Eigen::Dynamic, 3> dvalue_dxi(const Eigen::Vector3d& xi) const {
+        const auto dN_dxi = basis_sample(xi).dN_dxi;
+        Eigen::Matrix<double, Eigen::Dynamic, 3> result = coefficients_.transpose() * dN_dxi;
+        if (!dN_dxi.allFinite() || !result.allFinite())
+            throw std::invalid_argument("Interpolation::dvalue_dxi: non-finite data");
         return result;
     }
 
-    Eigen::MatrixXd value_matrix(const Eigen::Vector3d& xi) const {
-        const auto values = basis_sample(xi).values;
-        if (!values.allFinite())
-            throw std::invalid_argument("Interpolation::value_matrix: non-finite basis values");
-        return Eigen::kroneckerProduct(values.transpose(),
-                                       Eigen::MatrixXd::Identity(num_components(), num_components()));
+    // m-by-(n*m): derivative of value with respect to row-ordered coefficients.
+    Eigen::MatrixXd dvalue_dx_local(const Eigen::Vector3d& xi) const {
+        const auto N = basis_sample(xi).N;
+        if (!N.allFinite())
+            throw std::invalid_argument("Interpolation::dvalue_dx_local: non-finite basis values");
+        return Eigen::kroneckerProduct(N.transpose(), Eigen::MatrixXd::Identity(num_components(), num_components()));
     }
 
-    Eigen::MatrixXd gradient_matrix(const Eigen::Vector3d& xi) const {
-        const auto gradients = basis_sample(xi).gradients;
-        if (!gradients.allFinite())
-            throw std::invalid_argument("Interpolation::gradient_matrix: non-finite basis gradients");
-        return Eigen::kroneckerProduct(gradients.transpose(),
+    // (3*m)-by-(n*m): derivative of column-major vec(dvalue_dxi) with respect to x_local.
+    Eigen::MatrixXd dgrad_xi_dx_local(const Eigen::Vector3d& xi) const {
+        const auto dN_dxi = basis_sample(xi).dN_dxi;
+        if (!dN_dxi.allFinite())
+            throw std::invalid_argument("Interpolation::dgrad_xi_dx_local: non-finite basis gradients");
+        return Eigen::kroneckerProduct(dN_dxi.transpose(),
                                        Eigen::MatrixXd::Identity(num_components(), num_components()));
     }
 

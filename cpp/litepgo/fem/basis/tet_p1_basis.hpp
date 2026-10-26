@@ -10,8 +10,8 @@ class TetP1Basis final {
   public:
     static constexpr int num_basis_functions = 4;
     struct Sample {
-        Eigen::Vector4d values;
-        Eigen::Matrix<double, 4, 3> gradients;
+        Eigen::Vector4d N;
+        Eigen::Matrix<double, 4, 3> dN_dxi;
     };
 
     // Gradients are with respect to parameter coordinates; extrapolates without clamping.

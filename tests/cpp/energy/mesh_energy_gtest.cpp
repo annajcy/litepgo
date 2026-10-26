@@ -74,8 +74,8 @@ void check_fd(MeshEnergy& energy, const Vec& x) {
 template <class Map, class Fields, class Bind>
 void check_material_path(const Map& map, const Vec& data, Fields fields, Bind bind) {
     const auto reference = geometry();
-    MeshEnergy energy(map, [reference, fields, bind](int, const auto& local_dof_values, Vec* g, Eigen::MatrixXd* h) {
-        return integrate_volume<GaussLegendre3D<2>>(reference, bind(fields(local_dof_values)), g, h);
+    MeshEnergy energy(map, [reference, fields, bind](int, const auto& x_local, Vec* g, Eigen::MatrixXd* h) {
+        return integrate_volume<GaussLegendre3D<2>>(reference, bind(fields(x_local)), g, h);
     });
     // This test only evaluates nearby feasible states; it does not use the default step for a solver.
     check_fd(energy, data);
@@ -89,19 +89,19 @@ TEST(MeshEnergy, HexNodeDisplacementAndPlasticDisplacement) {
         data[i] = 0.01 * std::sin(i + 0.3);
     check_material_path(
         map, data,
-        [](const auto& local_dof_values) {
-            EXPECT_EQ(local_dof_values.rows(), 8);
-            EXPECT_EQ(local_dof_values.cols(), 3);
+        [](const auto& x_local) {
+            EXPECT_EQ(x_local.rows(), 8);
+            EXPECT_EQ(x_local.cols(), 3);
             auto fields = passive_fields();
-            fields.F = std::make_shared<DeformationGradientField<litepgo::HexQ1Basis>>(local_dof_values);
+            fields.F = std::make_shared<DeformationGradientField<litepgo::HexQ1Basis>>(x_local);
             return fields;
         },
         [](auto fields) { return MaterialLocalEnergyF<NeoHookean>(std::move(fields)); });
     check_material_path(
         map, data,
-        [](const auto& local_dof_values) {
+        [](const auto& x_local) {
             auto fields = passive_fields();
-            fields.Fp = std::make_shared<DeformationGradientField<litepgo::HexQ1Basis>>(local_dof_values);
+            fields.Fp = std::make_shared<DeformationGradientField<litepgo::HexQ1Basis>>(x_local);
             return fields;
         },
         [](auto fields) { return MaterialLocalEnergyFp<NeoHookean>(std::move(fields)); });
@@ -118,9 +118,9 @@ TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
     }
     check_material_path(
         ElementDofMap(topology, 9), plastic,
-        [](const Eigen::VectorXd& local_dof_values) {
+        [](const Eigen::VectorXd& x_local) {
             auto fields = passive_fields();
-            fields.Fp = std::make_shared<IdentityField<Eigen::Matrix3d>>(local_dof_values.reshaped(3, 3));
+            fields.Fp = std::make_shared<IdentityField<Eigen::Matrix3d>>(x_local.reshaped(3, 3));
             return fields;
         },
         [](auto fields) { return MaterialLocalEnergyFp<NeoHookean>(std::move(fields)); });
@@ -131,26 +131,26 @@ TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
     }
     check_material_path(
         VertexDofMap(topology, 2), nodal,
-        [](const auto& local_dof_values) {
+        [](const auto& x_local) {
             auto fields = passive_fields();
-            fields.theta = std::make_shared<InterpolatedValueField<litepgo::HexQ1Basis>>(local_dof_values);
+            fields.theta = std::make_shared<InterpolatedValueField<litepgo::HexQ1Basis>>(x_local);
             return fields;
         },
         [](auto fields) { return MaterialLocalEnergyTheta<NeoHookean>(std::move(fields)); });
     Vec shared(Eigen::Vector2d(2, 3));
     check_material_path(
         ConstantDofMap(topology, 2), shared,
-        [](const Eigen::VectorXd& local_dof_values) {
+        [](const Eigen::VectorXd& x_local) {
             auto fields = passive_fields();
-            fields.theta = std::make_shared<IdentityField<Eigen::VectorXd>>(local_dof_values);
+            fields.theta = std::make_shared<IdentityField<Eigen::VectorXd>>(x_local);
             return fields;
         },
         [](auto fields) { return MaterialLocalEnergyTheta<NeoHookean>(std::move(fields)); });
 }
 
 TEST(MeshEnergy, OwnsPlanUsesCurrentXAndSupportsTriangleAndTet) {
-    const auto quadratic = [](int e, const auto& local_dof_values, Vec* g, Eigen::MatrixXd* h) {
-        const Vec flat = local_dof_values.template reshaped<Eigen::RowMajor>();
+    const auto quadratic = [](int e, const auto& x_local, Vec* g, Eigen::MatrixXd* h) {
+        const Vec flat = x_local.template reshaped<Eigen::RowMajor>();
         if (g)
             *g = (e + 1) * flat;
         if (h)
@@ -173,13 +173,13 @@ TEST(MeshEnergy, OwnsPlanUsesCurrentXAndSupportsTriangleAndTet) {
 TEST(MeshEnergy, ProjectsEachLocalHessianBeforeScatter) {
     const auto topology = two_hexes();
     MeshEnergy energy(ConstantDofMap(topology, 1),
-                      [](int e, const Eigen::VectorXd& local_dof_values, Vec* g, Eigen::MatrixXd* h) {
+                      [](int e, const Eigen::VectorXd& x_local, Vec* g, Eigen::MatrixXd* h) {
                           double k = e == 0 ? -2 : 3;
                           if (g)
-                              *g = k * local_dof_values;
+                              *g = k * x_local;
                           if (h)
                               *h = Eigen::MatrixXd::Constant(1, 1, k);
-                          return 0.5 * k * local_dof_values.squaredNorm();
+                          return 0.5 * k * x_local.squaredNorm();
                       });
     EXPECT_EQ(energy.hessian(Vec::Ones(1)).coeff(0, 0), 1);
     EXPECT_EQ(energy.hessian(Vec::Ones(1), HessianKind::Projected).coeff(0, 0), 3);
@@ -189,18 +189,18 @@ TEST(MeshEnergy, FeasibleStepUsesMatchingLocalDofValuesAndDeltas) {
     const auto topology = two_hexes();
     MeshEnergy energy(
         ElementDofMap(topology, 2),
-        [](int, const Eigen::VectorXd& local_dof_values, Vec*, Eigen::MatrixXd*) {
-            if (local_dof_values.minCoeff() <= 0)
+        [](int, const Eigen::VectorXd& x_local, Vec*, Eigen::MatrixXd*) {
+            if (x_local.minCoeff() <= 0)
                 throw InfeasibleState("positive only");
-            return local_dof_values.sum();
+            return x_local.sum();
         },
-        [](int, const Eigen::VectorXd& local_dof_values, const Eigen::VectorXd& local_dof_delta) {
-            if (local_dof_values.minCoeff() <= 0)
+        [](int, const Eigen::VectorXd& x_local, const Eigen::VectorXd& dx_local) {
+            if (x_local.minCoeff() <= 0)
                 throw InfeasibleState("positive only");
             double alpha = 1;
             for (int j = 0; j < 2; ++j)
-                if (local_dof_delta[j] < 0)
-                    alpha = std::min(alpha, 0.9 * -local_dof_values[j] / local_dof_delta[j]);
+                if (dx_local[j] < 0)
+                    alpha = std::min(alpha, 0.9 * -x_local[j] / dx_local[j]);
             return alpha;
         });
     Vec x(4), dx(4);

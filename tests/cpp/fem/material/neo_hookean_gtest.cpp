@@ -18,11 +18,11 @@ TEST(NeoHookean, StressFreeAndLinearElasticTangent) {
     const Eigen::Matrix3d R = Eigen::AngleAxisd(0.7, Eigen::Vector3d(1, 2, 3).normalized()).toRotationMatrix();
     for (const Eigen::Matrix3d& F : {Fp, Eigen::Matrix3d(R * Fp)}) {
         EXPECT_NEAR(NeoHookean::value({F, Fp, theta}), 0.0, 1e-13);
-        EXPECT_LT(NeoHookean::gradient_F({F, Fp, theta}).norm(), 1e-13);
-        EXPECT_LT(NeoHookean::gradient_Fp({F, Fp, theta}).norm(), 1e-13);
+        EXPECT_LT(NeoHookean::dW_dF({F, Fp, theta}).norm(), 1e-13);
+        EXPECT_LT(NeoHookean::dW_dFp({F, Fp, theta}).norm(), 1e-13);
     }
-    const Eigen::Matrix<double, 9, 9> H = NeoHookean::hessian_F({I, I, theta});
-    EXPECT_TRUE(NeoHookean::hessian_Fp({I, I, theta}).isApprox(H, 1e-13));
+    const Eigen::Matrix<double, 9, 9> H = NeoHookean::d2W_dF2({I, I, theta});
+    EXPECT_TRUE(NeoHookean::d2W_dFp2({I, I, theta}).isApprox(H, 1e-13));
     for (int j = 0; j < 9; ++j) {
         Eigen::Matrix3d D = Eigen::Matrix3d::Zero();
         D.data()[j] = 1;
@@ -38,13 +38,12 @@ TEST(NeoHookean, AnalyticDilationAndObjectivity) {
     const double psi = 1.5 * theta[1] * (s * s - 1) - theta[1] * logJ + 0.5 * theta[0] * logJ * logJ;
     EXPECT_NEAR(NeoHookean::value({s * p * I, p * I, theta}), p * p * p * psi, 1e-13);
     const Eigen::Matrix3d expectedP = p * p * (theta[1] * s + (theta[0] * logJ - theta[1]) / s) * I;
-    EXPECT_TRUE(NeoHookean::gradient_F({s * p * I, p * I, theta}).isApprox(expectedP, 1e-13));
+    EXPECT_TRUE(NeoHookean::dW_dF({s * p * I, p * I, theta}).isApprox(expectedP, 1e-13));
     Eigen::Matrix3d F;
     F << 1.2, 0.2, 0.1, -0.1, 0.8, 0.3, 0.2, 0.1, 1.1;
     const Eigen::Matrix3d R = Eigen::AngleAxisd(0.6, Eigen::Vector3d(2, -1, 3).normalized()).toRotationMatrix();
     EXPECT_NEAR(NeoHookean::value({R * F, p * I, theta}), NeoHookean::value({F, p * I, theta}), 1e-13);
-    EXPECT_TRUE(
-        NeoHookean::gradient_F({R * F, p * I, theta}).isApprox(R * NeoHookean::gradient_F({F, p * I, theta}), 1e-13));
+    EXPECT_TRUE(NeoHookean::dW_dF({R * F, p * I, theta}).isApprox(R * NeoHookean::dW_dF({F, p * I, theta}), 1e-13));
 }
 
 TEST(NeoHookean, FullGradientAndHessianFiniteDifferences) {
@@ -62,8 +61,8 @@ TEST(NeoHookean, FullGradientAndHessianFiniteDifferences) {
         ASSERT_GT(Fp.determinant(), 0);
         ASSERT_GT(Fe.determinant(), 0);
         const Eigen::Vector2d theta(0.5 * sample, 0.7 + sample);
-        const Eigen::Matrix3d P = NeoHookean::gradient_F({F, Fp, theta});
-        const Eigen::Matrix<double, 9, 9> H = NeoHookean::hessian_F({F, Fp, theta});
+        const Eigen::Matrix3d P = NeoHookean::dW_dF({F, Fp, theta});
+        const Eigen::Matrix<double, 9, 9> H = NeoHookean::d2W_dF2({F, Fp, theta});
         EXPECT_LT((H - H.transpose()).norm(), 1e-12 * (1 + H.norm()));
         for (double h : {1e-3, 3e-4, 1e-4}) {
             SCOPED_TRACE(h);
@@ -76,7 +75,7 @@ TEST(NeoHookean, FullGradientAndHessianFiniteDifferences) {
                 fdP.data()[j] =
                     (NeoHookean::value({plus, Fp, theta}) - NeoHookean::value({minus, Fp, theta})) / (2 * h);
                 const Eigen::Matrix3d dP =
-                    (NeoHookean::gradient_F({plus, Fp, theta}) - NeoHookean::gradient_F({minus, Fp, theta})) / (2 * h);
+                    (NeoHookean::dW_dF({plus, Fp, theta}) - NeoHookean::dW_dF({minus, Fp, theta})) / (2 * h);
                 fdH.col(j) = Eigen::Map<const Eigen::Matrix<double, 9, 1>>(dP.data());
             }
             // O(h^2) central differences, with a roundoff floor.
@@ -115,8 +114,8 @@ TEST(NeoHookean, FpGradientAndHessianFiniteDifferences) {
         ASSERT_GT(Fp.determinant(), 0);
         ASSERT_GT(Fe.determinant(), 0);
         const Eigen::Vector2d theta(0.5 * sample, 0.7 + sample);
-        const Eigen::Matrix3d P = NeoHookean::gradient_Fp({F, Fp, theta});
-        const Eigen::Matrix<double, 9, 9> H = NeoHookean::hessian_Fp({F, Fp, theta});
+        const Eigen::Matrix3d P = NeoHookean::dW_dFp({F, Fp, theta});
+        const Eigen::Matrix<double, 9, 9> H = NeoHookean::d2W_dFp2({F, Fp, theta});
         EXPECT_LT((H - H.transpose()).norm(), 1e-12 * (1 + H.norm()));
         for (double h : {1e-3, 3e-4, 1e-4}) {
             SCOPED_TRACE(h);
@@ -128,7 +127,7 @@ TEST(NeoHookean, FpGradientAndHessianFiniteDifferences) {
                 minus.data()[j] -= h;
                 fdP.data()[j] = (NeoHookean::value({F, plus, theta}) - NeoHookean::value({F, minus, theta})) / (2 * h);
                 const Eigen::Matrix3d dP =
-                    (NeoHookean::gradient_Fp({F, plus, theta}) - NeoHookean::gradient_Fp({F, minus, theta})) / (2 * h);
+                    (NeoHookean::dW_dFp({F, plus, theta}) - NeoHookean::dW_dFp({F, minus, theta})) / (2 * h);
                 fdH.col(j) = Eigen::Map<const Eigen::Matrix<double, 9, 1>>(dP.data());
             }
             // O(h^2) central differences, with a roundoff floor.
@@ -164,8 +163,8 @@ TEST(NeoHookean, ParameterDerivativesMatchFiniteDifferences) {
         Fe.diagonal().array() += 0.7 + 0.05 * sample;
         const Eigen::Matrix3d F = Fe * Fp;
         const Eigen::Vector2d theta(0.5 + sample, 0.7 + sample);
-        const auto G = NeoHookean::gradient_theta({F, Fp, theta});
-        const auto H = NeoHookean::hessian_theta({F, Fp, theta});
+        const auto G = NeoHookean::dW_dtheta({F, Fp, theta});
+        const auto H = NeoHookean::d2W_dtheta2({F, Fp, theta});
         EXPECT_TRUE(H.isZero(0.0));
         for (double h : {1e-2, 1e-3, 1e-4}) {
             SCOPED_TRACE(h);
@@ -176,7 +175,7 @@ TEST(NeoHookean, ParameterDerivativesMatchFiniteDifferences) {
                 const double fd = (NeoHookean::value({F, Fp, plus}) - NeoHookean::value({F, Fp, minus})) / (2 * h);
                 EXPECT_NEAR(G[j], fd, 1e-9 * (1 + G.norm()));
                 const Eigen::Vector2d dG =
-                    (NeoHookean::gradient_theta({F, Fp, plus}) - NeoHookean::gradient_theta({F, Fp, minus})) / (2 * h);
+                    (NeoHookean::dW_dtheta({F, Fp, plus}) - NeoHookean::dW_dtheta({F, Fp, minus})) / (2 * h);
                 EXPECT_LT((H.col(j) - dG).norm(), 1e-12);
             }
             // Second differences of energy independently check diagonal and off-diagonal entries.
@@ -199,15 +198,15 @@ TEST(NeoHookean, ParameterDerivativesMatchFiniteDifferences) {
 TEST(NeoHookean, ParameterDerivativesAtRestAndZeroLambda) {
     const Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
     const Eigen::Vector2d theta(0, 3);
-    EXPECT_TRUE(NeoHookean::gradient_theta({I, I, theta}).isZero(0.0));
-    EXPECT_TRUE(NeoHookean::hessian_theta({I, I, theta}).isZero(0.0));
+    EXPECT_TRUE(NeoHookean::dW_dtheta({I, I, theta}).isZero(0.0));
+    EXPECT_TRUE(NeoHookean::d2W_dtheta2({I, I, theta}).isZero(0.0));
     const Eigen::Matrix3d F = 1.4 * I, Fp = 1.2 * I;
-    const auto G = NeoHookean::gradient_theta({F, Fp, theta});
+    const auto G = NeoHookean::dW_dtheta({F, Fp, theta});
     const double h = 1e-3;
     auto shifted = theta;
     shifted[0] += h;
     EXPECT_NEAR(G[0], (NeoHookean::value({F, Fp, shifted}) - NeoHookean::value({F, Fp, theta})) / h, 1e-10);
-    EXPECT_TRUE(NeoHookean::hessian_theta({F, Fp, theta}).isZero(0.0));
+    EXPECT_TRUE(NeoHookean::d2W_dtheta2({F, Fp, theta}).isZero(0.0));
 }
 
 TEST(NeoHookean, RejectsInvalidStatesAndParametersInEveryEntryPoint) {
@@ -215,12 +214,12 @@ TEST(NeoHookean, RejectsInvalidStatesAndParametersInEveryEntryPoint) {
     const Eigen::Vector2d theta(2, 3);
     const auto bad_state = [&](const Eigen::Matrix3d& F, const Eigen::Matrix3d& Fp) {
         EXPECT_THROW(NeoHookean::value({F, Fp, theta}), InfeasibleState);
-        EXPECT_THROW(NeoHookean::gradient_F({F, Fp, theta}), InfeasibleState);
-        EXPECT_THROW(NeoHookean::hessian_F({F, Fp, theta}), InfeasibleState);
-        EXPECT_THROW(NeoHookean::gradient_Fp({F, Fp, theta}), InfeasibleState);
-        EXPECT_THROW(NeoHookean::hessian_Fp({F, Fp, theta}), InfeasibleState);
-        EXPECT_THROW(NeoHookean::gradient_theta({F, Fp, theta}), InfeasibleState);
-        EXPECT_THROW(NeoHookean::hessian_theta({F, Fp, theta}), InfeasibleState);
+        EXPECT_THROW(NeoHookean::dW_dF({F, Fp, theta}), InfeasibleState);
+        EXPECT_THROW(NeoHookean::d2W_dF2({F, Fp, theta}), InfeasibleState);
+        EXPECT_THROW(NeoHookean::dW_dFp({F, Fp, theta}), InfeasibleState);
+        EXPECT_THROW(NeoHookean::d2W_dFp2({F, Fp, theta}), InfeasibleState);
+        EXPECT_THROW(NeoHookean::dW_dtheta({F, Fp, theta}), InfeasibleState);
+        EXPECT_THROW(NeoHookean::d2W_dtheta2({F, Fp, theta}), InfeasibleState);
     };
     for (double x : {0.0, -1.0}) {
         Eigen::Matrix3d bad = I;
@@ -232,22 +231,22 @@ TEST(NeoHookean, RejectsInvalidStatesAndParametersInEveryEntryPoint) {
                                        Eigen::Vector2d(std::numeric_limits<double>::quiet_NaN(), 3),
                                        Eigen::Vector2d(2, std::numeric_limits<double>::infinity())}) {
         EXPECT_THROW(NeoHookean::value({I, I, bad}), std::invalid_argument);
-        EXPECT_THROW(NeoHookean::gradient_F({I, I, bad}), std::invalid_argument);
-        EXPECT_THROW(NeoHookean::hessian_F({I, I, bad}), std::invalid_argument);
-        EXPECT_THROW(NeoHookean::gradient_Fp({I, I, bad}), std::invalid_argument);
-        EXPECT_THROW(NeoHookean::hessian_Fp({I, I, bad}), std::invalid_argument);
-        EXPECT_THROW(NeoHookean::gradient_theta({I, I, bad}), std::invalid_argument);
-        EXPECT_THROW(NeoHookean::hessian_theta({I, I, bad}), std::invalid_argument);
+        EXPECT_THROW(NeoHookean::dW_dF({I, I, bad}), std::invalid_argument);
+        EXPECT_THROW(NeoHookean::d2W_dF2({I, I, bad}), std::invalid_argument);
+        EXPECT_THROW(NeoHookean::dW_dFp({I, I, bad}), std::invalid_argument);
+        EXPECT_THROW(NeoHookean::d2W_dFp2({I, I, bad}), std::invalid_argument);
+        EXPECT_THROW(NeoHookean::dW_dtheta({I, I, bad}), std::invalid_argument);
+        EXPECT_THROW(NeoHookean::d2W_dtheta2({I, I, bad}), std::invalid_argument);
     }
     Eigen::Matrix3d bad = I;
     bad(0, 0) = std::numeric_limits<double>::quiet_NaN();
     EXPECT_THROW(NeoHookean::value({bad, I, theta}), std::invalid_argument);
-    EXPECT_THROW(NeoHookean::gradient_F({bad, I, theta}), std::invalid_argument);
-    EXPECT_THROW(NeoHookean::hessian_F({bad, I, theta}), std::invalid_argument);
-    EXPECT_THROW(NeoHookean::gradient_Fp({bad, I, theta}), std::invalid_argument);
-    EXPECT_THROW(NeoHookean::hessian_Fp({bad, I, theta}), std::invalid_argument);
-    EXPECT_THROW(NeoHookean::gradient_theta({bad, I, theta}), std::invalid_argument);
-    EXPECT_THROW(NeoHookean::hessian_theta({bad, I, theta}), std::invalid_argument);
+    EXPECT_THROW(NeoHookean::dW_dF({bad, I, theta}), std::invalid_argument);
+    EXPECT_THROW(NeoHookean::d2W_dF2({bad, I, theta}), std::invalid_argument);
+    EXPECT_THROW(NeoHookean::dW_dFp({bad, I, theta}), std::invalid_argument);
+    EXPECT_THROW(NeoHookean::d2W_dFp2({bad, I, theta}), std::invalid_argument);
+    EXPECT_THROW(NeoHookean::dW_dtheta({bad, I, theta}), std::invalid_argument);
+    EXPECT_THROW(NeoHookean::d2W_dtheta2({bad, I, theta}), std::invalid_argument);
 }
 
 } // namespace

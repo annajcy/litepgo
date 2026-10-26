@@ -30,11 +30,11 @@ class ElementDofMap final {
             result[static_cast<std::size_t>(i)] = element * width_ + i;
         return result;
     }
-    Eigen::VectorXd gather(int element, const ConstVecRef& global_dof_values) const {
+    Eigen::VectorXd gather(int element, const ConstVecRef& x) const {
         check_element(element);
-        if (global_dof_values.size() != num_dofs())
+        if (x.size() != num_dofs())
             throw std::invalid_argument("ElementDofMap: incorrect global vector size");
-        return global_dof_values.segment(element * width_, width_);
+        return x.segment(element * width_, width_);
     }
 
   private:

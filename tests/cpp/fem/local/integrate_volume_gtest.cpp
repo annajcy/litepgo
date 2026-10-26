@@ -31,7 +31,7 @@ struct ValueOnly : LocalEnergy {
     }
     Eigen::Vector3d coefficients{0.2, -0.4, 0.6};
     double value(const RestPointData& p) const override {
-        return 0.5 * (1 + p.position.x()) * coefficients.squaredNorm();
+        return 0.5 * (1 + p.X.x()) * coefficients.squaredNorm();
     }
 };
 struct FirstOnly : ValueOnly {
@@ -39,7 +39,7 @@ struct FirstOnly : ValueOnly {
         return true;
     }
     Eigen::VectorXd gradient(const RestPointData& p) const override {
-        return (1 + p.position.x()) * coefficients;
+        return (1 + p.X.x()) * coefficients;
     }
 };
 struct SecondOnly : ValueOnly {
@@ -47,7 +47,7 @@ struct SecondOnly : ValueOnly {
         return true;
     }
     Eigen::MatrixXd hessian(const RestPointData& p) const override {
-        return (1 + p.position.x()) * Eigen::Matrix3d::Identity();
+        return (1 + p.X.x()) * Eigen::Matrix3d::Identity();
     }
 };
 struct FullEnergy : FirstOnly {
@@ -69,7 +69,7 @@ struct FullEnergy : FirstOnly {
     }
     Eigen::MatrixXd hessian(const RestPointData& p) const override {
         ++hessian_calls;
-        return (1 + p.position.x()) * Eigen::Matrix3d::Identity();
+        return (1 + p.X.x()) * Eigen::Matrix3d::Identity();
     }
 };
 TEST(LocalEnergy, DerivativeCapabilitiesAreIndependent) {

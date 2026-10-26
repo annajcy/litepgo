@@ -11,6 +11,8 @@
 namespace litepgo {
 
 // Each class binds one affine active field to the material's static derivatives.
+// value/gradient/hessian evaluate the pointwise density W and its local DOF derivatives;
+// integrate_volume weights and sums these to obtain the element energy E_element.
 template <class Material> class MaterialLocalEnergyF final : public LocalEnergy {
   public:
     explicit MaterialLocalEnergyF(MaterialFields fields) : fields_(std::move(fields)) {
@@ -34,12 +36,12 @@ template <class Material> class MaterialLocalEnergyF final : public LocalEnergy 
         return Material::value(fields_.evaluate(point));
     }
     Eigen::VectorXd gradient(const RestPointData& point) const override {
-        const auto J = active_jacobian(point);
-        return gradient_wrt_dofs(J, Material::gradient_F(fields_.evaluate(point)));
+        const auto dF_dx_local = active_dF_dx_local(point);
+        return gradient_wrt_dofs(dF_dx_local, Material::dW_dF(fields_.evaluate(point)));
     }
     Eigen::MatrixXd hessian(const RestPointData& point) const override {
-        const auto J = active_jacobian(point);
-        return hessian_wrt_dofs(J, Material::hessian_F(fields_.evaluate(point)));
+        const auto dF_dx_local = active_dF_dx_local(point);
+        return hessian_wrt_dofs(dF_dx_local, Material::d2W_dF2(fields_.evaluate(point)));
     }
 
     double accumulate(const RestPointData& point, double weight, Eigen::VectorXd* gradient,
@@ -49,21 +51,21 @@ template <class Material> class MaterialLocalEnergyF final : public LocalEnergy 
         const auto inputs = fields_.evaluate(point);
         const double result = weight * Material::value(inputs);
         if (gradient || hessian) {
-            const auto J = active_jacobian(point);
+            const auto dF_dx_local = active_dF_dx_local(point);
             if (gradient)
-                add_gradient_wrt_dofs(J, Material::gradient_F(inputs), weight, *gradient);
+                add_gradient_wrt_dofs(dF_dx_local, Material::dW_dF(inputs), weight, *gradient);
             if (hessian)
-                add_hessian_wrt_dofs(J, Material::hessian_F(inputs), weight, *hessian);
+                add_hessian_wrt_dofs(dF_dx_local, Material::d2W_dF2(inputs), weight, *hessian);
         }
         return result;
     }
 
   private:
-    Eigen::MatrixXd active_jacobian(const RestPointData& point) const {
-        auto J = active_->jacobian(point);
-        if (J.rows() != 9 || J.cols() != num_dofs() || !J.allFinite())
+    Eigen::MatrixXd active_dF_dx_local(const RestPointData& point) const {
+        auto dF_dx_local = active_->dvalue_dx_local(point);
+        if (dF_dx_local.rows() != 9 || dF_dx_local.cols() != num_dofs() || !dF_dx_local.allFinite())
             throw std::invalid_argument("MaterialLocalEnergyF: invalid active Jacobian");
-        return J;
+        return dF_dx_local;
     }
 
     MaterialFields fields_;
@@ -93,12 +95,12 @@ template <class Material> class MaterialLocalEnergyFp final : public LocalEnergy
         return Material::value(fields_.evaluate(point));
     }
     Eigen::VectorXd gradient(const RestPointData& point) const override {
-        const auto J = active_jacobian(point);
-        return gradient_wrt_dofs(J, Material::gradient_Fp(fields_.evaluate(point)));
+        const auto dFp_dx_local = active_dFp_dx_local(point);
+        return gradient_wrt_dofs(dFp_dx_local, Material::dW_dFp(fields_.evaluate(point)));
     }
     Eigen::MatrixXd hessian(const RestPointData& point) const override {
-        const auto J = active_jacobian(point);
-        return hessian_wrt_dofs(J, Material::hessian_Fp(fields_.evaluate(point)));
+        const auto dFp_dx_local = active_dFp_dx_local(point);
+        return hessian_wrt_dofs(dFp_dx_local, Material::d2W_dFp2(fields_.evaluate(point)));
     }
 
     double accumulate(const RestPointData& point, double weight, Eigen::VectorXd* gradient,
@@ -108,21 +110,21 @@ template <class Material> class MaterialLocalEnergyFp final : public LocalEnergy
         const auto inputs = fields_.evaluate(point);
         const double result = weight * Material::value(inputs);
         if (gradient || hessian) {
-            const auto J = active_jacobian(point);
+            const auto dFp_dx_local = active_dFp_dx_local(point);
             if (gradient)
-                add_gradient_wrt_dofs(J, Material::gradient_Fp(inputs), weight, *gradient);
+                add_gradient_wrt_dofs(dFp_dx_local, Material::dW_dFp(inputs), weight, *gradient);
             if (hessian)
-                add_hessian_wrt_dofs(J, Material::hessian_Fp(inputs), weight, *hessian);
+                add_hessian_wrt_dofs(dFp_dx_local, Material::d2W_dFp2(inputs), weight, *hessian);
         }
         return result;
     }
 
   private:
-    Eigen::MatrixXd active_jacobian(const RestPointData& point) const {
-        auto J = active_->jacobian(point);
-        if (J.rows() != 9 || J.cols() != num_dofs() || !J.allFinite())
+    Eigen::MatrixXd active_dFp_dx_local(const RestPointData& point) const {
+        auto dFp_dx_local = active_->dvalue_dx_local(point);
+        if (dFp_dx_local.rows() != 9 || dFp_dx_local.cols() != num_dofs() || !dFp_dx_local.allFinite())
             throw std::invalid_argument("MaterialLocalEnergyFp: invalid active Jacobian");
-        return J;
+        return dFp_dx_local;
     }
 
     MaterialFields fields_;
@@ -152,12 +154,12 @@ template <class Material> class MaterialLocalEnergyTheta final : public LocalEne
         return Material::value(fields_.evaluate(point));
     }
     Eigen::VectorXd gradient(const RestPointData& point) const override {
-        const auto J = active_jacobian(point);
-        return gradient_wrt_dofs(J, Material::gradient_theta(fields_.evaluate(point)));
+        const auto dtheta_dx_local = active_dtheta_dx_local(point);
+        return gradient_wrt_dofs(dtheta_dx_local, Material::dW_dtheta(fields_.evaluate(point)));
     }
     Eigen::MatrixXd hessian(const RestPointData& point) const override {
-        const auto J = active_jacobian(point);
-        return hessian_wrt_dofs(J, Material::hessian_theta(fields_.evaluate(point)));
+        const auto dtheta_dx_local = active_dtheta_dx_local(point);
+        return hessian_wrt_dofs(dtheta_dx_local, Material::d2W_dtheta2(fields_.evaluate(point)));
     }
 
     double accumulate(const RestPointData& point, double weight, Eigen::VectorXd* gradient,
@@ -167,21 +169,22 @@ template <class Material> class MaterialLocalEnergyTheta final : public LocalEne
         const auto inputs = fields_.evaluate(point);
         const double result = weight * Material::value(inputs);
         if (gradient || hessian) {
-            const auto J = active_jacobian(point);
+            const auto dtheta_dx_local = active_dtheta_dx_local(point);
             if (gradient)
-                add_gradient_wrt_dofs(J, Material::gradient_theta(inputs), weight, *gradient);
+                add_gradient_wrt_dofs(dtheta_dx_local, Material::dW_dtheta(inputs), weight, *gradient);
             if (hessian)
-                add_hessian_wrt_dofs(J, Material::hessian_theta(inputs), weight, *hessian);
+                add_hessian_wrt_dofs(dtheta_dx_local, Material::d2W_dtheta2(inputs), weight, *hessian);
         }
         return result;
     }
 
   private:
-    Eigen::MatrixXd active_jacobian(const RestPointData& point) const {
-        auto J = active_->jacobian(point);
-        if (J.rows() != Material::num_parameters || J.cols() != num_dofs() || !J.allFinite())
+    Eigen::MatrixXd active_dtheta_dx_local(const RestPointData& point) const {
+        auto dtheta_dx_local = active_->dvalue_dx_local(point);
+        if (dtheta_dx_local.rows() != Material::num_parameters || dtheta_dx_local.cols() != num_dofs() ||
+            !dtheta_dx_local.allFinite())
             throw std::invalid_argument("MaterialLocalEnergyTheta: invalid active Jacobian");
-        return J;
+        return dtheta_dx_local;
     }
 
     MaterialFields fields_;

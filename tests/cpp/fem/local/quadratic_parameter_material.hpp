@@ -10,11 +10,11 @@ template <int Parameters> struct QuadraticParameterMaterial {
         check(inputs);
         return 0.5 * inputs.theta.squaredNorm();
     }
-    static Eigen::VectorXd gradient_theta(const litepgo::MaterialInputs& inputs) {
+    static Eigen::VectorXd dW_dtheta(const litepgo::MaterialInputs& inputs) {
         check(inputs);
         return inputs.theta;
     }
-    static Eigen::MatrixXd hessian_theta(const litepgo::MaterialInputs& inputs) {
+    static Eigen::MatrixXd d2W_dtheta2(const litepgo::MaterialInputs& inputs) {
         check(inputs);
         return Eigen::MatrixXd::Identity(num_parameters, num_parameters);
     }

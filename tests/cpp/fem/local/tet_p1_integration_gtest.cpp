@@ -18,13 +18,13 @@ namespace {
 using namespace litepgo;
 
 Eigen::Matrix<double, 4, 3> coordinates() {
-    Eigen::Matrix<double, 4, 3> X;
-    X << 0.2, -0.3, 0.4, 1.9, -0.2, 0.4, 0.4, 0.9, 0.5, 0.3, -0.1, 1.3;
-    return X;
+    Eigen::Matrix<double, 4, 3> X_nodes;
+    X_nodes << 0.2, -0.3, 0.4, 1.9, -0.2, 0.4, 0.4, 0.9, 0.5, 0.3, -0.1, 1.3;
+    return X_nodes;
 }
 
-Eigen::Matrix3d edge_matrix(const Eigen::Matrix<double, 4, 3>& X) {
-    return (X.bottomRows<3>().rowwise() - X.row(0)).transpose();
+Eigen::Matrix3d edge_matrix(const Eigen::Matrix<double, 4, 3>& X_nodes) {
+    return (X_nodes.bottomRows<3>().rowwise() - X_nodes.row(0)).transpose();
 }
 
 struct Coefficients {
@@ -83,9 +83,9 @@ template <class Member, class BindEnergy> void check_fd(Member member, BindEnerg
 } // namespace
 
 TEST(TetP1Integration, MatchesDirectGeometryAndDeformationGradient) {
-    const auto X = coordinates();
-    const Eigen::Matrix3d Dm = edge_matrix(X);
-    const Interpolation<TetP1Basis> geometry(X);
+    const auto X_nodes = coordinates();
+    const Eigen::Matrix3d Dm = edge_matrix(X_nodes);
+    const Interpolation<TetP1Basis> geometry(X_nodes);
     const auto f = coefficients();
     const auto local_fields = fields(f);
     const Eigen::Matrix3d F = Eigen::Matrix3d::Identity() + edge_matrix(f.u) * Dm.inverse();
@@ -94,10 +94,10 @@ TEST(TetP1Integration, MatchesDirectGeometryAndDeformationGradient) {
         {Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(0.2, 0.3, 0.1), Eigen::Vector3d(0.25, 0.25, 0.25)}};
     for (const auto& xi : samples) {
         const auto point = rest_point(geometry, xi);
-        EXPECT_TRUE(point.position.isApprox(X.row(0).transpose() + Dm * xi, 1e-14));
-        EXPECT_TRUE(point.jacobian.isApprox(Dm, 1e-14));
-        EXPECT_TRUE(point.inverse_jacobian.isApprox(Dm.inverse(), 1e-14));
-        EXPECT_NEAR(point.jacobian_determinant, Dm.determinant(), 1e-14);
+        EXPECT_TRUE(point.X.isApprox(X_nodes.row(0).transpose() + Dm * xi, 1e-14));
+        EXPECT_TRUE(point.dX_dxi.isApprox(Dm, 1e-14));
+        EXPECT_TRUE(point.dxi_dX.isApprox(Dm.inverse(), 1e-14));
+        EXPECT_NEAR(point.det_dX_dxi, Dm.determinant(), 1e-14);
         EXPECT_TRUE(local_fields.F->value(point).isApprox(F, 1e-14));
         EXPECT_TRUE(local_fields.Fp->value(point).isApprox(Fp, 1e-14));
     }
@@ -139,12 +139,12 @@ TEST(TetP1Integration, LocalDofFiniteDifferencesForAllThreeFields) {
 TEST(TetP1Integration, RejectsDegenerateAndNegativelyOrientedRestGeometry) {
     const MaterialLocalEnergyF<NeoHookean> local(fields(coefficients()));
     for (bool degenerate : {false, true}) {
-        auto X = coordinates();
+        auto X_nodes = coordinates();
         if (degenerate)
-            X.row(3) = X.row(0);
+            X_nodes.row(3) = X_nodes.row(0);
         else
-            X.row(1).swap(X.row(2));
-        const Interpolation<TetP1Basis> geometry(X);
+            X_nodes.row(1).swap(X_nodes.row(2));
+        const Interpolation<TetP1Basis> geometry(X_nodes);
         EXPECT_THROW(integrate_volume<TetCentroidQuadrature>(geometry, local), std::invalid_argument);
     }
 }

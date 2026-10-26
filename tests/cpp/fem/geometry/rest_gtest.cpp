@@ -19,13 +19,13 @@ const std::array<Eigen::Vector3d, 7> parameters{{Eigen::Vector3d(0.2, 0.3, 0.4),
                                                  Eigen::Vector3d(-0.2, 1.2, 0.4)}};
 
 Eigen::Matrix<double, 8, 3> corners() {
-    Eigen::Matrix<double, 8, 3> X;
-    X << 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1;
-    return X;
+    Eigen::Matrix<double, 8, 3> X_nodes;
+    X_nodes << 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1;
+    return X_nodes;
 }
 
-Eigen::Matrix<double, 8, 3> affine_geometry(const Eigen::Matrix3d& J, const Eigen::Vector3d& origin) {
-    return (corners() * J.transpose()).rowwise() + origin.transpose();
+Eigen::Matrix<double, 8, 3> affine_geometry(const Eigen::Matrix3d& dX_dxi, const Eigen::Vector3d& origin) {
+    return (corners() * dX_dxi.transpose()).rowwise() + origin.transpose();
 }
 
 // Non-affine but globally invertible on the cube: det(J0) = 1 - alpha*beta*zeta^2.
@@ -43,11 +43,11 @@ Eigen::Vector3d warped_parameter(const Eigen::Vector3d& X) {
 
 Eigen::Matrix<double, 8, 3> warped_geometry() {
     const auto nodes = corners();
-    Eigen::Matrix<double, 8, 3> X;
+    Eigen::Matrix<double, 8, 3> X_nodes;
     for (int i = 0; i < 8; ++i) {
-        X.row(i) = warped_position(nodes.row(i).transpose()).transpose();
+        X_nodes.row(i) = warped_position(nodes.row(i).transpose()).transpose();
     }
-    return X;
+    return X_nodes;
 }
 
 } // namespace
@@ -56,40 +56,40 @@ TEST(RestPoint, MapsUnitCubeAtArbitraryParameters) {
     const litepgo::Interpolation<litepgo::HexQ1Basis> reference(corners());
     for (const auto& xi : parameters) {
         const auto point = litepgo::rest_point(reference, xi);
-        EXPECT_TRUE(point.position.isApprox(xi, 1e-14));
-        EXPECT_TRUE(point.jacobian.isApprox(Eigen::Matrix3d::Identity(), 1e-14));
+        EXPECT_TRUE(point.X.isApprox(xi, 1e-14));
+        EXPECT_TRUE(point.dX_dxi.isApprox(Eigen::Matrix3d::Identity(), 1e-14));
         EXPECT_EQ(point.xi, xi);
-        EXPECT_TRUE(point.inverse_jacobian.isIdentity(1e-14));
-        EXPECT_NEAR(point.jacobian_determinant, 1.0, 1e-14);
+        EXPECT_TRUE(point.dxi_dX.isIdentity(1e-14));
+        EXPECT_NEAR(point.det_dX_dxi, 1.0, 1e-14);
     }
 }
 
 TEST(RestPoint, MapsTranslatedBox) {
     const Eigen::Vector3d lengths(2.0, 3.0, 4.0);
-    const Eigen::Matrix3d expected_jacobian = lengths.asDiagonal();
+    const Eigen::Matrix3d expected_dX_dxi = lengths.asDiagonal();
     const Eigen::Vector3d origin(1.0, -2.0, 3.0);
-    const litepgo::Interpolation<litepgo::HexQ1Basis> reference(affine_geometry(expected_jacobian, origin));
+    const litepgo::Interpolation<litepgo::HexQ1Basis> reference(affine_geometry(expected_dX_dxi, origin));
     for (const auto& xi : parameters) {
         const auto point = litepgo::rest_point(reference, xi);
-        EXPECT_TRUE(point.position.isApprox(origin + lengths.asDiagonal() * xi, 1e-14));
-        EXPECT_TRUE(point.jacobian.isApprox(expected_jacobian, 1e-14));
-        EXPECT_TRUE(point.inverse_jacobian.isApprox(expected_jacobian.inverse(), 1e-14));
-        EXPECT_NEAR(point.jacobian_determinant, 24.0, 1e-13);
+        EXPECT_TRUE(point.X.isApprox(origin + lengths.asDiagonal() * xi, 1e-14));
+        EXPECT_TRUE(point.dX_dxi.isApprox(expected_dX_dxi, 1e-14));
+        EXPECT_TRUE(point.dxi_dX.isApprox(expected_dX_dxi.inverse(), 1e-14));
+        EXPECT_NEAR(point.det_dX_dxi, 24.0, 1e-13);
     }
 }
 
 TEST(RestPoint, MapsShearedHexAtArbitraryParameters) {
-    Eigen::Matrix3d J;
-    J << 2, 0.3, 0.1, 0.2, 1.5, 0.1, 0, 0.2, 1.1;
+    Eigen::Matrix3d dX_dxi;
+    dX_dxi << 2, 0.3, 0.1, 0.2, 1.5, 0.1, 0, 0.2, 1.1;
     const Eigen::Vector3d origin(1.2, -0.7, 2.1);
-    const litepgo::Interpolation<litepgo::HexQ1Basis> reference(affine_geometry(J, origin));
+    const litepgo::Interpolation<litepgo::HexQ1Basis> reference(affine_geometry(dX_dxi, origin));
 
     for (const auto& xi : parameters) {
         const auto point = litepgo::rest_point(reference, xi);
-        EXPECT_TRUE(point.position.isApprox(origin + J * xi, 1e-13));
-        EXPECT_TRUE(point.jacobian.isApprox(J, 1e-13));
-        EXPECT_TRUE(point.inverse_jacobian.isApprox(J.inverse(), 1e-13));
-        EXPECT_NEAR(point.jacobian_determinant, J.determinant(), 1e-13);
+        EXPECT_TRUE(point.X.isApprox(origin + dX_dxi * xi, 1e-13));
+        EXPECT_TRUE(point.dX_dxi.isApprox(dX_dxi, 1e-13));
+        EXPECT_TRUE(point.dxi_dX.isApprox(dX_dxi.inverse(), 1e-13));
+        EXPECT_NEAR(point.det_dX_dxi, dX_dxi.determinant(), 1e-13);
     }
 }
 
@@ -99,34 +99,34 @@ TEST(RestPoint, InverseJacobianMatchesPhysicalFiniteDifferencesOnWarpedHex) {
     for (const auto& xi : parameters) {
         const Eigen::Vector3d position = warped_position(xi);
         const auto point = litepgo::rest_point(reference, xi);
-        EXPECT_TRUE(point.position.isApprox(position, 1e-14));
-        EXPECT_NEAR(point.jacobian_determinant, 1.0 - alpha * beta * xi.z() * xi.z(), 1e-14);
+        EXPECT_TRUE(point.X.isApprox(position, 1e-14));
+        EXPECT_NEAR(point.det_dX_dxi, 1.0 - alpha * beta * xi.z() * xi.z(), 1e-14);
         for (int d = 0; d < 3; ++d) {
             Eigen::Vector3d plus = position;
             Eigen::Vector3d minus = position;
             plus[d] += h;
             minus[d] -= h;
             const Eigen::Vector3d derivative = (warped_parameter(plus) - warped_parameter(minus)) / (2.0 * h);
-            EXPECT_TRUE((point.inverse_jacobian.col(d) - derivative).isZero(2e-9));
+            EXPECT_TRUE((point.dxi_dX.col(d) - derivative).isZero(2e-9));
         }
     }
 }
 
 TEST(RestPoint, OwnsGeometryCoefficients) {
-    Eigen::Matrix<double, 8, 3> X = corners();
-    const litepgo::Interpolation<litepgo::HexQ1Basis> reference(X);
-    X.setConstant(std::numeric_limits<double>::quiet_NaN());
+    Eigen::Matrix<double, 8, 3> X_nodes = corners();
+    const litepgo::Interpolation<litepgo::HexQ1Basis> reference(X_nodes);
+    X_nodes.setConstant(std::numeric_limits<double>::quiet_NaN());
     const auto point = litepgo::rest_point(reference, Eigen::Vector3d(0.2, 0.3, 0.4));
-    EXPECT_NEAR(point.jacobian_determinant, 1.0, 1e-14);
-    EXPECT_TRUE(point.inverse_jacobian.allFinite());
+    EXPECT_NEAR(point.det_dX_dxi, 1.0, 1e-14);
+    EXPECT_TRUE(point.dxi_dX.allFinite());
 }
 
 TEST(RestPoint, RejectsNonFiniteGeometry) {
     for (double value : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
                          -std::numeric_limits<double>::infinity()}) {
-        Eigen::Matrix<double, 8, 3> X = corners();
-        X(4, 2) = value;
-        EXPECT_THROW((litepgo::Interpolation<litepgo::HexQ1Basis>(X)), std::invalid_argument);
+        Eigen::Matrix<double, 8, 3> X_nodes = corners();
+        X_nodes(4, 2) = value;
+        EXPECT_THROW((litepgo::Interpolation<litepgo::HexQ1Basis>(X_nodes)), std::invalid_argument);
     }
 }
 
@@ -146,23 +146,23 @@ TEST(RestPoint, RejectsCollapsedAndInvertedGeometryWhenEvaluating) {
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
     const litepgo::Interpolation<litepgo::HexQ1Basis> collapsed(Eigen::Matrix<double, 8, 3>::Zero());
     EXPECT_THROW(litepgo::rest_point(collapsed, xi), std::invalid_argument);
-    Eigen::Matrix<double, 8, 3> X = corners();
-    X.col(2).setZero();
-    const litepgo::Interpolation<litepgo::HexQ1Basis> flat(X);
+    Eigen::Matrix<double, 8, 3> X_nodes = corners();
+    X_nodes.col(2).setZero();
+    const litepgo::Interpolation<litepgo::HexQ1Basis> flat(X_nodes);
     EXPECT_THROW(litepgo::rest_point(flat, xi), std::invalid_argument);
-    X = corners();
-    X.col(0) *= -1.0;
-    const litepgo::Interpolation<litepgo::HexQ1Basis> inverted(X);
+    X_nodes = corners();
+    X_nodes.col(0) *= -1.0;
+    const litepgo::Interpolation<litepgo::HexQ1Basis> inverted(X_nodes);
     EXPECT_THROW(litepgo::rest_point(inverted, xi), std::invalid_argument);
 }
 
 TEST(RestPoint, ChecksJacobianAtTheRequestedPoint) {
-    Eigen::Matrix<double, 8, 3> X = corners();
+    Eigen::Matrix<double, 8, 3> X_nodes = corners();
     // det(J0) = 1 - 1.5*xi: validity depends on the requested parameter point.
     for (int i = 0; i < 8; ++i) {
-        X(i, 2) *= 1.0 - 1.5 * X(i, 0);
+        X_nodes(i, 2) *= 1.0 - 1.5 * X_nodes(i, 0);
     }
-    const litepgo::Interpolation<litepgo::HexQ1Basis> reference(X);
+    const litepgo::Interpolation<litepgo::HexQ1Basis> reference(X_nodes);
     EXPECT_NO_THROW(litepgo::rest_point(reference, Eigen::Vector3d(0.2, 0.3, 0.4)));
     EXPECT_THROW(litepgo::rest_point(reference, Eigen::Vector3d(0.8, 0.3, 0.4)), std::invalid_argument);
 }
@@ -171,8 +171,8 @@ TEST(RestPoint, AcceptsSmallPositiveJacobiansAndRejectsOverflowWhenEvaluating) {
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
     const litepgo::Interpolation<litepgo::HexQ1Basis> small(1e-6 * corners());
     const auto point = litepgo::rest_point(small, xi);
-    EXPECT_GT(point.jacobian_determinant, 0.0);
-    EXPECT_TRUE(point.inverse_jacobian.allFinite());
+    EXPECT_GT(point.det_dX_dxi, 0.0);
+    EXPECT_TRUE(point.dxi_dX.allFinite());
     const litepgo::Interpolation<litepgo::HexQ1Basis> enormous(1e200 * corners());
     EXPECT_THROW(litepgo::rest_point(enormous, xi), std::invalid_argument);
 }

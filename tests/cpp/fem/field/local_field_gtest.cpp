@@ -32,11 +32,11 @@ template <class B> void check_deformation_jacobian() {
     constexpr double step = 1e-5;
     for (const Eigen::Vector3d xi : {Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(-0.2, 1.1, 0.1)}) {
         const auto point = rest_point(geometry, xi);
-        const auto J = field.jacobian(point);
+        const auto dvalue_dx_local = field.dvalue_dx_local(point);
         const Eigen::MatrixXd previous =
-            Eigen::kroneckerProduct(point.inverse_jacobian.transpose(), Eigen::Matrix3d::Identity()) *
-            Interpolation<B>(u).gradient_matrix(xi);
-        EXPECT_TRUE(J.isApprox(previous, 1e-14));
+            Eigen::kroneckerProduct(point.dxi_dX.transpose(), Eigen::Matrix3d::Identity()) *
+            Interpolation<B>(u).dgrad_xi_dx_local(xi);
+        EXPECT_TRUE(dvalue_dx_local.isApprox(previous, 1e-14));
         for (int j = 0; j < u.size(); ++j) {
             auto plus = u, minus = u;
             plus(j / 3, j % 3) += step;
@@ -44,7 +44,8 @@ template <class B> void check_deformation_jacobian() {
             const Eigen::Matrix3d fd =
                 (DeformationGradientField<B>(plus).value(point) - DeformationGradientField<B>(minus).value(point)) /
                 (2 * step);
-            EXPECT_LT((fd.reshaped() - J.col(j)).norm(), 1e-9 * (1 + J.col(j).norm())) << "DOF " << j;
+            EXPECT_LT((fd.reshaped() - dvalue_dx_local.col(j)).norm(), 1e-9 * (1 + dvalue_dx_local.col(j).norm()))
+                << "DOF " << j;
         }
     }
 }
@@ -61,9 +62,9 @@ template <bool InvalidGradient> struct InvalidFieldBasis {
     static Sample evaluate(const Eigen::Vector3d& xi) {
         auto sample = HexQ1Basis::evaluate(xi);
         if constexpr (InvalidGradient)
-            sample.gradients(0, 0) = std::numeric_limits<double>::quiet_NaN();
+            sample.dN_dxi(0, 0) = std::numeric_limits<double>::quiet_NaN();
         else
-            sample.values[0] = std::numeric_limits<double>::quiet_NaN();
+            sample.N[0] = std::numeric_limits<double>::quiet_NaN();
         return sample;
     }
 };
@@ -72,10 +73,10 @@ TEST(LocalField, DeformationJacobianValidatesGradientsAndOverflowIndependentlyOf
     auto point = rest_point(Interpolation<HexQ1Basis>(nodes()), {0.2, 0.3, 0.4});
     const DeformationGradientField<InvalidFieldBasis<true>> bad(Eigen::MatrixXd::Zero(8, 3));
     const DeformationGradientField<InvalidFieldBasis<false>> valid(Eigen::MatrixXd::Zero(8, 3));
-    EXPECT_THROW(bad.jacobian(point), std::invalid_argument);
-    EXPECT_NO_THROW(valid.jacobian(point));
-    point.inverse_jacobian.setConstant(std::numeric_limits<double>::max());
-    EXPECT_THROW(valid.jacobian(point), std::invalid_argument);
+    EXPECT_THROW(bad.dvalue_dx_local(point), std::invalid_argument);
+    EXPECT_NO_THROW(valid.dvalue_dx_local(point));
+    point.dxi_dX.setConstant(std::numeric_limits<double>::max());
+    EXPECT_THROW(valid.dvalue_dx_local(point), std::invalid_argument);
 }
 TEST(LocalField, AffineValuesAndCoefficientJacobians) {
     const auto X = nodes();
@@ -101,14 +102,14 @@ TEST(LocalField, AffineValuesAndCoefficientJacobians) {
         const Eigen::Matrix3d fd = (DeformationGradientField<litepgo::HexQ1Basis>(plus).value(point) -
                                     DeformationGradientField<litepgo::HexQ1Basis>(minus).value(point)) /
                                    (2 * h);
-        EXPECT_TRUE(displacement.jacobian(point).col(j).isApprox(
+        EXPECT_TRUE(displacement.dvalue_dx_local(point).col(j).isApprox(
             Eigen::Map<const Eigen::Matrix<double, 9, 1>>(fd.data()), 1e-9));
     }
     for (int j = 0; j < 16; ++j) {
         auto plus = c, minus = c;
         plus(j / 2, j % 2) += h;
         minus(j / 2, j % 2) -= h;
-        EXPECT_TRUE((parameters.jacobian(point).col(j).isApprox(
+        EXPECT_TRUE((parameters.dvalue_dx_local(point).col(j).isApprox(
             (InterpolatedValueField<litepgo::HexQ1Basis>(plus).value(point) -
              InterpolatedValueField<litepgo::HexQ1Basis>(minus).value(point)) /
                 (2 * h),
@@ -125,21 +126,21 @@ TEST(LocalField, DirectValuesIgnoreLocationAndOwnData) {
     const IdentityField<Eigen::Matrix3d> field(input);
     input.setZero();
     litepgo::RestPointData first_point{}, second_point{};
-    first_point.position.setConstant(0.2);
-    second_point.position.setConstant(100.0);
+    first_point.X.setConstant(0.2);
+    second_point.X.setConstant(100.0);
     EXPECT_EQ(field.value(first_point), field.value(second_point));
     EXPECT_EQ(field.value(litepgo::RestPointData{})(2, 2), 9);
-    EXPECT_TRUE(field.jacobian(litepgo::RestPointData{}).isIdentity());
+    EXPECT_TRUE(field.dvalue_dx_local(litepgo::RestPointData{}).isIdentity());
     const auto original = field.value(litepgo::RestPointData{});
     for (int j = 0; j < 9; ++j) {
         auto perturbed = original;
         perturbed.data()[j] += 1e-4;
         const Eigen::Matrix3d fd =
             (IdentityField<Eigen::Matrix3d>(perturbed).value(litepgo::RestPointData{}) - original) / 1e-4;
-        EXPECT_LT(
-            (Eigen::Map<const Eigen::Matrix<double, 9, 1>>(fd.data()) - field.jacobian(litepgo::RestPointData{}).col(j))
-                .norm(),
-            1e-10);
+        EXPECT_LT((Eigen::Map<const Eigen::Matrix<double, 9, 1>>(fd.data()) -
+                   field.dvalue_dx_local(litepgo::RestPointData{}).col(j))
+                      .norm(),
+                  1e-10);
     }
     const Eigen::Matrix<double, 3, 3, Eigen::RowMajor> row_major = original;
     EXPECT_EQ((IdentityField<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(row_major).value(litepgo::RestPointData{})),
@@ -178,7 +179,7 @@ TEST(LocalField, ExplicitlyExtractedValuesOwnOnlySelectedSnapshots) {
     shared << 4, 5;
     EXPECT_EQ(snapshot.value(litepgo::RestPointData{}), Eigen::Vector2d(2, 3));
     EXPECT_EQ(snapshot.value(litepgo::RestPointData{}), snapshot.value(litepgo::RestPointData{}));
-    EXPECT_TRUE(snapshot.jacobian(litepgo::RestPointData{}).isIdentity());
+    EXPECT_TRUE(snapshot.dvalue_dx_local(litepgo::RestPointData{}).isIdentity());
     const auto shared_owned = [] {
         const litepgo::Vec temporary(Eigen::Vector2d(6, 7));
         return litepgo::IdentityField<Eigen::Vector2d>(temporary);
@@ -203,7 +204,8 @@ TEST(LocalField, ConstantMatrixJacobianUsesColumnMajorDofs) {
              litepgo::IdentityField<Eigen::Matrix2d>(minus.reshaped(2, 2)).value(litepgo::RestPointData{})) /
             2e-4;
         EXPECT_LT(
-            (Eigen::Map<const Eigen::Vector4d>(fd.data()) - field.jacobian(litepgo::RestPointData{}).col(j)).norm(),
+            (Eigen::Map<const Eigen::Vector4d>(fd.data()) - field.dvalue_dx_local(litepgo::RestPointData{}).col(j))
+                .norm(),
             1e-10);
     }
 }
@@ -220,23 +222,23 @@ TEST(LocalField, FieldsRejectIncompatibleShapesAndNonFiniteParameters) {
     const litepgo::AffineField<Eigen::Matrix3d>& deformation_interface = deformation;
     const litepgo::AffineField<Eigen::VectorXd>& parameter_interface = parameters;
     EXPECT_THROW(deformation_interface.value(litepgo::RestPointData{}), std::invalid_argument);
-    EXPECT_THROW(deformation_interface.jacobian(litepgo::RestPointData{}), std::invalid_argument);
+    EXPECT_THROW(deformation_interface.dvalue_dx_local(litepgo::RestPointData{}), std::invalid_argument);
     auto point = litepgo::rest_point(litepgo::Interpolation<litepgo::HexQ1Basis>(nodes()), {0.2, 0.3, 0.4});
     EXPECT_EQ(deformation_interface.num_dofs(), 24);
     EXPECT_EQ(parameter_interface.num_dofs(), 32);
     EXPECT_EQ(parameter_interface.value(point).size(), 4);
-    EXPECT_EQ(parameter_interface.jacobian(point).cols(), 32);
+    EXPECT_EQ(parameter_interface.dvalue_dx_local(point).cols(), 32);
     const auto valid = point;
-    point.inverse_jacobian.setConstant(std::numeric_limits<double>::infinity());
+    point.dxi_dX.setConstant(std::numeric_limits<double>::infinity());
     EXPECT_THROW(deformation_interface.value(point), std::invalid_argument);
-    EXPECT_THROW(deformation_interface.jacobian(point), std::invalid_argument);
+    EXPECT_THROW(deformation_interface.dvalue_dx_local(point), std::invalid_argument);
     EXPECT_NO_THROW(parameter_interface.value(point));
     point = valid;
     point.xi.setConstant(std::numeric_limits<double>::quiet_NaN());
     EXPECT_THROW(deformation_interface.value(point), std::invalid_argument);
-    EXPECT_THROW(deformation_interface.jacobian(point), std::invalid_argument);
+    EXPECT_THROW(deformation_interface.dvalue_dx_local(point), std::invalid_argument);
     EXPECT_THROW(parameter_interface.value(point), std::invalid_argument);
-    EXPECT_THROW(parameter_interface.jacobian(point), std::invalid_argument);
+    EXPECT_THROW(parameter_interface.dvalue_dx_local(point), std::invalid_argument);
 }
 
 TEST(LocalField, IdentityFieldPreservesExplicitValueTypeAndValidatesDynamicValues) {
@@ -247,7 +249,7 @@ TEST(LocalField, IdentityFieldPreservesExplicitValueTypeAndValidatesDynamicValue
     const litepgo::IdentityField<Eigen::Vector2d> fixed(Eigen::Vector2d(2, 3));
     static_assert(std::is_same_v<decltype(fixed.value(point)), Eigen::Vector2d>);
     EXPECT_EQ(field.num_dofs(), 4);
-    EXPECT_TRUE(field.jacobian(point).isIdentity());
+    EXPECT_TRUE(field.dvalue_dx_local(point).isIdentity());
     input.setZero();
     EXPECT_EQ(field.value(point), Eigen::VectorXd::LinSpaced(4, 1, 4));
     for (int j = 0; j < 4; ++j) {
@@ -257,7 +259,7 @@ TEST(LocalField, IdentityFieldPreservesExplicitValueTypeAndValidatesDynamicValue
         const Eigen::VectorXd fd = (litepgo::IdentityField<Eigen::VectorXd>(plus).value(point) -
                                     litepgo::IdentityField<Eigen::VectorXd>(minus).value(point)) /
                                    2e-4;
-        EXPECT_TRUE(fd.isApprox(field.jacobian(point).col(j), 1e-10));
+        EXPECT_TRUE(fd.isApprox(field.dvalue_dx_local(point).col(j), 1e-10));
     }
     EXPECT_THROW((litepgo::IdentityField<Eigen::VectorXd>{Eigen::VectorXd{}}), std::invalid_argument);
     input[0] = std::numeric_limits<double>::infinity();
@@ -286,12 +288,12 @@ TEST(LocalField, FieldsChooseTheirOwnBasisOnWarpedGeometry) {
     constexpr double h = 1e-5;
     for (int q = 0; q < litepgo::GaussLegendre3D<2>::num_points; ++q) {
         const auto point = litepgo::rest_point(geometry, litepgo::GaussLegendre3D<2>::points().row(q).transpose());
-        EXPECT_TRUE(positions.value(point).isApprox(point.position, 1e-14));
+        EXPECT_TRUE(positions.value(point).isApprox(point.X, 1e-14));
         const auto& xi = point.xi;
         EXPECT_TRUE(
             values.value(point).isApprox(Eigen::Vector3d(xi.x() * xi.y(), xi.y() * xi.z(), xi.z() * xi.x()), 1e-14));
         for (int d = 0; d < 3; ++d) {
-            Eigen::Vector3d plus = point.position, minus = point.position;
+            Eigen::Vector3d plus = point.X, minus = point.X;
             plus[d] += h;
             minus[d] -= h;
             const Eigen::Vector3d fd = (values.value(litepgo::rest_point(geometry, inverse(plus))) -
@@ -306,11 +308,11 @@ TEST(LocalField, FieldsChooseTheirOwnBasisOnWarpedGeometry) {
             const Eigen::Matrix3d fd = (litepgo::DeformationGradientField<TensorBasis>(plus).value(point) -
                                         litepgo::DeformationGradientField<TensorBasis>(minus).value(point)) /
                                        (2 * h);
-            EXPECT_TRUE(fd.reshaped().isApprox(deformation.jacobian(point).col(j), 3e-9));
+            EXPECT_TRUE(fd.reshaped().isApprox(deformation.dvalue_dx_local(point).col(j), 3e-9));
             const Eigen::VectorXd value_fd = (litepgo::InterpolatedValueField<TensorBasis>(plus).value(point) -
                                               litepgo::InterpolatedValueField<TensorBasis>(minus).value(point)) /
                                              (2 * h);
-            EXPECT_TRUE(value_fd.isApprox(values.jacobian(point).col(j), 3e-9));
+            EXPECT_TRUE(value_fd.isApprox(values.dvalue_dx_local(point).col(j), 3e-9));
         }
     }
 }

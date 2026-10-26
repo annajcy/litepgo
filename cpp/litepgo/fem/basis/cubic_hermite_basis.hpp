@@ -11,8 +11,8 @@ class CubicHermiteBasis {
     static constexpr int num_basis_functions = 4;
 
     struct Sample {
-        Eigen::Vector4d values;
-        Eigen::Vector4d gradients;
+        Eigen::Vector4d N;
+        Eigen::Vector4d dN_dxi;
     };
 
     // Evaluates the polynomials without clamping the parameter to the interval.

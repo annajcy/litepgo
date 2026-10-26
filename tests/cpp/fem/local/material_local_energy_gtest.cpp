@@ -59,16 +59,16 @@ TEST(MaterialLocalEnergy, DirectFieldsBindCorrectDerivativesAndOwnSnapshots) {
     EXPECT_DOUBLE_EQ(deformation.value(RestPointData{}), expected);
     EXPECT_EQ(plastic.gradient(RestPointData{}), plastic.gradient(point));
     EXPECT_EQ(parameters.hessian(RestPointData{}), parameters.hessian(point));
-    const auto stress = NeoHookean::gradient_F(inputs);
-    const auto plastic_stress = NeoHookean::gradient_Fp(inputs);
+    const auto stress = NeoHookean::dW_dF(inputs);
+    const auto plastic_stress = NeoHookean::dW_dFp(inputs);
     EXPECT_TRUE(
         deformation.gradient(point).isApprox(Eigen::Map<const Eigen::Matrix<double, 9, 1>>(stress.data()), 1e-13));
     EXPECT_TRUE(
         plastic.gradient(point).isApprox(Eigen::Map<const Eigen::Matrix<double, 9, 1>>(plastic_stress.data()), 1e-13));
-    EXPECT_EQ(parameters.gradient(point), NeoHookean::gradient_theta(inputs));
-    EXPECT_EQ(deformation.hessian(point), NeoHookean::hessian_F(inputs));
-    EXPECT_EQ(plastic.hessian(point), NeoHookean::hessian_Fp(inputs));
-    EXPECT_EQ(parameters.hessian(point), NeoHookean::hessian_theta(inputs));
+    EXPECT_EQ(parameters.gradient(point), NeoHookean::dW_dtheta(inputs));
+    EXPECT_EQ(deformation.hessian(point), NeoHookean::d2W_dF2(inputs));
+    EXPECT_EQ(plastic.hessian(point), NeoHookean::d2W_dFp2(inputs));
+    EXPECT_EQ(parameters.hessian(point), NeoHookean::d2W_dtheta2(inputs));
     fields.F = std::make_shared<IdentityField<Eigen::Matrix3d>>(1.2 * F);
     fields.Fp = std::make_shared<IdentityField<Eigen::Matrix3d>>(0.9 * Fp);
     fields.theta = std::make_shared<IdentityField<Eigen::VectorXd>>(Eigen::Vector2d(4, 5));
@@ -99,7 +99,7 @@ struct MappedParameters : AffineField<Eigen::VectorXd> {
     Eigen::VectorXd value(const RestPointData&) const override {
         return J * coefficients;
     }
-    Eigen::MatrixXd jacobian(const RestPointData&) const override {
+    Eigen::MatrixXd dvalue_dx_local(const RestPointData&) const override {
         return J;
     }
 };
@@ -156,7 +156,7 @@ template <class T> struct CountingMaterialField final : litepgo::AffineField<T> 
         ++value_calls;
         return data;
     }
-    Eigen::MatrixXd jacobian(const litepgo::RestPointData&) const override {
+    Eigen::MatrixXd dvalue_dx_local(const litepgo::RestPointData&) const override {
         ++jacobian_calls;
         return Eigen::MatrixXd::Identity(data.size(), data.size());
     }

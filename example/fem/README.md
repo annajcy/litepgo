@@ -1,8 +1,64 @@
 # FEM with MeshEnergy
 
+## Notation and derivative layout
+
+`x` is the global unknown vector. `x_local = map.gather(e, x)` preserves the map's existing matrix or vector shape; `dx` and `dx_local` are the corresponding increments. `e` indexes elements, `q` quadrature points, and `a` basis functions. `u_coeffs` names displacement coefficients when their physical meaning is known. The symbols `F`, `Fe`, `Fp`, and `theta` retain their material meanings, with `Fe = F * inverse(Fp)`.
+
+| Code name | Mathematical meaning |
+| --- | --- |
+| `xi` | Reference-element coordinates $\xi$ |
+| `X` | Rest position $X$; `X_nodes` is a table of rest nodal positions |
+| `dX_dxi` | $\partial X/\partial\xi$ |
+| `dxi_dX` | $\partial\xi/\partial X$ |
+| `det_dX_dxi` | $\det(\partial X/\partial\xi)$ |
+| `N`, `dN_dxi` | Basis values $N_a$ and derivatives $\partial N_a/\partial\xi_d$ |
+| `dN_dX` | Physical basis derivatives: `dN_dxi * dxi_dX` |
+| `dvalue_dx_local` | $\partial\operatorname{vec}(v)/\partial x_{\mathrm{local}}$ at fixed geometry |
+| `dF_dx_local` | The same derivative for the deformation gradient $F$ |
+| `det_Fe`, `det_Fp`, `log_det_Fe` | $\det(F_e)$, $\det(F_p)$, $\log\det(F_e)$ |
+| `inv_Fp`, `inv_Fe_T` | $F_p^{-1}$ and $F_e^{-T}$ |
+
+Derivative matrices have output components in rows and scalar input DOFs in columns. Matrix outputs use column-major vectorization, independently of storage order: `vec(F)[c + 3*d] = F(c,d)`. Input packing stays field-specific: interpolation coefficients flatten by row, `x_local[m*a + c] = coefficients(a,c)` for `m` components; `IdentityField` matrix DOFs flatten by column. A map's shaped `x_local` and a field's coefficient representation must agree through the callback's existing mapping. For example, the Hermite callback scales physical derivative DOFs into reference coefficients and pulls derivatives back afterward.
+
+For `n` basis functions and `m` field components, `Interpolation` exposes:
+
+| Method | Meaning | Shape |
+| --- | --- | --- |
+| `value(xi)` | $v(\xi)$ | $m$ |
+| `dvalue_dxi(xi)` | $\partial v/\partial\xi$ | $m\times3$ |
+| `dvalue_dx_local(xi)` | $\partial v/\partial x_{\mathrm{local}}$ | $m\times(nm)$ |
+| `dgrad_xi_dx_local(xi)` | $\partial\operatorname{vec}(\partial v/\partial\xi)/\partial x_{\mathrm{local}}$ | $(3m)\times(nm)$ |
+
+For the multiplicative material model, `psi` is elastic density per plastic volume and `W = det_Fp * psi` is density per original reference volume. The material-backed `LocalEnergy` methods return pointwise density and its DOF derivatives. `integrate_volume` computes $E_e=\int_{\Omega_e}W\,dV$, and `MeshEnergy` sums element energies into the global `E`. The discrete volume weight is `dV = weights[q] * point.det_dX_dxi`.
+
+Material derivatives are `dW_dF`, `d2W_dF2`, and the corresponding `Fp` and `theta` names; other material arguments stay fixed. `dW_dF` and `dW_dFp` retain their $3\times3$ shape, with $\delta W=\sum_{ij}(\partial W/\partial F_{ij})\delta F_{ij}$; their Hessians are $9\times9$ matrices over column-major `vec(F)` or `vec(Fp)`. Elastic density derivatives use `dpsi_dFe` and `d2psi_dFe2`. Integrated element derivatives may be named `dE_dx_local` and `d2E_dx_local2`. Directional changes use `delta_`, such as `delta_Fe`; they are distinct from derivative operators such as `dFe_dF`.
+
+Generic operations retain `value`, `gradient`, `hessian`, `evaluate`, `gather`, and `assemble`. This naming change preserves types, layouts, arithmetic, validation, and accumulation behavior. Existing finite-difference and layout tests cover the renamed APIs.
+
+### C++ API migration
+
+The old public names have been replaced; custom bases, fields, and materials must use the new names. No compatibility aliases are provided.
+
+| Previous API | Replacement |
+| --- | --- |
+| `RestPointData::position` | `X` |
+| `RestPointData::jacobian` | `dX_dxi` |
+| `RestPointData::inverse_jacobian` | `dxi_dX` |
+| `RestPointData::jacobian_determinant` | `det_dX_dxi` |
+| `Basis::Sample::values`, `gradients` | `N`, `dN_dxi` (1D and 3D) |
+| `Interpolation::gradient` | `dvalue_dxi` |
+| `Interpolation::value_matrix` | `dvalue_dx_local` |
+| `Interpolation::gradient_matrix` | `dgrad_xi_dx_local` |
+| `AffineField::jacobian` and all overrides | `dvalue_dx_local` |
+| Material `gradient_F`, `hessian_F` | `dW_dF`, `d2W_dF2` |
+| Material `gradient_Fp`, `hessian_Fp` | `dW_dFp`, `d2W_dFp2` |
+| Material `gradient_theta`, `hessian_theta` | `dW_dtheta`, `d2W_dtheta2` |
+| `MultiplicativeKinematics::reference_gradient_F`, `reference_hessian_F` | `dW_dF`, `d2W_dF2` |
+| `MultiplicativeKinematics::reference_gradient_Fp`, `reference_hessian_Fp` | `dW_dFp`, `d2W_dFp2` |
+
 ## Hex Q1
 
-Two hexes of widths 1 and 2 share a face and its nodal displacement DOFs. Each `geometries[e]` interpolates rest coordinates gathered for element `e`; `MeshEnergy` supplies that same element's `local_u` to the lambda. `integrate_volume<GaussLegendre3D<2>>` integrates that geometry with eight Gauss points. `MaterialLocalEnergyF<NeoHookean>` differentiates displacement DOFs; `Fp = I` and `theta = [2, 3]` stay fixed. The example evaluates energy, gradient, and Hessian, and checks both zero rest energy and uniform-strain energy over the total volume of 3.
+Two hexes of widths 1 and 2 share a face and its nodal displacement DOFs. Each `geometries[e]` interpolates rest coordinates gathered for element `e`; `MeshEnergy` supplies that same element's `x_local` to the lambda. `integrate_volume<GaussLegendre3D<2>>` integrates that geometry with eight Gauss points. `MaterialLocalEnergyF<NeoHookean>` differentiates displacement DOFs; `Fp = I` and `theta = [2, 3]` stay fixed. The example evaluates energy, gradient, and Hessian, and checks both zero rest energy and uniform-strain energy over the total volume of 3.
 
 From the repository root:
 

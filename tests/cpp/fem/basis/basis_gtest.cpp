@@ -8,8 +8,8 @@ namespace {
 struct ConstantBasis {
     static constexpr int num_basis_functions = 1;
     struct Sample {
-        Eigen::Matrix<double, 1, 1> values;
-        Eigen::Matrix<double, 1, 1> gradients;
+        Eigen::Matrix<double, 1, 1> N;
+        Eigen::Matrix<double, 1, 1> dN_dxi;
     };
     static Sample evaluate(double) {
         return {Eigen::Matrix<double, 1, 1>(1.0), Eigen::Matrix<double, 1, 1>(0.0)};
@@ -52,16 +52,16 @@ struct WrongReturn : ConstantBasis {
 
 struct WrongGradientSize : ConstantBasis {
     struct Sample {
-        Eigen::Matrix<double, 1, 1> values;
-        Eigen::Matrix<double, 2, 1> gradients;
+        Eigen::Matrix<double, 1, 1> N;
+        Eigen::Matrix<double, 2, 1> dN_dxi;
     };
     static Sample evaluate(double);
 };
 
 struct WrongValueScalar : ConstantBasis {
     struct Sample {
-        Eigen::Matrix<float, 1, 1> values;
-        Eigen::Matrix<double, 1, 1> gradients;
+        Eigen::Matrix<float, 1, 1> N;
+        Eigen::Matrix<double, 1, 1> dN_dxi;
     };
     static Sample evaluate(double);
 };
@@ -87,24 +87,24 @@ static_assert(!CanFormTensorProduct<WrongGradientSize>);
 
 struct Wrong1DGradientColumns : litepgo::LagrangeBasis {
     struct Sample {
-        Eigen::Matrix<double, 2, 1> values;
-        Eigen::Matrix<double, 2, 2> gradients;
+        Eigen::Matrix<double, 2, 1> N;
+        Eigen::Matrix<double, 2, 2> dN_dxi;
     };
     static Sample evaluate(double);
 };
 
 struct WrongGradientColumns : litepgo::TensorProductBasis3D<litepgo::LagrangeBasis> {
     struct Sample {
-        Eigen::Matrix<double, 8, 1> values;
-        Eigen::Matrix<double, 8, 2> gradients;
+        Eigen::Matrix<double, 8, 1> N;
+        Eigen::Matrix<double, 8, 2> dN_dxi;
     };
     static Sample evaluate(const Eigen::Vector3d&);
 };
 
 struct WrongGradientRows : litepgo::TensorProductBasis3D<litepgo::LagrangeBasis> {
     struct Sample {
-        Eigen::Matrix<double, 8, 1> values;
-        Eigen::Matrix<double, 7, 3> gradients;
+        Eigen::Matrix<double, 8, 1> N;
+        Eigen::Matrix<double, 7, 3> dN_dxi;
     };
     static Sample evaluate(const Eigen::Vector3d&);
 };

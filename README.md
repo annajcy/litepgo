@@ -2,6 +2,8 @@
 
 Minimal adaptation of libpgo.
 
+FEM examples and the mathematical naming and derivative-layout conventions are in [example/fem](example/fem/README.md).
+
 Requires Python 3.12, uv, CMake 3.28+, Ninja, and a C++20 compiler.
 
 Eigen 5.0.1, oneTBB 2023.1.0, nanobind 3.1.0, and GoogleTest are fetched at pinned versions; TBB is built as a shared library. On macOS the Accelerate framework provides an extra sparse LDLT backend (`LITEPGO_WITH_ACCELERATE`, on by default); elsewhere only Eigen's LDLT is built. `litepgo.build_info()` reports what a build contains.

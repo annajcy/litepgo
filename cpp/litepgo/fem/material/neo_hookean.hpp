@@ -4,23 +4,24 @@
 
 namespace litepgo {
 
-// W = det(Fp) [mu/2 (||Fe||^2 - 3) - mu log(Je) + lambda/2 log(Je)^2],
-// Fe = F Fp^-1, Je = det(Fe). Density is per original reference volume.
+// W = det(Fp) * psi, psi = mu/2 (||Fe||^2 - 3) - mu log(det_Fe) + lambda/2 log(det_Fe)^2,
+// Fe = F Fp^-1, det_Fe = det(Fe). W is density per original reference volume.
 // Requires finite theta = [lambda, mu], lambda >= 0, mu > 0,
 // and finite F/Fp (invalid_argument otherwise). Non-positive det(Fp)/det(Fe)
 // or unrepresentable kinematics throw InfeasibleState.
-// Derivatives hold the other arguments fixed. Hessians use column-major vec.
+// Derivatives hold the other arguments fixed. dW_dF/dW_dFp retain 3-by-3 matrix shape;
+// their 9-by-9 Hessians differentiate column-major vec(F)/vec(Fp).
 class NeoHookean final {
   public:
     static constexpr int num_parameters = 2;
 
     static double value(const MaterialInputs& inputs);
-    static Eigen::Matrix3d gradient_F(const MaterialInputs& inputs);
-    static Eigen::Matrix<double, 9, 9> hessian_F(const MaterialInputs& inputs);
-    static Eigen::Matrix3d gradient_Fp(const MaterialInputs& inputs);
-    static Eigen::Matrix<double, 9, 9> hessian_Fp(const MaterialInputs& inputs);
-    static Eigen::Vector2d gradient_theta(const MaterialInputs& inputs);
-    static Eigen::Matrix2d hessian_theta(const MaterialInputs& inputs);
+    static Eigen::Matrix3d dW_dF(const MaterialInputs& inputs);
+    static Eigen::Matrix<double, 9, 9> d2W_dF2(const MaterialInputs& inputs);
+    static Eigen::Matrix3d dW_dFp(const MaterialInputs& inputs);
+    static Eigen::Matrix<double, 9, 9> d2W_dFp2(const MaterialInputs& inputs);
+    static Eigen::Vector2d dW_dtheta(const MaterialInputs& inputs);
+    static Eigen::Matrix2d d2W_dtheta2(const MaterialInputs& inputs);
 };
 
 } // namespace litepgo

@@ -50,15 +50,14 @@ class VertexDofMap final {
     }
 
     // Independent copy: rows follow connectivity, columns are vertex DOF slots.
-    Eigen::MatrixXd gather(int element, const ConstVecRef& global_dof_values) const {
+    Eigen::MatrixXd gather(int element, const ConstVecRef& x) const {
         check_element(element);
-        if (global_dof_values.size() != num_dofs())
+        if (x.size() != num_dofs())
             throw std::invalid_argument("VertexDofMap: incorrect global vector size");
-        Eigen::MatrixXd local_dof_values(cells_.cols(), dofs_per_vertex_);
+        Eigen::MatrixXd x_local(cells_.cols(), dofs_per_vertex_);
         for (int i = 0; i < cells_.cols(); ++i)
-            local_dof_values.row(i) =
-                global_dof_values.segment(cells_(element, i) * dofs_per_vertex_, dofs_per_vertex_).transpose();
-        return local_dof_values;
+            x_local.row(i) = x.segment(cells_(element, i) * dofs_per_vertex_, dofs_per_vertex_).transpose();
+        return x_local;
     }
 
   private:

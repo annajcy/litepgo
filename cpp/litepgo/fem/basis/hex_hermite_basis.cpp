@@ -17,8 +17,8 @@ HexHermiteBasis::Sample HexHermiteBasis::evaluate(const Eigen::Vector3d& xi) {
             32 * static_cast<int>(corner.x()) + 8 * static_cast<int>(corner.y()) + 2 * static_cast<int>(corner.z());
         for (int slot = 0; slot < 8; ++slot) {
             const int index = base + offsets[static_cast<std::size_t>(slot)];
-            result.values[8 * vertex + slot] = tensor.values[index];
-            result.gradients.row(8 * vertex + slot) = tensor.gradients.row(index);
+            result.N[8 * vertex + slot] = tensor.N[index];
+            result.dN_dxi.row(8 * vertex + slot) = tensor.dN_dxi.row(index);
         }
     }
     return result;

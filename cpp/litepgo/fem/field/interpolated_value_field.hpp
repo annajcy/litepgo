@@ -15,8 +15,8 @@ template <Basis3D B> class InterpolatedValueField final : public AffineField<Eig
     Eigen::VectorXd value(const RestPointData& point) const override {
         return interpolation_.value(point.xi);
     }
-    Eigen::MatrixXd jacobian(const RestPointData& point) const override {
-        return interpolation_.value_matrix(point.xi);
+    Eigen::MatrixXd dvalue_dx_local(const RestPointData& point) const override {
+        return interpolation_.dvalue_dx_local(point.xi);
     }
 
   private:
