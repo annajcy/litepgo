@@ -68,12 +68,12 @@ TEST(MultiplicativeKinematics, PlasticPullbackMatchesFiniteDifferences) {
     Fp << 1.4, 0.2, -0.1, 0.1, 0.8, 0.3, 0.0, -0.2, 1.2;
     Eigen::Matrix<double, 9, 1> v;
     v << 1, -2, 3, 1, 2, -1, 3, -2, 1;
-    const Eigen::Matrix<double, 9, 9> He = Eigen::Matrix<double, 9, 9>::Identity() + v * v.transpose();
+    const Eigen::Matrix<double, 9, 9> d2psi_dFe2 = Eigen::Matrix<double, 9, 9>::Identity() + v * v.transpose();
     // A nonzero constant isolates the determinant derivative as well.
     for (bool constant_only : {true, false}) {
         SCOPED_TRACE(constant_only);
         const Eigen::Matrix<double, 9, 9> H =
-            constant_only ? Eigen::Matrix<double, 9, 9>(Eigen::Matrix<double, 9, 9>::Zero()) : He;
+            constant_only ? Eigen::Matrix<double, 9, 9>(Eigen::Matrix<double, 9, 9>::Zero()) : d2psi_dFe2;
         const auto energy = [&](const Eigen::Matrix3d& p) {
             const Eigen::Matrix3d Fe = F * p.inverse();
             const Eigen::Map<const Eigen::Matrix<double, 9, 1>> x(Fe.data());

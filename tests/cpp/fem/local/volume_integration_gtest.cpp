@@ -27,17 +27,17 @@ struct NodalCoefficients {
 };
 
 Eigen::Matrix<double, 8, 3> coordinates(bool warped = true) {
-    Eigen::Matrix<double, 8, 3> X;
-    Eigen::Matrix3d J;
-    J << 1.7, 0.2, 0.1, 0.1, 1.2, 0.2, 0.0, 0.1, 0.9;
+    Eigen::Matrix<double, 8, 3> X_nodes;
+    Eigen::Matrix3d affine_dX_dxi;
+    affine_dX_dxi << 1.7, 0.2, 0.1, 0.1, 1.2, 0.2, 0.0, 0.1, 0.9;
     for (int i = 0; i < 8; ++i) {
         const auto xi = HexQ1Basis::reference_node(i);
-        Eigen::Vector3d x = J * xi;
+        Eigen::Vector3d X = affine_dX_dxi * xi;
         if (warped)
-            x += Eigen::Vector3d(0.15 * xi.y() * xi.z(), 0.1 * xi.x() * xi.z(), 0.05 * xi.x() * xi.y());
-        X.row(i) = x.transpose();
+            X += Eigen::Vector3d(0.15 * xi.y() * xi.z(), 0.1 * xi.x() * xi.z(), 0.05 * xi.x() * xi.y());
+        X_nodes.row(i) = X.transpose();
     }
-    return X;
+    return X_nodes;
 }
 
 NodalCoefficients fields(int seed = 0) {
@@ -128,23 +128,23 @@ TEST(VolumeIntegration, HexQ1LocalDofFiniteDifferencesForAllThreeFields) {
 }
 
 TEST(VolumeIntegration, AffineFieldsHaveExpectedVolumeWeightedEnergyAndTranslationNullModes) {
-    const auto X = coordinates(false);
-    const Interpolation<HexQ1Basis> geometry(X);
+    const auto X_nodes = coordinates(false);
+    const Interpolation<HexQ1Basis> geometry(X_nodes);
     Eigen::Matrix3d A, P;
     A << 0.1, 0.02, -0.03, 0.04, -0.05, 0.02, 0.01, 0.03, 0.08;
     P << 0.2, 0.03, 0, 0.01, 0.1, 0.02, 0, 0.01, -0.05;
     NodalCoefficients f;
-    f.u = X * A.transpose();
-    f.up = X * P.transpose();
+    f.u = X_nodes * A.transpose();
+    f.up = X_nodes * P.transpose();
     f.theta.col(0).setConstant(2);
     f.theta.col(1).setConstant(3);
     const auto local_fields = evaluate_fields(f);
-    Eigen::Matrix3d J;
-    J.col(0) = X.row(1) - X.row(0);
-    J.col(1) = X.row(3) - X.row(0);
-    J.col(2) = X.row(4) - X.row(0);
+    Eigen::Matrix3d dX_dxi;
+    dX_dxi.col(0) = X_nodes.row(1) - X_nodes.row(0);
+    dX_dxi.col(1) = X_nodes.row(3) - X_nodes.row(0);
+    dX_dxi.col(2) = X_nodes.row(4) - X_nodes.row(0);
     const double expected =
-        J.determinant() *
+        dX_dxi.determinant() *
         NeoHookean::value({Eigen::Matrix3d::Identity() + A, Eigen::Matrix3d::Identity() + P, Eigen::Vector2d(2, 3)});
     EXPECT_NEAR(integrate_volume<GaussLegendre3D<2>>(geometry, MaterialLocalEnergyF<NeoHookean>(evaluate_fields(f))),
                 expected, 1e-12);

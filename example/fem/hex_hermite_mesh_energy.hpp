@@ -86,9 +86,10 @@ inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X_nodes) {
             const auto reference_coefficients = hex_hermite_reference_coefficients(x_local, dof_scales);
             const auto F = std::make_shared<DeformationGradientField<HexHermiteBasis>>(reference_coefficients);
             const MaterialLocalEnergyF<NeoHookean> local_energy({F, Fp, theta});
+            // Reuse outputs for derivatives with respect to reference coefficients c until the pullback below.
             const double E_element =
                 integrate_volume<GaussLegendre3D<4>>(geometry, local_energy, dE_dx_local, d2E_dx_local2);
-            // c = S*x_local: pull coefficient derivatives back as S^T*g_c and S^T*H_c*S.
+            // c = S*flatten(x_local): fixed rest geometry makes S constant, so g_local = S^T*g_c, H_local = S^T*H_c*S.
             if (dE_dx_local)
                 dE_dx_local->array() *= dof_scales.array();
             if (d2E_dx_local2) {

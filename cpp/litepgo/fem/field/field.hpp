@@ -13,7 +13,9 @@ template <class Value> class Field {
 
 // At fixed geometry, vec(value) = dvalue_dx_local * flatten(x_local) + offset.
 // Rows index column-major vec(value); columns follow this field's scalar DOF order.
-// Affineness is a mathematical contract; x_local's packing is defined by each field.
+// Here x_local denotes this field's own coefficients, packed as defined by the field.
+// Callbacks must pull derivatives back through any mapping from gathered DOFs to these coefficients.
+// Affineness is a mathematical contract.
 template <class Value> class AffineField : public Field<Value> {
   public:
     virtual int num_dofs() const = 0;

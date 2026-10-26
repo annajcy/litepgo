@@ -30,9 +30,9 @@ HexTopology two_hexes() {
 }
 
 Eigen::Matrix3d reference_jacobian() {
-    Eigen::Matrix3d J;
-    J << 2, 0.3, 0.1, 0.2, 1.5, 0.1, 0, 0.2, 1.1;
-    return J;
+    Eigen::Matrix3d dX_dxi;
+    dX_dxi << 2, 0.3, 0.1, 0.2, 1.5, 0.1, 0, 0.2, 1.1;
+    return dX_dxi;
 }
 
 Eigen::Matrix<double, 12, 3> rest_positions() {

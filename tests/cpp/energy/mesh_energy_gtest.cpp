@@ -321,15 +321,15 @@ struct SharedDofMap {
 
 TEST(MeshEnergy, ParallelAssemblyMatchesSerialWithSharedRepeatedAndUnusedDofs) {
     const SharedDofMap map;
-    const auto local = [](int e, const Vec& q, Vec* g, Eigen::MatrixXd* h) {
-        Eigen::MatrixXd A = Eigen::MatrixXd::Constant(q.size(), q.size(), 0.01 * (e % 3));
+    const auto local = [](int e, const Vec& x_local, Vec* g, Eigen::MatrixXd* h) {
+        Eigen::MatrixXd A = Eigen::MatrixXd::Constant(x_local.size(), x_local.size(), 0.01 * (e % 3));
         A.diagonal().array() += 1 + e % 5;
-        const Vec derivative = A * q;
+        const Vec derivative = A * x_local;
         if (g)
             *g = derivative;
         if (h)
             *h = A;
-        return 0.5 * q.dot(derivative);
+        return 0.5 * x_local.dot(derivative);
     };
     MeshEnergy energy(map, local);
     const Assembler serial(map.num_dofs(), map.indices);
@@ -365,12 +365,12 @@ TEST(MeshEnergy, ParallelAssemblyMatchesSerialWithSharedRepeatedAndUnusedDofs) {
 TEST(MeshEnergy, ReusedBuffersRejectIncompleteWritesAndRecoverAfterExceptions) {
     bool write = true;
     MeshEnergy energy(ConstantDofMap(TriangleTopology(3, {{0, 1, 2}, {0, 1, 2}}), 2),
-                      [&write](int e, const Vec& q, Vec* g, Eigen::MatrixXd* h) {
+                      [&write](int e, const Vec& x_local, Vec* g, Eigen::MatrixXd* h) {
                           if (write && g)
-                              *g = 2 * (e + 1) * q;
+                              *g = 2 * (e + 1) * x_local;
                           if (write && h)
                               *h = 2 * (e + 1) * Eigen::Matrix2d::Identity();
-                          return (e + 1) * q.squaredNorm();
+                          return (e + 1) * x_local.squaredNorm();
                       });
     Vec x = Eigen::Vector2d(0.2, 0.4), g;
     SpMat h = energy.hessian_pattern();
@@ -391,16 +391,16 @@ TEST(MeshEnergy, ParallelFeasibleStepMatchesSerialAndPropagatesErrors) {
     const SharedDofMap map;
     std::atomic<int> calls = 0;
     bool bad_bound = false;
-    const auto step = [&calls, &bad_bound](int e, const Vec& q, const Vec& dq) {
+    const auto step = [&calls, &bad_bound](int e, const Vec& x_local, const Vec& dx_local) {
         ++calls;
         if (bad_bound && e == 500)
             return std::numeric_limits<double>::quiet_NaN();
         double alpha = 1;
-        for (Eigen::Index j = 0; j < q.size(); ++j) {
-            if (q[j] <= 0)
+        for (Eigen::Index j = 0; j < x_local.size(); ++j) {
+            if (x_local[j] <= 0)
                 throw InfeasibleState("positive DOFs required");
-            if (dq[j] < 0)
-                alpha = std::min(alpha, 0.8 * q[j] / -dq[j]);
+            if (dx_local[j] < 0)
+                alpha = std::min(alpha, 0.8 * x_local[j] / -dx_local[j]);
         }
         return alpha;
     };

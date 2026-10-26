@@ -89,18 +89,18 @@ TEST(MaterialLocalEnergy, DirectFieldsBindCorrectDerivativesAndOwnSnapshots) {
 namespace {
 struct MappedParameters : AffineField<Eigen::VectorXd> {
     Eigen::Vector4d coefficients;
-    Eigen::Matrix<double, 3, 4> J;
+    Eigen::Matrix<double, 3, 4> dtheta_dx_local;
     explicit MappedParameters(const Eigen::Vector4d& x) : coefficients(x) {
-        J << 1, 0.2, 0, -0.3, 0, 2, 0.4, 0, -0.1, 0, 1.5, 0.6;
+        dtheta_dx_local << 1, 0.2, 0, -0.3, 0, 2, 0.4, 0, -0.1, 0, 1.5, 0.6;
     }
     int num_dofs() const override {
         return 4;
     }
     Eigen::VectorXd value(const RestPointData&) const override {
-        return J * coefficients;
+        return dtheta_dx_local * coefficients;
     }
     Eigen::MatrixXd dvalue_dx_local(const RestPointData&) const override {
-        return J;
+        return dtheta_dx_local;
     }
 };
 } // namespace
@@ -147,7 +147,7 @@ TEST(MaterialLocalEnergy, AnotherMaterialUsesItsOwnParameterCountAndOnlyActiveDe
 namespace {
 template <class T> struct CountingMaterialField final : litepgo::AffineField<T> {
     T data;
-    mutable int value_calls = 0, jacobian_calls = 0;
+    mutable int value_calls = 0, derivative_calls = 0;
     explicit CountingMaterialField(T value) : data(std::move(value)) {}
     int num_dofs() const override {
         return static_cast<int>(data.size());
@@ -157,11 +157,11 @@ template <class T> struct CountingMaterialField final : litepgo::AffineField<T> 
         return data;
     }
     Eigen::MatrixXd dvalue_dx_local(const litepgo::RestPointData&) const override {
-        ++jacobian_calls;
+        ++derivative_calls;
         return Eigen::MatrixXd::Identity(data.size(), data.size());
     }
     void reset() const {
-        value_calls = jacobian_calls = 0;
+        value_calls = derivative_calls = 0;
     }
 };
 } // namespace
@@ -199,7 +199,7 @@ TEST(MaterialLocalEnergy, AccumulationReusesFieldValuesAndActiveJacobianForAllAc
             EXPECT_EQ(F->value_calls, 1);
             EXPECT_EQ(Fp->value_calls, 1);
             EXPECT_EQ(theta->value_calls, 1);
-            EXPECT_EQ(F->jacobian_calls + Fp->jacobian_calls + theta->jacobian_calls, want_g || want_h ? 1 : 0);
+            EXPECT_EQ(F->derivative_calls + Fp->derivative_calls + theta->derivative_calls, want_g || want_h ? 1 : 0);
         }
         Eigen::VectorXd g = Eigen::VectorXd::Constant(n, 7);
         EXPECT_THROW(energy->accumulate(point, std::numeric_limits<double>::infinity(), &g, nullptr),

@@ -9,7 +9,8 @@
 
 namespace litepgo {
 
-// Rows are basis coefficients, columns are components; x_local flattens by row.
+// Here x_local denotes this object's coefficient array: rows are basis coefficients,
+// columns are components, and scalar DOFs flatten by row.
 // For n basis functions and m components, value has m entries and dvalue_dxi is m-by-3.
 template <Basis3D B> class Interpolation final {
   public:

@@ -34,10 +34,10 @@ TEST(NeoHookean, StressFreeAndLinearElasticTangent) {
 TEST(NeoHookean, AnalyticDilationAndObjectivity) {
     const Eigen::Vector2d theta(2, 3);
     const Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
-    const double s = 1.25, p = 1.3, logJ = 3 * std::log(s);
-    const double psi = 1.5 * theta[1] * (s * s - 1) - theta[1] * logJ + 0.5 * theta[0] * logJ * logJ;
+    const double s = 1.25, p = 1.3, log_det_Fe = 3 * std::log(s);
+    const double psi = 1.5 * theta[1] * (s * s - 1) - theta[1] * log_det_Fe + 0.5 * theta[0] * log_det_Fe * log_det_Fe;
     EXPECT_NEAR(NeoHookean::value({s * p * I, p * I, theta}), p * p * p * psi, 1e-13);
-    const Eigen::Matrix3d expectedP = p * p * (theta[1] * s + (theta[0] * logJ - theta[1]) / s) * I;
+    const Eigen::Matrix3d expectedP = p * p * (theta[1] * s + (theta[0] * log_det_Fe - theta[1]) / s) * I;
     EXPECT_TRUE(NeoHookean::dW_dF({s * p * I, p * I, theta}).isApprox(expectedP, 1e-13));
     Eigen::Matrix3d F;
     F << 1.2, 0.2, 0.1, -0.1, 0.8, 0.3, 0.2, 0.1, 1.1;
@@ -47,7 +47,7 @@ TEST(NeoHookean, AnalyticDilationAndObjectivity) {
 }
 
 TEST(NeoHookean, FullGradientAndHessianFiniteDifferences) {
-    // Deterministic varied dense states, including compression and non-unit Jp.
+    // Deterministic varied dense states, including compression and non-unit det_Fp.
     for (int sample = 0; sample < 12; ++sample) {
         SCOPED_TRACE(sample);
         Eigen::Matrix3d Fp, Fe;
@@ -100,7 +100,7 @@ TEST(NeoHookean, FullGradientAndHessianFiniteDifferences) {
 }
 
 TEST(NeoHookean, FpGradientAndHessianFiniteDifferences) {
-    // Deterministic varied dense states, including compression and non-unit Jp.
+    // Deterministic varied dense states, including compression and non-unit det_Fp.
     for (int sample = 0; sample < 12; ++sample) {
         SCOPED_TRACE(sample);
         Eigen::Matrix3d Fp, Fe;

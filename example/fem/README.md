@@ -2,32 +2,54 @@
 
 ## Notation and derivative layout
 
-`x` is the global unknown vector. `x_local = map.gather(e, x)` preserves the map's existing matrix or vector shape; `dx` and `dx_local` are the corresponding increments. `e` indexes elements, `q` quadrature points, and `a` basis functions. `u_coeffs` names displacement coefficients when their physical meaning is known. The symbols `F`, `Fe`, `Fp`, and `theta` retain their material meanings, with `Fe = F * inverse(Fp)`.
+`x` is the global unknown vector. `x_local = map.gather(e, x)` preserves the map's existing matrix or vector shape; `dx` and `dx_local` are the corresponding increments. `e` indexes elements, `q` quadrature points, `a` basis functions, `v` vertices, and `c` component indices in array subscripts. `u_coeffs` names displacement coefficients when their physical meaning is known.
+
+`x_position(X) = X + u(X)` is the deformed physical position, where `X` is the rest position and `u(X)` the displacement. The total deformation gradient is $F=\partial x_{\mathrm{position}}/\partial X$. Its multiplicative decomposition is $F=F_eF_p$: `Fp` is the plastic deformation gradient from the reference configuration to the plastic intermediate configuration, and `Fe` is the elastic deformation gradient from that intermediate configuration to the current configuration. All three are $3\times3$ matrices, with `Fe = F * inverse(Fp)`. `theta` is the model-specific parameter vector; Neo-Hookean uses `theta = [lambda, mu]` for the two Lamé parameters. In field formulas, $y$ denotes the output of `value()`, which may be `F`, `Fp`, or `theta`.
 
 | Code name | Mathematical meaning |
 | --- | --- |
 | `xi` | Reference-element coordinates $\xi$ |
-| `X` | Rest position $X$; `X_nodes` is a table of rest nodal positions |
+| `X` | Rest position $X$ at one point |
+| `X_nodes` | Collection of rest nodal positions, in matrix or packed-vector form as specified by the interface |
 | `dX_dxi` | $\partial X/\partial\xi$ |
 | `dxi_dX` | $\partial\xi/\partial X$ |
 | `det_dX_dxi` | $\det(\partial X/\partial\xi)$ |
 | `N`, `dN_dxi` | Basis values $N_a$ and derivatives $\partial N_a/\partial\xi_d$ |
 | `dN_dX` | Physical basis derivatives: `dN_dxi * dxi_dX` |
-| `dvalue_dx_local` | $\partial\operatorname{vec}(v)/\partial x_{\mathrm{local}}$ at fixed geometry |
+| `dvalue_dx_local` | $\partial\operatorname{vec}(y)/\partial x_{\mathrm{local}}$ at fixed geometry |
 | `dF_dx_local` | The same derivative for the deformation gradient $F$ |
 | `det_Fe`, `det_Fp`, `log_det_Fe` | $\det(F_e)$, $\det(F_p)$, $\log\det(F_e)$ |
 | `inv_Fp`, `inv_Fe_T` | $F_p^{-1}$ and $F_e^{-T}$ |
 
-Derivative matrices have output components in rows and scalar input DOFs in columns. Matrix outputs use column-major vectorization, independently of storage order: `vec(F)[c + 3*d] = F(c,d)`. Input packing stays field-specific: interpolation coefficients flatten by row, `x_local[m*a + c] = coefficients(a,c)` for `m` components; `IdentityField` matrix DOFs flatten by column. A map's shaped `x_local` and a field's coefficient representation must agree through the callback's existing mapping. For example, the Hermite callback scales physical derivative DOFs into reference coefficients and pulls derivatives back afterward.
+`X_nodes` may be a `num_vertices`-by-3 matrix addressed as `X_nodes(v,c)`, or a vector of length `3*num_vertices` addressed as `X_nodes[3*v+c]`. Both store each vertex's three components in order; the declared interface type determines the representation. A name alone does not imply a matrix rank.
+
+The denominator in `dvalue_dx_local` refers to the local unknowns of the object being differentiated:
+
+| Context | Meaning of `x_local` |
+| --- | --- |
+| `MeshEnergy` callback | The matrix or vector returned by `map.gather(e, x)` |
+| `Interpolation` / `AffineField` | The current object's own coefficient array, with scalar DOFs in that object's packing order |
+
+Derivative matrices have output components in rows and scalar input DOFs in columns. Matrix outputs use column-major vectorization, independently of storage order: `vec(F)[c + 3*d] = F(c,d)`. Input packing stays field-specific: interpolation coefficients flatten by row, `flatten(x_local)[m*a + c] = coefficients(a,c)` for `m` components; `IdentityField` matrix DOFs flatten by column. Callbacks must account for any transformation between gathered unknowns and field coefficients when returning derivatives.
+
+For example, the Hermite callback transforms physical derivative DOFs into reference coefficients. Writing the flattened reference coefficient vector as $c$ and the diagonal scaling matrix as $S=\operatorname{diag}(\texttt{dof\_scales})$, the fixed rest geometry gives
+
+$$
+c=S\,\operatorname{flatten}(x_{\mathrm{local}}),\qquad
+g_{\mathrm{local}}=S^Tg_c,\qquad
+H_{\mathrm{local}}=S^TH_cS.
+$$
+
+Here $g_c=\partial E_e/\partial c$ and $H_c=\partial^2 E_e/\partial c^2$. The output buffers named `dE_dx_local` and `d2E_dx_local2` temporarily contain these coefficient derivatives immediately after `integrate_volume`; the callback then applies the pullback above in place so its returned derivatives refer to the gathered physical `x_local`.
 
 For `n` basis functions and `m` field components, `Interpolation` exposes:
 
 | Method | Meaning | Shape |
 | --- | --- | --- |
-| `value(xi)` | $v(\xi)$ | $m$ |
-| `dvalue_dxi(xi)` | $\partial v/\partial\xi$ | $m\times3$ |
-| `dvalue_dx_local(xi)` | $\partial v/\partial x_{\mathrm{local}}$ | $m\times(nm)$ |
-| `dgrad_xi_dx_local(xi)` | $\partial\operatorname{vec}(\partial v/\partial\xi)/\partial x_{\mathrm{local}}$ | $(3m)\times(nm)$ |
+| `value(xi)` | $y(\xi)$ | $m$ |
+| `dvalue_dxi(xi)` | $\partial y/\partial\xi$ | $m\times3$ |
+| `dvalue_dx_local(xi)` | $\partial y/\partial x_{\mathrm{local}}$ | $m\times(nm)$ |
+| `dgrad_xi_dx_local(xi)` | $\partial\operatorname{vec}(\partial y/\partial\xi)/\partial x_{\mathrm{local}}$ | $(3m)\times(nm)$ |
 
 For the multiplicative material model, `psi` is elastic density per plastic volume and `W = det_Fp * psi` is density per original reference volume. The material-backed `LocalEnergy` methods return pointwise density and its DOF derivatives. `integrate_volume` computes $E_e=\int_{\Omega_e}W\,dV$, and `MeshEnergy` sums element energies into the global `E`. The discrete volume weight is `dV = weights[q] * point.det_dX_dxi`.
 
@@ -97,7 +119,7 @@ Two boxes of sizes `(1,2,3)` and `(2,2,3)` share a face. Geometry uses Hex Q1; d
 
 The lambda converts physical derivatives to reference coefficients using the rest Q1 Jacobian, integrates with `GaussLegendre3D<4>`, then returns `S^T g` and `S^T H S`. Shared vertex DOFs enforce C1 continuity on conforming axis-aligned rest boxes in consistent Hex corner order. No interface changes are needed.
 
-Each rest element must be an axis-aligned rectangular box with positive dimensions; rotated, sheared, or warped rest hexes are rejected. The whole rest mesh need not form a box. This restriction applies only to the rest geometry: the deformed configuration `x(X) = X + u(X)` may rotate, stretch, shear, or bend, subject to the material's validity requirements. The DOF derivatives are with respect to fixed rest coordinates `X`, and their scales are computed once from the rest geometry. Supporting general rest hexes requires a different Hermite DOF mapping and compatible shared-face continuity conditions.
+Each rest element must be an axis-aligned rectangular box with positive dimensions; rotated, sheared, or warped rest hexes are rejected. The whole rest mesh need not form a box. This restriction applies only to the rest geometry: the deformed configuration `x_position(X) = X + u(X)` may rotate, stretch, shear, or bend, subject to the material's validity requirements. The DOF derivatives are with respect to fixed rest coordinates `X`, and their scales are computed once from the rest geometry. Supporting general rest hexes requires a different Hermite DOF mapping and compatible shared-face continuity conditions.
 
 ```sh
 cmake --build --preset debug --target hex_hermite_mesh_energy litepgo_tests

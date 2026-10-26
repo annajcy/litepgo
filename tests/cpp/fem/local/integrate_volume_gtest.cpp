@@ -287,7 +287,7 @@ TEST(IntegrateVolume, RejectsInvalidGeometryAtTheEvaluatedPoint) {
         X.row(i) << xi.x(), xi.y(), xi.z() * (1 - 1.5 * xi.x());
     }
     EXPECT_THROW(integrate_volume<Rule>(Interpolation<HexQ1Basis>(X), energy), std::invalid_argument);
-    EXPECT_EQ(energy.calls, 1); // Only the first point has positive det(J).
+    EXPECT_EQ(energy.calls, 1); // Only the first point has positive det(dX_dxi).
 }
 
 TEST(IntegrateVolume, RejectsNonFinitePointsWeightsAndOverflowingVolumeWeights) {
