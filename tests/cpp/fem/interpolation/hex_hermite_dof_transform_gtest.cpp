@@ -1,7 +1,7 @@
-#include "litepgo/fem/geometry/hex_hermite_dof_transform.hpp"
+#include "litepgo/fem/interpolation/hex_hermite_dof_transform.hpp"
 
 #include "litepgo/fem/basis/hex_hermite_basis.hpp"
-#include "litepgo/fem/geometry/rest.hpp"
+#include "litepgo/fem/interpolation/rest_point.hpp"
 
 #include <Eigen/Geometry>
 #include <array>
@@ -20,8 +20,8 @@ Eigen::Matrix<double, 8, 3> box_nodes(const Eigen::Vector3d& lengths,
 }
 
 TEST(HexHermiteDofTransform, ScalesEveryPhysicalDerivativeSlotAndComponent) {
-    const Interpolation<HexQ1Basis> geometry(box_nodes({2, 3, 5}, {0.2, -0.3, 0.4}));
-    const auto S = hex_hermite_dof_transform(geometry);
+    const Interpolation<HexQ1Basis> rest_geometry(box_nodes({2, 3, 5}, {0.2, -0.3, 0.4}));
+    const auto S = hex_hermite_dof_transform(rest_geometry);
     ASSERT_EQ(S.rows(), 192);
     ASSERT_EQ(S.cols(), 192);
     const std::array<double, 8> expected{1, 2, 3, 5, 6, 10, 15, 30};
@@ -35,8 +35,8 @@ TEST(HexHermiteDofTransform, ScalesEveryPhysicalDerivativeSlotAndComponent) {
 
 TEST(HexHermiteDofTransform, ReproducesPhysicalPolynomialWithMixedDerivatives) {
     const auto X_nodes = box_nodes({2, 3, 5}, {0.2, -0.3, 0.4});
-    const Interpolation<HexQ1Basis> geometry(X_nodes);
-    const auto S = hex_hermite_dof_transform(geometry);
+    const Interpolation<HexQ1Basis> rest_geometry(X_nodes);
+    const auto S = hex_hermite_dof_transform(rest_geometry);
     const Eigen::Vector3d factors(0.7, -1.3, 2.1);
     Eigen::MatrixXd x_local(8, 24);
     for (int v = 0; v < 8; ++v) {
@@ -51,7 +51,7 @@ TEST(HexHermiteDofTransform, ReproducesPhysicalPolynomialWithMixedDerivatives) {
     const Interpolation<HexHermiteBasis> displacement(c.reshaped<Eigen::RowMajor>(64, 3));
     for (const Eigen::Vector3d xi :
          {Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(1, 1, 1), Eigen::Vector3d(0.2, 0.3, 0.4)}) {
-        const auto point = rest_point(geometry, xi);
+        const auto point = rest_point(rest_geometry, xi);
         const auto& X = point.X;
         EXPECT_TRUE(displacement.value(xi).isApprox(factors * X.x() * X.y() * X.z(), 1e-12));
         const Eigen::Vector3d gradient(X.y() * X.z(), X.x() * X.z(), X.x() * X.y());
@@ -77,15 +77,15 @@ TEST(HexHermiteDofTransform, RejectsUnsupportedGeometryAndUnrepresentableScales)
             const Eigen::Matrix3d rotation = Eigen::AngleAxisd(0.3, Eigen::Vector3d::UnitZ()).toRotationMatrix();
             X_nodes = (X_nodes * rotation.transpose()).eval();
         }
-        const Interpolation<HexQ1Basis> geometry(X_nodes);
-        EXPECT_THROW(hex_hermite_dof_transform(geometry), std::invalid_argument);
+        const Interpolation<HexQ1Basis> rest_geometry(X_nodes);
+        EXPECT_THROW(hex_hermite_dof_transform(rest_geometry), std::invalid_argument);
     }
     const Interpolation<HexQ1Basis> non_volume(Eigen::MatrixXd::Zero(8, 2));
     EXPECT_THROW(hex_hermite_dof_transform(non_volume), std::invalid_argument);
     for (const Eigen::Vector3d lengths :
          {Eigen::Vector3d(1e-200, 1e-200, 1e200), Eigen::Vector3d(1e200, 1e200, 1e-200)}) {
-        const Interpolation<HexQ1Basis> geometry(box_nodes(lengths));
-        EXPECT_THROW(hex_hermite_dof_transform(geometry), std::invalid_argument);
+        const Interpolation<HexQ1Basis> rest_geometry(box_nodes(lengths));
+        EXPECT_THROW(hex_hermite_dof_transform(rest_geometry), std::invalid_argument);
     }
 }
 } // namespace

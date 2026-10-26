@@ -51,10 +51,10 @@ MaterialFields fields(const Coefficients& f) {
 }
 
 template <class Member, class BindEnergy> void check_fd(Member member, BindEnergy bind_energy) {
-    const Interpolation<TetP1Basis> geometry(coordinates());
+    const Interpolation<TetP1Basis> rest_geometry(coordinates());
     const auto f = coefficients();
     const auto evaluate = [&](const Coefficients& current, Eigen::VectorXd* g = nullptr, Eigen::MatrixXd* H = nullptr) {
-        return integrate_volume<TetCentroidQuadrature>(geometry, bind_energy(fields(current)), g, H);
+        return integrate_volume<TetCentroidQuadrature>(rest_geometry, bind_energy(fields(current)), g, H);
     };
     Eigen::VectorXd g;
     Eigen::MatrixXd H;
@@ -85,7 +85,7 @@ template <class Member, class BindEnergy> void check_fd(Member member, BindEnerg
 TEST(TetP1Integration, MatchesDirectGeometryAndDeformationGradient) {
     const auto X_nodes = coordinates();
     const Eigen::Matrix3d Dm = edge_matrix(X_nodes);
-    const Interpolation<TetP1Basis> geometry(X_nodes);
+    const Interpolation<TetP1Basis> rest_geometry(X_nodes);
     const auto f = coefficients();
     const auto local_fields = fields(f);
     const Eigen::Matrix3d F = Eigen::Matrix3d::Identity() + edge_matrix(f.u) * Dm.inverse();
@@ -93,7 +93,7 @@ TEST(TetP1Integration, MatchesDirectGeometryAndDeformationGradient) {
     const std::array<Eigen::Vector3d, 3> samples{
         {Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(0.2, 0.3, 0.1), Eigen::Vector3d(0.25, 0.25, 0.25)}};
     for (const auto& xi : samples) {
-        const auto point = rest_point(geometry, xi);
+        const auto point = rest_point(rest_geometry, xi);
         EXPECT_TRUE(point.X.isApprox(X_nodes.row(0).transpose() + Dm * xi, 1e-14));
         EXPECT_TRUE(point.dX_dxi.isApprox(Dm, 1e-14));
         EXPECT_TRUE(point.dxi_dX.isApprox(Dm.inverse(), 1e-14));
@@ -106,12 +106,13 @@ TEST(TetP1Integration, MatchesDirectGeometryAndDeformationGradient) {
     Eigen::VectorXd g;
     Eigen::MatrixXd H;
     EXPECT_NEAR(
-        integrate_volume<TetCentroidQuadrature>(geometry, MaterialLocalEnergyF<NeoHookean>(local_fields), &g, &H),
+        integrate_volume<TetCentroidQuadrature>(rest_geometry, MaterialLocalEnergyF<NeoHookean>(local_fields), &g, &H),
         expected, 1e-13);
-    EXPECT_NEAR(integrate_volume<TetCentroidQuadrature>(geometry, MaterialLocalEnergyFp<NeoHookean>(local_fields)),
+    EXPECT_NEAR(integrate_volume<TetCentroidQuadrature>(rest_geometry, MaterialLocalEnergyFp<NeoHookean>(local_fields)),
                 expected, 1e-13);
-    EXPECT_NEAR(integrate_volume<TetCentroidQuadrature>(geometry, MaterialLocalEnergyTheta<NeoHookean>(local_fields)),
-                expected, 1e-13);
+    EXPECT_NEAR(
+        integrate_volume<TetCentroidQuadrature>(rest_geometry, MaterialLocalEnergyTheta<NeoHookean>(local_fields)),
+        expected, 1e-13);
     for (int c = 0; c < 3; ++c) {
         Eigen::VectorXd translation = Eigen::VectorXd::Zero(12);
         for (int i = 0; i < 4; ++i)
@@ -144,7 +145,7 @@ TEST(TetP1Integration, RejectsDegenerateAndNegativelyOrientedRestGeometry) {
             X_nodes.row(3) = X_nodes.row(0);
         else
             X_nodes.row(1).swap(X_nodes.row(2));
-        const Interpolation<TetP1Basis> geometry(X_nodes);
-        EXPECT_THROW(integrate_volume<TetCentroidQuadrature>(geometry, local), std::invalid_argument);
+        const Interpolation<TetP1Basis> rest_geometry(X_nodes);
+        EXPECT_THROW(integrate_volume<TetCentroidQuadrature>(rest_geometry, local), std::invalid_argument);
     }
 }

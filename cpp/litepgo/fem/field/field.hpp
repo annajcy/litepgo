@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/fem/geometry/rest.hpp"
+#include "litepgo/fem/interpolation/rest_point.hpp"
 
 namespace litepgo {
 

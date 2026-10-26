@@ -1,7 +1,7 @@
 #pragma once
 
 #include "litepgo/fem/field/field.hpp"
-#include "litepgo/fem/geometry/interpolation.hpp"
+#include "litepgo/fem/interpolation/interpolation.hpp"
 
 #include <cmath>
 

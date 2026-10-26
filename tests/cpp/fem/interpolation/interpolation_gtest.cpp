@@ -1,6 +1,6 @@
 #include "litepgo/fem/basis/hex_q1_basis.hpp"
-#include "litepgo/fem/geometry/interpolation.hpp"
-#include "litepgo/fem/geometry/rest.hpp"
+#include "litepgo/fem/interpolation/interpolation.hpp"
+#include "litepgo/fem/interpolation/rest_point.hpp"
 
 #include <cmath>
 #include <gtest/gtest.h>
@@ -78,15 +78,15 @@ TEST(Interpolation, GeometryAndFieldsUseTheSameParameterInterpolation) {
     A << 0.2, -0.1, 0.3, 0.4, 0.2, -0.3, -0.2, 0.5, 0.1;
     const Eigen::Vector3d origin(1.2, -0.7, 2.1), offset(-0.3, 0.4, 0.7);
     const Eigen::Matrix<double, 8, 3> X_nodes = (corners() * dX_dxi.transpose()).rowwise() + origin.transpose();
-    const Interpolation<HexQ1Basis> geometry(X_nodes);
+    const Interpolation<HexQ1Basis> rest_geometry(X_nodes);
     const Interpolation<HexQ1Basis> displacement((X_nodes * A.transpose()).rowwise() + offset.transpose());
     Eigen::Matrix<double, 2, 3> M;
     M << 0.4, -0.1, 0.2, -0.3, 0.5, 0.1;
     const Interpolation<HexQ1Basis> parameters((X_nodes * M.transpose()).rowwise() + Eigen::RowVector2d(2, 3));
     for (const Eigen::Vector3d xi : {Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(-0.2, 1.2, 0.4)}) {
-        const auto point = rest_point(geometry, xi);
-        EXPECT_TRUE(geometry.value(xi).isApprox(origin + dX_dxi * xi, 1e-13));
-        EXPECT_TRUE(geometry.dvalue_dxi(xi).isApprox(dX_dxi, 1e-13));
+        const auto point = rest_point(rest_geometry, xi);
+        EXPECT_TRUE(rest_geometry.value(xi).isApprox(origin + dX_dxi * xi, 1e-13));
+        EXPECT_TRUE(rest_geometry.dvalue_dxi(xi).isApprox(dX_dxi, 1e-13));
         EXPECT_TRUE(displacement.value(xi).isApprox(A * point.X + offset, 1e-13));
         EXPECT_TRUE(displacement.dvalue_dxi(xi).isApprox(A * dX_dxi, 1e-13));
         EXPECT_TRUE((displacement.dvalue_dxi(xi) * point.dxi_dX).isApprox(A, 1e-13));

@@ -7,7 +7,7 @@
 #include "litepgo/fem/material/neo_hookean.hpp"
 #include "quadratic_parameter_material.hpp"
 
-#include "litepgo/fem/geometry/rest.hpp"
+#include "litepgo/fem/interpolation/rest_point.hpp"
 #include <gtest/gtest.h>
 #include <limits>
 
@@ -17,8 +17,8 @@ TEST(MaterialLocalEnergy, DirectFieldsBindCorrectDerivativesAndOwnSnapshots) {
     Eigen::Matrix<double, 8, 3> rest;
     for (int i = 0; i < 8; ++i)
         rest.row(i) = HexQ1Basis::reference_node(i).transpose();
-    const Interpolation<HexQ1Basis> geometry(rest);
-    const auto point = litepgo::rest_point(geometry, {0.2, 0.3, 0.4});
+    const Interpolation<HexQ1Basis> rest_geometry(rest);
+    const auto point = litepgo::rest_point(rest_geometry, {0.2, 0.3, 0.4});
 
     Eigen::Matrix3d F, Fp;
     F << 1.2, 0.1, -0.03, 0.04, 0.9, 0.02, -0.01, 0.04, 1.1;

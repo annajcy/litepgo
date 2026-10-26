@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/fem/geometry/interpolation.hpp"
+#include "litepgo/fem/interpolation/interpolation.hpp"
 
 #include <Eigen/LU>
 #include <cmath>
@@ -18,13 +18,13 @@ struct RestPointData {
 };
 
 // Validates the reference mapping at xi only; parameters are not clamped.
-template <Basis3D B> RestPointData rest_point(const Interpolation<B>& geometry, const Eigen::Vector3d& xi) {
-    if (geometry.num_components() != 3)
+template <Basis3D B> RestPointData rest_point(const Interpolation<B>& rest_geometry, const Eigen::Vector3d& xi) {
+    if (rest_geometry.num_components() != 3)
         throw std::invalid_argument("rest_point requires three geometry components");
     RestPointData point;
     point.xi = xi;
-    point.X = geometry.value(xi);
-    point.dX_dxi = geometry.dvalue_dxi(xi);
+    point.X = rest_geometry.value(xi);
+    point.dX_dxi = rest_geometry.dvalue_dxi(xi);
     point.det_dX_dxi = point.dX_dxi.determinant();
     if (!std::isfinite(point.det_dX_dxi) || point.det_dX_dxi <= 0.0)
         throw std::invalid_argument("rest_point: invalid reference mapping");

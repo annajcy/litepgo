@@ -1,5 +1,5 @@
 #include "litepgo/fem/basis/hex_q1_basis.hpp"
-#include "litepgo/fem/geometry/rest.hpp"
+#include "litepgo/fem/interpolation/rest_point.hpp"
 
 #include <gtest/gtest.h>
 
@@ -179,10 +179,10 @@ TEST(RestPoint, AcceptsSmallPositiveJacobiansAndRejectsOverflowWhenEvaluating) {
 
 TEST(RestPoint, RejectsNonVolumeComponentsAndNonFiniteInverse) {
     for (int components : {1, 2, 4}) {
-        const litepgo::Interpolation<litepgo::HexQ1Basis> geometry(Eigen::MatrixXd::Zero(8, components));
-        EXPECT_THROW(litepgo::rest_point(geometry, Eigen::Vector3d::Zero()), std::invalid_argument);
+        const litepgo::Interpolation<litepgo::HexQ1Basis> rest_geometry(Eigen::MatrixXd::Zero(8, components));
+        EXPECT_THROW(litepgo::rest_point(rest_geometry, Eigen::Vector3d::Zero()), std::invalid_argument);
     }
-    const litepgo::Interpolation<litepgo::HexQ1Basis> geometry(corners() *
-                                                               Eigen::Vector3d(1e-310, 1e100, 1e100).asDiagonal());
-    EXPECT_THROW(litepgo::rest_point(geometry, Eigen::Vector3d::Constant(0.5)), std::invalid_argument);
+    const litepgo::Interpolation<litepgo::HexQ1Basis> rest_geometry(corners() *
+                                                                    Eigen::Vector3d(1e-310, 1e100, 1e100).asDiagonal());
+    EXPECT_THROW(litepgo::rest_point(rest_geometry, Eigen::Vector3d::Constant(0.5)), std::invalid_argument);
 }

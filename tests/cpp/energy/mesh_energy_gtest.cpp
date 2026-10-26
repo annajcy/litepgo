@@ -22,7 +22,7 @@ using namespace litepgo;
 HexTopology two_hexes() {
     return HexTopology(12, {{1, 3, 9, 4, 7, 6, 0, 10}, {3, 8, 5, 9, 6, 2, 11, 0}});
 }
-Interpolation<HexQ1Basis> geometry() {
+Interpolation<HexQ1Basis> rest_geometry() {
     Eigen::Matrix<double, 8, 3> nodes;
     for (int i = 0; i < 8; ++i)
         nodes.row(i) = HexQ1Basis::reference_node(i).transpose();
@@ -73,7 +73,7 @@ void check_fd(MeshEnergy& energy, const Vec& x) {
 
 template <class Map, class Fields, class Bind>
 void check_material_path(const Map& map, const Vec& data, Fields fields, Bind bind) {
-    const auto reference = geometry();
+    const auto reference = rest_geometry();
     MeshEnergy energy(map, [reference, fields, bind](int, const auto& x_local, Vec* g, Eigen::MatrixXd* h) {
         return integrate_volume<GaussLegendre3D<2>>(reference, bind(fields(x_local)), g, h);
     });

@@ -19,7 +19,7 @@ struct Rule {
         return w;
     }
 };
-Interpolation<HexQ1Basis> geometry(double scale = 1) {
+Interpolation<HexQ1Basis> rest_geometry(double scale = 1) {
     Eigen::Matrix<double, 8, 3> X;
     for (int i = 0; i < 8; ++i)
         X.row(i) = scale * HexQ1Basis::reference_node(i);
@@ -92,7 +92,7 @@ TEST(LocalEnergy, DerivativeCapabilitiesAreIndependent) {
 
 TEST(LocalEnergy, DefaultAccumulationAddsWeightedValuesAndChecksRequests) {
     FullEnergy full;
-    const auto point = rest_point(geometry(), {0.2, 0.3, 0.4});
+    const auto point = rest_point(rest_geometry(), {0.2, 0.3, 0.4});
     Eigen::VectorXd g = Eigen::Vector3d::Constant(3);
     Eigen::MatrixXd h = Eigen::Matrix3d::Constant(5);
     const double weight = -0.7;
@@ -119,11 +119,11 @@ struct DisabledDerivatives : FullEnergy {
 };
 TEST(IntegrateVolume, ChecksCapabilitiesBeforeChangingOutputsOrEvaluatingPoints) {
     DisabledDerivatives energy;
-    const auto reference = geometry();
+    const auto reference = rest_geometry();
     Eigen::VectorXd g = Eigen::VectorXd::Constant(1, 7);
     Eigen::MatrixXd h = Eigen::MatrixXd::Constant(1, 1, 9);
     EXPECT_THROW(integrate_volume<Rule>(reference, energy, &g), std::logic_error);
-    EXPECT_THROW(integrate_volume<Rule>(geometry(0), energy, &g), std::logic_error);
+    EXPECT_THROW(integrate_volume<Rule>(rest_geometry(0), energy, &g), std::logic_error);
     EXPECT_THROW(integrate_volume<Rule>(reference, energy, nullptr, &h), std::logic_error);
     FirstOnly first;
     SecondOnly second;
@@ -142,7 +142,7 @@ TEST(IntegrateVolume, ChecksCapabilitiesBeforeChangingOutputsOrEvaluatingPoints)
 }
 
 TEST(IntegrateVolume, IntegratesIndependentOutputsInOnePassAndOverwritesBuffers) {
-    const auto reference = geometry();
+    const auto reference = rest_geometry();
     FullEnergy energy;
     Eigen::VectorXd g = Eigen::VectorXd::Ones(1);
     Eigen::MatrixXd h = Eigen::MatrixXd::Ones(1, 2);
@@ -164,8 +164,8 @@ TEST(IntegrateVolume, IntegratesIndependentOutputsInOnePassAndOverwritesBuffers)
     EXPECT_DOUBLE_EQ(integrate_volume<Rule>(reference, SecondOnly{}, nullptr, &second_h), value);
     EXPECT_EQ(first_g, g);
     EXPECT_EQ(second_h, h);
-    EXPECT_DOUBLE_EQ(integrate_volume<Rule>(geometry(), ValueOnly{}), value);
-    EXPECT_NEAR(integrate_volume<Rule>(geometry(2), ValueOnly{}),
+    EXPECT_DOUBLE_EQ(integrate_volume<Rule>(rest_geometry(), ValueOnly{}), value);
+    EXPECT_NEAR(integrate_volume<Rule>(rest_geometry(2), ValueOnly{}),
                 8 * (0.4 * 1.4 + 0.6 * 2.6) * 0.5 * energy.coefficients.squaredNorm(), 1e-13);
     for (int j = 0; j < 3; ++j) {
         auto plus = energy, minus = energy;
@@ -193,7 +193,7 @@ struct BadHessian : SecondOnly {
     }
 };
 TEST(IntegrateVolume, RejectsInvalidRuntimeDerivativeSizes) {
-    const auto reference = geometry();
+    const auto reference = rest_geometry();
     Eigen::VectorXd g;
     Eigen::MatrixXd h;
     BadGradient bad;
@@ -221,9 +221,9 @@ TEST(IntegrateVolume, RejectsResizedAccumulatorOutputsAtTheFirstPoint) {
     const ResizingAccumulator energy;
     Eigen::VectorXd g;
     Eigen::MatrixXd h;
-    EXPECT_THROW(integrate_volume<Rule>(geometry(), energy, &g), std::invalid_argument);
+    EXPECT_THROW(integrate_volume<Rule>(rest_geometry(), energy, &g), std::invalid_argument);
     EXPECT_EQ(energy.calls, 1);
-    EXPECT_THROW(integrate_volume<Rule>(geometry(), energy, nullptr, &h), std::invalid_argument);
+    EXPECT_THROW(integrate_volume<Rule>(rest_geometry(), energy, nullptr, &h), std::invalid_argument);
     EXPECT_EQ(energy.calls, 2);
 }
 } // namespace
@@ -261,8 +261,8 @@ struct NonFinitePoints : Rule {
 } // namespace
 
 TEST(IntegrateVolume, IntegratesUnitTranslatedAndWarpedVolumes) {
-    EXPECT_NEAR(integrate_volume<Rule>(geometry(), UnitDensity{}), 1, 1e-14);
-    EXPECT_NEAR(integrate_volume<GaussLegendre3D<2>>(geometry(), UnitDensity{}), 1, 1e-14);
+    EXPECT_NEAR(integrate_volume<Rule>(rest_geometry(), UnitDensity{}), 1, 1e-14);
+    EXPECT_NEAR(integrate_volume<GaussLegendre3D<2>>(rest_geometry(), UnitDensity{}), 1, 1e-14);
     Eigen::Matrix<double, 8, 3> X;
     for (int i = 0; i < 8; ++i) {
         const auto xi = HexQ1Basis::reference_node(i);
@@ -278,8 +278,8 @@ TEST(IntegrateVolume, IntegratesUnitTranslatedAndWarpedVolumes) {
 
 TEST(IntegrateVolume, RejectsInvalidGeometryAtTheEvaluatedPoint) {
     UnitDensity energy;
-    EXPECT_THROW(integrate_volume<Rule>(geometry(0), energy), std::invalid_argument);
-    EXPECT_THROW(integrate_volume<Rule>(geometry(-1), energy), std::invalid_argument);
+    EXPECT_THROW(integrate_volume<Rule>(rest_geometry(0), energy), std::invalid_argument);
+    EXPECT_THROW(integrate_volume<Rule>(rest_geometry(-1), energy), std::invalid_argument);
     EXPECT_EQ(energy.calls, 0);
     Eigen::Matrix<double, 8, 3> X;
     for (int i = 0; i < 8; ++i) {
@@ -292,9 +292,9 @@ TEST(IntegrateVolume, RejectsInvalidGeometryAtTheEvaluatedPoint) {
 
 TEST(IntegrateVolume, RejectsNonFinitePointsWeightsAndOverflowingVolumeWeights) {
     UnitDensity energy;
-    EXPECT_THROW(integrate_volume<NonFinitePoints>(geometry(), energy), std::invalid_argument);
-    EXPECT_THROW(integrate_volume<OverflowingWeights>(geometry(2), energy), std::invalid_argument);
+    EXPECT_THROW(integrate_volume<NonFinitePoints>(rest_geometry(), energy), std::invalid_argument);
+    EXPECT_THROW(integrate_volume<OverflowingWeights>(rest_geometry(2), energy), std::invalid_argument);
     EXPECT_EQ(energy.calls, 0);
-    EXPECT_THROW(integrate_volume<NonFiniteWeights>(geometry(), energy), std::invalid_argument);
+    EXPECT_THROW(integrate_volume<NonFiniteWeights>(rest_geometry(), energy), std::invalid_argument);
     EXPECT_EQ(energy.calls, 1);
 }

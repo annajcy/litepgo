@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/fem/geometry/rest.hpp"
+#include "litepgo/fem/interpolation/rest_point.hpp"
 #include "litepgo/fem/local/local_energy.hpp"
 #include "litepgo/fem/quadrature/quadrature.hpp"
 
@@ -14,7 +14,7 @@ namespace litepgo {
 // independently nullable, resized and overwritten; they must not alias energy data.
 // Unsupported derivative requests throw std::logic_error before any outputs change.
 template <Quadrature3D Q, Basis3D B>
-double integrate_volume(const Interpolation<B>& geometry, const LocalEnergy& energy,
+double integrate_volume(const Interpolation<B>& rest_geometry, const LocalEnergy& energy,
                         Eigen::VectorXd* gradient = nullptr, Eigen::MatrixXd* hessian = nullptr) {
     if (gradient && !energy.has_gradient())
         throw std::logic_error("integrate_volume: energy does not support gradient evaluation");
@@ -33,7 +33,7 @@ double integrate_volume(const Interpolation<B>& geometry, const LocalEnergy& ene
     const auto& points = Q::points();
     const auto& weights = Q::weights();
     for (int q = 0; q < Q::num_points; ++q) {
-        const auto point = rest_point(geometry, points.row(q).transpose());
+        const auto point = rest_point(rest_geometry, points.row(q).transpose());
         const double dV = weights[q] * point.det_dX_dxi;
         if (!std::isfinite(dV))
             throw std::invalid_argument("integrate_volume: non-finite volume weight");

@@ -6,7 +6,7 @@
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_value_field.hpp"
-#include "litepgo/fem/geometry/rest.hpp"
+#include "litepgo/fem/interpolation/rest_point.hpp"
 #include "litepgo/fem/quadrature/gauss_legendre_3d.hpp"
 #include <cmath>
 #include <gtest/gtest.h>
@@ -24,14 +24,14 @@ Eigen::Matrix<double, 8, 3> nodes() {
 template <class B> void check_deformation_jacobian() {
     auto X = nodes();
     X(6, 0) += 0.3;
-    const Interpolation<HexQ1Basis> geometry(X);
+    const Interpolation<HexQ1Basis> rest_geometry(X);
     Eigen::MatrixXd u(B::num_basis_functions, 3);
     for (int j = 0; j < u.size(); ++j)
         u(j / 3, j % 3) = 0.02 * std::sin(j + 0.3);
     const DeformationGradientField<B> field(u);
     constexpr double step = 1e-5;
     for (const Eigen::Vector3d xi : {Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(-0.2, 1.1, 0.1)}) {
-        const auto point = rest_point(geometry, xi);
+        const auto point = rest_point(rest_geometry, xi);
         const auto dvalue_dx_local = field.dvalue_dx_local(point);
         const Eigen::MatrixXd previous =
             Eigen::kroneckerProduct(point.dxi_dX.transpose(), Eigen::Matrix3d::Identity()) *
@@ -80,8 +80,8 @@ TEST(LocalField, DeformationJacobianValidatesGradientsAndOverflowIndependentlyOf
 }
 TEST(LocalField, AffineValuesAndCoefficientJacobians) {
     const auto X = nodes();
-    const Interpolation<HexQ1Basis> geometry(X);
-    const auto point = litepgo::rest_point(geometry, {0.2, 0.3, 0.4});
+    const Interpolation<HexQ1Basis> rest_geometry(X);
+    const auto point = litepgo::rest_point(rest_geometry, {0.2, 0.3, 0.4});
     Eigen::Matrix3d A;
     A << 0.1, 0.2, 0, -0.3, 0.1, 0.2, 0.1, 0, 0.3;
     Eigen::Matrix<double, 8, 3> u = X * A.transpose();
@@ -281,13 +281,13 @@ TEST(LocalField, FieldsChooseTheirOwnBasisOnWarpedGeometry) {
         const Eigen::Vector3d xi(i / 4, (i / 2) % 2, i % 2);
         u.row(i) << xi.x() * xi.y(), xi.y() * xi.z(), xi.z() * xi.x();
     }
-    const litepgo::Interpolation<litepgo::HexQ1Basis> geometry(X);
+    const litepgo::Interpolation<litepgo::HexQ1Basis> rest_geometry(X);
     const litepgo::DeformationGradientField<TensorBasis> deformation(u);
     const litepgo::InterpolatedValueField<TensorBasis> values(u);
     const litepgo::InterpolatedValueField<litepgo::HexQ1Basis> positions(X);
     constexpr double h = 1e-5;
     for (int q = 0; q < litepgo::GaussLegendre3D<2>::num_points; ++q) {
-        const auto point = litepgo::rest_point(geometry, litepgo::GaussLegendre3D<2>::points().row(q).transpose());
+        const auto point = litepgo::rest_point(rest_geometry, litepgo::GaussLegendre3D<2>::points().row(q).transpose());
         EXPECT_TRUE(positions.value(point).isApprox(point.X, 1e-14));
         const auto& xi = point.xi;
         EXPECT_TRUE(
@@ -296,8 +296,8 @@ TEST(LocalField, FieldsChooseTheirOwnBasisOnWarpedGeometry) {
             Eigen::Vector3d plus = point.X, minus = point.X;
             plus[d] += h;
             minus[d] -= h;
-            const Eigen::Vector3d fd = (values.value(litepgo::rest_point(geometry, inverse(plus))) -
-                                        values.value(litepgo::rest_point(geometry, inverse(minus)))) /
+            const Eigen::Vector3d fd = (values.value(litepgo::rest_point(rest_geometry, inverse(plus))) -
+                                        values.value(litepgo::rest_point(rest_geometry, inverse(minus)))) /
                                        (2 * h);
             EXPECT_TRUE(fd.isApprox((deformation.value(point) - Eigen::Matrix3d::Identity()).col(d), 3e-9));
         }

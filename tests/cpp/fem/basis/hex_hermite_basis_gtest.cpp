@@ -1,5 +1,5 @@
 #include "litepgo/fem/basis/hex_hermite_basis.hpp"
-#include "litepgo/fem/geometry/interpolation.hpp"
+#include "litepgo/fem/interpolation/interpolation.hpp"
 
 #include <gtest/gtest.h>
 

@@ -1,5 +1,7 @@
 # FEM with MeshEnergy
 
+The `cpp/litepgo/fem/interpolation/` module contains generic field interpolation (`interpolation.hpp`), reference-geometry point data and evaluation (`rest_point.hpp`), and the Hex Hermite coefficient transform (`hex_hermite_dof_transform.hpp/.cpp`). Its tests mirror this layout in `tests/cpp/fem/interpolation/`.
+
 ## Notation and derivative layout
 
 `x` is the global unknown vector. `x_local = map.gather(e, x)` preserves the map's existing matrix or vector shape; `dx` and `dx_local` are the corresponding increments. `e` indexes elements, `q` quadrature points, `a` basis functions, `v` vertices, and `c` component indices in array subscripts. `u_coeffs` names displacement coefficients when their physical meaning is known.
@@ -11,6 +13,7 @@
 | `xi` | Reference-element coordinates $\xi$ |
 | `X` | Rest position $X$ at one point |
 | `X_nodes` | Collection of rest nodal positions, in matrix or packed-vector form as specified by the interface |
+| `rest_geometry`, `rest_geometries` | The interpolation map $\xi\mapsto X(\xi)$ for one rest element, or the collection of these maps |
 | `dX_dxi` | $\partial X/\partial\xi$ |
 | `dxi_dX` | $\partial\xi/\partial X$ |
 | `det_dX_dxi` | $\det(\partial X/\partial\xi)$ |
@@ -61,6 +64,14 @@ Generic operations retain `value`, `gradient`, `hessian`, `evaluate`, `gather`, 
 
 The old public names have been replaced; custom bases, fields, and materials must use the new names. No compatibility aliases are provided.
 
+Update includes to the `fem/interpolation/` module as well:
+
+| Previous include | Replacement |
+| --- | --- |
+| `litepgo/fem/geometry/interpolation.hpp` | `litepgo/fem/interpolation/interpolation.hpp` |
+| `litepgo/fem/geometry/rest.hpp` | `litepgo/fem/interpolation/rest_point.hpp` |
+| `litepgo/fem/geometry/hex_hermite_dof_transform.hpp` | `litepgo/fem/interpolation/hex_hermite_dof_transform.hpp` |
+
 | Previous API | Replacement |
 | --- | --- |
 | `RestPointData::position` | `X` |
@@ -80,7 +91,7 @@ The old public names have been replaced; custom bases, fields, and materials mus
 
 ## Hex Q1
 
-Two hexes of widths 1 and 2 share a face and its nodal displacement DOFs. Each `geometries[e]` interpolates rest coordinates gathered for element `e`; `MeshEnergy` supplies that same element's `x_local` to the lambda. `integrate_volume<GaussLegendre3D<2>>` integrates that geometry with eight Gauss points. `MaterialLocalEnergyF<NeoHookean>` differentiates displacement DOFs; `Fp = I` and `theta = [2, 3]` stay fixed. The example evaluates energy, gradient, and Hessian, and checks both zero rest energy and uniform-strain energy over the total volume of 3.
+Two hexes of widths 1 and 2 share a face and its nodal displacement DOFs. Each `rest_geometries[e]` interpolates rest coordinates gathered for element `e`; `MeshEnergy` supplies that same element's `x_local` to the lambda. `integrate_volume<GaussLegendre3D<2>>` integrates that geometry with eight Gauss points. `MaterialLocalEnergyF<NeoHookean>` differentiates displacement DOFs; `Fp = I` and `theta = [2, 3]` stay fixed. The example evaluates energy, gradient, and Hessian, and checks both zero rest energy and uniform-strain energy over the total volume of 3.
 
 From the repository root:
 
@@ -117,10 +128,10 @@ The FD test in `tests/example/fem` shares the example setup and checks all 15 di
 
 Two boxes of sizes `(1,2,3)` and `(2,2,3)` share a face. Geometry uses Hex Q1; displacement uses 64 Hermite coefficients per component. Each vertex has 24 physical DOFs: the three components of `u, u_X, u_Y, u_Z, u_XY, u_XZ, u_YZ, u_XYZ`.
 
-The public function `hex_hermite_dof_transform(geometry)` computes `S` from the fixed rest Q1 geometry, including the geometry and scale validation. Include `litepgo/fem/geometry/hex_hermite_dof_transform.hpp` and compute it once per rest element:
+The public function `hex_hermite_dof_transform(rest_geometry)` computes `S` from the fixed rest Q1 geometry, including the geometry and scale validation. Include `litepgo/fem/interpolation/hex_hermite_dof_transform.hpp` and compute it once per rest element:
 
 ```cpp
-const auto S = litepgo::hex_hermite_dof_transform(geometry);
+const auto S = litepgo::hex_hermite_dof_transform(rest_geometry);
 const Eigen::VectorXd c = S * x_local.reshaped<Eigen::RowMajor>();
 const Eigen::MatrixXd u_coeffs = c.reshaped<Eigen::RowMajor>(64, 3);
 ```
@@ -137,4 +148,4 @@ cmake --build --preset debug --target hex_hermite_mesh_energy litepgo_tests
 ./build/debug/tests/cpp/litepgo_tests --gtest_filter='HexHermiteExample.*'
 ```
 
-Tests in `tests/cpp/fem/geometry` check the public transform's slot ordering, reproduction of physical mixed derivatives, and geometry/scale validation. Tests in `tests/example/fem` check affine fields, shared-face values and physical gradients, and energy derivatives with respect to physical DOFs. The example evaluates energy and derivatives only; feasible step bounds are not implemented. Nonlinear material integration is numerical.
+Tests in `tests/cpp/fem/interpolation` check the public transform's slot ordering, reproduction of physical mixed derivatives, and geometry/scale validation. Tests in `tests/example/fem` check affine fields, shared-face values and physical gradients, and energy derivatives with respect to physical DOFs. The example evaluates energy and derivatives only; feasible step bounds are not implemented. Nonlinear material integration is numerical.

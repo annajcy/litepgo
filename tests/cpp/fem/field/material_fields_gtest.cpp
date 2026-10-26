@@ -15,7 +15,7 @@
 #include "litepgo/fem/quadrature/gauss_legendre_3d.hpp"
 #include "litepgo/fem/quadrature/tensor_product_quadrature.hpp"
 
-#include "litepgo/fem/geometry/rest.hpp"
+#include "litepgo/fem/interpolation/rest_point.hpp"
 #include <array>
 #include <cmath>
 #include <gtest/gtest.h>
@@ -44,7 +44,7 @@ struct Fixture {
         for (int j = 0; j < u.size(); ++j)
             u[j] = 0.04 * std::sin(0.7 * (j + 1));
     }
-    Interpolation<HexQ1Basis> geometry(int e) const {
+    Interpolation<HexQ1Basis> rest_geometry(int e) const {
         Eigen::Matrix<double, 8, 3> local;
         const auto& v = topology.cell_vertices(e);
         for (int i = 0; i < 8; ++i)
@@ -61,12 +61,12 @@ struct Fixture {
 };
 
 template <int NumDofs, class MakeFields, class BindEnergy>
-void check_fd(const Interpolation<HexQ1Basis>& geometry, const Eigen::Matrix<double, NumDofs, 1>& x,
+void check_fd(const Interpolation<HexQ1Basis>& rest_geometry, const Eigen::Matrix<double, NumDofs, 1>& x,
               MakeFields make_fields, BindEnergy bind_energy) {
     const auto fields = make_fields(x);
     Eigen::VectorXd g;
     Eigen::MatrixXd H;
-    integrate_volume<GaussLegendre3D<2>>(geometry, bind_energy(fields), &g, &H);
+    integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(fields), &g, &H);
     EXPECT_LT((H - H.transpose()).norm(), 1e-12 * (1 + H.norm()));
     for (double h : {1e-3, 3e-4, 1e-4}) {
         SCOPED_TRACE(h);
@@ -78,8 +78,8 @@ void check_fd(const Interpolation<HexQ1Basis>& geometry, const Eigen::Matrix<dou
             minus[j] -= h;
             const auto plus_fields = make_fields(plus), minus_fields = make_fields(minus);
             Eigen::VectorXd plus_g, minus_g;
-            dg[j] = (integrate_volume<GaussLegendre3D<2>>(geometry, bind_energy(plus_fields), &plus_g) -
-                     integrate_volume<GaussLegendre3D<2>>(geometry, bind_energy(minus_fields), &minus_g)) /
+            dg[j] = (integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(plus_fields), &plus_g) -
+                     integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(minus_fields), &minus_g)) /
                     (2 * h);
             dH.col(j) = (plus_g - minus_g) / (2 * h);
         }
@@ -94,11 +94,12 @@ void check_fd(const Interpolation<HexQ1Basis>& geometry, const Eigen::Matrix<dou
     d.normalize();
     v.normalize();
     const double h = 3e-4;
-    const double fd = (integrate_volume<GaussLegendre3D<2>>(geometry, bind_energy(make_fields(x + h * d + h * v))) -
-                       integrate_volume<GaussLegendre3D<2>>(geometry, bind_energy(make_fields(x + h * d - h * v))) -
-                       integrate_volume<GaussLegendre3D<2>>(geometry, bind_energy(make_fields(x - h * d + h * v))) +
-                       integrate_volume<GaussLegendre3D<2>>(geometry, bind_energy(make_fields(x - h * d - h * v)))) /
-                      (4 * h * h);
+    const double fd =
+        (integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(make_fields(x + h * d + h * v))) -
+         integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(make_fields(x + h * d - h * v))) -
+         integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(make_fields(x - h * d + h * v))) +
+         integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(make_fields(x - h * d - h * v)))) /
+        (4 * h * h);
     EXPECT_NEAR(fd, d.dot(H * v), 2e-6 * (1 + H.norm()));
 }
 
@@ -107,11 +108,11 @@ TEST(MaterialFields, MixedRepresentationsPointInputsAndLocalFiniteDifferences) {
     const VertexDofMap map(f.topology, 3);
     for (int e = 0; e < 2; ++e) {
         SCOPED_TRACE(e);
-        const auto geometry = f.geometry(e);
+        const auto rest_geometry = f.rest_geometry(e);
         const auto fields = f.fields(e);
         const auto ue = map.gather(e, f.u);
         for (int q = 0; q < GaussLegendre3D<2>::num_points; ++q) {
-            const auto ref = rest_point(geometry, GaussLegendre3D<2>::points().row(q).transpose());
+            const auto ref = rest_point(rest_geometry, GaussLegendre3D<2>::points().row(q).transpose());
             const auto point = fields.evaluate(ref);
             EXPECT_TRUE(point.F.isApprox(Eigen::Matrix3d::Identity() +
                                          Interpolation<HexQ1Basis>(ue).dvalue_dxi(ref.xi) * ref.dxi_dX));
@@ -124,13 +125,15 @@ TEST(MaterialFields, MixedRepresentationsPointInputsAndLocalFiniteDifferences) {
                             ->dvalue_dx_local(ref)
                             .isIdentity());
         }
-        EXPECT_DOUBLE_EQ(integrate_volume<GaussLegendre3D<2>>(geometry, MaterialLocalEnergyF<NeoHookean>(fields)),
-                         integrate_volume<GaussLegendre3D<2>>(geometry, MaterialLocalEnergyFp<NeoHookean>(fields)));
-        EXPECT_DOUBLE_EQ(integrate_volume<GaussLegendre3D<2>>(geometry, MaterialLocalEnergyF<NeoHookean>(fields)),
-                         integrate_volume<GaussLegendre3D<2>>(geometry, MaterialLocalEnergyTheta<NeoHookean>(fields)));
+        EXPECT_DOUBLE_EQ(
+            integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyF<NeoHookean>(fields)),
+            integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyFp<NeoHookean>(fields)));
+        EXPECT_DOUBLE_EQ(
+            integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyF<NeoHookean>(fields)),
+            integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyTheta<NeoHookean>(fields)));
         const Eigen::Matrix<double, 24, 1> uvec = ue.reshaped<Eigen::RowMajor>();
         check_fd(
-            geometry, uvec,
+            rest_geometry, uvec,
             [&](const Eigen::Matrix<double, 24, 1>& x) {
                 Eigen::Matrix<double, 8, 3> c;
                 for (int j = 0; j < 24; ++j)
@@ -145,7 +148,7 @@ TEST(MaterialFields, MixedRepresentationsPointInputsAndLocalFiniteDifferences) {
         const Eigen::Matrix3d fp = f.fp.segment<9>(9 * e).reshaped(3, 3);
         const Eigen::Matrix<double, 9, 1> pvec = Eigen::Map<const Eigen::Matrix<double, 9, 1>>(fp.data());
         check_fd(
-            geometry, pvec,
+            rest_geometry, pvec,
             [&](const Eigen::Matrix<double, 9, 1>& x) {
                 return MaterialFields{
                     std::make_shared<DeformationGradientField<litepgo::HexQ1Basis>>(ue),
@@ -154,7 +157,7 @@ TEST(MaterialFields, MixedRepresentationsPointInputsAndLocalFiniteDifferences) {
             },
             [](const auto& local_fields) { return MaterialLocalEnergyFp<NeoHookean>(local_fields); });
         check_fd(
-            geometry, ConstantDofMap(f.topology, 2).gather(0, f.theta),
+            rest_geometry, ConstantDofMap(f.topology, 2).gather(0, f.theta),
             [&](const Eigen::Matrix<double, 2, 1>& x) {
                 return MaterialFields{std::make_shared<DeformationGradientField<litepgo::HexQ1Basis>>(ue),
                                       std::make_shared<IdentityField<Eigen::Matrix3d>>(fp),
@@ -167,16 +170,16 @@ TEST(MaterialFields, MixedRepresentationsPointInputsAndLocalFiniteDifferences) {
 TEST(MaterialFields, SameQuadratureAcceptsDifferentActiveDofCounts) {
     Fixture fixture;
     fixture.u.setZero();
-    const auto geometry = fixture.geometry(0);
+    const auto rest_geometry = fixture.rest_geometry(0);
     const auto nodal = fixture.fields(0);
     const MaterialFields direct{std::make_shared<IdentityField<Eigen::Matrix3d>>(Eigen::Matrix3d::Identity()), nodal.Fp,
                                 nodal.theta};
     Eigen::VectorXd nodal_gradient, direct_gradient;
     Eigen::MatrixXd nodal_hessian, direct_hessian;
-    const double nodal_value = integrate_volume<GaussLegendre3D<2>>(geometry, MaterialLocalEnergyF<NeoHookean>(nodal),
-                                                                    &nodal_gradient, &nodal_hessian);
-    const double direct_value = integrate_volume<GaussLegendre3D<2>>(geometry, MaterialLocalEnergyF<NeoHookean>(direct),
-                                                                     &direct_gradient, &direct_hessian);
+    const double nodal_value = integrate_volume<GaussLegendre3D<2>>(
+        rest_geometry, MaterialLocalEnergyF<NeoHookean>(nodal), &nodal_gradient, &nodal_hessian);
+    const double direct_value = integrate_volume<GaussLegendre3D<2>>(
+        rest_geometry, MaterialLocalEnergyF<NeoHookean>(direct), &direct_gradient, &direct_hessian);
     EXPECT_EQ(nodal_gradient.size(), 24);
     EXPECT_EQ(direct_gradient.size(), 9);
     EXPECT_DOUBLE_EQ(nodal_value, direct_value);
@@ -184,7 +187,7 @@ TEST(MaterialFields, SameQuadratureAcceptsDifferentActiveDofCounts) {
     Eigen::Matrix<double, 24, 24> expected_hessian = Eigen::Matrix<double, 24, 24>::Zero();
     Eigen::Matrix<double, 9, 9> expected_direct_hessian = Eigen::Matrix<double, 9, 9>::Zero();
     for (int q = 0; q < GaussLegendre3D<2>::num_points; ++q) {
-        const auto point = rest_point(geometry, GaussLegendre3D<2>::points().row(q).transpose());
+        const auto point = rest_point(rest_geometry, GaussLegendre3D<2>::points().row(q).transpose());
         const double weight = GaussLegendre3D<2>::weights()[q] * point.det_dX_dxi;
         const auto inputs = nodal.evaluate(point);
         const auto dvalue_dx_local =
@@ -202,7 +205,7 @@ TEST(MaterialFields, SameQuadratureAcceptsDifferentActiveDofCounts) {
     const Eigen::Matrix<double, 9, 1> identity =
         Eigen::Map<const Eigen::Matrix<double, 9, 1>>(Eigen::Matrix3d::Identity().eval().data());
     check_fd(
-        geometry, identity,
+        rest_geometry, identity,
         [&](const Eigen::Matrix<double, 9, 1>& x) {
             return MaterialFields{
                 std::make_shared<IdentityField<Eigen::Matrix3d>>(Eigen::Map<const Eigen::Matrix3d>(x.data())), nodal.Fp,
@@ -214,11 +217,11 @@ TEST(MaterialFields, SameQuadratureAcceptsDifferentActiveDofCounts) {
 TEST(MaterialFields, ElementAndSharedDofNumbersAccumulateIntoDifferentGlobalBlocks) {
     Fixture f;
     const VertexDofMap map(f.topology, 3);
-    std::array geometries{f.geometry(0), f.geometry(1)};
+    std::array rest_geometries{f.rest_geometry(0), f.rest_geometry(1)};
     const auto total = [&](const Fixture& data) {
         double value = 0;
         for (int e = 0; e < 2; ++e)
-            value += integrate_volume<GaussLegendre3D<2>>(geometries[static_cast<std::size_t>(e)],
+            value += integrate_volume<GaussLegendre3D<2>>(rest_geometries[static_cast<std::size_t>(e)],
                                                           MaterialLocalEnergyF<NeoHookean>(data.fields(e)));
         return value;
     };
@@ -226,16 +229,16 @@ TEST(MaterialFields, ElementAndSharedDofNumbersAccumulateIntoDifferentGlobalBloc
     Eigen::MatrixXd Hp = Eigen::MatrixXd::Zero(18, 18);
     Eigen::Matrix2d Ht = Eigen::Matrix2d::Zero();
     for (int e = 0; e < 2; ++e) {
-        const auto& geometry = geometries[static_cast<std::size_t>(e)];
+        const auto& rest_geometry = rest_geometries[static_cast<std::size_t>(e)];
         const auto fields = f.fields(e);
         const auto uidx = map.dof_indices(e);
         const auto pidx = ElementDofMap(f.topology, 9).dof_indices(e);
         const auto tidx = ConstantDofMap(f.topology, 2).dof_indices(e);
         Eigen::VectorXd ug, pg, tg;
         Eigen::MatrixXd ph, th;
-        integrate_volume<GaussLegendre3D<2>>(geometry, MaterialLocalEnergyF<NeoHookean>(fields), &ug);
-        integrate_volume<GaussLegendre3D<2>>(geometry, MaterialLocalEnergyFp<NeoHookean>(fields), &pg, &ph);
-        integrate_volume<GaussLegendre3D<2>>(geometry, MaterialLocalEnergyTheta<NeoHookean>(fields), &tg, &th);
+        integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyF<NeoHookean>(fields), &ug);
+        integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyFp<NeoHookean>(fields), &pg, &ph);
+        integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyTheta<NeoHookean>(fields), &tg, &th);
         for (int j = 0; j < 24; ++j)
             gu[uidx[static_cast<std::size_t>(j)]] += ug[j];
         for (int j = 0; j < 9; ++j) {
@@ -276,12 +279,13 @@ TEST(MaterialFields, ElementAndSharedDofNumbersAccumulateIntoDifferentGlobalBloc
     const Eigen::Matrix3d original = f.fp.head<9>().reshaped(3, 3);
     f.fp.head<9>() = 1.1 * original.reshaped();
     f.theta << 4, 5;
-    EXPECT_EQ(before.Fp->value(rest_point(geometries[0], GaussLegendre3D<2>::points().row(0).transpose())), original);
-    EXPECT_EQ(before.theta->value(rest_point(geometries[0], GaussLegendre3D<2>::points().row(0).transpose())),
-              Eigen::Vector2d(2, 3));
-    EXPECT_NE(f.fields(0).Fp->value(rest_point(geometries[0], GaussLegendre3D<2>::points().row(0).transpose())),
+    EXPECT_EQ(before.Fp->value(rest_point(rest_geometries[0], GaussLegendre3D<2>::points().row(0).transpose())),
               original);
-    EXPECT_EQ(f.fields(1).theta->value(rest_point(geometries[1], GaussLegendre3D<2>::points().row(0).transpose())),
+    EXPECT_EQ(before.theta->value(rest_point(rest_geometries[0], GaussLegendre3D<2>::points().row(0).transpose())),
+              Eigen::Vector2d(2, 3));
+    EXPECT_NE(f.fields(0).Fp->value(rest_point(rest_geometries[0], GaussLegendre3D<2>::points().row(0).transpose())),
+              original);
+    EXPECT_EQ(f.fields(1).theta->value(rest_point(rest_geometries[1], GaussLegendre3D<2>::points().row(0).transpose())),
               Eigen::Vector2d(4, 5));
 }
 
@@ -290,17 +294,17 @@ TEST(MaterialFields, SharedParameterHessianIncludesBothElements) {
     Eigen::Matrix2d H = Eigen::Matrix2d::Zero();
     double volume = 0;
     for (int e = 0; e < 2; ++e) {
-        const auto geometry = f.geometry(e);
+        const auto rest_geometry = f.rest_geometry(e);
         const auto fields = f.fields(e);
         Eigen::MatrixXd local_hessian;
-        integrate_volume<GaussLegendre3D<2>>(geometry, MaterialLocalEnergyTheta<QuadraticParameterMaterial<2>>(fields),
-                                             nullptr, &local_hessian);
+        integrate_volume<GaussLegendre3D<2>>(
+            rest_geometry, MaterialLocalEnergyTheta<QuadraticParameterMaterial<2>>(fields), nullptr, &local_hessian);
         H += local_hessian;
         for (int q = 0; q < GaussLegendre3D<2>::num_points; ++q)
             volume += GaussLegendre3D<2>::weights()[q] *
-                      rest_point(geometry, GaussLegendre3D<2>::points().row(q).transpose()).det_dX_dxi;
+                      rest_point(rest_geometry, GaussLegendre3D<2>::points().row(q).transpose()).det_dX_dxi;
         check_fd(
-            geometry, ConstantDofMap(f.topology, 2).gather(0, f.theta),
+            rest_geometry, ConstantDofMap(f.topology, 2).gather(0, f.theta),
             [&](const Eigen::Vector2d& theta) {
                 return MaterialFields{fields.F, fields.Fp, std::make_shared<IdentityField<Eigen::VectorXd>>(theta)};
             },
@@ -317,14 +321,15 @@ TEST(MaterialFields, DirectInfeasiblePlasticStateReachesMaterialValidation) {
     Eigen::Matrix3d inverted = Eigen::Matrix3d::Identity();
     inverted(0, 0) = -1;
     fields.Fp = std::make_shared<IdentityField<Eigen::Matrix3d>>(inverted);
-    const auto geometry = f.geometry(0);
+    const auto rest_geometry = f.rest_geometry(0);
     Eigen::VectorXd g;
     Eigen::MatrixXd h;
-    EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(geometry, MaterialLocalEnergyFp<NeoHookean>(fields)),
+    EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyFp<NeoHookean>(fields)),
                  InfeasibleState);
-    EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(geometry, MaterialLocalEnergyFp<NeoHookean>(fields), &g),
+    EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyFp<NeoHookean>(fields), &g),
                  InfeasibleState);
-    EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(geometry, MaterialLocalEnergyFp<NeoHookean>(fields), nullptr, &h),
-                 InfeasibleState);
+    EXPECT_THROW(
+        integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyFp<NeoHookean>(fields), nullptr, &h),
+        InfeasibleState);
 }
 } // namespace

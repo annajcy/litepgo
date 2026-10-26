@@ -1,20 +1,21 @@
-#include "litepgo/fem/geometry/hex_hermite_dof_transform.hpp"
+#include "litepgo/fem/interpolation/hex_hermite_dof_transform.hpp"
 
 #include "litepgo/fem/basis/hex_hermite_basis.hpp"
-#include "litepgo/fem/geometry/rest.hpp"
+#include "litepgo/fem/interpolation/rest_point.hpp"
 
 #include <array>
 #include <stdexcept>
 
 namespace litepgo {
 
-Eigen::DiagonalMatrix<double, Eigen::Dynamic> hex_hermite_dof_transform(const Interpolation<HexQ1Basis>& geometry) {
-    const Eigen::Vector3d lengths = rest_point(geometry, Eigen::Vector3d::Zero()).dX_dxi.diagonal();
+Eigen::DiagonalMatrix<double, Eigen::Dynamic>
+hex_hermite_dof_transform(const Interpolation<HexQ1Basis>& rest_geometry) {
+    const Eigen::Vector3d lengths = rest_point(rest_geometry, Eigen::Vector3d::Zero()).dX_dxi.diagonal();
     if ((lengths.array() <= 0).any())
         throw std::invalid_argument("hex_hermite_dof_transform requires positive axis-aligned box dimensions");
     for (int v = 0; v < 8; ++v) {
         const Eigen::Matrix3d normalized =
-            geometry.dvalue_dxi(HexQ1Basis::reference_node(v)) * lengths.cwiseInverse().asDiagonal();
+            rest_geometry.dvalue_dxi(HexQ1Basis::reference_node(v)) * lengths.cwiseInverse().asDiagonal();
         if (!normalized.isIdentity(1e-12))
             throw std::invalid_argument("hex_hermite_dof_transform requires axis-aligned boxes in Hex corner order");
     }
