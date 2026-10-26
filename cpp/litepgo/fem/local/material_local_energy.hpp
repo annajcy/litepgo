@@ -30,22 +30,6 @@ template <class Material> class MaterialLocalEnergyF final : public LocalEnergy 
         return true;
     }
 
-    double value(const RestPointData& point) const override {
-        return Material::value(fields_.evaluate(point));
-    }
-    Eigen::VectorXd gradient(const RestPointData& point) const override {
-        Eigen::VectorXd result = Eigen::VectorXd::Zero(num_dofs());
-        active_->accumulate_derivatives(point, Material::gradient_F(fields_.evaluate(point)), Eigen::MatrixXd{}, 1,
-                                        &result, nullptr);
-        return result;
-    }
-    Eigen::MatrixXd hessian(const RestPointData& point) const override {
-        Eigen::MatrixXd result = Eigen::MatrixXd::Zero(num_dofs(), num_dofs());
-        active_->accumulate_derivatives(point, Eigen::MatrixXd{}, Material::hessian_F(fields_.evaluate(point)), 1,
-                                        nullptr, &result);
-        return result;
-    }
-
     double accumulate(const RestPointData& point, double weight, Eigen::VectorXd* gradient,
                       Eigen::MatrixXd* hessian) const override {
         if (!std::isfinite(weight))
@@ -88,22 +72,6 @@ template <class Material> class MaterialLocalEnergyFp final : public LocalEnergy
         return true;
     }
 
-    double value(const RestPointData& point) const override {
-        return Material::value(fields_.evaluate(point));
-    }
-    Eigen::VectorXd gradient(const RestPointData& point) const override {
-        Eigen::VectorXd result = Eigen::VectorXd::Zero(num_dofs());
-        active_->accumulate_derivatives(point, Material::gradient_Fp(fields_.evaluate(point)), Eigen::MatrixXd{}, 1,
-                                        &result, nullptr);
-        return result;
-    }
-    Eigen::MatrixXd hessian(const RestPointData& point) const override {
-        Eigen::MatrixXd result = Eigen::MatrixXd::Zero(num_dofs(), num_dofs());
-        active_->accumulate_derivatives(point, Eigen::MatrixXd{}, Material::hessian_Fp(fields_.evaluate(point)), 1,
-                                        nullptr, &result);
-        return result;
-    }
-
     double accumulate(const RestPointData& point, double weight, Eigen::VectorXd* gradient,
                       Eigen::MatrixXd* hessian) const override {
         if (!std::isfinite(weight))
@@ -144,22 +112,6 @@ template <class Material> class MaterialLocalEnergyTheta final : public LocalEne
     }
     bool has_hessian() const noexcept override {
         return true;
-    }
-
-    double value(const RestPointData& point) const override {
-        return Material::value(fields_.evaluate(point));
-    }
-    Eigen::VectorXd gradient(const RestPointData& point) const override {
-        Eigen::VectorXd result = Eigen::VectorXd::Zero(num_dofs());
-        active_->accumulate_derivatives(point, Material::gradient_theta(fields_.evaluate(point)), Eigen::MatrixXd{}, 1,
-                                        &result, nullptr);
-        return result;
-    }
-    Eigen::MatrixXd hessian(const RestPointData& point) const override {
-        Eigen::MatrixXd result = Eigen::MatrixXd::Zero(num_dofs(), num_dofs());
-        active_->accumulate_derivatives(point, Eigen::MatrixXd{}, Material::hessian_theta(fields_.evaluate(point)), 1,
-                                        nullptr, &result);
-        return result;
     }
 
     double accumulate(const RestPointData& point, double weight, Eigen::VectorXd* gradient,

@@ -26,50 +26,46 @@ Interpolation<HexQ1Basis> geometry(double scale = 1) {
     return Interpolation<HexQ1Basis>(X);
 }
 struct ValueOnly : LocalEnergy {
+    mutable int accumulate_calls = 0, gradient_calls = 0, hessian_calls = 0, dof_calls = 0;
     int num_dofs() const override {
+        ++dof_calls;
         return 3;
     }
     Eigen::Vector3d coefficients{0.2, -0.4, 0.6};
-    double value(const RestPointData& p) const override {
-        return 0.5 * (1 + p.position.x()) * coefficients.squaredNorm();
+    double accumulate(const RestPointData& p, double weight, Eigen::VectorXd* gradient,
+                      Eigen::MatrixXd* hessian) const override {
+        if (!std::isfinite(weight))
+            throw std::invalid_argument("non-finite weight");
+        if ((gradient && !has_gradient()) || (hessian && !has_hessian()))
+            throw std::logic_error("unsupported derivative request");
+        if ((gradient && gradient->size() != 3) || (hessian && (hessian->rows() != 3 || hessian->cols() != 3)))
+            throw std::invalid_argument("incompatible output dimensions");
+        ++accumulate_calls;
+        const double factor = weight * (1 + p.position.x());
+        if (gradient) {
+            ++gradient_calls;
+            *gradient += factor * coefficients;
+        }
+        if (hessian) {
+            ++hessian_calls;
+            hessian->diagonal().array() += factor;
+        }
+        return 0.5 * factor * coefficients.squaredNorm();
     }
 };
 struct FirstOnly : ValueOnly {
     bool has_gradient() const noexcept override {
         return true;
     }
-    Eigen::VectorXd gradient(const RestPointData& p) const override {
-        return (1 + p.position.x()) * coefficients;
-    }
 };
 struct SecondOnly : ValueOnly {
     bool has_hessian() const noexcept override {
         return true;
     }
-    Eigen::MatrixXd hessian(const RestPointData& p) const override {
-        return (1 + p.position.x()) * Eigen::Matrix3d::Identity();
-    }
 };
 struct FullEnergy : FirstOnly {
-    mutable int value_calls = 0, gradient_calls = 0, hessian_calls = 0, dof_calls = 0;
     bool has_hessian() const noexcept override {
         return true;
-    }
-    int num_dofs() const override {
-        ++dof_calls;
-        return 3;
-    }
-    double value(const RestPointData& p) const override {
-        ++value_calls;
-        return ValueOnly::value(p);
-    }
-    Eigen::VectorXd gradient(const RestPointData& p) const override {
-        ++gradient_calls;
-        return FirstOnly::gradient(p);
-    }
-    Eigen::MatrixXd hessian(const RestPointData& p) const override {
-        ++hessian_calls;
-        return (1 + p.position.x()) * Eigen::Matrix3d::Identity();
     }
 };
 TEST(LocalEnergy, DerivativeCapabilitiesAreIndependent) {
@@ -86,19 +82,22 @@ TEST(LocalEnergy, DerivativeCapabilitiesAreIndependent) {
     EXPECT_TRUE(full.has_gradient());
     EXPECT_TRUE(full.has_hessian());
     const RestPointData point{};
-    EXPECT_THROW(value.gradient(point), std::logic_error);
-    EXPECT_THROW(value.hessian(point), std::logic_error);
+    Eigen::VectorXd g = Eigen::Vector3d::Zero();
+    Eigen::MatrixXd h = Eigen::Matrix3d::Zero();
+    EXPECT_THROW(value.accumulate(point, 1, &g, nullptr), std::logic_error);
+    EXPECT_THROW(value.accumulate(point, 1, nullptr, &h), std::logic_error);
 }
 
-TEST(LocalEnergy, DefaultAccumulationAddsWeightedValuesAndChecksRequests) {
+TEST(LocalEnergy, AccumulationAddsWeightedValuesAndChecksRequests) {
     FullEnergy full;
     const auto point = rest_point(geometry(), {0.2, 0.3, 0.4});
     Eigen::VectorXd g = Eigen::Vector3d::Constant(3);
     Eigen::MatrixXd h = Eigen::Matrix3d::Constant(5);
     const double weight = -0.7;
-    EXPECT_DOUBLE_EQ(full.accumulate(point, weight, &g, &h), weight * full.value(point));
-    EXPECT_TRUE(g.isApprox(Eigen::Vector3d::Constant(3) + weight * full.gradient(point), 1e-14));
-    EXPECT_TRUE(h.isApprox(Eigen::Matrix3d::Constant(5) + weight * full.hessian(point), 1e-14));
+    const double factor = weight * (1 + point.position.x());
+    EXPECT_DOUBLE_EQ(full.accumulate(point, weight, &g, &h), 0.5 * factor * full.coefficients.squaredNorm());
+    EXPECT_TRUE(g.isApprox(Eigen::Vector3d::Constant(3) + factor * full.coefficients, 1e-14));
+    EXPECT_TRUE(h.isApprox(Eigen::Matrix3d::Constant(5) + factor * Eigen::Matrix3d::Identity(), 1e-14));
     const auto before_g = g;
     const auto before_h = h;
     EXPECT_THROW(full.accumulate(point, std::numeric_limits<double>::infinity(), &g, &h), std::invalid_argument);
@@ -108,7 +107,7 @@ TEST(LocalEnergy, DefaultAccumulationAddsWeightedValuesAndChecksRequests) {
     EXPECT_EQ(h, before_h);
 }
 
-// Even if derivative methods exist, queries govern whether integration is allowed.
+// Capability checks precede quadrature evaluation and output initialization.
 struct DisabledDerivatives : FullEnergy {
     bool has_gradient() const noexcept override {
         return false;
@@ -132,10 +131,11 @@ TEST(IntegrateVolume, ChecksCapabilitiesBeforeChangingOutputsOrEvaluatingPoints)
     EXPECT_EQ(g, Eigen::VectorXd::Constant(1, 7));
     EXPECT_EQ(h, Eigen::MatrixXd::Constant(1, 1, 9));
     EXPECT_EQ(energy.dof_calls, 0);
-    EXPECT_EQ(energy.value_calls, 0);
+    EXPECT_EQ(energy.accumulate_calls, 0);
     EXPECT_EQ(energy.gradient_calls, 0);
     EXPECT_EQ(energy.hessian_calls, 0);
     EXPECT_DOUBLE_EQ(integrate_volume<Rule>(reference, energy), integrate_volume<Rule>(reference, ValueOnly{}));
+    EXPECT_EQ(energy.accumulate_calls, Rule::num_points);
     EXPECT_EQ(energy.dof_calls, 0);
     EXPECT_EQ(energy.gradient_calls, 0);
     EXPECT_EQ(energy.hessian_calls, 0);
@@ -152,7 +152,7 @@ TEST(IntegrateVolume, IntegratesIndependentOutputsInOnePassAndOverwritesBuffers)
     EXPECT_TRUE(g.isApprox(factor * energy.coefficients, 1e-13));
     EXPECT_TRUE(h.isApprox(factor * Eigen::Matrix3d::Identity(), 1e-13));
     EXPECT_EQ(energy.dof_calls, 1);
-    EXPECT_EQ(energy.value_calls, Rule::num_points);
+    EXPECT_EQ(energy.accumulate_calls, Rule::num_points);
     EXPECT_EQ(energy.gradient_calls, Rule::num_points);
     EXPECT_EQ(energy.hessian_calls, Rule::num_points);
     EXPECT_DOUBLE_EQ(integrate_volume<Rule>(reference, energy, &g, &h), value);
@@ -183,13 +183,17 @@ struct BadGradient : FirstOnly {
     int num_dofs() const override {
         return n;
     }
-    Eigen::VectorXd gradient(const RestPointData&) const override {
-        return Eigen::Vector2d::Zero();
+    double accumulate(const RestPointData&, double, Eigen::VectorXd* gradient, Eigen::MatrixXd*) const override {
+        if (gradient)
+            gradient->resize(2);
+        return 0;
     }
 };
 struct BadHessian : SecondOnly {
-    Eigen::MatrixXd hessian(const RestPointData&) const override {
-        return Eigen::MatrixXd::Zero(3, 2);
+    double accumulate(const RestPointData&, double, Eigen::VectorXd*, Eigen::MatrixXd* hessian) const override {
+        if (hessian)
+            hessian->resize(3, 2);
+        return 0;
     }
 };
 TEST(IntegrateVolume, RejectsInvalidRuntimeDerivativeSizes) {
@@ -234,9 +238,14 @@ struct UnitDensity : LocalEnergy {
     int num_dofs() const override {
         return 0;
     }
-    double value(const RestPointData&) const override {
+    double accumulate(const RestPointData&, double weight, Eigen::VectorXd* gradient,
+                      Eigen::MatrixXd* hessian) const override {
+        if (!std::isfinite(weight))
+            throw std::invalid_argument("non-finite weight");
+        if (gradient || hessian)
+            throw std::logic_error("unsupported derivative request");
         ++calls;
-        return 1;
+        return weight;
     }
 };
 struct NonFiniteWeights : Rule {

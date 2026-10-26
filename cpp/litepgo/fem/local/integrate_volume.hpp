@@ -37,12 +37,9 @@ double integrate_volume(const Interpolation<B>& geometry, const LocalEnergy& ene
         const double weight = weights[q] * point.jacobian_determinant;
         if (!std::isfinite(weight))
             throw std::invalid_argument("integrate_volume: non-finite volume weight");
-        if (gradient || hessian) {
-            result += energy.accumulate(point, weight, gradient, hessian);
-            if ((gradient && gradient->size() != n) || (hessian && (hessian->rows() != n || hessian->cols() != n)))
-                throw std::invalid_argument("integrate_volume: accumulator changed output dimensions");
-        } else
-            result += weight * energy.value(point);
+        result += energy.accumulate(point, weight, gradient, hessian);
+        if ((gradient && gradient->size() != n) || (hessian && (hessian->rows() != n || hessian->cols() != n)))
+            throw std::invalid_argument("integrate_volume: accumulator changed output dimensions");
     }
     return result;
 }

@@ -1,5 +1,7 @@
 # FEM with MeshEnergy
 
+`LocalEnergy::accumulate(point, weight, g, H)` returns weighted energy and adds derivatives to initialized outputs. Pass `nullptr` for each derivative you do not need.
+
 ## Hex Q1
 
 Two hexes of widths 1 and 2 share a face and its nodal displacement DOFs. Each `geometries[e]` interpolates rest coordinates gathered for element `e`; `MeshEnergy` supplies that same element's `local_u` to the lambda. `integrate_volume<GaussLegendre3D<2>>` integrates that geometry with eight Gauss points. `MaterialLocalEnergyF<NeoHookean>` differentiates displacement DOFs; `Fp = I` and `theta = [2, 3]` stay fixed. The example evaluates energy, gradient, and Hessian, and checks both zero rest energy and uniform-strain energy over the total volume of 3.
