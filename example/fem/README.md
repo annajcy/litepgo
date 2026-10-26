@@ -117,7 +117,17 @@ The FD test in `tests/example/fem` shares the example setup and checks all 15 di
 
 Two boxes of sizes `(1,2,3)` and `(2,2,3)` share a face. Geometry uses Hex Q1; displacement uses 64 Hermite coefficients per component. Each vertex has 24 physical DOFs: the three components of `u, u_X, u_Y, u_Z, u_XY, u_XZ, u_YZ, u_XYZ`.
 
-The lambda converts physical derivatives to reference coefficients using the rest Q1 Jacobian, integrates with `GaussLegendre3D<4>`, then returns `S^T g` and `S^T H S`. Shared vertex DOFs enforce C1 continuity on conforming axis-aligned rest boxes in consistent Hex corner order. No interface changes are needed.
+The public function `hex_hermite_dof_transform(geometry)` computes `S` from the fixed rest Q1 geometry, including the geometry and scale validation. Include `litepgo/fem/geometry/hex_hermite_dof_transform.hpp` and compute it once per rest element:
+
+```cpp
+const auto S = litepgo::hex_hermite_dof_transform(geometry);
+const Eigen::VectorXd c = S * x_local.reshaped<Eigen::RowMajor>();
+const Eigen::MatrixXd u_coeffs = c.reshaped<Eigen::RowMajor>(64, 3);
+```
+
+It returns a 192-by-192 `Eigen::DiagonalMatrix<double, Eigen::Dynamic>` storing only the 192 entries in `S.diagonal()`. For side lengths `hx`, `hy`, `hz`, the eight physical derivative slots scale by `1, hx, hy, hz, hx*hy, hx*hz, hy*hz, hx*hy*hz`, repeated for all three components at each vertex. Users supply the rest geometry and physical `x_local`; the function computes the transform. Since $S^T=S$, the Eigen expressions `S * g_c` and `S * H_c * S` apply the derivative pullback without an explicit transpose.
+
+The example caches these transforms, converts physical derivatives to reference coefficients, integrates with `GaussLegendre3D<4>`, then returns `S^T g` and `S^T H S` through in-place diagonal scaling. Shared vertex DOFs enforce C1 continuity on conforming axis-aligned rest boxes in consistent Hex corner order.
 
 Each rest element must be an axis-aligned rectangular box with positive dimensions; rotated, sheared, or warped rest hexes are rejected. The whole rest mesh need not form a box. This restriction applies only to the rest geometry: the deformed configuration `x_position(X) = X + u(X)` may rotate, stretch, shear, or bend, subject to the material's validity requirements. The DOF derivatives are with respect to fixed rest coordinates `X`, and their scales are computed once from the rest geometry. Supporting general rest hexes requires a different Hermite DOF mapping and compatible shared-face continuity conditions.
 
@@ -127,4 +137,4 @@ cmake --build --preset debug --target hex_hermite_mesh_energy litepgo_tests
 ./build/debug/tests/cpp/litepgo_tests --gtest_filter='HexHermiteExample.*'
 ```
 
-Tests in `tests/example/fem` check affine fields, shared-face values and physical gradients, and energy derivatives with respect to physical DOFs. The example evaluates energy and derivatives only; feasible step bounds are not implemented. Nonlinear material integration is numerical.
+Tests in `tests/cpp/fem/geometry` check the public transform's slot ordering, reproduction of physical mixed derivatives, and geometry/scale validation. Tests in `tests/example/fem` check affine fields, shared-face values and physical gradients, and energy derivatives with respect to physical DOFs. The example evaluates energy and derivatives only; feasible step bounds are not implemented. Nonlinear material integration is numerical.

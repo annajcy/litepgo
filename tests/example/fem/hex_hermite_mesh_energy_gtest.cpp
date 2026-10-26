@@ -41,7 +41,7 @@ TEST(HexHermiteExample, ReproducesAffineDisplacementAndVolumeWeightedEnergy) {
     for (int e = 0; e < 2; ++e) {
         const Interpolation<HexQ1Basis> geometry(geometry_map.gather(e, X_nodes));
         const auto coefficients = example::hex_hermite_reference_coefficients(
-            displacement_map.gather(e, x), example::hex_hermite_dof_scales(geometry));
+            displacement_map.gather(e, x), hex_hermite_dof_transform(geometry).diagonal());
         const Interpolation<HexHermiteBasis> displacement(coefficients);
         const DeformationGradientField<HexHermiteBasis> F(coefficients);
         for (const auto& xi : points) {
@@ -81,10 +81,10 @@ TEST(HexHermiteExample, SharedFacesHaveContinuousValuesAndPhysicalGradientsInAll
         const std::array<Interpolation<HexQ1Basis>, 2> geometries{
             Interpolation<HexQ1Basis>(geometry_map.gather(0, X_nodes)),
             Interpolation<HexQ1Basis>(geometry_map.gather(1, X_nodes))};
-        const auto c0 = example::hex_hermite_reference_coefficients(displacement_map.gather(0, x),
-                                                                    example::hex_hermite_dof_scales(geometries[0]));
-        const auto c1 = example::hex_hermite_reference_coefficients(displacement_map.gather(1, x),
-                                                                    example::hex_hermite_dof_scales(geometries[1]));
+        const auto c0 = example::hex_hermite_reference_coefficients(
+            displacement_map.gather(0, x), hex_hermite_dof_transform(geometries[0]).diagonal());
+        const auto c1 = example::hex_hermite_reference_coefficients(
+            displacement_map.gather(1, x), hex_hermite_dof_transform(geometries[1]).diagonal());
         const Interpolation<HexHermiteBasis> u0(c0), u1(c1);
         const DeformationGradientField<HexHermiteBasis> F0(c0), F1(c1);
         for (double s : {0.0, 0.23, 0.67, 1.0})

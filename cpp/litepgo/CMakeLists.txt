@@ -14,6 +14,7 @@ add_library(litepgo STATIC
     fem/basis/hex_q1_basis.cpp
     fem/basis/hex_hermite_basis.cpp
     fem/basis/tet_p1_basis.cpp
+    fem/geometry/hex_hermite_dof_transform.cpp
     dof/dof_reduction.cpp
     linalg/sparse_solver/eigen_ldlt.cpp
     linalg/sparse_solver/eigen_sparse_lu.cpp

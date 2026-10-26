@@ -27,6 +27,7 @@ add_executable(litepgo_tests
     fem/basis/hex_hermite_basis_gtest.cpp
     fem/basis/tet_p1_basis_gtest.cpp
     fem/geometry/interpolation_gtest.cpp
+    fem/geometry/hex_hermite_dof_transform_gtest.cpp
     fem/basis/lagrange_basis_gtest.cpp
     fem/local/integrate_volume_gtest.cpp
     fem/local/dof_derivatives_gtest.cpp
