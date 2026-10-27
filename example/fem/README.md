@@ -1,18 +1,18 @@
 # FEM with MeshEnergy
 
-Quadrature supplies reference coordinates `xi` and weights. A `Field` computes values and derivatives at `xi` through virtual functions. `DeformationGradientField` composes displacement and coordinate fields at one `xi`, returning column-flattened `F`. Materials consume numerical `F`, `Fp`, and `theta`. Local energies bind one active coefficient block and integrate its density and derivatives; `MeshEnergy` gathers and assembles the element results.
+Quadrature supplies reference coordinates `xi` and weights. A `Field` computes values and derivatives at `xi` through virtual functions. `DeformationGradientField` composes displacement and coordinate fields at one `xi`, returning column-flattened `F`. Materials consume numerical `F`, `Fp`, and `theta`. Local energies bind one active coefficient block and supply density and coefficient derivatives. `integrate_volume` applies geometric weights; `MeshEnergy` gathers and assembles the element results.
 
 ```mermaid
 flowchart TD
     Q["Quadrature: xi, weight"] --> D["DeformationGradientField.value / dvalue_dcoeffs"]
     U["u_field"] --> D
     X["X_field"] --> D
-    D --> L["Local energy: material inputs, chain rule, volume weight"]
+    D --> L["Local energy: material inputs and coefficient derivatives"]
     X --> M["X_field.dvalue_dxi(xi)"]
     M -->|inverse| D
-    M -->|determinant| L
+    M -->|determinant| I
     P["Fp and theta sources"] --> L
-    L --> I["integrate_volume: sum over q"]
+    L --> I["integrate_volume: apply volume weight and sum over q"]
     I --> A["MeshEnergy: global assembly"]
 ```
 
@@ -28,7 +28,7 @@ flowchart TD
 
 The 1D basis building blocks are `LinearLagrangeBasis` and `CubicHermiteBasis`. Tensor-product types retain the `3D` suffix, mirrored as `_3d` in their filenames.
 
-`IdentityField` and `InterpolatedField` own coefficient snapshots. `DeformationGradientField` borrows two `const Field&` inputs: displacement `u` and fixed coordinates `X`. Those input objects must outlive the composed field and any local energy holding a copy of it; temporary inputs are rejected at compile time. All three inherit `Field` and return owning vectors and matrices directly, without a field-sample interface.
+`IdentityField` and `InterpolatedField` own coefficient snapshots. `DeformationGradientField` borrows two `const Field&` inputs: displacement `u` and fixed coordinates `X`. Those input objects must outlive the composed field and any local energy borrowing it; temporary inputs are rejected at compile time. All three inherit `Field` and return owning vectors and matrices directly, without a field-sample interface.
 
 The composition uses the same reference coordinate for both inputs. The caller must bind fields belonging to the same element and reference-coordinate convention. Different bases are allowed; the existing extrapolation rules outside their reference elements remain unchanged. No mesh IDs or shared evaluation-cache framework are introduced.
 
@@ -94,7 +94,7 @@ Large coefficient derivative matrices are constructed only when requested. Each 
 
 `IdentityField` is spatially constant. It returns zero reference derivatives, an identity coefficient derivative, and a zero mixed reference/coefficient derivative. Being constant in space does not make its coefficients inactive.
 
-Inactive material sources may provide only `value(xi)`. An active source additionally provides `num_dofs()` and `dvalue_dcoeffs(xi)`. The active map must be affine in its coefficients; missing capabilities are rejected at binding. This also supports custom affine parameter maps whose coefficient count differs from their number of output components.
+Material input fields inherit `Field`. Only the selected active field needs usable coefficient derivatives and a positive DOF count; inactive fields may report zero DOFs and throw from unsupported derivatives. The active map must be affine in its coefficients. Custom affine parameter fields may have a coefficient count different from their number of output components.
 
 ## Deformation and coordinate derivatives
 
@@ -116,7 +116,7 @@ $$
 =\left(\frac{\partial X}{\partial\xi}\right)^{-1}.
 $$
 
-`Field` assigns no geometric meaning to its values or derivatives. `DeformationGradientField` requests `X_field.dvalue_dxi(xi)`, checks three components, a finite 3-by-3 derivative and a finite positive determinant, then computes and validates the inverse. `MaterialLocalEnergy` requests the same derivative and validates its shape, finiteness and positive finite determinant for volume weights; it does not compute an unused inverse. Neither query needs `X_field.value(xi)`. `coordinate_field()` exposes the coordinate field borrowed by the deformation field.
+`Field` assigns no geometric meaning to its values or derivatives. `DeformationGradientField` requests `X_field.dvalue_dxi(xi)`, checks three components, a finite 3-by-3 derivative and a finite positive determinant, then computes and validates the inverse. `integrate_volume` requests the same derivative and validates its shape, finiteness and positive finite determinant for volume weights; it does not compute an unused inverse. Neither query needs `X_field.value(xi)`. `coordinate_field()` exposes the coordinate field borrowed by the deformation field.
 
 $$
 F=I+u_{,\xi}X_{,\xi}^{-1},\qquad
@@ -145,23 +145,24 @@ Material APIs keep numerical `MaterialInputs{F, Fp, theta}`. They do not sample 
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/local/integrate_volume.hpp"
 
-const auto local_energy = litepgo::make_material_local_energy<
-    litepgo::NeoHookean, litepgo::MaterialVariable::F>(
-        deformation, Fp_field, theta_field);
+const litepgo::MaterialLocalEnergy<litepgo::NeoHookean> local_energy(
+    deformation, Fp_field, theta_field, litepgo::MaterialVariable::F);
 
 Eigen::VectorXd dE_du_local;
 Eigen::MatrixXd d2E_du_local2;
 const double E_element = litepgo::integrate_volume<litepgo::GaussLegendre3D<2>>(
-    local_energy, &dE_du_local, &d2E_du_local2);
+    X_field, local_energy, &dE_du_local, &d2E_du_local2);
 ```
 
 `GaussLegendre3D<PointsPerAxis>` uses `PointsPerAxis^3` integration points on `[0,1]^3`; `<2>` therefore uses eight points.
 
-`MaterialVariable::F`, `Fp`, or `Theta` selects one constitutive input and pulls its derivatives back to that source's coefficient block. With a `DeformationGradientField` source for `F`, the active coefficients are `u_local`. A plastic displacement can similarly supply `Fp` via another composed field. Direct `F` coefficients use `IdentityField` with a nine-component vector; that factory call takes a fourth argument `X_field`, binding the volume mapping at construction. A composed field already borrows its coordinates, and the factory rejects a separate fourth coordinate argument for it.
+`MaterialLocalEnergy<Material>` keeps only the material as a template argument. A runtime `MaterialVariable::F`, `Fp`, or `Theta` selects the active constitutive input and pulls its derivatives back to that field's coefficient block. All three inputs are borrowed as `const Field&`; they must outlive the energy, and temporary input fields are rejected. A copied energy borrows the same fields, so subsequent field updates are visible. A composed `F` field activates displacement coefficients; direct `F` or `Fp` coefficients can use a nine-component `IdentityField`. Unsupported material derivative blocks and non-positive active DOF counts are rejected at construction.
 
-`LocalEnergy::value(xi)`, `gradient(xi)`, and `hessian(xi)` return pointwise density `W` and coefficient derivatives. `accumulate(xi, quadrature_weight, ...)` applies `dV = quadrature_weight * det_dX_dxi` exactly once and adds requested derivatives to initialized buffers. The material implementation samples each input once and computes the active coefficient derivative once per accumulation, sharing it between gradient and Hessian. Inactive derivatives and unrequested material derivatives are not evaluated.
+`LocalEnergy::value(xi)`, `gradient(xi)`, and `hessian(xi)` return pointwise density `W` and coefficient derivatives. `accumulate(xi, weight, ...)` receives a complete weight from its caller and adds weighted values and requested derivatives to initialized buffers. It performs no geometry evaluation. The material implementation samples each input once and computes the active coefficient derivative once per accumulation, sharing it between gradient and Hessian. Inactive derivatives and unrequested material derivatives are not evaluated.
 
-`integrate_volume<Q>(local_energy, ...)` receives no separate geometry. It checks independently requested gradient/Hessian capabilities before changing outputs, initializes output shapes, traverses `q`, and sums the accumulator's contributions. Output buffers are independently nullable, overwritten by integration, and must not alias energy data; an accumulator may not resize them. Weights, coordinates, mapping validity, derivative shapes, and finite active maps are validated.
+`integrate_volume<Q>(X_field, local_energy, ...)` owns the geometric weighting step: at each quadrature point it validates `X_field.dvalue_dxi(xi)`, computes `weight = w_q * det(dX_dxi)`, and passes that weight to the accumulator exactly once. It does not query the coordinate field's position values or compute an inverse. Geometry, material fields, and quadrature must refer to the same element and parameter domain; in particular, use the same coordinates as any composed deformation field. Geometry is fixed when taking coefficient derivatives.
+
+Integration checks independently requested gradient/Hessian capabilities before changing outputs, initializes output shapes, traverses `q`, and sums the weighted contributions. Output buffers are independently nullable, overwritten by integration, and must not alias energy data; an accumulator may not resize them. Quadrature data, geometry shape and finiteness, positive finite determinants, volume-weight overflow, derivative shapes, and finite active maps are validated.
 
 For an affine active map `D`, pointwise pullbacks are
 
@@ -217,13 +218,13 @@ These are source-breaking changes; old headers and compatibility aliases are not
 | `field.value(point)` | `field.value(xi)`; composed deformation fields return nine components |
 | `dvalue_dx_local(xi)`, `dgrad_xi_dx_local(xi)` | `dvalue_dcoeffs(xi)`, `dgrad_xi_dcoeffs(xi)` |
 | `field.jacobian(point)` / `dF_dx_local` | `field.dvalue_dcoeffs(xi)` |
-| `MaterialFields` and `MaterialLocalEnergyF/Fp/Theta` | Explicit sources and `make_material_local_energy<Material, MaterialVariable::...>` |
-| `integrate_volume<Q>(geometry, energy, ...)` | `integrate_volume<Q>(bound_energy, ...)` |
+| `MaterialFields` and `make_material_local_energy<Material, Active>` | `MaterialLocalEnergy<Material>(F, Fp, theta, active)` with named `Field` inputs |
+| `integrate_volume<Q>(bound_energy, ...)` | `integrate_volume<Q>(X_field, energy, ...)` |
 | `Basis::Sample::values`, `gradients` | `N`, `dN_dxi` |
 | `RestPointData::position`, `jacobian`, `inverse_jacobian`, `jacobian_determinant` | Field values, coordinate Jacobians, their inverses, and their determinants |
 | Material `gradient_F`, `hessian_F` and corresponding `Fp`/`theta` names | `dW_dF`, `d2W_dF2` and corresponding names |
 
-Custom value sources implement `value(xi)`; custom active sources additionally implement the affine coefficient protocol above. Field implementations inherit `Field`; material sources can also use the same methods without inheritance. Local energies hold source objects by value, and a copied `DeformationGradientField` continues to borrow its original inputs. Scope remains one active affine coefficient block with fixed rest geometry; coordinate optimization, mixed active-block Hessians, second spatial basis derivatives, and `dF_dxi` are not implemented.
+Custom material inputs inherit `Field` and implement the value and affine coefficient protocol above. Local energies borrow their three input fields; composed deformation fields in turn borrow displacement and coordinate fields. All referenced objects must remain alive during evaluation. Scope remains one active affine coefficient block with fixed rest geometry; coordinate optimization, mixed active-block Hessians, second spatial basis derivatives, and `dF_dxi` are not implemented.
 
 ## Examples and validation
 

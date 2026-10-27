@@ -62,11 +62,12 @@ struct Fixture {
 };
 
 template <int NumDofs, class MakeFields, class BindEnergy>
-void check_fd(const Eigen::Matrix<double, NumDofs, 1>& x, MakeFields make_fields, BindEnergy bind_energy) {
+void check_fd(const Field& X_field, const Eigen::Matrix<double, NumDofs, 1>& x, MakeFields make_fields,
+              BindEnergy bind_energy) {
     const auto fields = make_fields(x);
     Eigen::VectorXd g;
     Eigen::MatrixXd H;
-    integrate_volume<GaussLegendre3D<2>>(bind_energy(fields), &g, &H);
+    integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy(fields), &g, &H);
     EXPECT_LT((H - H.transpose()).norm(), 1e-12 * (1 + H.norm()));
     for (double h : {1e-3, 3e-4, 1e-4}) {
         SCOPED_TRACE(h);
@@ -78,8 +79,8 @@ void check_fd(const Eigen::Matrix<double, NumDofs, 1>& x, MakeFields make_fields
             minus[j] -= h;
             const auto plus_fields = make_fields(plus), minus_fields = make_fields(minus);
             Eigen::VectorXd plus_g, minus_g;
-            dg[j] = (integrate_volume<GaussLegendre3D<2>>(bind_energy(plus_fields), &plus_g) -
-                     integrate_volume<GaussLegendre3D<2>>(bind_energy(minus_fields), &minus_g)) /
+            dg[j] = (integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy(plus_fields), &plus_g) -
+                     integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy(minus_fields), &minus_g)) /
                     (2 * h);
             dH.col(j) = (plus_g - minus_g) / (2 * h);
         }
@@ -94,10 +95,10 @@ void check_fd(const Eigen::Matrix<double, NumDofs, 1>& x, MakeFields make_fields
     d.normalize();
     v.normalize();
     const double h = 3e-4;
-    const double fd = (integrate_volume<GaussLegendre3D<2>>(bind_energy(make_fields(x + h * d + h * v))) -
-                       integrate_volume<GaussLegendre3D<2>>(bind_energy(make_fields(x + h * d - h * v))) -
-                       integrate_volume<GaussLegendre3D<2>>(bind_energy(make_fields(x - h * d + h * v))) +
-                       integrate_volume<GaussLegendre3D<2>>(bind_energy(make_fields(x - h * d - h * v)))) /
+    const double fd = (integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy(make_fields(x + h * d + h * v))) -
+                       integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy(make_fields(x + h * d - h * v))) -
+                       integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy(make_fields(x - h * d + h * v))) +
+                       integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy(make_fields(x - h * d - h * v)))) /
                       (4 * h * h);
     EXPECT_NEAR(fd, d.dot(H * v), 2e-6 * (1 + H.norm()));
 }
@@ -121,14 +122,15 @@ TEST(MaterialSources, MixedRepresentationsPointInputsAndLocalFiniteDifferences) 
             EXPECT_TRUE(fields.Fp.dvalue_dcoeffs(ref_xi).isIdentity());
             EXPECT_TRUE(fields.theta.dvalue_dcoeffs(ref_xi).isIdentity());
         }
-        EXPECT_DOUBLE_EQ(integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::F>(fields)),
-                         integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::Fp>(fields)));
         EXPECT_DOUBLE_EQ(
-            integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::F>(fields)),
-            integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::Theta>(fields)));
+            integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy<NeoHookean, MaterialVariable::F>(fields)),
+            integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy<NeoHookean, MaterialVariable::Fp>(fields)));
+        EXPECT_DOUBLE_EQ(
+            integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy<NeoHookean, MaterialVariable::F>(fields)),
+            integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy<NeoHookean, MaterialVariable::Theta>(fields)));
         const Eigen::Matrix<double, 24, 1> uvec = ue.reshaped<Eigen::RowMajor>();
         check_fd(
-            uvec,
+            X_field, uvec,
             [&](const Eigen::Matrix<double, 24, 1>& x) {
                 Eigen::Matrix<double, 8, 3> c;
                 for (int j = 0; j < 24; ++j)
@@ -141,7 +143,7 @@ TEST(MaterialSources, MixedRepresentationsPointInputsAndLocalFiniteDifferences) 
         const Eigen::Matrix3d fp = f.fp.segment<9>(9 * e).reshaped(3, 3);
         const Eigen::Matrix<double, 9, 1> pvec = Eigen::Map<const Eigen::Matrix<double, 9, 1>>(fp.data());
         check_fd(
-            pvec,
+            X_field, pvec,
             [&](const Eigen::Matrix<double, 9, 1>& x) {
                 return MaterialSources{OwnedDeformationField(InterpolatedField<litepgo::HexQ1Basis>(ue), X_field),
                                        IdentityField(x),
@@ -149,7 +151,7 @@ TEST(MaterialSources, MixedRepresentationsPointInputsAndLocalFiniteDifferences) 
             },
             [&](const auto& local_fields) { return bind_energy<NeoHookean, MaterialVariable::Fp>(local_fields); });
         check_fd(
-            ConstantDofMap(f.topology, 2).gather(0, f.theta),
+            X_field, ConstantDofMap(f.topology, 2).gather(0, f.theta),
             [&](const Eigen::Matrix<double, 2, 1>& x) {
                 return MaterialSources{OwnedDeformationField(InterpolatedField<litepgo::HexQ1Basis>(ue), X_field),
                                        IdentityField(fp.reshaped()), IdentityField(x)};
@@ -166,10 +168,10 @@ TEST(MaterialSources, SameQuadratureAcceptsDifferentActiveDofCounts) {
     const MaterialSources direct{IdentityField(Eigen::Matrix3d::Identity().reshaped()), nodal.Fp, nodal.theta};
     Eigen::VectorXd nodal_gradient, direct_gradient;
     Eigen::MatrixXd nodal_hessian, direct_hessian;
-    const double nodal_value = integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::F>(nodal),
-                                                                    &nodal_gradient, &nodal_hessian);
+    const double nodal_value = integrate_volume<GaussLegendre3D<2>>(
+        X_field, bind_energy<NeoHookean, MaterialVariable::F>(nodal), &nodal_gradient, &nodal_hessian);
     const double direct_value = integrate_volume<GaussLegendre3D<2>>(
-        bind_energy<NeoHookean, MaterialVariable::F>(direct, X_field), &direct_gradient, &direct_hessian);
+        X_field, bind_energy<NeoHookean, MaterialVariable::F>(direct), &direct_gradient, &direct_hessian);
     EXPECT_EQ(nodal_gradient.size(), 24);
     EXPECT_EQ(direct_gradient.size(), 9);
     EXPECT_DOUBLE_EQ(nodal_value, direct_value);
@@ -194,9 +196,9 @@ TEST(MaterialSources, SameQuadratureAcceptsDifferentActiveDofCounts) {
     const Eigen::Matrix<double, 9, 1> identity =
         Eigen::Map<const Eigen::Matrix<double, 9, 1>>(Eigen::Matrix3d::Identity().eval().data());
     check_fd(
-        identity,
+        X_field, identity,
         [&](const Eigen::Matrix<double, 9, 1>& x) { return MaterialSources{IdentityField(x), nodal.Fp, nodal.theta}; },
-        [&](const auto& fields) { return bind_energy<NeoHookean, MaterialVariable::F>(fields, X_field); });
+        [&](const auto& fields) { return bind_energy<NeoHookean, MaterialVariable::F>(fields); });
 }
 
 TEST(MaterialSources, ElementAndSharedDofNumbersAccumulateIntoDifferentGlobalBlocks) {
@@ -204,23 +206,28 @@ TEST(MaterialSources, ElementAndSharedDofNumbersAccumulateIntoDifferentGlobalBlo
     const VertexDofMap map(f.topology, 3);
     const auto total = [&](const Fixture& data) {
         double value = 0;
-        for (int e = 0; e < 2; ++e)
-            value += integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::F>(data.fields(e)));
+        for (int e = 0; e < 2; ++e) {
+            const auto X_field = data.X_field(e);
+            value += integrate_volume<GaussLegendre3D<2>>(X_field,
+                                                          bind_energy<NeoHookean, MaterialVariable::F>(data.fields(e)));
+        }
         return value;
     };
     Vec gu = Vec::Zero(36), gp = Vec::Zero(18), gt = Vec::Zero(2);
     Eigen::MatrixXd Hp = Eigen::MatrixXd::Zero(18, 18);
     Eigen::Matrix2d Ht = Eigen::Matrix2d::Zero();
     for (int e = 0; e < 2; ++e) {
+        const auto X_field = f.X_field(e);
         const auto fields = f.fields(e);
         const auto uidx = map.dof_indices(e);
         const auto pidx = ElementDofMap(f.topology, 9).dof_indices(e);
         const auto tidx = ConstantDofMap(f.topology, 2).dof_indices(e);
         Eigen::VectorXd ug, pg, tg;
         Eigen::MatrixXd ph, th;
-        integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::F>(fields), &ug);
-        integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::Fp>(fields), &pg, &ph);
-        integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::Theta>(fields), &tg, &th);
+        integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy<NeoHookean, MaterialVariable::F>(fields), &ug);
+        integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy<NeoHookean, MaterialVariable::Fp>(fields), &pg, &ph);
+        integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy<NeoHookean, MaterialVariable::Theta>(fields), &tg,
+                                             &th);
         for (int j = 0; j < 24; ++j)
             gu[uidx[static_cast<std::size_t>(j)]] += ug[j];
         for (int j = 0; j < 9; ++j) {
@@ -277,13 +284,14 @@ TEST(MaterialSources, SharedParameterHessianIncludesBothElements) {
         const auto fields = f.fields(e);
         Eigen::MatrixXd local_hessian;
         integrate_volume<GaussLegendre3D<2>>(
-            bind_energy<QuadraticParameterMaterial<2>, MaterialVariable::Theta>(fields), nullptr, &local_hessian);
+            X_field, bind_energy<QuadraticParameterMaterial<2>, MaterialVariable::Theta>(fields), nullptr,
+            &local_hessian);
         H += local_hessian;
         for (int q = 0; q < GaussLegendre3D<2>::num_points; ++q)
             volume += GaussLegendre3D<2>::weights()[q] *
                       X_field.dvalue_dxi(GaussLegendre3D<2>::points().row(q).transpose()).determinant();
         check_fd(
-            ConstantDofMap(f.topology, 2).gather(0, f.theta),
+            X_field, ConstantDofMap(f.topology, 2).gather(0, f.theta),
             [&](const Eigen::Vector2d& theta) { return MaterialSources{fields.F, fields.Fp, IdentityField(theta)}; },
             [&](const auto& local_fields) {
                 return bind_energy<QuadraticParameterMaterial<2>, MaterialVariable::Theta>(local_fields);
@@ -294,18 +302,20 @@ TEST(MaterialSources, SharedParameterHessianIncludesBothElements) {
 
 TEST(MaterialSources, DirectInfeasiblePlasticStateReachesMaterialValidation) {
     const Fixture f;
+    const auto X_field = f.X_field(0);
     auto fields = f.fields(0);
     Eigen::Matrix3d inverted = Eigen::Matrix3d::Identity();
     inverted(0, 0) = -1;
     fields.Fp = IdentityField(inverted.reshaped());
     Eigen::VectorXd g;
     Eigen::MatrixXd h;
-    EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::Fp>(fields)),
-                 InfeasibleState);
-    EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::Fp>(fields), &g),
+    EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy<NeoHookean, MaterialVariable::Fp>(fields)),
                  InfeasibleState);
     EXPECT_THROW(
-        integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::Fp>(fields), nullptr, &h),
+        integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy<NeoHookean, MaterialVariable::Fp>(fields), &g),
         InfeasibleState);
+    EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(X_field, bind_energy<NeoHookean, MaterialVariable::Fp>(fields),
+                                                      nullptr, &h),
+                 InfeasibleState);
 }
 } // namespace

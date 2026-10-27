@@ -19,18 +19,12 @@ Eigen::MatrixXd LocalEnergy::hessian(const Eigen::Vector3d&) const {
     throw std::logic_error("LocalEnergy does not support Hessian evaluation");
 }
 
-double LocalEnergy::accumulate(const Eigen::Vector3d& xi, double quadrature_weight, Eigen::VectorXd* gradient,
+double LocalEnergy::accumulate(const Eigen::Vector3d& xi, double weight, Eigen::VectorXd* gradient,
                                Eigen::MatrixXd* hessian) const {
-    if (!xi.allFinite() || !std::isfinite(quadrature_weight))
+    if (!xi.allFinite() || !std::isfinite(weight))
         throw std::invalid_argument("LocalEnergy::accumulate requires a finite weight");
     if ((gradient && !has_gradient()) || (hessian && !has_hessian()))
         throw std::logic_error("LocalEnergy does not support the requested derivatives");
-    const double determinant = det_dX_dxi(xi);
-    if (!std::isfinite(determinant) || determinant <= 0)
-        throw std::invalid_argument("LocalEnergy::accumulate: invalid reference volume");
-    const double weight = quadrature_weight * determinant;
-    if (!std::isfinite(weight))
-        throw std::invalid_argument("LocalEnergy::accumulate: non-finite volume weight");
     const double result = weight * value(xi);
     if (gradient) {
         const auto local = this->gradient(xi);

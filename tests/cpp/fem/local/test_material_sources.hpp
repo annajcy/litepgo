@@ -42,10 +42,6 @@ template <class FSource, class FpSource, class ThetaSource> struct MaterialSourc
     }
 };
 template <class Material, MaterialVariable Active, class Sources> auto bind_energy(const Sources& fields) {
-    return make_material_local_energy<Material, Active>(fields.F, fields.Fp, fields.theta);
-}
-template <class Material, MaterialVariable Active, class Sources, class XField>
-auto bind_energy(const Sources& fields, const XField& X_field) {
-    return make_material_local_energy<Material, Active>(fields.F, fields.Fp, fields.theta, X_field);
+    return MaterialLocalEnergy<Material>(fields.F, fields.Fp, fields.theta, Active);
 }
 } // namespace litepgo::test

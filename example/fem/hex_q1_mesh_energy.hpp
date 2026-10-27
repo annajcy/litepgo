@@ -44,9 +44,8 @@ inline MeshEnergy make_hex_q1_mesh_energy(const Vec& X_nodes) {
             const auto& u_local = x_local;
             const auto u_field = InterpolatedField<HexQ1Basis>(u_local);
             const auto deformation = DeformationGradientField(u_field, X_field);
-            const auto local_energy =
-                make_material_local_energy<NeoHookean, MaterialVariable::F>(deformation, Fp_field, theta_field);
-            return integrate_volume<GaussLegendre3D<2>>(local_energy, dE_dx_local, d2E_dx_local2);
+            const MaterialLocalEnergy<NeoHookean> local_energy(deformation, Fp_field, theta_field, MaterialVariable::F);
+            return integrate_volume<GaussLegendre3D<2>>(X_field, local_energy, dE_dx_local, d2E_dx_local2);
         },
         [](int, const auto&, const auto&) -> double {
             // shortcut: evaluation only; supply feasible step bounds before using a solver.
