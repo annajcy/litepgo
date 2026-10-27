@@ -188,15 +188,20 @@ TEST(MaterialLocalEnergy, AccumulationReusesInputValuesAndTheActiveDerivative) {
 struct CountingCoordinates {
     InterpolatedField<HexQ1Basis> field = coordinates(2);
     std::shared_ptr<int> calls = std::make_shared<int>(0);
+    std::shared_ptr<int> value_calls = std::make_shared<int>(0);
     int num_components() const {
         return 3;
     }
-    auto evaluate(const Eigen::Vector3d& xi) const {
+    Eigen::VectorXd value(const Eigen::Vector3d& xi) const {
+        ++*value_calls;
+        return field.value(xi);
+    }
+    Eigen::Matrix<double, Eigen::Dynamic, 3> dvalue_dxi(const Eigen::Vector3d& xi) const {
         ++*calls;
-        return field.evaluate(xi);
+        return field.dvalue_dxi(xi);
     }
 };
-TEST(MaterialLocalEnergy, DeformationAndVolumeMeasureShareOneCoordinateSample) {
+TEST(MaterialLocalEnergy, DeformationAndVolumeMeasureShareOneCoordinateMapping) {
     const CountingCoordinates X_field;
     const auto deformation = DeformationGradient(InterpolatedField<HexQ1Basis>(Eigen::MatrixXd::Zero(8, 3)), X_field);
     const auto energy = make_material_local_energy<NeoHookean, MaterialVariable::F>(
@@ -205,6 +210,7 @@ TEST(MaterialLocalEnergy, DeformationAndVolumeMeasureShareOneCoordinateSample) {
     Eigen::MatrixXd H;
     EXPECT_DOUBLE_EQ(integrate_volume<GaussLegendre3D<2>>(energy, &g, &H), 0);
     EXPECT_EQ(*X_field.calls, GaussLegendre3D<2>::num_points);
+    EXPECT_EQ(*X_field.value_calls, GaussLegendre3D<2>::num_points);
 }
 } // namespace
 
@@ -245,15 +251,14 @@ TEST(MaterialLocalEnergy, RejectsInvalidActiveDerivativeShapesCountsAndNonFinite
     EXPECT_THROW(bind(bad), std::invalid_argument);
 }
 struct SpatialOnlyDisplacement {
-    struct Sample {
-        const Eigen::Vector3d value;
-        const Eigen::Matrix3d dvalue_dxi = Eigen::Matrix3d::Identity() * 0.1;
-    };
     int num_components() const {
         return 3;
     }
-    Sample evaluate(const Eigen::Vector3d& xi) const {
-        return {0.1 * xi};
+    Eigen::Vector3d value(const Eigen::Vector3d& xi) const {
+        return 0.1 * xi;
+    }
+    Eigen::Matrix3d dvalue_dxi(const Eigen::Vector3d&) const {
+        return Eigen::Matrix3d::Identity() * 0.1;
     }
 };
 TEST(MaterialLocalEnergy, InactiveDeformationNeedsNoCoefficientDerivativeAndRejectsIndependentGeometry) {

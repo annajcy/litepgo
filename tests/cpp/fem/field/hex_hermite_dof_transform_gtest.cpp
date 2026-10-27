@@ -51,7 +51,7 @@ TEST(HexHermiteDofTransform, ReproducesPhysicalPolynomialWithMixedDerivatives) {
     const InterpolatedField<HexHermiteBasis> displacement(c.reshaped<Eigen::RowMajor>(64, 3));
     for (const Eigen::Vector3d xi :
          {Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(1, 1, 1), Eigen::Vector3d(0.2, 0.3, 0.4)}) {
-        const auto point = litepgo::ReferenceMapping(X_field.evaluate(xi));
+        const auto point = litepgo::ReferenceMapping(X_field, xi);
         const auto& X = point.X();
         EXPECT_TRUE(displacement.value(xi).isApprox(factors * X.x() * X.y() * X.z(), 1e-12));
         const Eigen::Vector3d gradient(X.y() * X.z(), X.x() * X.z(), X.x() * X.y());

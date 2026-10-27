@@ -32,7 +32,7 @@ struct ValueOnly : LocalEnergy {
     explicit ValueOnly(InterpolatedField<HexQ1Basis> coordinates = make_X_field()) : X_field(std::move(coordinates)) {}
     const InterpolatedField<HexQ1Basis> X_field;
     double det_dX_dxi(const Eigen::Vector3d& xi) const override {
-        return ReferenceMapping(X_field.evaluate(xi)).det_dX_dxi();
+        return ReferenceMapping(X_field, xi).det_dX_dxi();
     }
     int num_dofs() const override {
         return 3;
@@ -245,7 +245,7 @@ struct UnitDensity : LocalEnergy {
         : X_field(std::move(coordinates)) {}
     const InterpolatedField<HexQ1Basis> X_field;
     double det_dX_dxi(const Eigen::Vector3d& xi) const override {
-        return ReferenceMapping(X_field.evaluate(xi)).det_dX_dxi();
+        return ReferenceMapping(X_field, xi).det_dX_dxi();
     }
     mutable int calls = 0;
     int num_dofs() const override {

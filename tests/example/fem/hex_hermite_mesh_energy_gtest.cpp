@@ -45,7 +45,7 @@ TEST(HexHermiteExample, ReproducesAffineDisplacementAndVolumeWeightedEnergy) {
         const InterpolatedField<HexHermiteBasis> displacement(coefficients);
         const auto F = DeformationGradient(displacement, X_field);
         for (const auto& xi : points) {
-            const auto point = litepgo::ReferenceMapping(X_field.evaluate(xi));
+            const auto point = litepgo::ReferenceMapping(X_field, xi);
             EXPECT_TRUE(displacement.value(xi).isApprox(A * point.X() + b, 1e-13));
             EXPECT_TRUE(F.evaluate(point.xi()).F().isApprox(Eigen::Matrix3d::Identity() + A, 1e-13));
         }
@@ -94,9 +94,9 @@ TEST(HexHermiteExample, SharedFacesHaveContinuousValuesAndPhysicalGradientsInAll
                 xi[(normal + 1) % 3] = s;
                 xi[(normal + 2) % 3] = t;
                 xi[normal] = 1;
-                const auto p0 = litepgo::ReferenceMapping(X_fields[0].evaluate(xi));
+                const auto p0 = litepgo::ReferenceMapping(X_fields[0], xi);
                 xi[normal] = 0;
-                const auto p1 = litepgo::ReferenceMapping(X_fields[1].evaluate(xi));
+                const auto p1 = litepgo::ReferenceMapping(X_fields[1], xi);
                 EXPECT_TRUE(p0.X().isApprox(p1.X(), 1e-14));
                 EXPECT_LT((u0.value(p0.xi()) - u1.value(p1.xi())).norm(), 1e-13);
                 EXPECT_LT((F0.evaluate(p0.xi()).F() - F1.evaluate(p1.xi()).F()).norm(), 1e-13);

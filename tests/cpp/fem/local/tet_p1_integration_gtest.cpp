@@ -94,7 +94,7 @@ TEST(TetP1Integration, MatchesDirectGeometryAndDeformationGradient) {
     const std::array<Eigen::Vector3d, 3> samples{
         {Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(0.2, 0.3, 0.1), Eigen::Vector3d(0.25, 0.25, 0.25)}};
     for (const auto& xi : samples) {
-        const auto point = litepgo::ReferenceMapping(X_field.evaluate(xi));
+        const auto point = litepgo::ReferenceMapping(X_field, xi);
         EXPECT_TRUE(point.X().isApprox(X_nodes.row(0).transpose() + Dm * xi, 1e-14));
         EXPECT_TRUE(point.dX_dxi().isApprox(Dm, 1e-14));
         EXPECT_TRUE(point.dxi_dX().isApprox(Dm.inverse(), 1e-14));

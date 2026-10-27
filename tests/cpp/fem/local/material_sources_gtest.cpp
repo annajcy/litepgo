@@ -110,15 +110,14 @@ TEST(MaterialSources, MixedRepresentationsPointInputsAndLocalFiniteDifferences) 
         const auto fields = f.fields(e);
         const auto ue = map.gather(e, f.u);
         for (int q = 0; q < GaussLegendre3D<2>::num_points; ++q) {
-            const auto ref =
-                litepgo::ReferenceMapping(X_field.evaluate(GaussLegendre3D<2>::points().row(q).transpose()));
+            const auto ref = litepgo::ReferenceMapping(X_field, GaussLegendre3D<2>::points().row(q).transpose());
             const auto point = fields.evaluate(ref.xi());
             EXPECT_TRUE(point.F.isApprox(Eigen::Matrix3d::Identity() +
                                          InterpolatedField<HexQ1Basis>(ue).dvalue_dxi(ref.xi()) * ref.dxi_dX()));
             EXPECT_EQ(point.Fp, f.fp.segment<9>(9 * e).reshaped(3, 3));
             EXPECT_EQ(point.theta, ConstantDofMap(f.topology, 2).gather(0, f.theta));
-            EXPECT_TRUE(fields.Fp.evaluate(ref.xi()).dvalue_dcoeffs().isIdentity());
-            EXPECT_TRUE(fields.theta.evaluate(ref.xi()).dvalue_dcoeffs().isIdentity());
+            EXPECT_TRUE(fields.Fp.dvalue_dcoeffs(ref.xi()).isIdentity());
+            EXPECT_TRUE(fields.theta.dvalue_dcoeffs(ref.xi()).isIdentity());
         }
         EXPECT_DOUBLE_EQ(integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::F>(fields)),
                          integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::Fp>(fields)));
@@ -176,7 +175,7 @@ TEST(MaterialSources, SameQuadratureAcceptsDifferentActiveDofCounts) {
     Eigen::Matrix<double, 24, 24> expected_hessian = Eigen::Matrix<double, 24, 24>::Zero();
     Eigen::Matrix<double, 9, 9> expected_direct_hessian = Eigen::Matrix<double, 9, 9>::Zero();
     for (int q = 0; q < GaussLegendre3D<2>::num_points; ++q) {
-        const auto point = litepgo::ReferenceMapping(X_field.evaluate(GaussLegendre3D<2>::points().row(q).transpose()));
+        const auto point = litepgo::ReferenceMapping(X_field, GaussLegendre3D<2>::points().row(q).transpose());
         const double weight = GaussLegendre3D<2>::weights()[q] * point.det_dX_dxi();
         const auto inputs = nodal.evaluate(point.xi());
         const auto dF_du_local = nodal.F.evaluate(point.xi()).dF_du_local();
@@ -280,8 +279,7 @@ TEST(MaterialSources, SharedParameterHessianIncludesBothElements) {
         H += local_hessian;
         for (int q = 0; q < GaussLegendre3D<2>::num_points; ++q)
             volume += GaussLegendre3D<2>::weights()[q] *
-                      litepgo::ReferenceMapping(X_field.evaluate(GaussLegendre3D<2>::points().row(q).transpose()))
-                          .det_dX_dxi();
+                      litepgo::ReferenceMapping(X_field, GaussLegendre3D<2>::points().row(q).transpose()).det_dX_dxi();
         check_fd(
             ConstantDofMap(f.topology, 2).gather(0, f.theta),
             [&](const Eigen::Vector2d& theta) { return MaterialSources{fields.F, fields.Fp, IdentityField(theta)}; },

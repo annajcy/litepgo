@@ -1,0 +1,52 @@
+#include "litepgo/fem/field/field.hpp"
+#include "litepgo/fem/field/identity_field.hpp"
+
+#include <gtest/gtest.h>
+#include <type_traits>
+
+namespace {
+using namespace litepgo;
+
+class CoefficientOnlyField final : public Field {
+  public:
+    int num_components() const override {
+        return 2;
+    }
+    int num_dofs() const override {
+        return 2;
+    }
+    Eigen::VectorXd value(const Eigen::Vector3d&) const override {
+        return Eigen::Vector2d(2, 3);
+    }
+    Eigen::MatrixXd dvalue_dcoeffs(const Eigen::Vector3d&) const override {
+        return Eigen::Matrix2d::Identity();
+    }
+};
+
+TEST(Field, UnsupportedSpatialDerivativesThrowThroughBaseReference) {
+    static_assert(std::is_abstract_v<Field>);
+    static_assert(std::has_virtual_destructor_v<Field>);
+    const CoefficientOnlyField concrete;
+    const Field& field = concrete;
+    const Eigen::Vector3d xi(0.2, 0.3, 0.4);
+    EXPECT_EQ(field.value(xi), Eigen::Vector2d(2, 3));
+    EXPECT_TRUE(field.dvalue_dcoeffs(xi).isIdentity());
+    EXPECT_THROW(field.dvalue_dxi(xi), std::logic_error);
+    EXPECT_THROW(field.dgrad_xi_dcoeffs(xi), std::logic_error);
+}
+
+TEST(Field, IdentityFieldDispatchesValuesAndDerivativesThroughBaseReference) {
+    const IdentityField concrete(Eigen::Matrix3d::Identity().reshaped());
+    const Field& field = concrete;
+    const Eigen::Vector3d xi(0.2, 0.3, 0.4);
+    EXPECT_EQ(field.num_components(), 9);
+    EXPECT_EQ(field.num_dofs(), 9);
+    EXPECT_EQ(field.value(xi), Eigen::Matrix3d::Identity().reshaped());
+    EXPECT_TRUE(field.dvalue_dcoeffs(xi).isIdentity());
+    EXPECT_EQ(field.dvalue_dxi(xi).rows(), 9);
+    EXPECT_TRUE(field.dvalue_dxi(xi).isZero());
+    EXPECT_EQ(field.dgrad_xi_dcoeffs(xi).rows(), 27);
+    EXPECT_EQ(field.dgrad_xi_dcoeffs(xi).cols(), 9);
+    EXPECT_TRUE(field.dgrad_xi_dcoeffs(xi).isZero());
+}
+} // namespace

@@ -9,7 +9,7 @@
 namespace litepgo {
 
 Eigen::DiagonalMatrix<double, Eigen::Dynamic> hex_hermite_dof_transform(const InterpolatedField<HexQ1Basis>& X_field) {
-    const Eigen::Vector3d lengths = ReferenceMapping(X_field.evaluate(Eigen::Vector3d::Zero())).dX_dxi().diagonal();
+    const Eigen::Vector3d lengths = ReferenceMapping(X_field, Eigen::Vector3d::Zero()).dX_dxi().diagonal();
     if ((lengths.array() <= 0).any())
         throw std::invalid_argument("hex_hermite_dof_transform requires positive axis-aligned box dimensions");
     for (int v = 0; v < 8; ++v) {

@@ -44,12 +44,15 @@ template <int Components, int Storage> void check_coefficient_derivatives() {
     for (int i = 0; i < 8; ++i)
         for (int c = 0; c < Components; ++c)
             coefficients(i, c) = std::sin(0.37 * (i * Components + c + 1));
-    const InterpolatedField<HexQ1Basis> field(coefficients);
+    const InterpolatedField<HexQ1Basis> concrete(coefficients);
+    const Field& field = concrete;
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
     const Eigen::VectorXd flattened = coefficients.template reshaped<Eigen::RowMajor>();
+    EXPECT_EQ(field.num_components(), Components);
+    EXPECT_EQ(field.num_dofs(), 8 * Components);
     const auto gradient = field.dvalue_dxi(xi);
-    EXPECT_TRUE((field.evaluate(xi).dvalue_dcoeffs() * flattened).isApprox(field.value(xi), 1e-14));
-    EXPECT_TRUE((field.evaluate(xi).dgrad_xi_dcoeffs() * flattened).isApprox(gradient.reshaped(), 1e-14));
+    EXPECT_TRUE((field.dvalue_dcoeffs(xi) * flattened).isApprox(field.value(xi), 1e-14));
+    EXPECT_TRUE((field.dgrad_xi_dcoeffs(xi) * flattened).isApprox(gradient.reshaped(), 1e-14));
     constexpr double h = 1e-4;
     for (int j = 0; j < field.num_dofs(); ++j) {
         auto plus = coefficients, minus = coefficients;
@@ -58,8 +61,8 @@ template <int Components, int Storage> void check_coefficient_derivatives() {
         const InterpolatedField<HexQ1Basis> a(plus), b(minus);
         const Eigen::VectorXd value_fd = (a.value(xi) - b.value(xi)) / (2 * h);
         const Eigen::MatrixXd gradient_fd = (a.dvalue_dxi(xi) - b.dvalue_dxi(xi)) / (2 * h);
-        EXPECT_TRUE(value_fd.isApprox(field.evaluate(xi).dvalue_dcoeffs().col(j), 1e-9));
-        EXPECT_TRUE(gradient_fd.reshaped().isApprox(field.evaluate(xi).dgrad_xi_dcoeffs().col(j), 1e-9));
+        EXPECT_TRUE(value_fd.isApprox(field.dvalue_dcoeffs(xi).col(j), 1e-9));
+        EXPECT_TRUE(gradient_fd.reshaped().isApprox(field.dgrad_xi_dcoeffs(xi).col(j), 1e-9));
     }
 }
 } // namespace
@@ -84,7 +87,7 @@ TEST(InterpolatedField, GeometryAndFieldsUseTheSameParameterInterpolation) {
     M << 0.4, -0.1, 0.2, -0.3, 0.5, 0.1;
     const InterpolatedField<HexQ1Basis> parameters((X_nodes * M.transpose()).rowwise() + Eigen::RowVector2d(2, 3));
     for (const Eigen::Vector3d xi : {Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(-0.2, 1.2, 0.4)}) {
-        const auto point = litepgo::ReferenceMapping(X_field.evaluate(xi));
+        const auto point = litepgo::ReferenceMapping(X_field, xi);
         EXPECT_TRUE(X_field.value(xi).isApprox(origin + dX_dxi * xi, 1e-13));
         EXPECT_TRUE(X_field.dvalue_dxi(xi).isApprox(dX_dxi, 1e-13));
         EXPECT_TRUE(displacement.value(xi).isApprox(A * point.X() + offset, 1e-13));
@@ -126,14 +129,14 @@ TEST(InterpolatedField, ValueAndGradientValidateIndependently) {
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
     const InterpolatedField<InvalidBasis<true>> bad_values(corners());
     EXPECT_THROW(bad_values.value(xi), std::invalid_argument);
-    EXPECT_THROW(bad_values.evaluate(xi), std::invalid_argument);
+    EXPECT_THROW(bad_values.dvalue_dcoeffs(xi), std::invalid_argument);
     EXPECT_TRUE(bad_values.dvalue_dxi(xi).isIdentity(1e-14));
-    EXPECT_THROW(bad_values.evaluate(xi), std::invalid_argument);
+    EXPECT_TRUE(bad_values.dgrad_xi_dcoeffs(xi).allFinite());
     const InterpolatedField<InvalidBasis<false>> bad_gradients(corners());
     EXPECT_THROW(bad_gradients.dvalue_dxi(xi), std::invalid_argument);
-    EXPECT_THROW(bad_gradients.evaluate(xi), std::invalid_argument);
+    EXPECT_THROW(bad_gradients.dgrad_xi_dcoeffs(xi), std::invalid_argument);
     EXPECT_TRUE(bad_gradients.value(xi).isApprox(xi, 1e-14));
-    EXPECT_THROW(bad_gradients.evaluate(xi), std::invalid_argument);
+    EXPECT_TRUE(bad_gradients.dvalue_dcoeffs(xi).allFinite());
 }
 
 TEST(InterpolatedField, RejectsIncompatibleCoefficientsAndNonFiniteInputsOrResults) {
@@ -149,10 +152,12 @@ TEST(InterpolatedField, RejectsIncompatibleCoefficientsAndNonFiniteInputsOrResul
         const Eigen::Vector3d xi(bad, 0.3, 0.4);
         EXPECT_THROW(field.value(xi), std::invalid_argument);
         EXPECT_THROW(field.dvalue_dxi(xi), std::invalid_argument);
-        EXPECT_THROW(field.evaluate(xi).dvalue_dcoeffs(), std::invalid_argument);
-        EXPECT_THROW(field.evaluate(xi).dgrad_xi_dcoeffs(), std::invalid_argument);
+        EXPECT_THROW(field.dvalue_dcoeffs(xi), std::invalid_argument);
+        EXPECT_THROW(field.dgrad_xi_dcoeffs(xi), std::invalid_argument);
     }
     const InterpolatedField<HexQ1Basis> enormous(Eigen::MatrixXd::Constant(8, 3, std::numeric_limits<double>::max()));
     EXPECT_THROW(enormous.value(Eigen::Vector3d::Constant(2)), std::invalid_argument);
     EXPECT_THROW(enormous.dvalue_dxi(Eigen::Vector3d::Constant(2)), std::invalid_argument);
+    EXPECT_TRUE(enormous.dvalue_dcoeffs(Eigen::Vector3d::Constant(2)).allFinite());
+    EXPECT_TRUE(enormous.dgrad_xi_dcoeffs(Eigen::Vector3d::Constant(2)).allFinite());
 }

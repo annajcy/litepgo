@@ -128,7 +128,7 @@ TEST(VertexDofMap, ThreeGatheredFieldsReproduceAffineValuesAndPhysicalGradients)
         const litepgo::InterpolatedField<litepgo::HexQ1Basis> up(map.gather(e, b));
         const litepgo::InterpolatedField<litepgo::HexQ1Basis> parameters(VertexDofMap(topology, 2).gather(e, theta));
         for (const Eigen::Vector3d xi : {Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(0.76, 0.11, 0.64)}) {
-            const auto point = litepgo::ReferenceMapping(X_field.evaluate(xi));
+            const auto point = litepgo::ReferenceMapping(X_field, xi);
             const Eigen::Vector3d position =
                 Eigen::Vector3d(1.2, -0.7, 2.1) + reference_jacobian() * (xi + Eigen::Vector3d(e, 0, 0));
             const auto u_sample_value = u.value(point.xi());

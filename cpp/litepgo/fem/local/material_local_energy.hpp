@@ -19,10 +19,21 @@ namespace detail {
 template <class Value> struct ValueSample {
     const Value value;
 };
+// Derivatives stay lazy; the owning energy keeps the source alive during evaluation.
+template <class Value, class Source> struct DirectMaterialInput {
+    const Value value;
+    const Eigen::Vector3d xi;
+    const Source& source;
+    Eigen::MatrixXd dvalue_dcoeffs() const {
+        return source.dvalue_dcoeffs(xi);
+    }
+};
 template <bool NeedCoefficients = true, class Source>
 auto material_sample(const Source& source, const Eigen::Vector3d& xi) {
     if constexpr (requires { source.evaluate(xi); } && (NeedCoefficients || !requires { source.value(xi); }))
         return source.evaluate(xi);
+    else if constexpr (NeedCoefficients && requires { source.dvalue_dcoeffs(xi); })
+        return DirectMaterialInput{source.value(xi).eval(), xi, source};
     else
         return ValueSample{source.value(xi).eval()};
 }
@@ -171,7 +182,7 @@ class MaterialLocalEnergy final : public LocalEnergy {
             if constexpr (requires { F_sample.det_dX_dxi(); })
                 return F_sample.det_dX_dxi();
             else
-                return ReferenceMapping(X_field_.evaluate(xi)).det_dX_dxi();
+                return ReferenceMapping(X_field_, xi).det_dX_dxi();
         }();
         if (!std::isfinite(determinant) || determinant <= 0)
             throw std::invalid_argument("MaterialLocalEnergy: invalid reference volume");

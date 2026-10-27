@@ -19,7 +19,7 @@ add_executable(litepgo_tests
     fem/basis/1d/cubic_hermite_basis_gtest.cpp
     dof/element_dof_map_gtest.cpp
     dof/constant_dof_map_gtest.cpp
-    fem/field/field_sample_gtest.cpp
+    fem/field/field_gtest.cpp
     fem/field/identity_field_gtest.cpp
     fem/kinematics/deformation_gradient_gtest.cpp
     fem/local/material_sources_gtest.cpp

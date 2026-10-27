@@ -31,7 +31,7 @@ template <class B> void check_derivative() {
         const Eigen::MatrixXd previous =
             Eigen::kroneckerProduct(deformation_sample.reference_mapping().dxi_dX().transpose(),
                                     Eigen::Matrix3d::Identity()) *
-            InterpolatedField<B>(u_local).evaluate(xi).dgrad_xi_dcoeffs();
+            InterpolatedField<B>(u_local).dgrad_xi_dcoeffs(xi);
         EXPECT_TRUE(derivative.isApprox(previous, 1e-14));
         for (int j = 0; j < u_local.size(); ++j) {
             auto plus = u_local, minus = u_local;
@@ -56,9 +56,9 @@ TEST(DeformationGradient, SamplesOwnSnapshotsAndCanOnlyBeConstructedByEvaluation
     const auto deformation =
         DeformationGradient(InterpolatedField<HexQ1Basis>(u_local), InterpolatedField<HexQ1Basis>(X_local));
     using DS = decltype(deformation.evaluate(Eigen::Vector3d::Zero()));
-    using US = InterpolatedField<HexQ1Basis>::Sample;
+    using UField = InterpolatedField<HexQ1Basis>;
     static_assert(!std::is_default_constructible_v<DS>);
-    static_assert(!std::is_constructible_v<DS, US, ReferenceMapping>);
+    static_assert(!std::is_constructible_v<DS, UField, ReferenceMapping>);
     X_local.setZero();
     u_local.setZero();
     const auto detached = [&] {
