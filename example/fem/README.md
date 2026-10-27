@@ -17,6 +17,7 @@ The `cpp/litepgo/fem/interpolation/` module contains generic field interpolation
 | `dX_dxi` | $\partial X/\partial\xi$ |
 | `dxi_dX` | $\partial\xi/\partial X$ |
 | `det_dX_dxi` | $\det(\partial X/\partial\xi)$ |
+| `basis_sample` | Result of `B::evaluate(xi)`, containing all basis values `N` and derivatives `dN_dxi` at one reference point |
 | `N`, `dN_dxi` | Basis values $N_a$ and derivatives $\partial N_a/\partial\xi_d$ |
 | `dN_dX` | Physical basis derivatives: `dN_dxi * dxi_dX` |
 | `dvalue_dx_local` | $\partial\operatorname{vec}(y)/\partial x_{\mathrm{local}}$ at fixed geometry |

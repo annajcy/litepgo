@@ -28,12 +28,12 @@ template <bool InvalidValues> struct InvalidBasis {
     static constexpr int num_basis_functions = 8;
     using Sample = HexQ1Basis::Sample;
     static Sample evaluate(const Eigen::Vector3d& xi) {
-        auto sample = HexQ1Basis::evaluate(xi);
+        auto basis_sample = HexQ1Basis::evaluate(xi);
         if constexpr (InvalidValues)
-            sample.N.setConstant(std::numeric_limits<double>::quiet_NaN());
+            basis_sample.N.setConstant(std::numeric_limits<double>::quiet_NaN());
         else
-            sample.dN_dxi.setConstant(std::numeric_limits<double>::infinity());
-        return sample;
+            basis_sample.dN_dxi.setConstant(std::numeric_limits<double>::infinity());
+        return basis_sample;
     }
 };
 

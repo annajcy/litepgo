@@ -19,8 +19,8 @@ TEST(TetP1Basis, InterpolatesReferenceNodes) {
     nodes << 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1;
     for (int a = 0; a < 4; ++a) {
         EXPECT_EQ(TetP1Basis::reference_node(a), nodes.row(a).transpose());
-        const auto sample = TetP1Basis::evaluate(nodes.row(a).transpose());
-        EXPECT_EQ(sample.N, Eigen::Vector4d::Unit(a));
+        const auto basis_sample = TetP1Basis::evaluate(nodes.row(a).transpose());
+        EXPECT_EQ(basis_sample.N, Eigen::Vector4d::Unit(a));
     }
     EXPECT_THROW(TetP1Basis::reference_node(-1), std::out_of_range);
     EXPECT_THROW(TetP1Basis::reference_node(4), std::out_of_range);
@@ -33,24 +33,24 @@ TEST(TetP1Basis, ReproducesAffineFunctionsAndPartitionsUnity) {
     const Eigen::Vector3d slope(0.3, -0.7, 0.2);
     const Eigen::Vector4d coefficients = (nodes * slope).array() + 0.4;
     for (const auto& xi : samples) {
-        const auto sample = TetP1Basis::evaluate(xi);
-        EXPECT_NEAR(sample.N.sum(), 1, 1e-15);
-        EXPECT_TRUE(sample.dN_dxi.colwise().sum().isZero());
-        EXPECT_NEAR(coefficients.dot(sample.N), 0.4 + slope.dot(xi), 1e-15);
-        EXPECT_TRUE((sample.dN_dxi.transpose() * coefficients).isApprox(slope, 1e-14));
+        const auto basis_sample = TetP1Basis::evaluate(xi);
+        EXPECT_NEAR(basis_sample.N.sum(), 1, 1e-15);
+        EXPECT_TRUE(basis_sample.dN_dxi.colwise().sum().isZero());
+        EXPECT_NEAR(coefficients.dot(basis_sample.N), 0.4 + slope.dot(xi), 1e-15);
+        EXPECT_TRUE((basis_sample.dN_dxi.transpose() * coefficients).isApprox(slope, 1e-14));
     }
 }
 
 TEST(TetP1Basis, GradientsMatchFiniteDifferences) {
     constexpr double h = 1e-6;
     for (const auto& xi : samples) {
-        const auto sample = TetP1Basis::evaluate(xi);
+        const auto basis_sample = TetP1Basis::evaluate(xi);
         for (int d = 0; d < 3; ++d) {
             Eigen::Vector3d plus = xi, minus = xi;
             plus[d] += h;
             minus[d] -= h;
             const Eigen::Vector4d fd = (TetP1Basis::evaluate(plus).N - TetP1Basis::evaluate(minus).N) / (2 * h);
-            EXPECT_TRUE((fd - sample.dN_dxi.col(d)).isZero(3e-10));
+            EXPECT_TRUE((fd - basis_sample.dN_dxi.col(d)).isZero(3e-10));
         }
     }
 }

@@ -17,10 +17,12 @@ concept Basis = (Dim > 0) &&
                     requires(B::num_basis_functions > 0);
                 } &&
                 requires(const std::conditional_t<Dim == 1, double, Eigen::Matrix<double, Dim, 1>>& xi,
-                         const typename B::Sample& sample) {
+                         const typename B::Sample& basis_sample) {
                     { B::evaluate(xi) } -> std::same_as<typename B::Sample>;
-                    { (sample.N) } -> std::same_as<const Eigen::Matrix<double, B::num_basis_functions, 1>&>;
-                    { (sample.dN_dxi) } -> std::same_as<const Eigen::Matrix<double, B::num_basis_functions, Dim>&>;
+                    { (basis_sample.N) } -> std::same_as<const Eigen::Matrix<double, B::num_basis_functions, 1>&>;
+                    {
+                        (basis_sample.dN_dxi)
+                    } -> std::same_as<const Eigen::Matrix<double, B::num_basis_functions, Dim>&>;
                 };
 
 template <class B>

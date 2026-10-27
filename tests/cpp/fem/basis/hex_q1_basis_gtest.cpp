@@ -25,9 +25,9 @@ TEST(HexQ1Basis, InterpolatesReferenceNodesInLibpgoOrder) {
     const auto corners = reference_corners();
     for (int a = 0; a < 8; ++a) {
         EXPECT_EQ(HexQ1Basis::reference_node(a), corners.col(a));
-        const auto sample = HexQ1Basis::evaluate(corners.col(a));
+        const auto basis_sample = HexQ1Basis::evaluate(corners.col(a));
         for (int b = 0; b < 8; ++b) {
-            EXPECT_DOUBLE_EQ(sample.N[b], a == b ? 1.0 : 0.0);
+            EXPECT_DOUBLE_EQ(basis_sample.N[b], a == b ? 1.0 : 0.0);
         }
     }
     EXPECT_THROW(HexQ1Basis::reference_node(-1), std::out_of_range);
@@ -36,21 +36,21 @@ TEST(HexQ1Basis, InterpolatesReferenceNodesInLibpgoOrder) {
 
 TEST(HexQ1Basis, MatchesVerifiedLibpgoWeightsAndGradients) {
     // Verified against fit-micro's CubicLinearShapeFunction at (0.2,0.3,0.4).
-    const auto sample = HexQ1Basis::evaluate(Eigen::Vector3d(0.2, 0.3, 0.4));
+    const auto basis_sample = HexQ1Basis::evaluate(Eigen::Vector3d(0.2, 0.3, 0.4));
     Eigen::Matrix<double, 8, 1> weights;
     weights << 0.336, 0.084, 0.036, 0.144, 0.224, 0.056, 0.024, 0.096;
     Eigen::Matrix<double, 8, 3> gradients;
     gradients << -0.42, -0.48, -0.56, 0.42, -0.12, -0.14, 0.18, 0.12, -0.06, -0.18, 0.48, -0.24, -0.28, -0.32, 0.56,
         0.28, -0.08, 0.14, 0.12, 0.08, 0.06, -0.12, 0.32, 0.24;
-    EXPECT_TRUE((sample.N - weights).isZero(1e-15));
-    EXPECT_TRUE((sample.dN_dxi - gradients).isZero(1e-15));
+    EXPECT_TRUE((basis_sample.N - weights).isZero(1e-15));
+    EXPECT_TRUE((basis_sample.dN_dxi - gradients).isZero(1e-15));
 }
 
 TEST(HexQ1Basis, PartitionsUnityAndHasZeroGradientSum) {
     for (const auto& p : samples) {
-        const auto sample = HexQ1Basis::evaluate(p);
-        EXPECT_NEAR(sample.N.sum(), 1.0, 1e-15);
-        EXPECT_TRUE(sample.dN_dxi.colwise().sum().isZero(1e-15));
+        const auto basis_sample = HexQ1Basis::evaluate(p);
+        EXPECT_NEAR(basis_sample.N.sum(), 1.0, 1e-15);
+        EXPECT_TRUE(basis_sample.dN_dxi.colwise().sum().isZero(1e-15));
     }
 }
 
@@ -66,19 +66,19 @@ TEST(HexQ1Basis, ReproducesAffineGeometryAndVectorFields) {
     const Eigen::Matrix<double, 3, 8> Ue = (A * Xe).colwise() + b;
 
     for (const auto& p : samples) {
-        const auto sample = HexQ1Basis::evaluate(p);
+        const auto basis_sample = HexQ1Basis::evaluate(p);
         const Eigen::Vector3d X = origin + dX_dxi * p;
-        EXPECT_TRUE((Xe * sample.N).isApprox(X, 1e-14));
-        EXPECT_TRUE((Xe * sample.dN_dxi).isApprox(dX_dxi, 1e-14));
-        EXPECT_TRUE((Ue * sample.N).isApprox(A * X + b, 1e-14));
-        EXPECT_TRUE((Ue * sample.dN_dxi).isApprox(A * dX_dxi, 1e-14));
+        EXPECT_TRUE((Xe * basis_sample.N).isApprox(X, 1e-14));
+        EXPECT_TRUE((Xe * basis_sample.dN_dxi).isApprox(dX_dxi, 1e-14));
+        EXPECT_TRUE((Ue * basis_sample.N).isApprox(A * X + b, 1e-14));
+        EXPECT_TRUE((Ue * basis_sample.dN_dxi).isApprox(A * dX_dxi, 1e-14));
     }
 }
 
 TEST(HexQ1Basis, GradientsMatchFiniteDifferences) {
     constexpr double h = 1e-6;
     for (const auto& p : samples) {
-        const auto sample = HexQ1Basis::evaluate(p);
+        const auto basis_sample = HexQ1Basis::evaluate(p);
         for (int d = 0; d < 3; ++d) {
             Eigen::Vector3d plus = p;
             Eigen::Vector3d minus = p;
@@ -86,7 +86,7 @@ TEST(HexQ1Basis, GradientsMatchFiniteDifferences) {
             minus[d] -= h;
             const Eigen::Matrix<double, 8, 1> derivative =
                 (HexQ1Basis::evaluate(plus).N - HexQ1Basis::evaluate(minus).N) / (2.0 * h);
-            EXPECT_TRUE((derivative - sample.dN_dxi.col(d)).isZero(3e-10));
+            EXPECT_TRUE((derivative - basis_sample.dN_dxi.col(d)).isZero(3e-10));
         }
     }
 }

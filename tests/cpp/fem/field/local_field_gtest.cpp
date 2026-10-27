@@ -60,12 +60,12 @@ template <bool InvalidGradient> struct InvalidFieldBasis {
     static constexpr int num_basis_functions = HexQ1Basis::num_basis_functions;
     using Sample = HexQ1Basis::Sample;
     static Sample evaluate(const Eigen::Vector3d& xi) {
-        auto sample = HexQ1Basis::evaluate(xi);
+        auto basis_sample = HexQ1Basis::evaluate(xi);
         if constexpr (InvalidGradient)
-            sample.dN_dxi(0, 0) = std::numeric_limits<double>::quiet_NaN();
+            basis_sample.dN_dxi(0, 0) = std::numeric_limits<double>::quiet_NaN();
         else
-            sample.N[0] = std::numeric_limits<double>::quiet_NaN();
-        return sample;
+            basis_sample.N[0] = std::numeric_limits<double>::quiet_NaN();
+        return basis_sample;
     }
 };
 

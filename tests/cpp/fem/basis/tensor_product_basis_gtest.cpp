@@ -35,18 +35,18 @@ Eigen::Vector3d polynomial_gradient(const Eigen::Vector3d& p) {
 TEST(TensorProductBasis, InterpolatesCornersInTensorOrder) {
     const auto nodes = corners();
     for (int a = 0; a < litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>::num_basis_functions; ++a) {
-        const auto sample = litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>::evaluate(nodes.col(a));
+        const auto basis_sample = litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>::evaluate(nodes.col(a));
         for (int b = 0; b < litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>::num_basis_functions; ++b) {
-            EXPECT_DOUBLE_EQ(sample.N[b], a == b ? 1.0 : 0.0);
+            EXPECT_DOUBLE_EQ(basis_sample.N[b], a == b ? 1.0 : 0.0);
         }
     }
 }
 
 TEST(TensorProductBasis, PartitionsUnityAndHasZeroGradientSum) {
     for (const auto& p : samples) {
-        const auto sample = litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>::evaluate(p);
-        EXPECT_NEAR(sample.N.sum(), 1.0, 1e-15);
-        EXPECT_TRUE(sample.dN_dxi.colwise().sum().isZero(1e-15));
+        const auto basis_sample = litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>::evaluate(p);
+        EXPECT_NEAR(basis_sample.N.sum(), 1.0, 1e-15);
+        EXPECT_TRUE(basis_sample.dN_dxi.colwise().sum().isZero(1e-15));
     }
 }
 
@@ -56,9 +56,9 @@ TEST(TensorProductBasis, ReproducesAffineVectorFieldsAndJacobians) {
     const Eigen::Vector3d b(0.3, -1.7, 2.1);
     const Eigen::Matrix<double, 3, 8> coefficients = (A * corners()).colwise() + b;
     for (const auto& p : samples) {
-        const auto sample = litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>::evaluate(p);
-        EXPECT_TRUE((coefficients * sample.N).isApprox(A * p + b, 1e-14));
-        EXPECT_TRUE((coefficients * sample.dN_dxi).isApprox(A, 1e-14));
+        const auto basis_sample = litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>::evaluate(p);
+        EXPECT_TRUE((coefficients * basis_sample.N).isApprox(A * p + b, 1e-14));
+        EXPECT_TRUE((coefficients * basis_sample.dN_dxi).isApprox(A, 1e-14));
     }
 }
 
@@ -69,16 +69,16 @@ TEST(TensorProductBasis, ReproducesTrilinearPolynomialsAndGradients) {
         coefficients[a] = polynomial(nodes.col(a));
     }
     for (const auto& p : samples) {
-        const auto sample = litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>::evaluate(p);
-        EXPECT_NEAR(coefficients.dot(sample.N), polynomial(p), 2e-14);
-        EXPECT_TRUE((sample.dN_dxi.transpose() * coefficients).isApprox(polynomial_gradient(p), 1e-14));
+        const auto basis_sample = litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>::evaluate(p);
+        EXPECT_NEAR(coefficients.dot(basis_sample.N), polynomial(p), 2e-14);
+        EXPECT_TRUE((basis_sample.dN_dxi.transpose() * coefficients).isApprox(polynomial_gradient(p), 1e-14));
     }
 }
 
 TEST(TensorProductBasis, GradientsMatchFiniteDifferencesIncludingCorners) {
     constexpr double h = 1e-6;
     for (const auto& p : samples) {
-        const auto sample = litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>::evaluate(p);
+        const auto basis_sample = litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>::evaluate(p);
         for (int d = 0; d < 3; ++d) {
             Eigen::Vector3d plus = p;
             Eigen::Vector3d minus = p;
@@ -88,7 +88,7 @@ TEST(TensorProductBasis, GradientsMatchFiniteDifferencesIncludingCorners) {
                 (litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>::evaluate(plus).N -
                  litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>::evaluate(minus).N) /
                 (2.0 * h);
-            EXPECT_TRUE((derivative - sample.dN_dxi.col(d)).isZero(3e-10));
+            EXPECT_TRUE((derivative - basis_sample.dN_dxi.col(d)).isZero(3e-10));
         }
     }
 }
