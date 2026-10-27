@@ -173,6 +173,7 @@ TEST(HexHermiteExample, RejectsUnsupportedGeometryAndIncorrectDofShapes) {
             X_nodes[0] = std::numeric_limits<double>::quiet_NaN();
         EXPECT_THROW(example::make_hex_hermite_mesh_energy(X_nodes), std::invalid_argument);
     }
+    EXPECT_THROW(example::make_hex_hermite_mesh_energy(Vec::Zero(35)), std::invalid_argument);
     EXPECT_THROW(example::hex_hermite_reference_coefficients(Eigen::MatrixXd::Zero(8, 3), Vec::Ones(192)),
                  std::invalid_argument);
     EXPECT_THROW(example::hex_hermite_reference_coefficients(Eigen::MatrixXd::Zero(8, 24), Vec::Ones(191)),

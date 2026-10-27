@@ -8,11 +8,12 @@
 #include "litepgo/fem/field/hex_hermite_dof_transform.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
-#include "litepgo/fem/local/integrate_volume.hpp"
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 
+#include <Eigen/LU>
+#include <cmath>
 #include <stdexcept>
 #include <vector>
 
@@ -69,8 +70,25 @@ inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X_nodes) {
             const MaterialLocalEnergyF<NeoHookean> local_energy(deformation, Fp_field, theta_field);
             Vec dE_du_local;
             Eigen::MatrixXd d2E_du_local2;
-            const double E_element = integrate_volume<GaussLegendre3D<4>>(
-                X_field, local_energy, dE_dx_local ? &dE_du_local : nullptr, d2E_dx_local2 ? &d2E_du_local2 : nullptr);
+            if (dE_dx_local)
+                dE_du_local.setZero(local_energy.num_dofs());
+            if (d2E_dx_local2)
+                d2E_du_local2.setZero(local_energy.num_dofs(), local_energy.num_dofs());
+            using Q = GaussLegendre3D<4>;
+            double E_element = 0;
+            for (int q = 0; q < Q::num_points; ++q) {
+                const Eigen::Vector3d xi = Q::points().row(q).transpose();
+                const auto dX_dxi = X_field.dvalue_dxi(xi);
+                if (dX_dxi.rows() != 3 || dX_dxi.cols() != 3 || !dX_dxi.allFinite())
+                    throw std::invalid_argument("hex_hermite requires a finite 3-by-3 coordinate derivative");
+                const double determinant = Eigen::Matrix3d(dX_dxi).determinant();
+                const double weight = Q::weights()[q] * determinant;
+                if (!std::isfinite(determinant) || determinant <= 0 || !std::isfinite(weight))
+                    throw std::invalid_argument(
+                        "hex_hermite requires a finite positive coordinate determinant and finite volume weight");
+                E_element += local_energy.accumulate(xi, weight, dE_dx_local ? &dE_du_local : nullptr,
+                                                     d2E_dx_local2 ? &d2E_du_local2 : nullptr);
+            }
             // Pull reference-coefficient derivatives back to gathered physical Hermite DOFs.
             if (dE_dx_local)
                 *dE_dx_local = dof_scales.array() * dE_du_local.array();

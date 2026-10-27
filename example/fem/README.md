@@ -1,6 +1,6 @@
 # FEM with MeshEnergy
 
-Quadrature supplies reference coordinates `xi` and weights. A `Field` computes values and derivatives at `xi` through virtual functions. `DeformationGradientField` composes displacement and coordinate fields at one `xi`, returning column-flattened `F`. Materials consume numerical `F`, `Fp`, and `theta`. Local energies bind one active coefficient block and supply density and coefficient derivatives. `integrate_volume` applies geometric weights; `MeshEnergy` gathers and assembles the element results.
+Quadrature supplies reference coordinates `xi` and weights. A `Field` computes values and derivatives at `xi` through virtual functions. `DeformationGradientField` composes displacement and coordinate fields at one `xi`, returning column-flattened `F`. Materials consume numerical `F`, `Fp`, and `theta`. Local energies bind one active coefficient block and supply density and coefficient derivatives. The element lambda applies geometric weights and sums quadrature contributions; `MeshEnergy` gathers and assembles the element results.
 
 ```mermaid
 flowchart TD
@@ -12,7 +12,7 @@ flowchart TD
     M -->|inverse| D
     M -->|determinant| I
     P["Fp and theta sources"] --> L
-    L --> I["integrate_volume: apply volume weight and sum over q"]
+    L --> I["Element lambda: apply volume weight and sum over q"]
     I --> A["MeshEnergy: global assembly"]
 ```
 
@@ -24,7 +24,7 @@ flowchart TD
 | `fem/quadrature/` | Reference points and weights, grouped into `1d/` and `3d/` |
 | `fem/field/` | `Field`, `InterpolatedField`, `IdentityField`, `DeformationGradientField`, and the Hex Hermite coefficient transform |
 | `fem/material/` | Numerical constitutive inputs, density, and material derivatives |
-| `fem/local/` | Active-input binding, derivative contractions, and volume integration |
+| `fem/local/` | Pointwise local energies, active-input binding, and derivative contractions |
 
 The 1D basis building blocks are `LinearLagrangeBasis` and `CubicHermiteBasis`. Tensor-product types retain the `3D` suffix, mirrored as `_3d` in their filenames.
 
@@ -116,7 +116,7 @@ $$
 =\left(\frac{\partial X}{\partial\xi}\right)^{-1}.
 $$
 
-`Field` assigns no geometric meaning to its values or derivatives. `DeformationGradientField` requests `X_field.dvalue_dxi(xi)`, checks three components, a finite 3-by-3 derivative and a finite positive determinant, then computes and validates the inverse. `integrate_volume` requests the same derivative and validates its shape, finiteness and positive finite determinant for volume weights; it does not compute an unused inverse. Neither query needs `X_field.value(xi)`. `coordinate_field()` exposes the coordinate field borrowed by the deformation field.
+`Field` assigns no geometric meaning to its values or derivatives. `DeformationGradientField` requests `X_field.dvalue_dxi(xi)`, checks three components, a finite 3-by-3 derivative and a finite positive determinant, then computes and validates the inverse. The element lambda requests the same derivative and validates its shape, finiteness and positive finite determinant for volume weights; the weighting step does not need an inverse. Neither query needs `X_field.value(xi)`. `coordinate_field()` exposes the coordinate field borrowed by the deformation field.
 
 $$
 F=I+u_{,\xi}X_{,\xi}^{-1},\qquad
@@ -139,19 +139,44 @@ The implementation obtains `dgrad_xi_dcoeffs(xi)` from the displacement field an
 
 Material APIs keep numerical `MaterialInputs{F, Fp, theta}`. They do not sample fields or select quadrature. `dW_dF` and `dW_dFp` return 3-by-3 matrices; their Hessians `d2W_dF2` and `d2W_dFp2` are 9-by-9 over column-major vectorization. `dW_dtheta` and `d2W_dtheta2` differentiate the pointwise parameter vector. Elastic derivatives use `dpsi_dFe` and `d2psi_dFe2`; inverse/determinant variables use `inv_Fp`, `inv_Fe_T`, `det_Fe`, `det_Fp`, and `log_det_Fe`. Directional changes use `delta_`; optimizer steps retain `dx` and `dx_local`.
 
+The element callback keeps geometry, material binding, and quadrature together. Here `X_fields` owns the coordinate fields for the elements, and `x_local` contains the gathered Q1 displacement coefficients:
+
 ```cpp
 #include "litepgo/fem/material/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/local/material_local_energy.hpp"
-#include "litepgo/fem/local/integrate_volume.hpp"
 
-const litepgo::MaterialLocalEnergyF<litepgo::NeoHookean> local_energy(
-    deformation, Fp_field, theta_field);
+#include <Eigen/LU>
+#include <cmath>
+#include <stdexcept>
 
-Eigen::VectorXd dE_du_local;
-Eigen::MatrixXd d2E_du_local2;
-const double E_element = litepgo::integrate_volume<litepgo::GaussLegendre3D<2>>(
-    X_field, local_energy, &dE_du_local, &d2E_du_local2);
+const auto evaluate_element =
+    [X_fields, Fp_field, theta_field](int e, const Eigen::MatrixXd& x_local,
+                                    Eigen::VectorXd* g, Eigen::MatrixXd* H) {
+        const auto& X_field = X_fields[static_cast<std::size_t>(e)];
+        const litepgo::InterpolatedField<litepgo::HexQ1Basis> u_field(x_local);
+        const litepgo::DeformationGradientField deformation(u_field, X_field);
+        const litepgo::MaterialLocalEnergyF<litepgo::NeoHookean> local_energy(
+            deformation, Fp_field, theta_field);
+        if (g)
+            g->setZero(local_energy.num_dofs());
+        if (H)
+            H->setZero(local_energy.num_dofs(), local_energy.num_dofs());
+        using Q = litepgo::GaussLegendre3D<2>;
+        double E_element = 0;
+        for (int q = 0; q < Q::num_points; ++q) {
+            const Eigen::Vector3d xi = Q::points().row(q).transpose();
+            const auto dX_dxi = X_field.dvalue_dxi(xi);
+            if (dX_dxi.rows() != 3 || dX_dxi.cols() != 3 || !dX_dxi.allFinite())
+                throw std::invalid_argument("Invalid coordinate derivative");
+            const double determinant = Eigen::Matrix3d(dX_dxi).determinant();
+            const double weight = Q::weights()[q] * determinant;
+            if (!std::isfinite(determinant) || determinant <= 0 || !std::isfinite(weight))
+                throw std::invalid_argument("Invalid coordinate determinant or volume weight");
+            E_element += local_energy.accumulate(xi, weight, g, H);
+        }
+        return E_element;
+    };
 ```
 
 `GaussLegendre3D<PointsPerAxis>` uses `PointsPerAxis^3` integration points on `[0,1]^3`; `<2>` therefore uses eight points.
@@ -162,9 +187,9 @@ All three input fields must outlive the energy, and temporary input fields are r
 
 `LocalEnergy::value(xi)`, `gradient(xi)`, and `hessian(xi)` return pointwise density `W` and coefficient derivatives. `accumulate(xi, weight, ...)` receives a complete weight from its caller and adds weighted values and requested derivatives to initialized buffers. It performs no geometry evaluation. The material implementation samples each input once and computes the active coefficient derivative once per accumulation, sharing it between gradient and Hessian. Inactive derivatives and unrequested material derivatives are not evaluated.
 
-`integrate_volume<Q>(X_field, local_energy, ...)` owns the geometric weighting step: at each quadrature point it validates `X_field.dvalue_dxi(xi)`, computes `weight = w_q * det(dX_dxi)`, and passes that weight to the accumulator exactly once. It does not query the coordinate field's position values or compute an inverse. Geometry, material fields, and quadrature must refer to the same element and parameter domain; in particular, use the same coordinates as any composed deformation field. Geometry is fixed when taking coefficient derivatives.
+The element lambda owns the geometric weighting step: at each quadrature point it validates `X_field.dvalue_dxi(xi)`, computes `weight = w_q * det(dX_dxi)`, and passes that weight to the accumulator exactly once. Computing this weight requires neither coordinate position values nor an inverse. Geometry, material fields, and quadrature must refer to the same element and parameter domain; in particular, use the same coordinates as any composed deformation field. Geometry is fixed when taking coefficient derivatives.
 
-Integration checks independently requested gradient/Hessian capabilities before changing outputs, initializes output shapes, traverses `q`, and sums the weighted contributions. Output buffers are independently nullable, overwritten by integration, and must not alias energy data; an accumulator may not resize them. Quadrature data, geometry shape and finiteness, positive finite determinants, volume-weight overflow, derivative shapes, and finite active maps are validated.
+The element lambda initializes each requested output to zero, traverses `q`, and sums the weighted contributions in one pass. Gradient and Hessian pointers are independently nullable; each evaluation overwrites the requested outputs. `accumulate` adds to those buffers without resizing them, so callers must initialize their dimensions and keep them separate from energy data. The examples use fixed quadrature rules with finite points and weights, validate geometry at every evaluated point, and reject non-finite volume weights. Field and local-energy evaluation retain coefficient, derivative-shape, and finite-map checks. The Hex Hermite callback integrates in reference coefficients before applying its physical-DOF transform.
 
 For an affine active map `D`, pointwise pullbacks are
 
@@ -221,7 +246,7 @@ These are source-breaking changes; old headers and compatibility aliases are not
 | `dvalue_dx_local(xi)`, `dgrad_xi_dx_local(xi)` | `dvalue_dcoeffs(xi)`, `dgrad_xi_dcoeffs(xi)` |
 | `field.jacobian(point)` / `dF_dx_local` | `field.dvalue_dcoeffs(xi)` |
 | `MaterialLocalEnergy<Material>(F, Fp, theta, active)` or `make_material_local_energy<Material, Active>` | `MaterialLocalEnergyF/Fp/Theta<Material>(F, Fp, theta)` with named `Field` inputs |
-| `integrate_volume<Q>(bound_energy, ...)` | `integrate_volume<Q>(X_field, energy, ...)` |
+| Volume integration helper | Quadrature loop inside the element lambda, passing `w_q * det(dX_dxi)` to `local_energy.accumulate` |
 | `Basis::Sample::values`, `gradients` | `N`, `dN_dxi` |
 | `RestPointData::position`, `jacobian`, `inverse_jacobian`, `jacobian_determinant` | Field values, coordinate Jacobians, their inverses, and their determinants |
 | Material `gradient_F`, `hessian_F` and corresponding `Fp`/`theta` names | `dW_dF`, `d2W_dF2` and corresponding names |

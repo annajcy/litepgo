@@ -30,7 +30,7 @@ add_executable(litepgo_tests
     fem/field/interpolated_field_gtest.cpp
     fem/field/hex_hermite_dof_transform_gtest.cpp
     fem/basis/1d/linear_lagrange_basis_gtest.cpp
-    fem/local/integrate_volume_gtest.cpp
+    fem/local/local_energy_gtest.cpp
     fem/local/dof_derivatives_gtest.cpp
     fem/material/material_inputs_gtest.cpp
     fem/material/multiplicative_kinematics_gtest.cpp

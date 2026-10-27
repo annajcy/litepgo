@@ -2,10 +2,8 @@
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
-#include "litepgo/fem/local/integrate_volume.hpp"
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
-#include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "quadratic_parameter_material.hpp"
 #include <gtest/gtest.h>
 #include <limits>
@@ -48,7 +46,6 @@ struct ValueOnlyF final : ValueOnlyField {
 TEST(MaterialLocalEnergy, DirectFieldsBindCorrectDerivativesAndBorrowNamedFields) {
     Eigen::Matrix3d F = (Eigen::Matrix3d() << 1.2, 0.1, -0.03, 0.04, 0.9, 0.02, -0.01, 0.04, 1.1).finished();
     const Eigen::Matrix3d Fp = (Eigen::Matrix3d() << 0.95, -0.02, 0.05, 0.01, 1.1, -0.04, 0.03, 0.01, 1.05).finished();
-    const auto X_field = coordinates(2);
     IdentityField F_field(F.reshaped());
     const IdentityField Fp_field(Fp.reshaped());
     const IdentityField theta_field(Eigen::Vector2d(2, 3));
@@ -67,7 +64,7 @@ TEST(MaterialLocalEnergy, DirectFieldsBindCorrectDerivativesAndBorrowNamedFields
     EXPECT_EQ(energy.hessian(xi), NeoHookean::d2W_dF2(inputs));
     EXPECT_EQ(plastic.hessian(xi), NeoHookean::d2W_dFp2(inputs));
     EXPECT_EQ(parameters.hessian(xi), NeoHookean::d2W_dtheta2(inputs));
-    EXPECT_NEAR(integrate_volume<GaussLegendre3D<2>>(X_field, energy), 8 * W, 1e-13);
+    EXPECT_NEAR(energy.accumulate(xi, 8, nullptr, nullptr), 8 * W, 1e-13);
     F.setZero();
     EXPECT_DOUBLE_EQ(energy.value(xi), W);
     F = 1.01 * inputs.F;
@@ -311,9 +308,9 @@ TEST(MaterialLocalEnergy, InactiveInterpolatedParametersDoNotRequireSpatialDeriv
     const litepgo::DeformationGradientField deformation(u_field, X_field);
     const litepgo::IdentityField Fp_field(Eigen::Matrix3d::Identity().reshaped());
     const auto energy = litepgo::MaterialLocalEnergyF<litepgo::NeoHookean>(deformation, Fp_field, theta_field);
-    Eigen::VectorXd g;
-    Eigen::MatrixXd H;
-    EXPECT_DOUBLE_EQ(litepgo::integrate_volume<litepgo::GaussLegendre3D<2>>(X_field, energy, &g, &H), 0);
+    Eigen::VectorXd g = Eigen::VectorXd::Zero(energy.num_dofs());
+    Eigen::MatrixXd H = Eigen::MatrixXd::Zero(energy.num_dofs(), energy.num_dofs());
+    EXPECT_DOUBLE_EQ(energy.accumulate({0.2, 0.3, 0.4}, 1, &g, &H), 0);
     EXPECT_TRUE(g.isZero());
     EXPECT_GT(H.norm(), 0);
 }

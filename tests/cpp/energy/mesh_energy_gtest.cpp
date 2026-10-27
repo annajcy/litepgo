@@ -6,10 +6,10 @@
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 
-#include "litepgo/fem/local/integrate_volume.hpp"
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
+#include <Eigen/LU>
 #include <atomic>
 #include <cmath>
 #include <gtest/gtest.h>
@@ -74,7 +74,21 @@ void check_fd(MeshEnergy& energy, const Vec& x) {
 template <class Map, class Fields, class Bind>
 void check_material_path(const Map& map, const Vec& data, Fields fields, Bind bind) {
     MeshEnergy energy(map, [fields, bind](int, const auto& x_local, Vec* g, Eigen::MatrixXd* h) {
-        return integrate_volume<GaussLegendre3D<2>>(make_X_field(), bind(fields(x_local)), g, h);
+        const auto X_field = make_X_field();
+        const auto sources = fields(x_local);
+        const auto local_energy = bind(sources);
+        if (g)
+            g->setZero(local_energy.num_dofs());
+        if (h)
+            h->setZero(local_energy.num_dofs(), local_energy.num_dofs());
+        using Q = GaussLegendre3D<2>;
+        double result = 0;
+        for (int q = 0; q < Q::num_points; ++q) {
+            const Eigen::Vector3d xi = Q::points().row(q).transpose();
+            const double weight = Q::weights()[q] * X_field.dvalue_dxi(xi).determinant();
+            result += local_energy.accumulate(xi, weight, g, h);
+        }
+        return result;
     });
     // This test only evaluates nearby feasible states; it does not use the default step for a solver.
     check_fd(energy, data);

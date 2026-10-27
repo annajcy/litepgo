@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <limits>
 
 TEST(TetP1Example, GradientAndHessianMatchFiniteDifferences) {
     using namespace litepgo;
@@ -67,5 +68,27 @@ TEST(TetP1Example, GradientAndHessianMatchFiniteDifferences) {
                                  (4 * h * h);
             EXPECT_NEAR(d.dot(H * v), mixed, (10 * h * h + 1e-7) * (1 + H.norm()));
         }
+    }
+}
+
+TEST(TetP1Example, ElementLambdaRejectsInvalidGeometry) {
+    using namespace litepgo;
+    for (double scale : {0., -1., 1e200}) {
+        SCOPED_TRACE(scale);
+        const Vec X_nodes = scale * example::tet_p1_rest_positions();
+        auto energy = example::make_tet_p1_mesh_energy(X_nodes);
+        const Vec x = Vec::Zero(15);
+        Vec g;
+        SpMat H = energy.hessian_pattern();
+        EXPECT_THROW(energy.value(x), std::invalid_argument);
+        EXPECT_THROW(energy.evaluate(x, &g, nullptr), std::invalid_argument);
+        EXPECT_THROW(energy.evaluate(x, nullptr, &H), std::invalid_argument);
+    }
+    EXPECT_THROW(example::make_tet_p1_mesh_energy(Vec::Zero(14)), std::invalid_argument);
+    for (double bad : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
+                       -std::numeric_limits<double>::infinity()}) {
+        Vec X_nodes = example::tet_p1_rest_positions();
+        X_nodes[0] = bad;
+        EXPECT_THROW(example::make_tet_p1_mesh_energy(X_nodes), std::invalid_argument);
     }
 }
