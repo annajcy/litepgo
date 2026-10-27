@@ -1,12 +1,13 @@
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
-#include "litepgo/fem/kinematics/reference_mapping.hpp"
 #include "litepgo/fem/local/integrate_volume.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include <gtest/gtest.h>
 #include <limits>
 #include <stdexcept>
 #include <utility>
+
+#include <Eigen/LU>
 
 namespace {
 using namespace litepgo;
@@ -32,7 +33,7 @@ struct ValueOnly : LocalEnergy {
     explicit ValueOnly(InterpolatedField<HexQ1Basis> coordinates = make_X_field()) : X_field(std::move(coordinates)) {}
     const InterpolatedField<HexQ1Basis> X_field;
     double det_dX_dxi(const Eigen::Vector3d& xi) const override {
-        return ReferenceMapping(X_field, xi).det_dX_dxi();
+        return X_field.dvalue_dxi(xi).determinant();
     }
     int num_dofs() const override {
         return 3;
@@ -245,7 +246,7 @@ struct UnitDensity : LocalEnergy {
         : X_field(std::move(coordinates)) {}
     const InterpolatedField<HexQ1Basis> X_field;
     double det_dX_dxi(const Eigen::Vector3d& xi) const override {
-        return ReferenceMapping(X_field, xi).det_dX_dxi();
+        return X_field.dvalue_dxi(xi).determinant();
     }
     mutable int calls = 0;
     int num_dofs() const override {

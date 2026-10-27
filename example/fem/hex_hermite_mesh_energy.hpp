@@ -4,10 +4,10 @@
 #include "litepgo/energy/mesh_energy.hpp"
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
+#include "litepgo/fem/field/deformation_gradient_field.hpp"
 #include "litepgo/fem/field/hex_hermite_dof_transform.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
-#include "litepgo/fem/kinematics/deformation_gradient.hpp"
 #include "litepgo/fem/local/integrate_volume.hpp"
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
@@ -48,8 +48,9 @@ inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X_nodes) {
     std::vector<InterpolatedField<HexQ1Basis>> X_fields;
     std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> transforms;
     for (int e = 0; e < geometry_map.num_elements(); ++e) {
-        X_fields.emplace_back(geometry_map.gather(e, X_nodes));
-        transforms.push_back(hex_hermite_dof_transform(X_fields.back()));
+        const auto X_local = geometry_map.gather(e, X_nodes);
+        transforms.push_back(hex_hermite_dof_transform(X_local));
+        X_fields.emplace_back(X_local);
     }
     const IdentityField Fp_field(Eigen::Matrix3d::Identity().reshaped());
     const IdentityField theta_field(Eigen::Vector2d(2, 3));
@@ -64,7 +65,7 @@ inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X_nodes) {
             const auto& u_physical_local = x_local;
             const auto u_local = hex_hermite_reference_coefficients(u_physical_local, dof_scales);
             const auto u_field = InterpolatedField<HexHermiteBasis>(u_local);
-            const auto deformation = DeformationGradient(u_field, X_field);
+            const auto deformation = DeformationGradientField(u_field, X_field);
             const auto local_energy =
                 make_material_local_energy<NeoHookean, MaterialVariable::F>(deformation, Fp_field, theta_field);
             Vec dE_du_local;

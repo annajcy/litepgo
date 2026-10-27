@@ -1,6 +1,7 @@
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
-#include "litepgo/fem/kinematics/reference_mapping.hpp"
+
+#include <Eigen/LU>
 
 #include <cmath>
 #include <gtest/gtest.h>
@@ -87,14 +88,13 @@ TEST(InterpolatedField, GeometryAndFieldsUseTheSameParameterInterpolation) {
     M << 0.4, -0.1, 0.2, -0.3, 0.5, 0.1;
     const InterpolatedField<HexQ1Basis> parameters((X_nodes * M.transpose()).rowwise() + Eigen::RowVector2d(2, 3));
     for (const Eigen::Vector3d xi : {Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(-0.2, 1.2, 0.4)}) {
-        const auto point = litepgo::ReferenceMapping(X_field, xi);
         EXPECT_TRUE(X_field.value(xi).isApprox(origin + dX_dxi * xi, 1e-13));
         EXPECT_TRUE(X_field.dvalue_dxi(xi).isApprox(dX_dxi, 1e-13));
-        EXPECT_TRUE(displacement.value(xi).isApprox(A * point.X() + offset, 1e-13));
+        EXPECT_TRUE(displacement.value(xi).isApprox(A * X_field.value(xi) + offset, 1e-13));
         EXPECT_TRUE(displacement.dvalue_dxi(xi).isApprox(A * dX_dxi, 1e-13));
-        EXPECT_TRUE((displacement.dvalue_dxi(xi) * point.dxi_dX()).isApprox(A, 1e-13));
-        EXPECT_TRUE(parameters.value(xi).isApprox(M * point.X() + Eigen::Vector2d(2, 3), 1e-13));
-        EXPECT_TRUE((parameters.dvalue_dxi(xi) * point.dxi_dX()).isApprox(M, 1e-13));
+        EXPECT_TRUE((displacement.dvalue_dxi(xi) * X_field.dvalue_dxi(xi).inverse()).isApprox(A, 1e-13));
+        EXPECT_TRUE(parameters.value(xi).isApprox(M * X_field.value(xi) + Eigen::Vector2d(2, 3), 1e-13));
+        EXPECT_TRUE((parameters.dvalue_dxi(xi) * X_field.dvalue_dxi(xi).inverse()).isApprox(M, 1e-13));
     }
 }
 

@@ -3,9 +3,9 @@
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/energy/mesh_energy.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
+#include "litepgo/fem/field/deformation_gradient_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
-#include "litepgo/fem/kinematics/deformation_gradient.hpp"
 #include "litepgo/fem/local/integrate_volume.hpp"
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
@@ -43,7 +43,7 @@ inline MeshEnergy make_hex_q1_mesh_energy(const Vec& X_nodes) {
             const auto& X_field = X_fields[static_cast<std::size_t>(e)];
             const auto& u_local = x_local;
             const auto u_field = InterpolatedField<HexQ1Basis>(u_local);
-            const auto deformation = DeformationGradient(u_field, X_field);
+            const auto deformation = DeformationGradientField(u_field, X_field);
             const auto local_energy =
                 make_material_local_energy<NeoHookean, MaterialVariable::F>(deformation, Fp_field, theta_field);
             return integrate_volume<GaussLegendre3D<2>>(local_energy, dE_dx_local, d2E_dx_local2);

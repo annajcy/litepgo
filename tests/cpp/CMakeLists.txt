@@ -21,7 +21,7 @@ add_executable(litepgo_tests
     dof/constant_dof_map_gtest.cpp
     fem/field/field_gtest.cpp
     fem/field/identity_field_gtest.cpp
-    fem/kinematics/deformation_gradient_gtest.cpp
+    fem/field/deformation_gradient_field_gtest.cpp
     fem/local/material_sources_gtest.cpp
     fem/quadrature/1d/gauss_legendre_1d_gtest.cpp
     fem/basis/3d/hex_q1_basis_gtest.cpp
@@ -43,7 +43,6 @@ add_executable(litepgo_tests
     dof/vertex_dof_map_gtest.cpp
     fem/local/volume_integration_gtest.cpp
     fem/local/tet_p1_integration_gtest.cpp
-    fem/kinematics/reference_mapping_gtest.cpp
     dof/dof_reduction_gtest.cpp
     linalg/reduced_matrix_gtest.cpp
     linalg/sparse_pattern_gtest.cpp

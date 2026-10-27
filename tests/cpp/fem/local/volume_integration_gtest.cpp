@@ -10,7 +10,6 @@
 #include "litepgo/fem/quadrature/3d/tensor_product_quadrature_3d.hpp"
 #include "quadratic_parameter_material.hpp"
 
-#include "litepgo/fem/kinematics/reference_mapping.hpp"
 #include <Eigen/LU>
 #include <cmath>
 #include <gtest/gtest.h>
@@ -54,8 +53,8 @@ NodalCoefficients fields(int seed = 0) {
 }
 
 auto evaluate_fields(const NodalCoefficients& coefficients, const InterpolatedField<HexQ1Basis>& X_field) {
-    return MaterialSources{DeformationGradient(InterpolatedField<litepgo::HexQ1Basis>(coefficients.u), X_field),
-                           DeformationGradient(InterpolatedField<litepgo::HexQ1Basis>(coefficients.up), X_field),
+    return MaterialSources{OwnedDeformationField(InterpolatedField<litepgo::HexQ1Basis>(coefficients.u), X_field),
+                           OwnedDeformationField(InterpolatedField<litepgo::HexQ1Basis>(coefficients.up), X_field),
                            InterpolatedField<litepgo::HexQ1Basis>(coefficients.theta)};
 }
 

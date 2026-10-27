@@ -1,6 +1,8 @@
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
 #include "test_material_sources.hpp"
 
+#include <Eigen/LU>
+
 #include "litepgo/fem/local/integrate_volume.hpp"
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
@@ -46,8 +48,8 @@ Coefficients coefficients() {
 }
 
 auto fields(const Coefficients& f, const InterpolatedField<TetP1Basis>& X_field) {
-    return MaterialSources{DeformationGradient(InterpolatedField<TetP1Basis>(f.u), X_field),
-                           DeformationGradient(InterpolatedField<TetP1Basis>(f.up), X_field),
+    return MaterialSources{OwnedDeformationField(InterpolatedField<TetP1Basis>(f.u), X_field),
+                           OwnedDeformationField(InterpolatedField<TetP1Basis>(f.up), X_field),
                            InterpolatedField<TetP1Basis>(f.theta)};
 }
 
@@ -94,13 +96,12 @@ TEST(TetP1Integration, MatchesDirectGeometryAndDeformationGradient) {
     const std::array<Eigen::Vector3d, 3> samples{
         {Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(0.2, 0.3, 0.1), Eigen::Vector3d(0.25, 0.25, 0.25)}};
     for (const auto& xi : samples) {
-        const auto point = litepgo::ReferenceMapping(X_field, xi);
-        EXPECT_TRUE(point.X().isApprox(X_nodes.row(0).transpose() + Dm * xi, 1e-14));
-        EXPECT_TRUE(point.dX_dxi().isApprox(Dm, 1e-14));
-        EXPECT_TRUE(point.dxi_dX().isApprox(Dm.inverse(), 1e-14));
-        EXPECT_NEAR(point.det_dX_dxi(), Dm.determinant(), 1e-14);
-        EXPECT_TRUE(local_fields.F.evaluate(point.xi()).F().isApprox(F, 1e-14));
-        EXPECT_TRUE(local_fields.Fp.evaluate(point.xi()).F().isApprox(Fp, 1e-14));
+        EXPECT_TRUE(X_field.value(xi).isApprox(X_nodes.row(0).transpose() + Dm * xi, 1e-14));
+        EXPECT_TRUE(X_field.dvalue_dxi(xi).isApprox(Dm, 1e-14));
+        EXPECT_TRUE(X_field.dvalue_dxi(xi).inverse().isApprox(Dm.inverse(), 1e-14));
+        EXPECT_NEAR(X_field.dvalue_dxi(xi).determinant(), Dm.determinant(), 1e-14);
+        EXPECT_TRUE(local_fields.F.value(xi).reshaped(3, 3).isApprox(F, 1e-14));
+        EXPECT_TRUE(local_fields.Fp.value(xi).reshaped(3, 3).isApprox(Fp, 1e-14));
     }
     // F and Fp are constant, and NeoHookean is linear in the P1 parameter field.
     const double expected = Dm.determinant() / 6 * NeoHookean::value({F, Fp, f.theta.colwise().mean().transpose()});

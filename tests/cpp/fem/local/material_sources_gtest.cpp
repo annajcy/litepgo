@@ -7,6 +7,8 @@
 #include "litepgo/fem/field/identity_field.hpp"
 #include "test_material_sources.hpp"
 
+#include <Eigen/LU>
+
 #include "litepgo/fem/local/integrate_volume.hpp"
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
@@ -14,7 +16,6 @@
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/quadrature/3d/tensor_product_quadrature_3d.hpp"
 
-#include "litepgo/fem/kinematics/reference_mapping.hpp"
 #include <array>
 #include <cmath>
 #include <gtest/gtest.h>
@@ -54,7 +55,7 @@ struct Fixture {
     auto fields(int e) const {
         const VertexDofMap map(topology, 3);
         return MaterialSources{
-            DeformationGradient(InterpolatedField<litepgo::HexQ1Basis>(map.gather(e, u)), X_field(e)),
+            OwnedDeformationField(InterpolatedField<litepgo::HexQ1Basis>(map.gather(e, u)), X_field(e)),
             IdentityField(ElementDofMap(topology, 9).gather(e, fp)),
             IdentityField(ConstantDofMap(topology, 2).gather(e, theta))};
     }
@@ -110,14 +111,15 @@ TEST(MaterialSources, MixedRepresentationsPointInputsAndLocalFiniteDifferences) 
         const auto fields = f.fields(e);
         const auto ue = map.gather(e, f.u);
         for (int q = 0; q < GaussLegendre3D<2>::num_points; ++q) {
-            const auto ref = litepgo::ReferenceMapping(X_field, GaussLegendre3D<2>::points().row(q).transpose());
-            const auto point = fields.evaluate(ref.xi());
-            EXPECT_TRUE(point.F.isApprox(Eigen::Matrix3d::Identity() +
-                                         InterpolatedField<HexQ1Basis>(ue).dvalue_dxi(ref.xi()) * ref.dxi_dX()));
+            const Eigen::Vector3d ref_xi = GaussLegendre3D<2>::points().row(q).transpose();
+            const auto point = fields.evaluate(ref_xi);
+            EXPECT_TRUE(
+                point.F.isApprox(Eigen::Matrix3d::Identity() + InterpolatedField<HexQ1Basis>(ue).dvalue_dxi(ref_xi) *
+                                                                   X_field.dvalue_dxi(ref_xi).inverse()));
             EXPECT_EQ(point.Fp, f.fp.segment<9>(9 * e).reshaped(3, 3));
             EXPECT_EQ(point.theta, ConstantDofMap(f.topology, 2).gather(0, f.theta));
-            EXPECT_TRUE(fields.Fp.dvalue_dcoeffs(ref.xi()).isIdentity());
-            EXPECT_TRUE(fields.theta.dvalue_dcoeffs(ref.xi()).isIdentity());
+            EXPECT_TRUE(fields.Fp.dvalue_dcoeffs(ref_xi).isIdentity());
+            EXPECT_TRUE(fields.theta.dvalue_dcoeffs(ref_xi).isIdentity());
         }
         EXPECT_DOUBLE_EQ(integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::F>(fields)),
                          integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::Fp>(fields)));
@@ -131,7 +133,7 @@ TEST(MaterialSources, MixedRepresentationsPointInputsAndLocalFiniteDifferences) 
                 Eigen::Matrix<double, 8, 3> c;
                 for (int j = 0; j < 24; ++j)
                     c(j / 3, j % 3) = x[j];
-                return MaterialSources{DeformationGradient(InterpolatedField<litepgo::HexQ1Basis>(c), X_field),
+                return MaterialSources{OwnedDeformationField(InterpolatedField<litepgo::HexQ1Basis>(c), X_field),
                                        IdentityField(ElementDofMap(f.topology, 9).gather(e, f.fp)),
                                        IdentityField(ConstantDofMap(f.topology, 2).gather(e, f.theta))};
             },
@@ -141,7 +143,7 @@ TEST(MaterialSources, MixedRepresentationsPointInputsAndLocalFiniteDifferences) 
         check_fd(
             pvec,
             [&](const Eigen::Matrix<double, 9, 1>& x) {
-                return MaterialSources{DeformationGradient(InterpolatedField<litepgo::HexQ1Basis>(ue), X_field),
+                return MaterialSources{OwnedDeformationField(InterpolatedField<litepgo::HexQ1Basis>(ue), X_field),
                                        IdentityField(x),
                                        IdentityField(ConstantDofMap(f.topology, 2).gather(e, f.theta))};
             },
@@ -149,7 +151,7 @@ TEST(MaterialSources, MixedRepresentationsPointInputsAndLocalFiniteDifferences) 
         check_fd(
             ConstantDofMap(f.topology, 2).gather(0, f.theta),
             [&](const Eigen::Matrix<double, 2, 1>& x) {
-                return MaterialSources{DeformationGradient(InterpolatedField<litepgo::HexQ1Basis>(ue), X_field),
+                return MaterialSources{OwnedDeformationField(InterpolatedField<litepgo::HexQ1Basis>(ue), X_field),
                                        IdentityField(fp.reshaped()), IdentityField(x)};
             },
             [&](const auto& local_fields) { return bind_energy<NeoHookean, MaterialVariable::Theta>(local_fields); });
@@ -175,10 +177,10 @@ TEST(MaterialSources, SameQuadratureAcceptsDifferentActiveDofCounts) {
     Eigen::Matrix<double, 24, 24> expected_hessian = Eigen::Matrix<double, 24, 24>::Zero();
     Eigen::Matrix<double, 9, 9> expected_direct_hessian = Eigen::Matrix<double, 9, 9>::Zero();
     for (int q = 0; q < GaussLegendre3D<2>::num_points; ++q) {
-        const auto point = litepgo::ReferenceMapping(X_field, GaussLegendre3D<2>::points().row(q).transpose());
-        const double weight = GaussLegendre3D<2>::weights()[q] * point.det_dX_dxi();
-        const auto inputs = nodal.evaluate(point.xi());
-        const auto dF_du_local = nodal.F.evaluate(point.xi()).dF_du_local();
+        const Eigen::Vector3d point_xi = GaussLegendre3D<2>::points().row(q).transpose();
+        const double weight = GaussLegendre3D<2>::weights()[q] * X_field.dvalue_dxi(point_xi).determinant();
+        const auto inputs = nodal.evaluate(point_xi);
+        const auto dF_du_local = nodal.F.dvalue_dcoeffs(point_xi);
         const auto stress = NeoHookean::dW_dF(inputs);
         const auto tangent = NeoHookean::d2W_dF2(inputs);
         expected_gradient +=
@@ -279,7 +281,7 @@ TEST(MaterialSources, SharedParameterHessianIncludesBothElements) {
         H += local_hessian;
         for (int q = 0; q < GaussLegendre3D<2>::num_points; ++q)
             volume += GaussLegendre3D<2>::weights()[q] *
-                      litepgo::ReferenceMapping(X_field, GaussLegendre3D<2>::points().row(q).transpose()).det_dX_dxi();
+                      X_field.dvalue_dxi(GaussLegendre3D<2>::points().row(q).transpose()).determinant();
         check_fd(
             ConstantDofMap(f.topology, 2).gather(0, f.theta),
             [&](const Eigen::Vector2d& theta) { return MaterialSources{fields.F, fields.Fp, IdentityField(theta)}; },

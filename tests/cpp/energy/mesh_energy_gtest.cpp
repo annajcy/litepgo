@@ -92,7 +92,7 @@ TEST(MeshEnergy, HexNodeDisplacementAndPlasticDisplacement) {
             EXPECT_EQ(x_local.rows(), 8);
             EXPECT_EQ(x_local.cols(), 3);
             auto fields = passive_fields();
-            return MaterialSources{DeformationGradient(InterpolatedField<HexQ1Basis>(x_local), make_X_field()),
+            return MaterialSources{OwnedDeformationField(InterpolatedField<HexQ1Basis>(x_local), make_X_field()),
                                    fields.Fp, fields.theta};
         },
         [](auto fields) { return bind_energy<NeoHookean, MaterialVariable::F>(std::move(fields)); });
@@ -101,7 +101,7 @@ TEST(MeshEnergy, HexNodeDisplacementAndPlasticDisplacement) {
         [](const auto& x_local) {
             auto fields = passive_fields();
             return MaterialSources{
-                fields.F, DeformationGradient(InterpolatedField<HexQ1Basis>(x_local), make_X_field()), fields.theta};
+                fields.F, OwnedDeformationField(InterpolatedField<HexQ1Basis>(x_local), make_X_field()), fields.theta};
         },
         [](auto fields) { return bind_energy<NeoHookean, MaterialVariable::Fp>(std::move(fields), make_X_field()); });
 }
