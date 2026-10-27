@@ -368,7 +368,7 @@ TEST(DeformationGradientField, CoordinateDerivativesRejectNonVolumeComponentsAnd
 }
 
 namespace {
-class RawCoordinates final : public litepgo::Field {
+class SpatialDerivativeOnlyField final : public litepgo::Field {
   public:
     int components = 3;
     Eigen::Matrix<double, Eigen::Dynamic, 3> derivative = Eigen::Matrix3d::Identity();
@@ -379,10 +379,10 @@ class RawCoordinates final : public litepgo::Field {
         return 0;
     }
     Eigen::VectorXd value(const Eigen::Vector3d&) const override {
-        throw std::logic_error("Coordinate position is not needed");
+        throw std::logic_error("Field value is not needed");
     }
     Eigen::MatrixXd dvalue_dcoeffs(const Eigen::Vector3d&) const override {
-        throw std::logic_error("Coordinate coefficients are fixed");
+        throw std::logic_error("Field coefficients are fixed");
     }
     Eigen::Matrix<double, Eigen::Dynamic, 3> dvalue_dxi(const Eigen::Vector3d&) const override {
         return derivative;
@@ -391,7 +391,7 @@ class RawCoordinates final : public litepgo::Field {
 } // namespace
 
 TEST(DeformationGradientField, CoordinateDerivativesValidateSpatialDerivativesWithoutRequestingValues) {
-    RawCoordinates raw;
+    SpatialDerivativeOnlyField raw;
     const litepgo::Field& field = raw;
     const litepgo::InterpolatedField<litepgo::HexQ1Basis> u_field(nodes());
     const litepgo::DeformationGradientField deformation(u_field, field);
@@ -421,4 +421,27 @@ TEST(DeformationGradientField, CoordinateDerivativesValidateSpatialDerivativesWi
     EXPECT_EQ(field.dvalue_dxi(xi), raw.derivative);
     EXPECT_THROW(inverse_from_deformation(field, xi), std::invalid_argument);
     EXPECT_THROW(deformation.dvalue_dcoeffs(xi), std::invalid_argument);
+}
+
+TEST(DeformationGradientField, ValueUsesOnlyDisplacementDerivativesAndRetainsValidation) {
+    SpatialDerivativeOnlyField displacement;
+    displacement.derivative << 0.1, 0.2, -0.03, 0.04, -0.1, 0.02, 0.01, -0.02, 0.3;
+    const litepgo::InterpolatedField<litepgo::HexQ1Basis> coordinates(2 * nodes());
+    const litepgo::DeformationGradientField deformation(displacement, coordinates);
+    const Eigen::Vector3d xi(0.2, 0.3, 0.4);
+    EXPECT_TRUE(deformation.value(xi).reshaped(3, 3).isApprox(
+        Eigen::Matrix3d::Identity() + 0.5 * displacement.derivative, 1e-14));
+    displacement.components = 2;
+    EXPECT_THROW(deformation.value(xi), std::invalid_argument);
+    displacement.components = 3;
+    for (int rows : {2, 4}) {
+        displacement.derivative = Eigen::Matrix<double, Eigen::Dynamic, 3>::Zero(rows, 3);
+        EXPECT_THROW(deformation.value(xi), std::invalid_argument);
+    }
+    displacement.derivative = Eigen::Matrix3d::Zero();
+    for (double bad : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
+                       -std::numeric_limits<double>::infinity()}) {
+        displacement.derivative(0, 0) = bad;
+        EXPECT_THROW(deformation.value(xi), std::invalid_argument);
+    }
 }

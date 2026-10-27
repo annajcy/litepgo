@@ -30,9 +30,8 @@ class DeformationGradientField final : public Field {
     }
     Eigen::VectorXd value(const Eigen::Vector3d& xi) const override {
         const Eigen::Matrix3d dxi_dX = inverse_coordinate_derivative(xi);
-        const auto u = u_field_.value(xi);
         const auto du_dxi = u_field_.dvalue_dxi(xi);
-        if (u.size() != 3 || du_dxi.rows() != 3 || du_dxi.cols() != 3 || !u.allFinite() || !du_dxi.allFinite())
+        if (u_field_.num_components() != 3 || du_dxi.rows() != 3 || du_dxi.cols() != 3 || !du_dxi.allFinite())
             throw std::invalid_argument("DeformationGradientField requires finite three-component displacement data");
         const Eigen::Matrix3d F = Eigen::Matrix3d::Identity() + du_dxi * dxi_dX;
         if (!F.allFinite())

@@ -7,6 +7,11 @@
 namespace {
 using namespace litepgo;
 
+template <class T>
+constexpr bool has_legacy_geometry_api = requires(const T& field, const Eigen::Vector3d& xi) { field.dX_dxi(xi); } ||
+                                         requires(const T& field, const Eigen::Vector3d& xi) { field.dxi_dX(xi); };
+static_assert(!has_legacy_geometry_api<Field>);
+
 class CoefficientOnlyField final : public Field {
   public:
     int num_components() const override {

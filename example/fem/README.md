@@ -123,6 +123,8 @@ F=I+u_{,\xi}X_{,\xi}^{-1},\qquad
 N_{,X}=N_{,\xi}X_{,\xi}^{-1}.
 $$
 
+Computing `F` queries `u_field.dvalue_dxi(xi)` and `X_field.dvalue_dxi(xi)` without evaluating either field's value. Displacement component counts, derivative dimensions and finiteness, and the resulting `F` remain validated.
+
 `dvalue_dcoeffs(xi)` is a 9-by-`3*n_u` derivative with respect to the displacement field's reference coefficients, holding `X` fixed. `num_components()` is 9 and `num_dofs()` is the displacement field's count:
 
 $$
