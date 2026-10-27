@@ -145,8 +145,8 @@ Material APIs keep numerical `MaterialInputs{F, Fp, theta}`. They do not sample 
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/local/integrate_volume.hpp"
 
-const litepgo::MaterialLocalEnergy<litepgo::NeoHookean> local_energy(
-    deformation, Fp_field, theta_field, litepgo::MaterialVariable::F);
+const litepgo::MaterialLocalEnergyF<litepgo::NeoHookean> local_energy(
+    deformation, Fp_field, theta_field);
 
 Eigen::VectorXd dE_du_local;
 Eigen::MatrixXd d2E_du_local2;
@@ -156,7 +156,9 @@ const double E_element = litepgo::integrate_volume<litepgo::GaussLegendre3D<2>>(
 
 `GaussLegendre3D<PointsPerAxis>` uses `PointsPerAxis^3` integration points on `[0,1]^3`; `<2>` therefore uses eight points.
 
-`MaterialLocalEnergy<Material>` keeps only the material as a template argument. A runtime `MaterialVariable::F`, `Fp`, or `Theta` selects the active constitutive input and pulls its derivatives back to that field's coefficient block. All three inputs are borrowed as `const Field&`; they must outlive the energy, and temporary input fields are rejected. A copied energy borrows the same fields, so subsequent field updates are visible. A composed `F` field activates displacement coefficients; direct `F` or `Fp` coefficients can use a nine-component `IdentityField`. Unsupported material derivative blocks and non-positive active DOF counts are rejected at construction.
+`MaterialLocalEnergyF<Material>`, `MaterialLocalEnergyFp<Material>`, and `MaterialLocalEnergyTheta<Material>` select the active input by their class name. Each constructor accepts `(F_field, Fp_field, theta_field)` as three `const Field&` inputs. The abstract `MaterialLocalEnergy<Material>` base shares input validation, density evaluation and coefficient pullbacks; each concrete class chooses its active field and calls the matching material gradient and Hessian. There is no runtime activity enum. A material only needs to implement `value` and the derivative pair used by the selected class.
+
+All three input fields must outlive the energy, and temporary input fields are rejected. A copied energy borrows the same fields, so subsequent field updates are visible. A composed `F` field activates displacement coefficients; direct `F` or `Fp` coefficients can use a nine-component `IdentityField`. Non-positive active DOF counts are rejected at construction.
 
 `LocalEnergy::value(xi)`, `gradient(xi)`, and `hessian(xi)` return pointwise density `W` and coefficient derivatives. `accumulate(xi, weight, ...)` receives a complete weight from its caller and adds weighted values and requested derivatives to initialized buffers. It performs no geometry evaluation. The material implementation samples each input once and computes the active coefficient derivative once per accumulation, sharing it between gradient and Hessian. Inactive derivatives and unrequested material derivatives are not evaluated.
 
@@ -218,7 +220,7 @@ These are source-breaking changes; old headers and compatibility aliases are not
 | `field.value(point)` | `field.value(xi)`; composed deformation fields return nine components |
 | `dvalue_dx_local(xi)`, `dgrad_xi_dx_local(xi)` | `dvalue_dcoeffs(xi)`, `dgrad_xi_dcoeffs(xi)` |
 | `field.jacobian(point)` / `dF_dx_local` | `field.dvalue_dcoeffs(xi)` |
-| `MaterialFields` and `make_material_local_energy<Material, Active>` | `MaterialLocalEnergy<Material>(F, Fp, theta, active)` with named `Field` inputs |
+| `MaterialLocalEnergy<Material>(F, Fp, theta, active)` or `make_material_local_energy<Material, Active>` | `MaterialLocalEnergyF/Fp/Theta<Material>(F, Fp, theta)` with named `Field` inputs |
 | `integrate_volume<Q>(bound_energy, ...)` | `integrate_volume<Q>(X_field, energy, ...)` |
 | `Basis::Sample::values`, `gradients` | `N`, `dN_dxi` |
 | `RestPointData::position`, `jacobian`, `inverse_jacobian`, `jacobian_determinant` | Field values, coordinate Jacobians, their inverses, and their determinants |

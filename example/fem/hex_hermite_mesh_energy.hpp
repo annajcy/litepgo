@@ -66,7 +66,7 @@ inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X_nodes) {
             const auto u_local = hex_hermite_reference_coefficients(u_physical_local, dof_scales);
             const auto u_field = InterpolatedField<HexHermiteBasis>(u_local);
             const auto deformation = DeformationGradientField(u_field, X_field);
-            const MaterialLocalEnergy<NeoHookean> local_energy(deformation, Fp_field, theta_field, MaterialVariable::F);
+            const MaterialLocalEnergyF<NeoHookean> local_energy(deformation, Fp_field, theta_field);
             Vec dE_du_local;
             Eigen::MatrixXd d2E_du_local2;
             const double E_element = integrate_volume<GaussLegendre3D<4>>(

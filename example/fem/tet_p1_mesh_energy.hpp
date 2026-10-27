@@ -43,7 +43,7 @@ inline MeshEnergy make_tet_p1_mesh_energy(const Vec& X_nodes) {
             const auto& u_local = x_local;
             const auto u_field = InterpolatedField<TetP1Basis>(u_local);
             const auto deformation = DeformationGradientField(u_field, X_field);
-            const MaterialLocalEnergy<NeoHookean> local_energy(deformation, Fp_field, theta_field, MaterialVariable::F);
+            const MaterialLocalEnergyF<NeoHookean> local_energy(deformation, Fp_field, theta_field);
             return integrate_volume<TetCentroidQuadrature>(X_field, local_energy, dE_dx_local, d2E_dx_local2);
         },
         [](int, const auto&, const auto&) -> double {

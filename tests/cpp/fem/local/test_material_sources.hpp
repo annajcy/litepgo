@@ -41,7 +41,7 @@ template <class FSource, class FpSource, class ThetaSource> struct MaterialSourc
         return {F.value(xi).reshaped(3, 3), Fp.value(xi).reshaped(3, 3), theta.value(xi)};
     }
 };
-template <class Material, MaterialVariable Active, class Sources> auto bind_energy(const Sources& fields) {
-    return MaterialLocalEnergy<Material>(fields.F, fields.Fp, fields.theta, Active);
+template <class Energy, class Sources> auto bind_energy(const Sources& fields) {
+    return Energy(fields.F, fields.Fp, fields.theta);
 }
 } // namespace litepgo::test

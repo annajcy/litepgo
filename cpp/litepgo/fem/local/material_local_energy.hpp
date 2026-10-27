@@ -10,57 +10,28 @@
 
 namespace litepgo {
 
-enum class MaterialVariable { F, Fp, Theta };
-
-// Borrows all three fields; they must outlive this energy. Only the selected coefficient block is active.
-template <class Material> class MaterialLocalEnergy final : public LocalEnergy {
+// Shared density evaluation and coefficient pullbacks. All input fields must outlive the energy.
+template <class Material> class MaterialLocalEnergy : public LocalEnergy {
   public:
-    MaterialLocalEnergy(const Field& F, const Field& Fp, const Field& theta, MaterialVariable active)
-        : F_(F), Fp_(Fp), theta_(theta), active_(active) {
-        if (num_dofs() <= 0)
-            throw std::invalid_argument("MaterialLocalEnergy requires positive active DOFs");
-        if (!has_gradient() || !has_hessian())
-            throw std::invalid_argument("MaterialLocalEnergy: material does not support the active derivatives");
-    }
-    MaterialLocalEnergy(const Field&&, const Field&, const Field&, MaterialVariable) = delete;
-    MaterialLocalEnergy(const Field&, const Field&&, const Field&, MaterialVariable) = delete;
-    MaterialLocalEnergy(const Field&, const Field&, const Field&&, MaterialVariable) = delete;
-
     int num_dofs() const override {
-        return active_source().num_dofs();
+        return active_field_.num_dofs();
     }
     bool has_gradient() const noexcept override {
-        switch (active_) {
-        case MaterialVariable::F:
-            return requires(const MaterialInputs& input) { Material::dW_dF(input); };
-        case MaterialVariable::Fp:
-            return requires(const MaterialInputs& input) { Material::dW_dFp(input); };
-        case MaterialVariable::Theta:
-            return requires(const MaterialInputs& input) { Material::dW_dtheta(input); };
-        }
-        return false;
+        return true;
     }
     bool has_hessian() const noexcept override {
-        switch (active_) {
-        case MaterialVariable::F:
-            return requires(const MaterialInputs& input) { Material::d2W_dF2(input); };
-        case MaterialVariable::Fp:
-            return requires(const MaterialInputs& input) { Material::d2W_dFp2(input); };
-        case MaterialVariable::Theta:
-            return requires(const MaterialInputs& input) { Material::d2W_dtheta2(input); };
-        }
-        return false;
+        return true;
     }
     double value(const Eigen::Vector3d& xi) const override {
         return Material::value(inputs(xi));
     }
     Eigen::VectorXd gradient(const Eigen::Vector3d& xi) const override {
         const auto input = inputs(xi);
-        return gradient_wrt_dofs(active_derivative(input, xi), material_gradient(input));
+        return gradient_wrt_dofs(active_derivative(xi), material_gradient(input));
     }
     Eigen::MatrixXd hessian(const Eigen::Vector3d& xi) const override {
         const auto input = inputs(xi);
-        return hessian_wrt_dofs(active_derivative(input, xi), material_hessian(input));
+        return hessian_wrt_dofs(active_derivative(xi), material_hessian(input));
     }
     double accumulate(const Eigen::Vector3d& xi, double weight, Eigen::VectorXd* gradient,
                       Eigen::MatrixXd* hessian) const override {
@@ -69,7 +40,7 @@ template <class Material> class MaterialLocalEnergy final : public LocalEnergy {
         const auto input = inputs(xi);
         const double result = weight * Material::value(input);
         if (gradient || hessian) {
-            const auto derivative = active_derivative(input, xi);
+            const auto derivative = active_derivative(xi);
             if (gradient)
                 add_gradient_wrt_dofs(derivative, material_gradient(input), weight, *gradient);
             if (hessian)
@@ -78,18 +49,17 @@ template <class Material> class MaterialLocalEnergy final : public LocalEnergy {
         return result;
     }
 
-  private:
-    const Field& active_source() const {
-        switch (active_) {
-        case MaterialVariable::F:
-            return F_;
-        case MaterialVariable::Fp:
-            return Fp_;
-        case MaterialVariable::Theta:
-            return theta_;
-        }
-        throw std::invalid_argument("MaterialLocalEnergy: invalid active variable");
+  protected:
+    MaterialLocalEnergy(const Field& F, const Field& Fp, const Field& theta, const Field& active_field)
+        : F_(F), Fp_(Fp), theta_(theta), active_field_(active_field) {
+        if (active_field_.num_dofs() <= 0)
+            throw std::invalid_argument("MaterialLocalEnergy requires positive active DOFs");
     }
+
+  private:
+    virtual Eigen::MatrixXd material_gradient(const MaterialInputs& input) const = 0;
+    virtual Eigen::MatrixXd material_hessian(const MaterialInputs& input) const = 0;
+
     MaterialInputs inputs(const Eigen::Vector3d& xi) const {
         if (!xi.allFinite())
             throw std::invalid_argument("MaterialLocalEnergy requires finite parameters");
@@ -101,51 +71,71 @@ template <class Material> class MaterialLocalEnergy final : public LocalEnergy {
             throw std::invalid_argument("MaterialLocalEnergy requires compatible finite material inputs");
         return {F.reshaped(3, 3), Fp.reshaped(3, 3), theta};
     }
-    Eigen::MatrixXd active_derivative(const MaterialInputs& input, const Eigen::Vector3d& xi) const {
-        const auto derivative = active_source().dvalue_dcoeffs(xi);
-        const Eigen::Index rows = active_ == MaterialVariable::Theta ? input.theta.size() : 9;
-        if (derivative.rows() != rows || derivative.cols() != num_dofs() || !derivative.allFinite())
+    Eigen::MatrixXd active_derivative(const Eigen::Vector3d& xi) const {
+        const auto derivative = active_field_.dvalue_dcoeffs(xi);
+        if (derivative.rows() != active_field_.num_components() || derivative.cols() != num_dofs() ||
+            !derivative.allFinite())
             throw std::invalid_argument("MaterialLocalEnergy: invalid active coefficient derivative");
         return derivative;
-    }
-    Eigen::MatrixXd material_gradient(const MaterialInputs& input) const {
-        switch (active_) {
-        case MaterialVariable::F:
-            if constexpr (requires { Material::dW_dF(input); })
-                return Material::dW_dF(input);
-            break;
-        case MaterialVariable::Fp:
-            if constexpr (requires { Material::dW_dFp(input); })
-                return Material::dW_dFp(input);
-            break;
-        case MaterialVariable::Theta:
-            if constexpr (requires { Material::dW_dtheta(input); })
-                return Material::dW_dtheta(input);
-            break;
-        }
-        throw std::logic_error("MaterialLocalEnergy: unsupported material gradient");
-    }
-    Eigen::MatrixXd material_hessian(const MaterialInputs& input) const {
-        switch (active_) {
-        case MaterialVariable::F:
-            if constexpr (requires { Material::d2W_dF2(input); })
-                return Material::d2W_dF2(input);
-            break;
-        case MaterialVariable::Fp:
-            if constexpr (requires { Material::d2W_dFp2(input); })
-                return Material::d2W_dFp2(input);
-            break;
-        case MaterialVariable::Theta:
-            if constexpr (requires { Material::d2W_dtheta2(input); })
-                return Material::d2W_dtheta2(input);
-            break;
-        }
-        throw std::logic_error("MaterialLocalEnergy: unsupported material Hessian");
     }
     const Field& F_;
     const Field& Fp_;
     const Field& theta_;
-    MaterialVariable active_;
+    const Field& active_field_;
+};
+
+template <class Material> class MaterialLocalEnergyF final : public MaterialLocalEnergy<Material> {
+    using Base = MaterialLocalEnergy<Material>;
+
+  public:
+    MaterialLocalEnergyF(const Field& F, const Field& Fp, const Field& theta) : Base(F, Fp, theta, F) {}
+    MaterialLocalEnergyF(const Field&&, const Field&, const Field&) = delete;
+    MaterialLocalEnergyF(const Field&, const Field&&, const Field&) = delete;
+    MaterialLocalEnergyF(const Field&, const Field&, const Field&&) = delete;
+
+  private:
+    Eigen::MatrixXd material_gradient(const MaterialInputs& input) const override {
+        return Material::dW_dF(input);
+    }
+    Eigen::MatrixXd material_hessian(const MaterialInputs& input) const override {
+        return Material::d2W_dF2(input);
+    }
+};
+
+template <class Material> class MaterialLocalEnergyFp final : public MaterialLocalEnergy<Material> {
+    using Base = MaterialLocalEnergy<Material>;
+
+  public:
+    MaterialLocalEnergyFp(const Field& F, const Field& Fp, const Field& theta) : Base(F, Fp, theta, Fp) {}
+    MaterialLocalEnergyFp(const Field&&, const Field&, const Field&) = delete;
+    MaterialLocalEnergyFp(const Field&, const Field&&, const Field&) = delete;
+    MaterialLocalEnergyFp(const Field&, const Field&, const Field&&) = delete;
+
+  private:
+    Eigen::MatrixXd material_gradient(const MaterialInputs& input) const override {
+        return Material::dW_dFp(input);
+    }
+    Eigen::MatrixXd material_hessian(const MaterialInputs& input) const override {
+        return Material::d2W_dFp2(input);
+    }
+};
+
+template <class Material> class MaterialLocalEnergyTheta final : public MaterialLocalEnergy<Material> {
+    using Base = MaterialLocalEnergy<Material>;
+
+  public:
+    MaterialLocalEnergyTheta(const Field& F, const Field& Fp, const Field& theta) : Base(F, Fp, theta, theta) {}
+    MaterialLocalEnergyTheta(const Field&&, const Field&, const Field&) = delete;
+    MaterialLocalEnergyTheta(const Field&, const Field&&, const Field&) = delete;
+    MaterialLocalEnergyTheta(const Field&, const Field&, const Field&&) = delete;
+
+  private:
+    Eigen::MatrixXd material_gradient(const MaterialInputs& input) const override {
+        return Material::dW_dtheta(input);
+    }
+    Eigen::MatrixXd material_hessian(const MaterialInputs& input) const override {
+        return Material::d2W_dtheta2(input);
+    }
 };
 
 } // namespace litepgo
