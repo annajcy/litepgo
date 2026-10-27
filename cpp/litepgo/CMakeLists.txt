@@ -8,13 +8,12 @@ add_library(litepgo STATIC
     energy/weighted_energy_sum.cpp
     fem/material/multiplicative_kinematics.cpp
     fem/material/neo_hookean.cpp
-    fem/field/material_fields.cpp
     fem/local/dof_derivatives.cpp
     fem/local/local_energy.cpp
     fem/basis/hex_q1_basis.cpp
     fem/basis/hex_hermite_basis.cpp
     fem/basis/tet_p1_basis.cpp
-    fem/interpolation/hex_hermite_dof_transform.cpp
+    fem/field/hex_hermite_dof_transform.cpp
     dof/dof_reduction.cpp
     linalg/sparse_solver/eigen_ldlt.cpp
     linalg/sparse_solver/eigen_sparse_lu.cpp

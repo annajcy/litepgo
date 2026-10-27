@@ -1,8 +1,7 @@
 #include "litepgo/energy/energy.hpp"
 #include "litepgo/fem/basis/hex_q1_basis.hpp"
-#include "litepgo/fem/field/deformation_gradient_field.hpp"
-#include "litepgo/fem/field/interpolated_value_field.hpp"
-#include "litepgo/fem/field/material_fields.hpp"
+#include "test_material_sources.hpp"
+
 #include "litepgo/fem/local/integrate_volume.hpp"
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
@@ -11,7 +10,7 @@
 #include "litepgo/fem/quadrature/tensor_product_quadrature.hpp"
 #include "quadratic_parameter_material.hpp"
 
-#include "litepgo/fem/interpolation/rest_point.hpp"
+#include "litepgo/fem/kinematics/reference_mapping.hpp"
 #include <Eigen/LU>
 #include <cmath>
 #include <gtest/gtest.h>
@@ -19,6 +18,7 @@
 
 namespace {
 using namespace litepgo;
+using namespace litepgo::test;
 // Nodal coefficients for finite-difference perturbations in these tests only.
 struct NodalCoefficients {
     Eigen::Matrix<double, 8, 3> u;
@@ -53,18 +53,18 @@ NodalCoefficients fields(int seed = 0) {
     return f;
 }
 
-auto evaluate_fields(const NodalCoefficients& coefficients) {
-    return MaterialFields{std::make_shared<DeformationGradientField<litepgo::HexQ1Basis>>(coefficients.u),
-                          std::make_shared<DeformationGradientField<litepgo::HexQ1Basis>>(coefficients.up),
-                          std::make_shared<InterpolatedValueField<litepgo::HexQ1Basis>>(coefficients.theta)};
+auto evaluate_fields(const NodalCoefficients& coefficients, const InterpolatedField<HexQ1Basis>& X_field) {
+    return MaterialSources{DeformationGradient(InterpolatedField<litepgo::HexQ1Basis>(coefficients.u), X_field),
+                           DeformationGradient(InterpolatedField<litepgo::HexQ1Basis>(coefficients.up), X_field),
+                           InterpolatedField<litepgo::HexQ1Basis>(coefficients.theta)};
 }
 
 template <class Member, class BindEnergy>
-void check_fd(const Interpolation<HexQ1Basis>& rest_geometry, const NodalCoefficients& f, Member member,
+void check_fd(const InterpolatedField<HexQ1Basis>& X_field, const NodalCoefficients& f, Member member,
               BindEnergy bind_energy) {
     const auto integrate_at = [&](const auto& coefficients, Eigen::VectorXd* g = nullptr,
                                   Eigen::MatrixXd* h = nullptr) {
-        return integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(evaluate_fields(coefficients)), g, h);
+        return integrate_volume<GaussLegendre3D<2>>(bind_energy(evaluate_fields(coefficients, X_field)), g, h);
     };
     Eigen::VectorXd G;
     Eigen::MatrixXd H;
@@ -108,29 +108,33 @@ void check_fd(const Interpolation<HexQ1Basis>& rest_geometry, const NodalCoeffic
 }
 
 TEST(VolumeIntegration, HexQ1LocalDofFiniteDifferencesForAllThreeFields) {
-    const Interpolation<HexQ1Basis> rest_geometry(coordinates());
+    const InterpolatedField<HexQ1Basis> X_field(coordinates());
     for (int seed = 0; seed < 3; ++seed) {
         SCOPED_TRACE(seed);
         const auto f = fields(seed);
-        EXPECT_DOUBLE_EQ(
-            integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyF<NeoHookean>(evaluate_fields(f))),
-            integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyFp<NeoHookean>(evaluate_fields(f))));
-        EXPECT_DOUBLE_EQ(
-            integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyF<NeoHookean>(evaluate_fields(f))),
-            integrate_volume<GaussLegendre3D<2>>(rest_geometry,
-                                                 MaterialLocalEnergyTheta<NeoHookean>(evaluate_fields(f))));
-        check_fd(rest_geometry, f, &NodalCoefficients::u,
-                 [](const auto& local_fields) { return MaterialLocalEnergyF<NeoHookean>(local_fields); });
-        check_fd(rest_geometry, f, &NodalCoefficients::up,
-                 [](const auto& local_fields) { return MaterialLocalEnergyFp<NeoHookean>(local_fields); });
-        check_fd(rest_geometry, f, &NodalCoefficients::theta,
-                 [](const auto& local_fields) { return MaterialLocalEnergyTheta<NeoHookean>(local_fields); });
+        EXPECT_DOUBLE_EQ(integrate_volume<GaussLegendre3D<2>>(
+                             bind_energy<NeoHookean, MaterialVariable::F>(X_field, evaluate_fields(f, X_field))),
+                         integrate_volume<GaussLegendre3D<2>>(
+                             bind_energy<NeoHookean, MaterialVariable::Fp>(X_field, evaluate_fields(f, X_field))));
+        EXPECT_DOUBLE_EQ(integrate_volume<GaussLegendre3D<2>>(
+                             bind_energy<NeoHookean, MaterialVariable::F>(X_field, evaluate_fields(f, X_field))),
+                         integrate_volume<GaussLegendre3D<2>>(
+                             bind_energy<NeoHookean, MaterialVariable::Theta>(X_field, evaluate_fields(f, X_field))));
+        check_fd(X_field, f, &NodalCoefficients::u, [&](const auto& local_fields) {
+            return bind_energy<NeoHookean, MaterialVariable::F>(X_field, local_fields);
+        });
+        check_fd(X_field, f, &NodalCoefficients::up, [&](const auto& local_fields) {
+            return bind_energy<NeoHookean, MaterialVariable::Fp>(X_field, local_fields);
+        });
+        check_fd(X_field, f, &NodalCoefficients::theta, [&](const auto& local_fields) {
+            return bind_energy<NeoHookean, MaterialVariable::Theta>(X_field, local_fields);
+        });
     }
 }
 
 TEST(VolumeIntegration, AffineFieldsHaveExpectedVolumeWeightedEnergyAndTranslationNullModes) {
     const auto X_nodes = coordinates(false);
-    const Interpolation<HexQ1Basis> rest_geometry(X_nodes);
+    const InterpolatedField<HexQ1Basis> X_field(X_nodes);
     Eigen::Matrix3d A, P;
     A << 0.1, 0.02, -0.03, 0.04, -0.05, 0.02, 0.01, 0.03, 0.08;
     P << 0.2, 0.03, 0, 0.01, 0.1, 0.02, 0, 0.01, -0.05;
@@ -139,7 +143,7 @@ TEST(VolumeIntegration, AffineFieldsHaveExpectedVolumeWeightedEnergyAndTranslati
     f.up = X_nodes * P.transpose();
     f.theta.col(0).setConstant(2);
     f.theta.col(1).setConstant(3);
-    const auto local_fields = evaluate_fields(f);
+    const auto local_fields = evaluate_fields(f, X_field);
     Eigen::Matrix3d dX_dxi;
     dX_dxi.col(0) = X_nodes.row(1) - X_nodes.row(0);
     dX_dxi.col(1) = X_nodes.row(3) - X_nodes.row(0);
@@ -147,12 +151,14 @@ TEST(VolumeIntegration, AffineFieldsHaveExpectedVolumeWeightedEnergyAndTranslati
     const double expected =
         dX_dxi.determinant() *
         NeoHookean::value({Eigen::Matrix3d::Identity() + A, Eigen::Matrix3d::Identity() + P, Eigen::Vector2d(2, 3)});
-    EXPECT_NEAR(
-        integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyF<NeoHookean>(evaluate_fields(f))),
-        expected, 1e-12);
+    EXPECT_NEAR(integrate_volume<GaussLegendre3D<2>>(
+                    bind_energy<NeoHookean, MaterialVariable::F>(X_field, evaluate_fields(f, X_field))),
+                expected, 1e-12);
     Eigen::MatrixXd H, Hp;
-    integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyF<NeoHookean>(local_fields), nullptr, &H);
-    integrate_volume<GaussLegendre3D<2>>(rest_geometry, MaterialLocalEnergyFp<NeoHookean>(local_fields), nullptr, &Hp);
+    integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::F>(X_field, local_fields), nullptr,
+                                         &H);
+    integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::Fp>(X_field, local_fields), nullptr,
+                                         &Hp);
     for (int c = 0; c < 3; ++c) {
         Eigen::Matrix<double, 24, 1> translation = Eigen::Matrix<double, 24, 1>::Zero();
         for (int i = 0; i < 8; ++i)
@@ -162,26 +168,27 @@ TEST(VolumeIntegration, AffineFieldsHaveExpectedVolumeWeightedEnergyAndTranslati
         auto shifted = f;
         shifted.u.col(c).array() += 0.7;
         shifted.up.col(c).array() -= 0.4;
-        EXPECT_NEAR(integrate_volume<GaussLegendre3D<2>>(rest_geometry,
-                                                         MaterialLocalEnergyF<NeoHookean>(evaluate_fields(shifted))),
+        EXPECT_NEAR(integrate_volume<GaussLegendre3D<2>>(
+                        bind_energy<NeoHookean, MaterialVariable::F>(X_field, evaluate_fields(shifted, X_field))),
                     expected, 1e-12);
     }
 }
 
 TEST(VolumeIntegration, NonzeroParameterHessian) {
-    const Interpolation<HexQ1Basis> rest_geometry(coordinates());
+    const InterpolatedField<HexQ1Basis> X_field(coordinates());
     const auto coefficients = fields();
-    const MaterialLocalEnergyTheta<QuadraticParameterMaterial<2>> energy(evaluate_fields(coefficients));
+    const auto energy = bind_energy<QuadraticParameterMaterial<2>, MaterialVariable::Theta>(
+        X_field, evaluate_fields(coefficients, X_field));
     Eigen::MatrixXd H;
-    integrate_volume<GaussLegendre3D<2>>(rest_geometry, energy, nullptr, &H);
+    integrate_volume<GaussLegendre3D<2>>(energy, nullptr, &H);
     EXPECT_GT(H.norm(), 0.1);
-    check_fd(rest_geometry, coefficients, &NodalCoefficients::theta, [](const auto& local_fields) {
-        return MaterialLocalEnergyTheta<QuadraticParameterMaterial<2>>(local_fields);
+    check_fd(X_field, coefficients, &NodalCoefficients::theta, [&](const auto& local_fields) {
+        return bind_energy<QuadraticParameterMaterial<2>, MaterialVariable::Theta>(X_field, local_fields);
     });
 }
 
 TEST(VolumeIntegration, PropagatesInvalidFieldsAndInfeasibleStates) {
-    const Interpolation<HexQ1Basis> rest_geometry(coordinates(false));
+    const InterpolatedField<HexQ1Basis> X_field(coordinates(false));
     const auto check = [&](auto bind_energy) {
         Eigen::VectorXd g;
         Eigen::MatrixXd h;
@@ -193,40 +200,41 @@ TEST(VolumeIntegration, PropagatesInvalidFieldsAndInfeasibleStates) {
                 bad.up(0, 0) = std::numeric_limits<double>::infinity();
             if (which == 2)
                 bad.theta(0, 0) = std::numeric_limits<double>::quiet_NaN();
-            EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(evaluate_fields(bad))),
+            EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(bind_energy(evaluate_fields(bad, X_field))),
                          std::invalid_argument);
-            EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(evaluate_fields(bad)), &g),
+            EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(bind_energy(evaluate_fields(bad, X_field)), &g),
                          std::invalid_argument);
-            EXPECT_THROW(
-                integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(evaluate_fields(bad)), nullptr, &h),
-                std::invalid_argument);
+            EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(bind_energy(evaluate_fields(bad, X_field)), nullptr, &h),
+                         std::invalid_argument);
         }
         auto bad = fields();
         bad.theta.col(1).setConstant(-1);
-        EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(evaluate_fields(bad))),
+        EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(bind_energy(evaluate_fields(bad, X_field))),
                      std::invalid_argument);
-        EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(evaluate_fields(bad)), &g),
+        EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(bind_energy(evaluate_fields(bad, X_field)), &g),
                      std::invalid_argument);
-        EXPECT_THROW(
-            integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(evaluate_fields(bad)), nullptr, &h),
-            std::invalid_argument);
+        EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(bind_energy(evaluate_fields(bad, X_field)), nullptr, &h),
+                     std::invalid_argument);
         for (bool plastic : {false, true}) {
             bad = fields();
             auto& C = plastic ? bad.up : bad.u;
             C.setZero();
             C.col(0) = -2 * coordinates(false).col(0);
-            EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(evaluate_fields(bad))),
+            EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(bind_energy(evaluate_fields(bad, X_field))),
                          InfeasibleState);
-            EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(evaluate_fields(bad)), &g),
+            EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(bind_energy(evaluate_fields(bad, X_field)), &g),
                          InfeasibleState);
-            EXPECT_THROW(
-                integrate_volume<GaussLegendre3D<2>>(rest_geometry, bind_energy(evaluate_fields(bad)), nullptr, &h),
-                InfeasibleState);
+            EXPECT_THROW(integrate_volume<GaussLegendre3D<2>>(bind_energy(evaluate_fields(bad, X_field)), nullptr, &h),
+                         InfeasibleState);
         }
     };
-    check([](const auto& local_fields) { return MaterialLocalEnergyF<NeoHookean>(local_fields); });
-    check([](const auto& local_fields) { return MaterialLocalEnergyFp<NeoHookean>(local_fields); });
-    check([](const auto& local_fields) { return MaterialLocalEnergyTheta<NeoHookean>(local_fields); });
+    check(
+        [&](const auto& local_fields) { return bind_energy<NeoHookean, MaterialVariable::F>(X_field, local_fields); });
+    check(
+        [&](const auto& local_fields) { return bind_energy<NeoHookean, MaterialVariable::Fp>(X_field, local_fields); });
+    check([&](const auto& local_fields) {
+        return bind_energy<NeoHookean, MaterialVariable::Theta>(X_field, local_fields);
+    });
 }
 
 } // namespace

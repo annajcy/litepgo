@@ -4,15 +4,15 @@
 #include "litepgo/energy/mesh_energy.hpp"
 #include "litepgo/fem/basis/hex_hermite_basis.hpp"
 #include "litepgo/fem/basis/hex_q1_basis.hpp"
-#include "litepgo/fem/field/deformation_gradient_field.hpp"
+#include "litepgo/fem/field/hex_hermite_dof_transform.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
-#include "litepgo/fem/interpolation/hex_hermite_dof_transform.hpp"
+#include "litepgo/fem/field/interpolated_field.hpp"
+#include "litepgo/fem/kinematics/deformation_gradient.hpp"
 #include "litepgo/fem/local/integrate_volume.hpp"
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/gauss_legendre_3d.hpp"
 
-#include <memory>
 #include <stdexcept>
 #include <vector>
 
@@ -31,13 +31,13 @@ inline Vec hex_hermite_rest_positions() {
     return X_nodes.reshaped<Eigen::RowMajor>();
 }
 
-inline Eigen::MatrixXd hex_hermite_reference_coefficients(const Eigen::MatrixXd& x_local, const Vec& scales) {
-    if (x_local.rows() != 8 || x_local.cols() != 24 || scales.size() != 192)
+inline Eigen::MatrixXd hex_hermite_reference_coefficients(const Eigen::MatrixXd& u_physical_local, const Vec& scales) {
+    if (u_physical_local.rows() != 8 || u_physical_local.cols() != 24 || scales.size() != 192)
         throw std::invalid_argument("Hex Hermite example requires 8x24 physical DOFs and 192 scales");
-    Eigen::MatrixXd reference_coefficients = x_local.reshaped<Eigen::RowMajor>(64, 3);
+    Eigen::MatrixXd u_local = u_physical_local.reshaped<Eigen::RowMajor>(64, 3);
     for (int row = 0; row < 64; ++row)
-        reference_coefficients.row(row) *= scales[3 * row];
-    return reference_coefficients;
+        u_local.row(row) *= scales[3 * row];
+    return u_local;
 }
 
 inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X_nodes) {
@@ -45,34 +45,39 @@ inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X_nodes) {
     // Each vertex stores [u, u_X, u_Y, u_Z, u_XY, u_XZ, u_YZ, u_XYZ], each a 3-vector.
     // Global index: 24*vertex + 3*slot + component; shared vertices use the same indices.
     const VertexDofMap geometry_map(topology, 3), displacement_map(topology, 24);
-    std::vector<Interpolation<HexQ1Basis>> rest_geometries;
+    std::vector<InterpolatedField<HexQ1Basis>> X_fields;
     std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> transforms;
     for (int e = 0; e < geometry_map.num_elements(); ++e) {
-        rest_geometries.emplace_back(geometry_map.gather(e, X_nodes));
-        transforms.push_back(hex_hermite_dof_transform(rest_geometries.back()));
+        X_fields.emplace_back(geometry_map.gather(e, X_nodes));
+        transforms.push_back(hex_hermite_dof_transform(X_fields.back()));
     }
-    const auto Fp = std::make_shared<IdentityField<Eigen::Matrix3d>>(Eigen::Matrix3d::Identity());
-    const auto theta = std::make_shared<IdentityField<Eigen::VectorXd>>(Eigen::Vector2d(2, 3));
+    const IdentityField<Eigen::Matrix3d> Fp_field(Eigen::Matrix3d::Identity());
+    const IdentityField<Eigen::VectorXd> theta_field(Eigen::Vector2d(2, 3));
     return MeshEnergy(
         displacement_map,
-        [rest_geometries, transforms, Fp, theta](int e, const Eigen::MatrixXd& x_local, Vec* dE_dx_local,
-                                                 Eigen::MatrixXd* d2E_dx_local2) {
+        [X_fields, transforms, Fp_field, theta_field](int e, const Eigen::MatrixXd& x_local, Vec* dE_dx_local,
+                                                      Eigen::MatrixXd* d2E_dx_local2) {
             const auto index = static_cast<std::size_t>(e);
-            const auto& rest_geometry = rest_geometries[index];
+            const auto& X_field = X_fields[index];
             const auto& S = transforms[index];
             const auto& dof_scales = S.diagonal();
-            const auto reference_coefficients = hex_hermite_reference_coefficients(x_local, dof_scales);
-            const auto F = std::make_shared<DeformationGradientField<HexHermiteBasis>>(reference_coefficients);
-            const MaterialLocalEnergyF<NeoHookean> local_energy({F, Fp, theta});
-            // Reuse outputs for derivatives with respect to reference coefficients c until the pullback below.
-            const double E_element =
-                integrate_volume<GaussLegendre3D<4>>(rest_geometry, local_energy, dE_dx_local, d2E_dx_local2);
-            // c = S*flatten(x_local): fixed rest geometry makes S constant, so g_local = S^T*g_c, H_local = S^T*H_c*S.
+            const auto& u_physical_local = x_local;
+            const auto u_local = hex_hermite_reference_coefficients(u_physical_local, dof_scales);
+            const auto u_field = InterpolatedField<HexHermiteBasis>(u_local);
+            const auto deformation = DeformationGradient(u_field, X_field);
+            const auto local_energy =
+                make_material_local_energy<NeoHookean, MaterialVariable::F>(deformation, Fp_field, theta_field);
+            Vec dE_du_local;
+            Eigen::MatrixXd d2E_du_local2;
+            const double E_element = integrate_volume<GaussLegendre3D<4>>(
+                local_energy, dE_dx_local ? &dE_du_local : nullptr, d2E_dx_local2 ? &d2E_du_local2 : nullptr);
+            // Pull reference-coefficient derivatives back to gathered physical Hermite DOFs.
             if (dE_dx_local)
-                dE_dx_local->array() *= dof_scales.array();
+                *dE_dx_local = dof_scales.array() * dE_du_local.array();
             if (d2E_dx_local2) {
-                d2E_dx_local2->array().colwise() *= dof_scales.array();
-                d2E_dx_local2->array().rowwise() *= dof_scales.transpose().array();
+                d2E_du_local2.array().colwise() *= dof_scales.array();
+                d2E_du_local2.array().rowwise() *= dof_scales.transpose().array();
+                *d2E_dx_local2 = std::move(d2E_du_local2);
             }
             return E_element;
         },

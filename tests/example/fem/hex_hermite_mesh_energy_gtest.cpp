@@ -39,15 +39,15 @@ TEST(HexHermiteExample, ReproducesAffineDisplacementAndVolumeWeightedEnergy) {
     const std::array<Eigen::Vector3d, 3> points{
         {Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(1, 1, 1), Eigen::Vector3d(0.2, 0.3, 0.4)}};
     for (int e = 0; e < 2; ++e) {
-        const Interpolation<HexQ1Basis> rest_geometry(geometry_map.gather(e, X_nodes));
+        const InterpolatedField<HexQ1Basis> X_field(geometry_map.gather(e, X_nodes));
         const auto coefficients = example::hex_hermite_reference_coefficients(
-            displacement_map.gather(e, x), hex_hermite_dof_transform(rest_geometry).diagonal());
-        const Interpolation<HexHermiteBasis> displacement(coefficients);
-        const DeformationGradientField<HexHermiteBasis> F(coefficients);
+            displacement_map.gather(e, x), hex_hermite_dof_transform(X_field).diagonal());
+        const InterpolatedField<HexHermiteBasis> displacement(coefficients);
+        const auto F = DeformationGradient(displacement, X_field);
         for (const auto& xi : points) {
-            const auto point = rest_point(rest_geometry, xi);
-            EXPECT_TRUE(displacement.value(xi).isApprox(A * point.X + b, 1e-13));
-            EXPECT_TRUE(F.value(point).isApprox(Eigen::Matrix3d::Identity() + A, 1e-13));
+            const auto point = litepgo::ReferenceMapping(X_field.evaluate(xi));
+            EXPECT_TRUE(displacement.value(xi).isApprox(A * point.X() + b, 1e-13));
+            EXPECT_TRUE(F.evaluate(point.xi()).F().isApprox(Eigen::Matrix3d::Identity() + A, 1e-13));
         }
     }
 }
@@ -78,27 +78,28 @@ TEST(HexHermiteExample, SharedFacesHaveContinuousValuesAndPhysicalGradientsInAll
             x[j] = 0.01 * std::sin(0.7 * j + 0.3);
         const HexTopology topology(12, cells);
         const VertexDofMap geometry_map(topology, 3), displacement_map(topology, 24);
-        const std::array<Interpolation<HexQ1Basis>, 2> rest_geometries{
-            Interpolation<HexQ1Basis>(geometry_map.gather(0, X_nodes)),
-            Interpolation<HexQ1Basis>(geometry_map.gather(1, X_nodes))};
-        const auto c0 = example::hex_hermite_reference_coefficients(
-            displacement_map.gather(0, x), hex_hermite_dof_transform(rest_geometries[0]).diagonal());
-        const auto c1 = example::hex_hermite_reference_coefficients(
-            displacement_map.gather(1, x), hex_hermite_dof_transform(rest_geometries[1]).diagonal());
-        const Interpolation<HexHermiteBasis> u0(c0), u1(c1);
-        const DeformationGradientField<HexHermiteBasis> F0(c0), F1(c1);
+        const std::array<InterpolatedField<HexQ1Basis>, 2> X_fields{
+            InterpolatedField<HexQ1Basis>(geometry_map.gather(0, X_nodes)),
+            InterpolatedField<HexQ1Basis>(geometry_map.gather(1, X_nodes))};
+        const auto c0 = example::hex_hermite_reference_coefficients(displacement_map.gather(0, x),
+                                                                    hex_hermite_dof_transform(X_fields[0]).diagonal());
+        const auto c1 = example::hex_hermite_reference_coefficients(displacement_map.gather(1, x),
+                                                                    hex_hermite_dof_transform(X_fields[1]).diagonal());
+        const InterpolatedField<HexHermiteBasis> u0(c0), u1(c1);
+        const auto F0 = DeformationGradient(u0, X_fields[0]);
+        const auto F1 = DeformationGradient(u1, X_fields[1]);
         for (double s : {0.0, 0.23, 0.67, 1.0})
             for (double t : {0.0, 0.31, 0.8, 1.0}) {
                 Eigen::Vector3d xi = Eigen::Vector3d::Zero();
                 xi[(normal + 1) % 3] = s;
                 xi[(normal + 2) % 3] = t;
                 xi[normal] = 1;
-                const auto p0 = rest_point(rest_geometries[0], xi);
+                const auto p0 = litepgo::ReferenceMapping(X_fields[0].evaluate(xi));
                 xi[normal] = 0;
-                const auto p1 = rest_point(rest_geometries[1], xi);
-                EXPECT_TRUE(p0.X.isApprox(p1.X, 1e-14));
-                EXPECT_LT((u0.value(p0.xi) - u1.value(p1.xi)).norm(), 1e-13);
-                EXPECT_LT((F0.value(p0) - F1.value(p1)).norm(), 1e-13);
+                const auto p1 = litepgo::ReferenceMapping(X_fields[1].evaluate(xi));
+                EXPECT_TRUE(p0.X().isApprox(p1.X(), 1e-14));
+                EXPECT_LT((u0.value(p0.xi()) - u1.value(p1.xi())).norm(), 1e-13);
+                EXPECT_LT((F0.evaluate(p0.xi()).F() - F1.evaluate(p1.xi()).F()).norm(), 1e-13);
             }
     }
 }

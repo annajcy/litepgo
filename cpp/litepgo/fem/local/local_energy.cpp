@@ -12,28 +12,34 @@ bool LocalEnergy::has_hessian() const noexcept {
     return false;
 }
 
-Eigen::VectorXd LocalEnergy::gradient(const RestPointData&) const {
+Eigen::VectorXd LocalEnergy::gradient(const Eigen::Vector3d&) const {
     throw std::logic_error("LocalEnergy does not support gradient evaluation");
 }
-Eigen::MatrixXd LocalEnergy::hessian(const RestPointData&) const {
+Eigen::MatrixXd LocalEnergy::hessian(const Eigen::Vector3d&) const {
     throw std::logic_error("LocalEnergy does not support Hessian evaluation");
 }
 
-double LocalEnergy::accumulate(const RestPointData& point, double weight, Eigen::VectorXd* gradient,
+double LocalEnergy::accumulate(const Eigen::Vector3d& xi, double quadrature_weight, Eigen::VectorXd* gradient,
                                Eigen::MatrixXd* hessian) const {
-    if (!std::isfinite(weight))
+    if (!xi.allFinite() || !std::isfinite(quadrature_weight))
         throw std::invalid_argument("LocalEnergy::accumulate requires a finite weight");
     if ((gradient && !has_gradient()) || (hessian && !has_hessian()))
         throw std::logic_error("LocalEnergy does not support the requested derivatives");
-    const double result = weight * value(point);
+    const double determinant = det_dX_dxi(xi);
+    if (!std::isfinite(determinant) || determinant <= 0)
+        throw std::invalid_argument("LocalEnergy::accumulate: invalid reference volume");
+    const double weight = quadrature_weight * determinant;
+    if (!std::isfinite(weight))
+        throw std::invalid_argument("LocalEnergy::accumulate: non-finite volume weight");
+    const double result = weight * value(xi);
     if (gradient) {
-        const auto local = this->gradient(point);
+        const auto local = this->gradient(xi);
         if (local.size() != gradient->size())
             throw std::invalid_argument("LocalEnergy::accumulate: invalid gradient size");
         *gradient += weight * local;
     }
     if (hessian) {
-        const auto local = this->hessian(point);
+        const auto local = this->hessian(xi);
         if (local.rows() != hessian->rows() || local.cols() != hessian->cols())
             throw std::invalid_argument("LocalEnergy::accumulate: invalid Hessian size");
         *hessian += weight * local;

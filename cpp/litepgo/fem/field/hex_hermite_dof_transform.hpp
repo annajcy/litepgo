@@ -1,7 +1,7 @@
 #pragma once
 
 #include "litepgo/fem/basis/hex_q1_basis.hpp"
-#include "litepgo/fem/interpolation/interpolation.hpp"
+#include "litepgo/fem/field/interpolated_field.hpp"
 
 namespace litepgo {
 
@@ -10,6 +10,6 @@ namespace litepgo {
 // c reshapes by row into the 64-by-3 reference coefficients expected by HexHermiteBasis.
 // Compute once per fixed rest element. Invalid geometry or non-finite/non-positive scales throw invalid_argument.
 // shortcut: positive axis-aligned rest boxes in Q1 corner order only; general rest hexes need a different mapping.
-Eigen::DiagonalMatrix<double, Eigen::Dynamic> hex_hermite_dof_transform(const Interpolation<HexQ1Basis>& rest_geometry);
+Eigen::DiagonalMatrix<double, Eigen::Dynamic> hex_hermite_dof_transform(const InterpolatedField<HexQ1Basis>& X_field);
 
 } // namespace litepgo

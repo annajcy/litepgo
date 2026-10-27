@@ -1,4 +1,6 @@
 #include "litepgo/fem/basis/hex_q1_basis.hpp"
+#include "litepgo/fem/field/interpolated_field.hpp"
+#include "litepgo/fem/kinematics/reference_mapping.hpp"
 #include "litepgo/fem/local/integrate_volume.hpp"
 #include "litepgo/fem/quadrature/gauss_legendre_3d.hpp"
 #include <gtest/gtest.h>
@@ -19,35 +21,46 @@ struct Rule {
         return w;
     }
 };
-Interpolation<HexQ1Basis> rest_geometry(double scale = 1) {
+InterpolatedField<HexQ1Basis> make_X_field(double scale = 1) {
     Eigen::Matrix<double, 8, 3> X;
     for (int i = 0; i < 8; ++i)
         X.row(i) = scale * HexQ1Basis::reference_node(i);
-    return Interpolation<HexQ1Basis>(X);
+    return InterpolatedField<HexQ1Basis>(X);
+}
+// Configure the fixture's coordinate snapshot; the production integrator receives only the bound energy.
+template <class Q, class Energy>
+double integrate_test_volume(const InterpolatedField<HexQ1Basis>& X_field, const Energy& energy,
+                             Eigen::VectorXd* gradient = nullptr, Eigen::MatrixXd* hessian = nullptr) {
+    energy.X_field = X_field;
+    return integrate_volume<Q>(energy, gradient, hessian);
 }
 struct ValueOnly : LocalEnergy {
+    mutable InterpolatedField<HexQ1Basis> X_field{make_X_field()};
+    double det_dX_dxi(const Eigen::Vector3d& xi) const override {
+        return ReferenceMapping(X_field.evaluate(xi)).det_dX_dxi();
+    }
     int num_dofs() const override {
         return 3;
     }
     Eigen::Vector3d coefficients{0.2, -0.4, 0.6};
-    double value(const RestPointData& p) const override {
-        return 0.5 * (1 + p.X.x()) * coefficients.squaredNorm();
+    double value(const Eigen::Vector3d& p) const override {
+        return 0.5 * (1 + X_field.value(p).x()) * coefficients.squaredNorm();
     }
 };
 struct FirstOnly : ValueOnly {
     bool has_gradient() const noexcept override {
         return true;
     }
-    Eigen::VectorXd gradient(const RestPointData& p) const override {
-        return (1 + p.X.x()) * coefficients;
+    Eigen::VectorXd gradient(const Eigen::Vector3d& p) const override {
+        return (1 + X_field.value(p).x()) * coefficients;
     }
 };
 struct SecondOnly : ValueOnly {
     bool has_hessian() const noexcept override {
         return true;
     }
-    Eigen::MatrixXd hessian(const RestPointData& p) const override {
-        return (1 + p.X.x()) * Eigen::Matrix3d::Identity();
+    Eigen::MatrixXd hessian(const Eigen::Vector3d& p) const override {
+        return (1 + X_field.value(p).x()) * Eigen::Matrix3d::Identity();
     }
 };
 struct FullEnergy : FirstOnly {
@@ -59,17 +72,17 @@ struct FullEnergy : FirstOnly {
         ++dof_calls;
         return 3;
     }
-    double value(const RestPointData& p) const override {
+    double value(const Eigen::Vector3d& p) const override {
         ++value_calls;
         return ValueOnly::value(p);
     }
-    Eigen::VectorXd gradient(const RestPointData& p) const override {
+    Eigen::VectorXd gradient(const Eigen::Vector3d& p) const override {
         ++gradient_calls;
         return FirstOnly::gradient(p);
     }
-    Eigen::MatrixXd hessian(const RestPointData& p) const override {
+    Eigen::MatrixXd hessian(const Eigen::Vector3d& p) const override {
         ++hessian_calls;
-        return (1 + p.X.x()) * Eigen::Matrix3d::Identity();
+        return (1 + X_field.value(p).x()) * Eigen::Matrix3d::Identity();
     }
 };
 TEST(LocalEnergy, DerivativeCapabilitiesAreIndependent) {
@@ -85,14 +98,14 @@ TEST(LocalEnergy, DerivativeCapabilitiesAreIndependent) {
     EXPECT_TRUE(second.has_hessian());
     EXPECT_TRUE(full.has_gradient());
     EXPECT_TRUE(full.has_hessian());
-    const RestPointData point{};
+    const Eigen::Vector3d point = Eigen::Vector3d::Zero();
     EXPECT_THROW(value.gradient(point), std::logic_error);
     EXPECT_THROW(value.hessian(point), std::logic_error);
 }
 
 TEST(LocalEnergy, DefaultAccumulationAddsWeightedValuesAndChecksRequests) {
     FullEnergy full;
-    const auto point = rest_point(rest_geometry(), {0.2, 0.3, 0.4});
+    const Eigen::Vector3d point(0.2, 0.3, 0.4);
     Eigen::VectorXd g = Eigen::Vector3d::Constant(3);
     Eigen::MatrixXd h = Eigen::Matrix3d::Constant(5);
     const double weight = -0.7;
@@ -119,34 +132,35 @@ struct DisabledDerivatives : FullEnergy {
 };
 TEST(IntegrateVolume, ChecksCapabilitiesBeforeChangingOutputsOrEvaluatingPoints) {
     DisabledDerivatives energy;
-    const auto reference = rest_geometry();
+    const auto reference = make_X_field();
     Eigen::VectorXd g = Eigen::VectorXd::Constant(1, 7);
     Eigen::MatrixXd h = Eigen::MatrixXd::Constant(1, 1, 9);
-    EXPECT_THROW(integrate_volume<Rule>(reference, energy, &g), std::logic_error);
-    EXPECT_THROW(integrate_volume<Rule>(rest_geometry(0), energy, &g), std::logic_error);
-    EXPECT_THROW(integrate_volume<Rule>(reference, energy, nullptr, &h), std::logic_error);
+    EXPECT_THROW(integrate_test_volume<Rule>(reference, energy, &g), std::logic_error);
+    EXPECT_THROW(integrate_test_volume<Rule>(make_X_field(0), energy, &g), std::logic_error);
+    EXPECT_THROW(integrate_test_volume<Rule>(reference, energy, nullptr, &h), std::logic_error);
     FirstOnly first;
     SecondOnly second;
-    EXPECT_THROW(integrate_volume<Rule>(reference, first, &g, &h), std::logic_error);
-    EXPECT_THROW(integrate_volume<Rule>(reference, second, &g, &h), std::logic_error);
+    EXPECT_THROW(integrate_test_volume<Rule>(reference, first, &g, &h), std::logic_error);
+    EXPECT_THROW(integrate_test_volume<Rule>(reference, second, &g, &h), std::logic_error);
     EXPECT_EQ(g, Eigen::VectorXd::Constant(1, 7));
     EXPECT_EQ(h, Eigen::MatrixXd::Constant(1, 1, 9));
     EXPECT_EQ(energy.dof_calls, 0);
     EXPECT_EQ(energy.value_calls, 0);
     EXPECT_EQ(energy.gradient_calls, 0);
     EXPECT_EQ(energy.hessian_calls, 0);
-    EXPECT_DOUBLE_EQ(integrate_volume<Rule>(reference, energy), integrate_volume<Rule>(reference, ValueOnly{}));
+    EXPECT_DOUBLE_EQ(integrate_test_volume<Rule>(reference, energy),
+                     integrate_test_volume<Rule>(reference, ValueOnly{}));
     EXPECT_EQ(energy.dof_calls, 0);
     EXPECT_EQ(energy.gradient_calls, 0);
     EXPECT_EQ(energy.hessian_calls, 0);
 }
 
 TEST(IntegrateVolume, IntegratesIndependentOutputsInOnePassAndOverwritesBuffers) {
-    const auto reference = rest_geometry();
+    const auto reference = make_X_field();
     FullEnergy energy;
     Eigen::VectorXd g = Eigen::VectorXd::Ones(1);
     Eigen::MatrixXd h = Eigen::MatrixXd::Ones(1, 2);
-    const double value = integrate_volume<Rule>(reference, energy, &g, &h);
+    const double value = integrate_test_volume<Rule>(reference, energy, &g, &h);
     const double factor = 0.4 * 1.2 + 0.6 * 1.8;
     EXPECT_NEAR(value, factor * 0.5 * energy.coefficients.squaredNorm(), 1e-13);
     EXPECT_TRUE(g.isApprox(factor * energy.coefficients, 1e-13));
@@ -155,25 +169,25 @@ TEST(IntegrateVolume, IntegratesIndependentOutputsInOnePassAndOverwritesBuffers)
     EXPECT_EQ(energy.value_calls, Rule::num_points);
     EXPECT_EQ(energy.gradient_calls, Rule::num_points);
     EXPECT_EQ(energy.hessian_calls, Rule::num_points);
-    EXPECT_DOUBLE_EQ(integrate_volume<Rule>(reference, energy, &g, &h), value);
+    EXPECT_DOUBLE_EQ(integrate_test_volume<Rule>(reference, energy, &g, &h), value);
     EXPECT_TRUE(g.isApprox(factor * energy.coefficients, 1e-13));
     EXPECT_TRUE(h.isApprox(factor * Eigen::Matrix3d::Identity(), 1e-13));
     Eigen::VectorXd first_g;
     Eigen::MatrixXd second_h;
-    EXPECT_DOUBLE_EQ(integrate_volume<Rule>(reference, FirstOnly{}, &first_g), value);
-    EXPECT_DOUBLE_EQ(integrate_volume<Rule>(reference, SecondOnly{}, nullptr, &second_h), value);
+    EXPECT_DOUBLE_EQ(integrate_test_volume<Rule>(reference, FirstOnly{}, &first_g), value);
+    EXPECT_DOUBLE_EQ(integrate_test_volume<Rule>(reference, SecondOnly{}, nullptr, &second_h), value);
     EXPECT_EQ(first_g, g);
     EXPECT_EQ(second_h, h);
-    EXPECT_DOUBLE_EQ(integrate_volume<Rule>(rest_geometry(), ValueOnly{}), value);
-    EXPECT_NEAR(integrate_volume<Rule>(rest_geometry(2), ValueOnly{}),
+    EXPECT_DOUBLE_EQ(integrate_test_volume<Rule>(make_X_field(), ValueOnly{}), value);
+    EXPECT_NEAR(integrate_test_volume<Rule>(make_X_field(2), ValueOnly{}),
                 8 * (0.4 * 1.4 + 0.6 * 2.6) * 0.5 * energy.coefficients.squaredNorm(), 1e-13);
     for (int j = 0; j < 3; ++j) {
         auto plus = energy, minus = energy;
         plus.coefficients[j] += 1e-4;
         minus.coefficients[j] -= 1e-4;
         Eigen::VectorXd plus_g, minus_g;
-        const double plus_value = integrate_volume<Rule>(reference, plus, &plus_g);
-        const double minus_value = integrate_volume<Rule>(reference, minus, &minus_g);
+        const double plus_value = integrate_test_volume<Rule>(reference, plus, &plus_g);
+        const double minus_value = integrate_test_volume<Rule>(reference, minus, &minus_g);
         EXPECT_NEAR(g[j], (plus_value - minus_value) / 2e-4, 1e-10);
         EXPECT_TRUE(h.col(j).isApprox((plus_g - minus_g) / 2e-4, 1e-10));
     }
@@ -183,30 +197,30 @@ struct BadGradient : FirstOnly {
     int num_dofs() const override {
         return n;
     }
-    Eigen::VectorXd gradient(const RestPointData&) const override {
+    Eigen::VectorXd gradient(const Eigen::Vector3d&) const override {
         return Eigen::Vector2d::Zero();
     }
 };
 struct BadHessian : SecondOnly {
-    Eigen::MatrixXd hessian(const RestPointData&) const override {
+    Eigen::MatrixXd hessian(const Eigen::Vector3d&) const override {
         return Eigen::MatrixXd::Zero(3, 2);
     }
 };
 TEST(IntegrateVolume, RejectsInvalidRuntimeDerivativeSizes) {
-    const auto reference = rest_geometry();
+    const auto reference = make_X_field();
     Eigen::VectorXd g;
     Eigen::MatrixXd h;
     BadGradient bad;
-    EXPECT_THROW(integrate_volume<Rule>(reference, bad, &g), std::invalid_argument);
+    EXPECT_THROW(integrate_test_volume<Rule>(reference, bad, &g), std::invalid_argument);
     bad.n = 0;
-    EXPECT_THROW(integrate_volume<Rule>(reference, bad, &g), std::invalid_argument);
-    EXPECT_NO_THROW(integrate_volume<Rule>(reference, bad));
-    EXPECT_THROW(integrate_volume<Rule>(reference, BadHessian{}, nullptr, &h), std::invalid_argument);
+    EXPECT_THROW(integrate_test_volume<Rule>(reference, bad, &g), std::invalid_argument);
+    EXPECT_NO_THROW(integrate_test_volume<Rule>(reference, bad));
+    EXPECT_THROW(integrate_test_volume<Rule>(reference, BadHessian{}, nullptr, &h), std::invalid_argument);
 }
 
 struct ResizingAccumulator : FullEnergy {
     mutable int calls = 0;
-    double accumulate(const RestPointData&, double, Eigen::VectorXd* gradient,
+    double accumulate(const Eigen::Vector3d&, double, Eigen::VectorXd* gradient,
                       Eigen::MatrixXd* hessian) const override {
         ++calls;
         if (gradient)
@@ -221,20 +235,24 @@ TEST(IntegrateVolume, RejectsResizedAccumulatorOutputsAtTheFirstPoint) {
     const ResizingAccumulator energy;
     Eigen::VectorXd g;
     Eigen::MatrixXd h;
-    EXPECT_THROW(integrate_volume<Rule>(rest_geometry(), energy, &g), std::invalid_argument);
+    EXPECT_THROW(integrate_test_volume<Rule>(make_X_field(), energy, &g), std::invalid_argument);
     EXPECT_EQ(energy.calls, 1);
-    EXPECT_THROW(integrate_volume<Rule>(rest_geometry(), energy, nullptr, &h), std::invalid_argument);
+    EXPECT_THROW(integrate_test_volume<Rule>(make_X_field(), energy, nullptr, &h), std::invalid_argument);
     EXPECT_EQ(energy.calls, 2);
 }
 } // namespace
 
 namespace {
 struct UnitDensity : LocalEnergy {
+    mutable InterpolatedField<HexQ1Basis> X_field{make_X_field()};
+    double det_dX_dxi(const Eigen::Vector3d& xi) const override {
+        return ReferenceMapping(X_field.evaluate(xi)).det_dX_dxi();
+    }
     mutable int calls = 0;
     int num_dofs() const override {
         return 0;
     }
-    double value(const RestPointData&) const override {
+    double value(const Eigen::Vector3d&) const override {
         ++calls;
         return 1;
     }
@@ -261,40 +279,41 @@ struct NonFinitePoints : Rule {
 } // namespace
 
 TEST(IntegrateVolume, IntegratesUnitTranslatedAndWarpedVolumes) {
-    EXPECT_NEAR(integrate_volume<Rule>(rest_geometry(), UnitDensity{}), 1, 1e-14);
-    EXPECT_NEAR(integrate_volume<GaussLegendre3D<2>>(rest_geometry(), UnitDensity{}), 1, 1e-14);
+    EXPECT_NEAR(integrate_test_volume<Rule>(make_X_field(), UnitDensity{}), 1, 1e-14);
+    EXPECT_NEAR(integrate_test_volume<GaussLegendre3D<2>>(make_X_field(), UnitDensity{}), 1, 1e-14);
     Eigen::Matrix<double, 8, 3> X;
     for (int i = 0; i < 8; ++i) {
         const auto xi = HexQ1Basis::reference_node(i);
         X.row(i) = (Eigen::Vector3d(1, -2, 3) + Eigen::Vector3d(2, 3, 4).asDiagonal() * xi).transpose();
     }
-    EXPECT_NEAR(integrate_volume<GaussLegendre3D<2>>(Interpolation<HexQ1Basis>(X), UnitDensity{}), 24, 1e-13);
+    EXPECT_NEAR(integrate_test_volume<GaussLegendre3D<2>>(InterpolatedField<HexQ1Basis>(X), UnitDensity{}), 24, 1e-13);
     for (int i = 0; i < 8; ++i) {
         const auto xi = HexQ1Basis::reference_node(i);
         X.row(i) << xi.x() + 0.4 * xi.y() * xi.z(), xi.y() + 0.2 * xi.x() * xi.z(), xi.z();
     }
-    EXPECT_NEAR(integrate_volume<GaussLegendre3D<2>>(Interpolation<HexQ1Basis>(X), UnitDensity{}), 1 - 0.08 / 3, 1e-14);
+    EXPECT_NEAR(integrate_test_volume<GaussLegendre3D<2>>(InterpolatedField<HexQ1Basis>(X), UnitDensity{}),
+                1 - 0.08 / 3, 1e-14);
 }
 
 TEST(IntegrateVolume, RejectsInvalidGeometryAtTheEvaluatedPoint) {
     UnitDensity energy;
-    EXPECT_THROW(integrate_volume<Rule>(rest_geometry(0), energy), std::invalid_argument);
-    EXPECT_THROW(integrate_volume<Rule>(rest_geometry(-1), energy), std::invalid_argument);
+    EXPECT_THROW(integrate_test_volume<Rule>(make_X_field(0), energy), std::invalid_argument);
+    EXPECT_THROW(integrate_test_volume<Rule>(make_X_field(-1), energy), std::invalid_argument);
     EXPECT_EQ(energy.calls, 0);
     Eigen::Matrix<double, 8, 3> X;
     for (int i = 0; i < 8; ++i) {
         const auto xi = HexQ1Basis::reference_node(i);
         X.row(i) << xi.x(), xi.y(), xi.z() * (1 - 1.5 * xi.x());
     }
-    EXPECT_THROW(integrate_volume<Rule>(Interpolation<HexQ1Basis>(X), energy), std::invalid_argument);
+    EXPECT_THROW(integrate_test_volume<Rule>(InterpolatedField<HexQ1Basis>(X), energy), std::invalid_argument);
     EXPECT_EQ(energy.calls, 1); // Only the first point has positive det(dX_dxi).
 }
 
 TEST(IntegrateVolume, RejectsNonFinitePointsWeightsAndOverflowingVolumeWeights) {
     UnitDensity energy;
-    EXPECT_THROW(integrate_volume<NonFinitePoints>(rest_geometry(), energy), std::invalid_argument);
-    EXPECT_THROW(integrate_volume<OverflowingWeights>(rest_geometry(2), energy), std::invalid_argument);
+    EXPECT_THROW(integrate_test_volume<NonFinitePoints>(make_X_field(), energy), std::invalid_argument);
+    EXPECT_THROW(integrate_test_volume<OverflowingWeights>(make_X_field(2), energy), std::invalid_argument);
     EXPECT_EQ(energy.calls, 0);
-    EXPECT_THROW(integrate_volume<NonFiniteWeights>(rest_geometry(), energy), std::invalid_argument);
+    EXPECT_THROW(integrate_test_volume<NonFiniteWeights>(make_X_field(), energy), std::invalid_argument);
     EXPECT_EQ(energy.calls, 1);
 }

@@ -1,5 +1,5 @@
 #include "litepgo/fem/basis/hex_hermite_basis.hpp"
-#include "litepgo/fem/interpolation/interpolation.hpp"
+#include "litepgo/fem/field/interpolated_field.hpp"
 
 #include <gtest/gtest.h>
 
@@ -85,7 +85,7 @@ TEST(HexHermiteBasis, ReproducesAffineVectorFieldsWith192Dofs) {
         for (int d = 0; d < 3; ++d)
             coefficients.row(8 * vertex + d + 1) = A.col(d).transpose();
     }
-    const litepgo::Interpolation<HexHermiteBasis> interpolation(coefficients);
+    const litepgo::InterpolatedField<HexHermiteBasis> interpolation(coefficients);
     EXPECT_EQ(interpolation.num_dofs(), 192);
     for (const auto& xi : samples) {
         EXPECT_TRUE(interpolation.value(xi).isApprox(A * xi + b, 1e-13));

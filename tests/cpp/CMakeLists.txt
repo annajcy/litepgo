@@ -19,15 +19,16 @@ add_executable(litepgo_tests
     fem/basis/cubic_hermite_basis_gtest.cpp
     dof/element_dof_map_gtest.cpp
     dof/constant_dof_map_gtest.cpp
-    fem/field/field_gtest.cpp
-    fem/field/local_field_gtest.cpp
-    fem/field/material_fields_gtest.cpp
+    fem/field/field_sample_gtest.cpp
+    fem/field/identity_field_gtest.cpp
+    fem/kinematics/deformation_gradient_gtest.cpp
+    fem/local/material_sources_gtest.cpp
     fem/quadrature/gauss_legendre_1d_gtest.cpp
     fem/basis/hex_q1_basis_gtest.cpp
     fem/basis/hex_hermite_basis_gtest.cpp
     fem/basis/tet_p1_basis_gtest.cpp
-    fem/interpolation/interpolation_gtest.cpp
-    fem/interpolation/hex_hermite_dof_transform_gtest.cpp
+    fem/field/interpolated_field_gtest.cpp
+    fem/field/hex_hermite_dof_transform_gtest.cpp
     fem/basis/lagrange_basis_gtest.cpp
     fem/local/integrate_volume_gtest.cpp
     fem/local/dof_derivatives_gtest.cpp
@@ -42,7 +43,7 @@ add_executable(litepgo_tests
     dof/vertex_dof_map_gtest.cpp
     fem/local/volume_integration_gtest.cpp
     fem/local/tet_p1_integration_gtest.cpp
-    fem/interpolation/rest_point_gtest.cpp
+    fem/kinematics/reference_mapping_gtest.cpp
     dof/dof_reduction_gtest.cpp
     linalg/reduced_matrix_gtest.cpp
     linalg/sparse_pattern_gtest.cpp
