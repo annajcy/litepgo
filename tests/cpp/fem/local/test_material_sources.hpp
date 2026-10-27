@@ -17,11 +17,11 @@ template <class FSource, class FpSource, class ThetaSource> struct MaterialSourc
         return {value_at(F, xi), value_at(Fp, xi), value_at(theta, xi)};
     }
 };
-template <class Material, MaterialVariable Active, class XField, class Sources>
-auto bind_energy(const XField& X_field, const Sources& fields) {
-    if constexpr (requires { fields.F.evaluate(Eigen::Vector3d{}).det_dX_dxi(); })
-        return make_material_local_energy<Material, Active>(fields.F, fields.Fp, fields.theta);
-    else
-        return make_material_local_energy<Material, Active>(fields.F, fields.Fp, fields.theta, X_field);
+template <class Material, MaterialVariable Active, class Sources> auto bind_energy(const Sources& fields) {
+    return make_material_local_energy<Material, Active>(fields.F, fields.Fp, fields.theta);
+}
+template <class Material, MaterialVariable Active, class Sources, class XField>
+auto bind_energy(const Sources& fields, const XField& X_field) {
+    return make_material_local_energy<Material, Active>(fields.F, fields.Fp, fields.theta, X_field);
 }
 } // namespace litepgo::test

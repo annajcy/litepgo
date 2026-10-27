@@ -113,21 +113,19 @@ TEST(VolumeIntegration, HexQ1LocalDofFiniteDifferencesForAllThreeFields) {
         SCOPED_TRACE(seed);
         const auto f = fields(seed);
         EXPECT_DOUBLE_EQ(integrate_volume<GaussLegendre3D<2>>(
-                             bind_energy<NeoHookean, MaterialVariable::F>(X_field, evaluate_fields(f, X_field))),
+                             bind_energy<NeoHookean, MaterialVariable::F>(evaluate_fields(f, X_field))),
                          integrate_volume<GaussLegendre3D<2>>(
-                             bind_energy<NeoHookean, MaterialVariable::Fp>(X_field, evaluate_fields(f, X_field))));
+                             bind_energy<NeoHookean, MaterialVariable::Fp>(evaluate_fields(f, X_field))));
         EXPECT_DOUBLE_EQ(integrate_volume<GaussLegendre3D<2>>(
-                             bind_energy<NeoHookean, MaterialVariable::F>(X_field, evaluate_fields(f, X_field))),
+                             bind_energy<NeoHookean, MaterialVariable::F>(evaluate_fields(f, X_field))),
                          integrate_volume<GaussLegendre3D<2>>(
-                             bind_energy<NeoHookean, MaterialVariable::Theta>(X_field, evaluate_fields(f, X_field))));
-        check_fd(X_field, f, &NodalCoefficients::u, [&](const auto& local_fields) {
-            return bind_energy<NeoHookean, MaterialVariable::F>(X_field, local_fields);
-        });
-        check_fd(X_field, f, &NodalCoefficients::up, [&](const auto& local_fields) {
-            return bind_energy<NeoHookean, MaterialVariable::Fp>(X_field, local_fields);
-        });
+                             bind_energy<NeoHookean, MaterialVariable::Theta>(evaluate_fields(f, X_field))));
+        check_fd(X_field, f, &NodalCoefficients::u,
+                 [&](const auto& local_fields) { return bind_energy<NeoHookean, MaterialVariable::F>(local_fields); });
+        check_fd(X_field, f, &NodalCoefficients::up,
+                 [&](const auto& local_fields) { return bind_energy<NeoHookean, MaterialVariable::Fp>(local_fields); });
         check_fd(X_field, f, &NodalCoefficients::theta, [&](const auto& local_fields) {
-            return bind_energy<NeoHookean, MaterialVariable::Theta>(X_field, local_fields);
+            return bind_energy<NeoHookean, MaterialVariable::Theta>(local_fields);
         });
     }
 }
@@ -151,14 +149,12 @@ TEST(VolumeIntegration, AffineFieldsHaveExpectedVolumeWeightedEnergyAndTranslati
     const double expected =
         dX_dxi.determinant() *
         NeoHookean::value({Eigen::Matrix3d::Identity() + A, Eigen::Matrix3d::Identity() + P, Eigen::Vector2d(2, 3)});
-    EXPECT_NEAR(integrate_volume<GaussLegendre3D<2>>(
-                    bind_energy<NeoHookean, MaterialVariable::F>(X_field, evaluate_fields(f, X_field))),
-                expected, 1e-12);
+    EXPECT_NEAR(
+        integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::F>(evaluate_fields(f, X_field))),
+        expected, 1e-12);
     Eigen::MatrixXd H, Hp;
-    integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::F>(X_field, local_fields), nullptr,
-                                         &H);
-    integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::Fp>(X_field, local_fields), nullptr,
-                                         &Hp);
+    integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::F>(local_fields), nullptr, &H);
+    integrate_volume<GaussLegendre3D<2>>(bind_energy<NeoHookean, MaterialVariable::Fp>(local_fields), nullptr, &Hp);
     for (int c = 0; c < 3; ++c) {
         Eigen::Matrix<double, 24, 1> translation = Eigen::Matrix<double, 24, 1>::Zero();
         for (int i = 0; i < 8; ++i)
@@ -169,7 +165,7 @@ TEST(VolumeIntegration, AffineFieldsHaveExpectedVolumeWeightedEnergyAndTranslati
         shifted.u.col(c).array() += 0.7;
         shifted.up.col(c).array() -= 0.4;
         EXPECT_NEAR(integrate_volume<GaussLegendre3D<2>>(
-                        bind_energy<NeoHookean, MaterialVariable::F>(X_field, evaluate_fields(shifted, X_field))),
+                        bind_energy<NeoHookean, MaterialVariable::F>(evaluate_fields(shifted, X_field))),
                     expected, 1e-12);
     }
 }
@@ -177,13 +173,13 @@ TEST(VolumeIntegration, AffineFieldsHaveExpectedVolumeWeightedEnergyAndTranslati
 TEST(VolumeIntegration, NonzeroParameterHessian) {
     const InterpolatedField<HexQ1Basis> X_field(coordinates());
     const auto coefficients = fields();
-    const auto energy = bind_energy<QuadraticParameterMaterial<2>, MaterialVariable::Theta>(
-        X_field, evaluate_fields(coefficients, X_field));
+    const auto energy =
+        bind_energy<QuadraticParameterMaterial<2>, MaterialVariable::Theta>(evaluate_fields(coefficients, X_field));
     Eigen::MatrixXd H;
     integrate_volume<GaussLegendre3D<2>>(energy, nullptr, &H);
     EXPECT_GT(H.norm(), 0.1);
     check_fd(X_field, coefficients, &NodalCoefficients::theta, [&](const auto& local_fields) {
-        return bind_energy<QuadraticParameterMaterial<2>, MaterialVariable::Theta>(X_field, local_fields);
+        return bind_energy<QuadraticParameterMaterial<2>, MaterialVariable::Theta>(local_fields);
     });
 }
 
@@ -228,13 +224,9 @@ TEST(VolumeIntegration, PropagatesInvalidFieldsAndInfeasibleStates) {
                          InfeasibleState);
         }
     };
-    check(
-        [&](const auto& local_fields) { return bind_energy<NeoHookean, MaterialVariable::F>(X_field, local_fields); });
-    check(
-        [&](const auto& local_fields) { return bind_energy<NeoHookean, MaterialVariable::Fp>(X_field, local_fields); });
-    check([&](const auto& local_fields) {
-        return bind_energy<NeoHookean, MaterialVariable::Theta>(X_field, local_fields);
-    });
+    check([&](const auto& local_fields) { return bind_energy<NeoHookean, MaterialVariable::F>(local_fields); });
+    check([&](const auto& local_fields) { return bind_energy<NeoHookean, MaterialVariable::Fp>(local_fields); });
+    check([&](const auto& local_fields) { return bind_energy<NeoHookean, MaterialVariable::Theta>(local_fields); });
 }
 
 } // namespace

@@ -96,7 +96,7 @@ TEST(MeshEnergy, HexNodeDisplacementAndPlasticDisplacement) {
             return MaterialSources{DeformationGradient(InterpolatedField<HexQ1Basis>(x_local), make_X_field()),
                                    fields.Fp, fields.theta};
         },
-        [](auto fields) { return bind_energy<NeoHookean, MaterialVariable::F>(make_X_field(), std::move(fields)); });
+        [](auto fields) { return bind_energy<NeoHookean, MaterialVariable::F>(std::move(fields)); });
     check_material_path(
         map, data,
         [](const auto& x_local) {
@@ -104,7 +104,7 @@ TEST(MeshEnergy, HexNodeDisplacementAndPlasticDisplacement) {
             return MaterialSources{
                 fields.F, DeformationGradient(InterpolatedField<HexQ1Basis>(x_local), make_X_field()), fields.theta};
         },
-        [](auto fields) { return bind_energy<NeoHookean, MaterialVariable::Fp>(make_X_field(), std::move(fields)); });
+        [](auto fields) { return bind_energy<NeoHookean, MaterialVariable::Fp>(std::move(fields), make_X_field()); });
 }
 
 TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
@@ -122,7 +122,7 @@ TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
             auto fields = passive_fields();
             return MaterialSources{fields.F, IdentityField<Eigen::Matrix3d>(x_local.reshaped(3, 3)), fields.theta};
         },
-        [](auto fields) { return bind_energy<NeoHookean, MaterialVariable::Fp>(make_X_field(), std::move(fields)); });
+        [](auto fields) { return bind_energy<NeoHookean, MaterialVariable::Fp>(std::move(fields), make_X_field()); });
     Vec nodal = Vec::Zero(24);
     for (int i = 0; i < 12; ++i) {
         nodal[2 * i] = 2 + 0.01 * i;
@@ -135,7 +135,7 @@ TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
             return MaterialSources{fields.F, fields.Fp, InterpolatedField<litepgo::HexQ1Basis>(x_local)};
         },
         [](auto fields) {
-            return bind_energy<NeoHookean, MaterialVariable::Theta>(make_X_field(), std::move(fields));
+            return bind_energy<NeoHookean, MaterialVariable::Theta>(std::move(fields), make_X_field());
         });
     Vec shared(Eigen::Vector2d(2, 3));
     check_material_path(
@@ -145,7 +145,7 @@ TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
             return MaterialSources{fields.F, fields.Fp, IdentityField<Eigen::VectorXd>(x_local)};
         },
         [](auto fields) {
-            return bind_energy<NeoHookean, MaterialVariable::Theta>(make_X_field(), std::move(fields));
+            return bind_energy<NeoHookean, MaterialVariable::Theta>(std::move(fields), make_X_field());
         });
 }
 

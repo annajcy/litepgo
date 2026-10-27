@@ -106,14 +106,12 @@ TEST(TetP1Integration, MatchesDirectGeometryAndDeformationGradient) {
     const double expected = Dm.determinant() / 6 * NeoHookean::value({F, Fp, f.theta.colwise().mean().transpose()});
     Eigen::VectorXd g;
     Eigen::MatrixXd H;
-    EXPECT_NEAR(integrate_volume<TetCentroidQuadrature>(
-                    bind_energy<NeoHookean, MaterialVariable::F>(X_field, local_fields), &g, &H),
-                expected, 1e-13);
     EXPECT_NEAR(
-        integrate_volume<TetCentroidQuadrature>(bind_energy<NeoHookean, MaterialVariable::Fp>(X_field, local_fields)),
+        integrate_volume<TetCentroidQuadrature>(bind_energy<NeoHookean, MaterialVariable::F>(local_fields), &g, &H),
         expected, 1e-13);
-    EXPECT_NEAR(integrate_volume<TetCentroidQuadrature>(
-                    bind_energy<NeoHookean, MaterialVariable::Theta>(X_field, local_fields)),
+    EXPECT_NEAR(integrate_volume<TetCentroidQuadrature>(bind_energy<NeoHookean, MaterialVariable::Fp>(local_fields)),
+                expected, 1e-13);
+    EXPECT_NEAR(integrate_volume<TetCentroidQuadrature>(bind_energy<NeoHookean, MaterialVariable::Theta>(local_fields)),
                 expected, 1e-13);
     for (int c = 0; c < 3; ++c) {
         Eigen::VectorXd translation = Eigen::VectorXd::Zero(12);
@@ -125,21 +123,18 @@ TEST(TetP1Integration, MatchesDirectGeometryAndDeformationGradient) {
 }
 
 TEST(TetP1Integration, LocalDofFiniteDifferencesForAllThreeFields) {
-    const InterpolatedField<TetP1Basis> X_field(coordinates());
     {
         SCOPED_TRACE("F");
-        check_fd(&Coefficients::u,
-                 [&](auto f) { return bind_energy<NeoHookean, MaterialVariable::F>(X_field, std::move(f)); });
+        check_fd(&Coefficients::u, [](auto f) { return bind_energy<NeoHookean, MaterialVariable::F>(std::move(f)); });
     }
     {
         SCOPED_TRACE("Fp");
-        check_fd(&Coefficients::up,
-                 [&](auto f) { return bind_energy<NeoHookean, MaterialVariable::Fp>(X_field, std::move(f)); });
+        check_fd(&Coefficients::up, [](auto f) { return bind_energy<NeoHookean, MaterialVariable::Fp>(std::move(f)); });
     }
     {
         SCOPED_TRACE("theta");
         check_fd(&Coefficients::theta,
-                 [&](auto f) { return bind_energy<NeoHookean, MaterialVariable::Theta>(X_field, std::move(f)); });
+                 [](auto f) { return bind_energy<NeoHookean, MaterialVariable::Theta>(std::move(f)); });
     }
 }
 
@@ -152,7 +147,7 @@ TEST(TetP1Integration, RejectsDegenerateAndNegativelyOrientedRestGeometry) {
             X_nodes.row(1).swap(X_nodes.row(2));
         const InterpolatedField<TetP1Basis> X_field(X_nodes);
         EXPECT_THROW(integrate_volume<TetCentroidQuadrature>(
-                         bind_energy<NeoHookean, MaterialVariable::F>(X_field, fields(coefficients(), X_field))),
+                         bind_energy<NeoHookean, MaterialVariable::F>(fields(coefficients(), X_field))),
                      std::invalid_argument);
     }
 }
