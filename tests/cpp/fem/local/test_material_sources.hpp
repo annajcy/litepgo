@@ -14,7 +14,7 @@ template <class FSource, class FpSource, class ThetaSource> struct MaterialSourc
     FpSource Fp;
     ThetaSource theta;
     MaterialInputs evaluate(const Eigen::Vector3d& xi) const {
-        return {value_at(F, xi), value_at(Fp, xi), value_at(theta, xi)};
+        return {value_at(F, xi).reshaped(3, 3), value_at(Fp, xi).reshaped(3, 3), value_at(theta, xi)};
     }
 };
 template <class Material, MaterialVariable Active, class Sources> auto bind_energy(const Sources& fields) {

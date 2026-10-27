@@ -136,10 +136,10 @@ class MaterialLocalEnergy final : public LocalEnergy {
         const auto F = detail::material_value(std::get<0>(field_samples));
         const auto Fp = detail::material_value(std::get<1>(field_samples));
         const auto theta = detail::material_value(std::get<2>(field_samples));
-        if (F.rows() != 3 || F.cols() != 3 || Fp.rows() != 3 || Fp.cols() != 3 || theta.cols() != 1 ||
-            theta.size() == 0 || !F.allFinite() || !Fp.allFinite() || !theta.allFinite())
+        if (F.size() != 9 || Fp.size() != 9 || theta.cols() != 1 || theta.size() == 0 || !F.allFinite() ||
+            !Fp.allFinite() || !theta.allFinite())
             throw std::invalid_argument("MaterialLocalEnergy requires compatible finite material inputs");
-        return {F, Fp, theta};
+        return {F.reshaped(3, 3), Fp.reshaped(3, 3), theta};
     }
     Eigen::MatrixXd active_derivative(const Samples& field_samples) const {
         auto derivative = detail::coefficient_derivative(std::get<active_index>(field_samples));

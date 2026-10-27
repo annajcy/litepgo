@@ -32,8 +32,8 @@ inline MeshEnergy make_hex_q1_mesh_energy(const Vec& X_nodes) {
     std::vector<InterpolatedField<HexQ1Basis>> X_fields;
     for (int e = 0; e < map.num_elements(); ++e)
         X_fields.emplace_back(map.gather(e, X_nodes));
-    const IdentityField<Eigen::Matrix3d> Fp_field(Eigen::Matrix3d::Identity());
-    const IdentityField<Eigen::VectorXd> theta_field(Eigen::Vector2d(2, 3));
+    const IdentityField Fp_field(Eigen::Matrix3d::Identity().reshaped());
+    const IdentityField theta_field(Eigen::Vector2d(2, 3));
 
     return MeshEnergy(
         map,

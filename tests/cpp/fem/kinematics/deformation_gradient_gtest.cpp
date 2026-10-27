@@ -95,9 +95,9 @@ TEST(DeformationGradient, ValidatesShapesParametersGeometryAndOverflow) {
     EXPECT_THROW(overflow_derivative.dF_du_local(), std::invalid_argument);
 }
 TEST(DeformationGradient, SpatiallyConstantDisplacementHasZeroCoefficientGradient) {
-    const auto deformation_sample = DeformationGradient(IdentityField<Eigen::Vector3d>(Eigen::Vector3d(1, 2, 3)),
-                                                        InterpolatedField<HexQ1Basis>(nodes()))
-                                        .evaluate({0.2, 0.3, 0.4});
+    const auto deformation_sample =
+        DeformationGradient(IdentityField(Eigen::Vector3d(1, 2, 3)), InterpolatedField<HexQ1Basis>(nodes()))
+            .evaluate({0.2, 0.3, 0.4});
     EXPECT_EQ(deformation_sample.F(), Eigen::Matrix3d::Identity());
     EXPECT_TRUE(deformation_sample.dF_du_local().isZero());
 }

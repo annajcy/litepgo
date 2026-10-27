@@ -51,8 +51,8 @@ inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X_nodes) {
         X_fields.emplace_back(geometry_map.gather(e, X_nodes));
         transforms.push_back(hex_hermite_dof_transform(X_fields.back()));
     }
-    const IdentityField<Eigen::Matrix3d> Fp_field(Eigen::Matrix3d::Identity());
-    const IdentityField<Eigen::VectorXd> theta_field(Eigen::Vector2d(2, 3));
+    const IdentityField Fp_field(Eigen::Matrix3d::Identity().reshaped());
+    const IdentityField theta_field(Eigen::Vector2d(2, 3));
     return MeshEnergy(
         displacement_map,
         [X_fields, transforms, Fp_field, theta_field](int e, const Eigen::MatrixXd& x_local, Vec* dE_dx_local,

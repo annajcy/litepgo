@@ -3,20 +3,17 @@
 #include <Eigen/Core>
 #include <limits>
 #include <stdexcept>
-#include <type_traits>
 #include <utility>
 
 namespace litepgo {
 
-// Spatially constant; matrix coefficients flatten by column, independently of Value storage order.
-template <class Value> class IdentityField final {
-    static_assert(std::is_same_v<Value, typename Value::PlainObject> && std::is_same_v<typename Value::Scalar, double>);
-
+// Spatially constant; coefficients and values use the same component vector.
+class IdentityField final {
   public:
     class Sample final {
       public:
         const Eigen::Vector3d xi;
-        const Value value;
+        const Eigen::VectorXd value;
         const Eigen::Matrix<double, Eigen::Dynamic, 3> dvalue_dxi;
         int num_dofs() const {
             return static_cast<int>(value.size());
@@ -30,11 +27,11 @@ template <class Value> class IdentityField final {
 
       private:
         friend class IdentityField;
-        Sample(Eigen::Vector3d xi, Value value)
+        Sample(Eigen::Vector3d xi, Eigen::VectorXd value)
             : xi(std::move(xi)), value(std::move(value)),
               dvalue_dxi(Eigen::Matrix<double, Eigen::Dynamic, 3>::Zero(this->value.size(), 3)) {}
     };
-    explicit IdentityField(Value coeffs) : coeffs_(std::move(coeffs)) {
+    explicit IdentityField(Eigen::VectorXd coeffs) : coeffs_(std::move(coeffs)) {
         if (coeffs_.size() == 0 || coeffs_.size() > std::numeric_limits<int>::max() || !coeffs_.allFinite())
             throw std::invalid_argument("IdentityField requires nonempty finite values with int-sized DOFs");
     }
@@ -44,7 +41,7 @@ template <class Value> class IdentityField final {
     int num_components() const {
         return static_cast<int>(coeffs_.size());
     }
-    Value value(const Eigen::Vector3d& xi) const {
+    Eigen::VectorXd value(const Eigen::Vector3d& xi) const {
         check_xi(xi);
         return coeffs_;
     }
@@ -62,7 +59,7 @@ template <class Value> class IdentityField final {
         if (!xi.allFinite())
             throw std::invalid_argument("IdentityField requires finite parameters");
     }
-    Value coeffs_;
+    Eigen::VectorXd coeffs_;
 };
 
 } // namespace litepgo

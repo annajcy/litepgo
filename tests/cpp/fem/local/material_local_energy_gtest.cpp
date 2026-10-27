@@ -34,8 +34,8 @@ TEST(MaterialLocalEnergy, DirectFieldsBindCorrectDerivativesAndOwnSnapshots) {
     Eigen::Matrix3d F = (Eigen::Matrix3d() << 1.2, 0.1, -0.03, 0.04, 0.9, 0.02, -0.01, 0.04, 1.1).finished();
     const Eigen::Matrix3d Fp = (Eigen::Matrix3d() << 0.95, -0.02, 0.05, 0.01, 1.1, -0.04, 0.03, 0.01, 1.05).finished();
     const auto X_field = coordinates(2);
-    const IdentityField<Eigen::Matrix3d> F_field(F), Fp_field(Fp);
-    const IdentityField<Eigen::VectorXd> theta_field(Eigen::Vector2d(2, 3));
+    const IdentityField F_field(F.reshaped()), Fp_field(Fp.reshaped());
+    const IdentityField theta_field(Eigen::Vector2d(2, 3));
     const auto energy =
         make_material_local_energy<NeoHookean, MaterialVariable::F>(F_field, Fp_field, theta_field, X_field);
     const auto plastic =
@@ -58,13 +58,13 @@ TEST(MaterialLocalEnergy, DirectFieldsBindCorrectDerivativesAndOwnSnapshots) {
     F.setZero();
     EXPECT_DOUBLE_EQ(energy.value(xi), W);
     const auto detached = [&] {
-        return make_material_local_energy<NeoHookean, MaterialVariable::F>(IdentityField<Eigen::Matrix3d>(inputs.F),
-                                                                           Fp_field, theta_field, coordinates());
+        return make_material_local_energy<NeoHookean, MaterialVariable::F>(IdentityField(inputs.F.reshaped()), Fp_field,
+                                                                           theta_field, coordinates());
     }();
     EXPECT_DOUBLE_EQ(detached.value(xi), W);
 }
 TEST(MaterialLocalEnergy, InactiveInputsNeedOnlyValuesAndActiveCapabilitiesAreCheckedAtBinding) {
-    const IdentityField<Eigen::Matrix3d> Fp(Eigen::Matrix3d::Identity());
+    const IdentityField Fp(Eigen::Matrix3d::Identity().reshaped());
     const auto energy = make_material_local_energy<NeoHookean, MaterialVariable::Fp>(
         ValueOnlyF{}, Fp, ValueOnlyParameters{}, coordinates());
     EXPECT_DOUBLE_EQ(energy.value({0.2, 0.3, 0.4}), 0);
@@ -104,7 +104,7 @@ struct MappedParameters {
     }
 };
 TEST(MaterialLocalEnergy, AnotherMaterialUsesOnlyItsActiveDerivativesAndOwnParameterCount) {
-    const IdentityField<Eigen::Matrix3d> F(Eigen::Matrix3d::Identity());
+    const IdentityField F(Eigen::Matrix3d::Identity().reshaped());
     const auto bind = [&](const Eigen::Vector4d& coeffs) {
         return make_material_local_energy<QuadraticParameterMaterial<3>, MaterialVariable::Theta>(
             F, F, MappedParameters{coeffs}, coordinates());
@@ -200,8 +200,7 @@ TEST(MaterialLocalEnergy, DeformationAndVolumeMeasureShareOneCoordinateSample) {
     const CountingCoordinates X_field;
     const auto deformation = DeformationGradient(InterpolatedField<HexQ1Basis>(Eigen::MatrixXd::Zero(8, 3)), X_field);
     const auto energy = make_material_local_energy<NeoHookean, MaterialVariable::F>(
-        deformation, IdentityField<Eigen::Matrix3d>(Eigen::Matrix3d::Identity()),
-        IdentityField<Eigen::VectorXd>(Eigen::Vector2d(2, 3)));
+        deformation, IdentityField(Eigen::Matrix3d::Identity().reshaped()), IdentityField(Eigen::Vector2d(2, 3)));
     Eigen::VectorXd g;
     Eigen::MatrixXd H;
     EXPECT_DOUBLE_EQ(integrate_volume<GaussLegendre3D<2>>(energy, &g, &H), 0);
@@ -228,7 +227,7 @@ struct BadActiveField {
     }
 };
 TEST(MaterialLocalEnergy, RejectsInvalidActiveDerivativeShapesCountsAndNonFiniteEntries) {
-    const IdentityField<Eigen::Matrix3d> Fp(Eigen::Matrix3d::Identity());
+    const IdentityField Fp(Eigen::Matrix3d::Identity().reshaped());
     const auto bind = [&](const BadActiveField& F) {
         return make_material_local_energy<NeoHookean, MaterialVariable::F>(F, Fp, ValueOnlyParameters{}, coordinates());
     };
@@ -259,7 +258,7 @@ struct SpatialOnlyDisplacement {
 };
 TEST(MaterialLocalEnergy, InactiveDeformationNeedsNoCoefficientDerivativeAndRejectsIndependentGeometry) {
     const auto deformation = DeformationGradient(SpatialOnlyDisplacement{}, coordinates());
-    const auto Fp = IdentityField<Eigen::Matrix3d>(Eigen::Matrix3d::Identity());
+    const auto Fp = IdentityField(Eigen::Matrix3d::Identity().reshaped());
     const auto energy =
         make_material_local_energy<NeoHookean, MaterialVariable::Fp>(deformation, Fp, ValueOnlyParameters{});
     EXPECT_GT(energy.value({0.2, 0.3, 0.4}), 0);
@@ -270,22 +269,29 @@ TEST(MaterialLocalEnergy, InactiveDeformationNeedsNoCoefficientDerivativeAndReje
 template <class Source>
 concept CanBindIndependentGeometry = requires(const Source& source) {
     make_material_local_energy<NeoHookean, MaterialVariable::F>(
-        source, IdentityField<Eigen::Matrix3d>(Eigen::Matrix3d::Identity()), ValueOnlyParameters{}, coordinates());
+        source, IdentityField(Eigen::Matrix3d::Identity().reshaped()), ValueOnlyParameters{}, coordinates());
 };
 using CoordinateField = InterpolatedField<HexQ1Basis>;
 static_assert(!CanBindIndependentGeometry<DeformationGradient<CoordinateField, CoordinateField>>);
-static_assert(CanBindIndependentGeometry<IdentityField<Eigen::Matrix3d>>);
+static_assert(CanBindIndependentGeometry<IdentityField>);
 } // namespace
 
-TEST(MaterialLocalEnergy, RejectsDynamicInputShapesBeforeConvertingToFixedMatrices) {
-    const auto Fp = litepgo::IdentityField<Eigen::Matrix3d>(Eigen::Matrix3d::Identity());
-    const auto F = litepgo::IdentityField<Eigen::MatrixXd>(Eigen::MatrixXd::Identity(2, 2));
-    const auto energy = litepgo::make_material_local_energy<litepgo::NeoHookean, litepgo::MaterialVariable::Fp>(
-        F, Fp, ValueOnlyParameters{}, coordinates());
+TEST(MaterialLocalEnergy, RejectsInvalidFAndFpSizesBeforeReshaping) {
+    const auto Fp = litepgo::IdentityField(Eigen::Matrix3d::Identity().reshaped());
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
-    EXPECT_THROW(energy.value(xi), std::invalid_argument);
-    EXPECT_THROW(energy.gradient(xi), std::invalid_argument);
-    EXPECT_THROW(energy.hessian(xi), std::invalid_argument);
+    for (int size : {1, 4, 8, 10}) {
+        SCOPED_TRACE(size);
+        const litepgo::IdentityField invalid(Eigen::VectorXd::Ones(size));
+        const auto invalid_F = litepgo::make_material_local_energy<litepgo::NeoHookean, litepgo::MaterialVariable::Fp>(
+            invalid, Fp, ValueOnlyParameters{}, coordinates());
+        const auto invalid_Fp = litepgo::make_material_local_energy<litepgo::NeoHookean, litepgo::MaterialVariable::Fp>(
+            Fp, invalid, ValueOnlyParameters{}, coordinates());
+        for (const auto* energy : {&invalid_F, &invalid_Fp}) {
+            EXPECT_THROW(energy->value(xi), std::invalid_argument);
+            EXPECT_THROW(energy->gradient(xi), std::invalid_argument);
+            EXPECT_THROW(energy->hessian(xi), std::invalid_argument);
+        }
+    }
 }
 
 namespace {
@@ -306,7 +312,7 @@ TEST(MaterialLocalEnergy, InactiveInterpolatedParametersDoNotRequireSpatialDeriv
     const auto deformation = litepgo::DeformationGradient(
         litepgo::InterpolatedField<litepgo::HexQ1Basis>(Eigen::MatrixXd::Zero(8, 3)), coordinates());
     const auto energy = litepgo::make_material_local_energy<litepgo::NeoHookean, litepgo::MaterialVariable::F>(
-        deformation, litepgo::IdentityField<Eigen::Matrix3d>(Eigen::Matrix3d::Identity()), theta_field);
+        deformation, litepgo::IdentityField(Eigen::Matrix3d::Identity().reshaped()), theta_field);
     Eigen::VectorXd g;
     Eigen::MatrixXd H;
     EXPECT_DOUBLE_EQ(litepgo::integrate_volume<litepgo::GaussLegendre3D<2>>(energy, &g, &H), 0);

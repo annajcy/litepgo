@@ -59,7 +59,7 @@ Derivative matrices place scalar output components in rows and scalar input coef
 vec(F)[i+3*d] = F(i,d)
 ```
 
-`IdentityField<Value>` preserves `Value`. Its matrix coefficients flatten by column, matching `vec(value)`, so its coefficient derivative is an identity matrix even for a row-major `Value`. `X_nodes(v,c)` and packed `X_nodes[3*v+c]` address the same vertex/component ordering.
+`IdentityField` owns an `Eigen::VectorXd` and returns the same component vector. Flatten matrix coefficients by column before construction, for example `IdentityField(Fp.reshaped())`. The material input layer checks that `F` and `Fp` each contain nine components and restores their 3-by-3 shape. `X_nodes(v,c)` and packed `X_nodes[3*v+c]` address the same vertex/component ordering.
 
 ## Basic fields and samples
 
@@ -148,7 +148,7 @@ const double E_element = litepgo::integrate_volume<litepgo::GaussLegendre3D<2>>(
 
 `GaussLegendre3D<PointsPerAxis>` uses `PointsPerAxis^3` integration points on `[0,1]^3`; `<2>` therefore uses eight points.
 
-`MaterialVariable::F`, `Fp`, or `Theta` selects one constitutive input and pulls its derivatives back to that source's coefficient block. With a `DeformationGradient` source for `F`, the active coefficients are `u_local`. A plastic displacement can similarly supply `Fp` via its own deformation evaluator. Direct matrix-valued `F` coefficients use `IdentityField<Matrix3d>`; that factory call takes a fourth argument `X_field`, binding the volume mapping at construction. A deformation source already owns its coordinates, and the factory rejects a separate fourth coordinate argument for it.
+`MaterialVariable::F`, `Fp`, or `Theta` selects one constitutive input and pulls its derivatives back to that source's coefficient block. With a `DeformationGradient` source for `F`, the active coefficients are `u_local`. A plastic displacement can similarly supply `Fp` via its own deformation evaluator. Direct `F` coefficients use `IdentityField` with a nine-component vector; that factory call takes a fourth argument `X_field`, binding the volume mapping at construction. A deformation source already owns its coordinates, and the factory rejects a separate fourth coordinate argument for it.
 
 `LocalEnergy::value(xi)`, `gradient(xi)`, and `hessian(xi)` return pointwise density `W` and coefficient derivatives. `accumulate(xi, quadrature_weight, ...)` applies `dV = quadrature_weight * det_dX_dxi` exactly once and adds requested derivatives to initialized buffers. The material implementation samples each input once and computes the active coefficient derivative once per accumulation, sharing it between gradient and Hessian. Inactive derivatives and unrequested material derivatives are not evaluated.
 

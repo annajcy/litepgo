@@ -32,9 +32,8 @@ InterpolatedField<HexQ1Basis> make_X_field() {
 auto passive_fields() {
     Eigen::Matrix3d F;
     F << 1.1, 0.04, 0.02, -0.03, 0.95, 0.01, 0.02, 0.03, 1.05;
-    return MaterialSources{IdentityField<Eigen::Matrix3d>(F),
-                           IdentityField<Eigen::Matrix3d>(Eigen::Matrix3d::Identity()),
-                           IdentityField<Eigen::VectorXd>(Eigen::Vector2d(2, 3))};
+    return MaterialSources{IdentityField(F.reshaped()), IdentityField(Eigen::Matrix3d::Identity().reshaped()),
+                           IdentityField(Eigen::Vector2d(2, 3))};
 }
 
 void check_fd(MeshEnergy& energy, const Vec& x) {
@@ -120,7 +119,7 @@ TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
         ElementDofMap(topology, 9), plastic,
         [](const Eigen::VectorXd& x_local) {
             auto fields = passive_fields();
-            return MaterialSources{fields.F, IdentityField<Eigen::Matrix3d>(x_local.reshaped(3, 3)), fields.theta};
+            return MaterialSources{fields.F, IdentityField(x_local), fields.theta};
         },
         [](auto fields) { return bind_energy<NeoHookean, MaterialVariable::Fp>(std::move(fields), make_X_field()); });
     Vec nodal = Vec::Zero(24);
@@ -142,7 +141,7 @@ TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
         ConstantDofMap(topology, 2), shared,
         [](const Eigen::VectorXd& x_local) {
             auto fields = passive_fields();
-            return MaterialSources{fields.F, fields.Fp, IdentityField<Eigen::VectorXd>(x_local)};
+            return MaterialSources{fields.F, fields.Fp, IdentityField(x_local)};
         },
         [](auto fields) {
             return bind_energy<NeoHookean, MaterialVariable::Theta>(std::move(fields), make_X_field());

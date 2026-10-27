@@ -17,7 +17,7 @@ TEST(FieldSample, SnapshotsAreReadOnlyOwningAndNotPubliclyConstructible) {
     EXPECT_EQ(field_sample.dgrad_xi_dcoeffs().rows(), 6);
 }
 TEST(FieldSample, IdentityFieldHasZeroSpatialAndMixedDerivatives) {
-    const auto field_sample = IdentityField<Eigen::Matrix3d>(Eigen::Matrix3d::Identity()).evaluate({0.2, 0.3, 0.4});
+    const auto field_sample = IdentityField(Eigen::Matrix3d::Identity().reshaped()).evaluate({0.2, 0.3, 0.4});
     EXPECT_EQ(field_sample.dvalue_dxi.rows(), 9);
     EXPECT_TRUE(field_sample.dvalue_dxi.isZero());
     EXPECT_TRUE(field_sample.dvalue_dcoeffs().isIdentity());
