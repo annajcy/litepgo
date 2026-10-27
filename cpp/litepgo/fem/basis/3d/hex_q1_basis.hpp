@@ -1,7 +1,7 @@
 #pragma once
 
-#include "litepgo/fem/basis/lagrange_basis.hpp"
-#include "litepgo/fem/basis/tensor_product_basis.hpp"
+#include "litepgo/fem/basis/1d/linear_lagrange_basis.hpp"
+#include "litepgo/fem/basis/3d/tensor_product_basis_3d.hpp"
 
 namespace litepgo {
 
@@ -11,7 +11,7 @@ namespace litepgo {
 class HexQ1Basis final {
   public:
     static constexpr int num_basis_functions = 8;
-    using Sample = TensorProductBasis3D<LagrangeBasis>::Sample;
+    using Sample = TensorProductBasis3D<LinearLagrangeBasis>::Sample;
 
     // N and dN_dxi rows follow Hex corner order; derivatives use parameter coordinates.
     // Outside [0,1]^3, extrapolates without clamping.

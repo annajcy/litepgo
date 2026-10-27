@@ -1,4 +1,4 @@
-#include "litepgo/fem/basis/hex_q1_basis.hpp"
+#include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/kinematics/reference_mapping.hpp"
 
@@ -12,7 +12,7 @@ using namespace litepgo;
 template <class B>
 concept CanInterpolate = requires { typename InterpolatedField<B>; };
 static_assert(CanInterpolate<HexQ1Basis>);
-static_assert(!CanInterpolate<LagrangeBasis>);
+static_assert(!CanInterpolate<LinearLagrangeBasis>);
 static_assert(InterpolatedField<HexQ1Basis>::num_basis_functions == 8);
 
 Eigen::Matrix<double, 8, 3> corners() {

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "litepgo/fem/basis/cubic_hermite_basis.hpp"
-#include "litepgo/fem/basis/tensor_product_basis.hpp"
+#include "litepgo/fem/basis/1d/cubic_hermite_basis.hpp"
+#include "litepgo/fem/basis/3d/tensor_product_basis_3d.hpp"
 
 namespace litepgo {
 

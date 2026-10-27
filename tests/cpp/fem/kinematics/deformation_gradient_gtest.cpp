@@ -1,6 +1,6 @@
-#include "litepgo/fem/basis/hex_hermite_basis.hpp"
-#include "litepgo/fem/basis/hex_q1_basis.hpp"
-#include "litepgo/fem/basis/tet_p1_basis.hpp"
+#include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
+#include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
+#include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/kinematics/deformation_gradient.hpp"
@@ -102,7 +102,7 @@ TEST(DeformationGradient, SpatiallyConstantDisplacementHasZeroCoefficientGradien
     EXPECT_TRUE(deformation_sample.dF_du_local().isZero());
 }
 TEST(DeformationGradient, DifferentDisplacementBasisOnWarpedCoordinatesUsesPhysicalChainRule) {
-    using TensorBasis = TensorProductBasis3D<LagrangeBasis>;
+    using TensorBasis = TensorProductBasis3D<LinearLagrangeBasis>;
     const auto warped = [](const Eigen::Vector3d& xi) -> Eigen::Vector3d {
         return {xi.x() + 0.4 * xi.y() * xi.z(), xi.y() + 0.2 * xi.x() * xi.z(), xi.z()};
     };

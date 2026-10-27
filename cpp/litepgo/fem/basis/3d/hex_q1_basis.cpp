@@ -1,4 +1,4 @@
-#include "litepgo/fem/basis/hex_q1_basis.hpp"
+#include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 
 #include <array>
 #include <cstddef>
@@ -25,7 +25,7 @@ constexpr std::array<int, 8> hex_to_tensor{0, 4, 6, 2, 1, 5, 7, 3};
 namespace litepgo {
 
 HexQ1Basis::Sample HexQ1Basis::evaluate(const Eigen::Vector3d& xi) {
-    const auto tensor = TensorProductBasis3D<LagrangeBasis>::evaluate(xi);
+    const auto tensor = TensorProductBasis3D<LinearLagrangeBasis>::evaluate(xi);
     Sample result;
     result.N = tensor.N(hex_to_tensor);
     result.dN_dxi = tensor.dN_dxi(hex_to_tensor, Eigen::placeholders::all);

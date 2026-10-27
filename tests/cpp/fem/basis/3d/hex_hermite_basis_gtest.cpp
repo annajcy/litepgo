@@ -1,4 +1,4 @@
-#include "litepgo/fem/basis/hex_hermite_basis.hpp"
+#include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
 
 #include <gtest/gtest.h>

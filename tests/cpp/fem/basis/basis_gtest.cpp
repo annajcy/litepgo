@@ -1,7 +1,7 @@
+#include "litepgo/fem/basis/1d/linear_lagrange_basis.hpp"
+#include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
+#include "litepgo/fem/basis/3d/tensor_product_basis_3d.hpp"
 #include "litepgo/fem/basis/basis.hpp"
-#include "litepgo/fem/basis/hex_q1_basis.hpp"
-#include "litepgo/fem/basis/lagrange_basis.hpp"
-#include "litepgo/fem/basis/tensor_product_basis.hpp"
 
 namespace {
 
@@ -69,7 +69,7 @@ struct WrongValueScalar : ConstantBasis {
 template <class B>
 concept CanFormTensorProduct = requires { typename litepgo::TensorProductBasis3D<B>; };
 
-static_assert(litepgo::Basis1D<litepgo::LagrangeBasis>);
+static_assert(litepgo::Basis1D<litepgo::LinearLagrangeBasis>);
 static_assert(litepgo::Basis1D<ConstantBasis>);
 static_assert(!litepgo::Basis1D<MissingSample>);
 static_assert(!litepgo::Basis1D<MissingEvaluate>);
@@ -80,12 +80,12 @@ static_assert(!litepgo::Basis1D<WrongReturn>);
 static_assert(!litepgo::Basis1D<WrongGradientSize>);
 static_assert(!litepgo::Basis1D<WrongValueScalar>);
 
-static_assert(CanFormTensorProduct<litepgo::LagrangeBasis>);
+static_assert(CanFormTensorProduct<litepgo::LinearLagrangeBasis>);
 static_assert(CanFormTensorProduct<ConstantBasis>);
 static_assert(!CanFormTensorProduct<WrongReturn>);
 static_assert(!CanFormTensorProduct<WrongGradientSize>);
 
-struct Wrong1DGradientColumns : litepgo::LagrangeBasis {
+struct Wrong1DGradientColumns : litepgo::LinearLagrangeBasis {
     struct Sample {
         Eigen::Matrix<double, 2, 1> N;
         Eigen::Matrix<double, 2, 2> dN_dxi;
@@ -93,7 +93,7 @@ struct Wrong1DGradientColumns : litepgo::LagrangeBasis {
     static Sample evaluate(double);
 };
 
-struct WrongGradientColumns : litepgo::TensorProductBasis3D<litepgo::LagrangeBasis> {
+struct WrongGradientColumns : litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis> {
     struct Sample {
         Eigen::Matrix<double, 8, 1> N;
         Eigen::Matrix<double, 8, 2> dN_dxi;
@@ -101,7 +101,7 @@ struct WrongGradientColumns : litepgo::TensorProductBasis3D<litepgo::LagrangeBas
     static Sample evaluate(const Eigen::Vector3d&);
 };
 
-struct WrongGradientRows : litepgo::TensorProductBasis3D<litepgo::LagrangeBasis> {
+struct WrongGradientRows : litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis> {
     struct Sample {
         Eigen::Matrix<double, 8, 1> N;
         Eigen::Matrix<double, 7, 3> dN_dxi;
@@ -109,26 +109,26 @@ struct WrongGradientRows : litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>
     static Sample evaluate(const Eigen::Vector3d&);
 };
 
-struct Wrong3DReturn : litepgo::TensorProductBasis3D<litepgo::LagrangeBasis> {
+struct Wrong3DReturn : litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis> {
     static double evaluate(const Eigen::Vector3d&);
 };
 
-static_assert(litepgo::Basis<litepgo::LagrangeBasis, 1>);
-static_assert(litepgo::Basis<litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>, 3>);
-static_assert(litepgo::Basis3D<litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>>);
+static_assert(litepgo::Basis<litepgo::LinearLagrangeBasis, 1>);
+static_assert(litepgo::Basis<litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>, 3>);
+static_assert(litepgo::Basis3D<litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>>);
 static_assert(litepgo::Basis3D<litepgo::HexQ1Basis>);
 static_assert(!litepgo::Basis1D<litepgo::HexQ1Basis>);
 static_assert(litepgo::Basis3D<litepgo::TensorProductBasis3D<ConstantBasis>>);
 static_assert(!litepgo::Basis1D<Wrong1DGradientColumns>);
-static_assert(!litepgo::Basis3D<litepgo::LagrangeBasis>);
+static_assert(!litepgo::Basis3D<litepgo::LinearLagrangeBasis>);
 static_assert(!litepgo::Basis3D<WrongGradientColumns>);
 static_assert(!litepgo::Basis3D<WrongGradientRows>);
 static_assert(!litepgo::Basis3D<Wrong3DReturn>);
-static_assert(!litepgo::Basis<litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>, 1>);
-static_assert(!litepgo::Basis<litepgo::LagrangeBasis, 3>);
-static_assert(!litepgo::Basis<litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>, 2>);
-static_assert(!litepgo::Basis<litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>, 0>);
-static_assert(!litepgo::Basis<litepgo::TensorProductBasis3D<litepgo::LagrangeBasis>, -1>);
+static_assert(!litepgo::Basis<litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>, 1>);
+static_assert(!litepgo::Basis<litepgo::LinearLagrangeBasis, 3>);
+static_assert(!litepgo::Basis<litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>, 2>);
+static_assert(!litepgo::Basis<litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>, 0>);
+static_assert(!litepgo::Basis<litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>, -1>);
 static_assert(!litepgo::Basis<MissingSample, 3>);
 static_assert(!litepgo::Basis<NonConstantCount, 3>);
 static_assert(!litepgo::Basis<WrongGradientColumns, 3>);

@@ -1,6 +1,6 @@
 #include "litepgo/fem/field/hex_hermite_dof_transform.hpp"
 
-#include "litepgo/fem/basis/hex_hermite_basis.hpp"
+#include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
 #include "litepgo/fem/kinematics/reference_mapping.hpp"
 
 #include <array>

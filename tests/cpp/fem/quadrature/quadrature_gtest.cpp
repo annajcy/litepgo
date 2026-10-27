@@ -1,7 +1,7 @@
-#include "litepgo/fem/quadrature/gauss_legendre_1d.hpp"
-#include "litepgo/fem/quadrature/gauss_legendre_3d.hpp"
+#include "litepgo/fem/quadrature/1d/gauss_legendre_1d.hpp"
+#include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
+#include "litepgo/fem/quadrature/3d/tensor_product_quadrature_3d.hpp"
 #include "litepgo/fem/quadrature/quadrature.hpp"
-#include "litepgo/fem/quadrature/tensor_product_quadrature.hpp"
 
 namespace {
 

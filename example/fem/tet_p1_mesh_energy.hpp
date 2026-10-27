@@ -2,14 +2,14 @@
 
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/energy/mesh_energy.hpp"
-#include "litepgo/fem/basis/tet_p1_basis.hpp"
+#include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/kinematics/deformation_gradient.hpp"
 #include "litepgo/fem/local/integrate_volume.hpp"
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
-#include "litepgo/fem/quadrature/tet_centroid_quadrature.hpp"
+#include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 
 #include <stdexcept>
 #include <vector>

@@ -1,5 +1,5 @@
 #include "litepgo/fem/basis/basis.hpp"
-#include "litepgo/fem/basis/tet_p1_basis.hpp"
+#include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
 
 #include <gtest/gtest.h>
 

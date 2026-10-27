@@ -5,7 +5,7 @@
 namespace litepgo {
 
 // Linear nodal basis on [0, 1], ordered by the nodes 0, 1 (libpgo convention).
-class LagrangeBasis {
+class LinearLagrangeBasis {
   public:
     static constexpr int num_basis_functions = 2;
 

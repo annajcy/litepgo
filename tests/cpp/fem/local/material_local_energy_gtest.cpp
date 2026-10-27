@@ -1,11 +1,11 @@
-#include "litepgo/fem/basis/hex_q1_basis.hpp"
+#include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/kinematics/deformation_gradient.hpp"
 #include "litepgo/fem/local/integrate_volume.hpp"
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
-#include "litepgo/fem/quadrature/gauss_legendre_3d.hpp"
+#include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "quadratic_parameter_material.hpp"
 #include <gtest/gtest.h>
 #include <limits>

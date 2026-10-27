@@ -1,5 +1,5 @@
 #include "litepgo/fem/quadrature/quadrature.hpp"
-#include "litepgo/fem/quadrature/tet_centroid_quadrature.hpp"
+#include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 
 #include <gtest/gtest.h>
 

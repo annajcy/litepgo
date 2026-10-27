@@ -1,6 +1,6 @@
-#include "litepgo/fem/quadrature/gauss_legendre_1d.hpp"
-#include "litepgo/fem/quadrature/gauss_legendre_3d.hpp"
-#include "litepgo/fem/quadrature/tensor_product_quadrature.hpp"
+#include "litepgo/fem/quadrature/1d/gauss_legendre_1d.hpp"
+#include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
+#include "litepgo/fem/quadrature/3d/tensor_product_quadrature_3d.hpp"
 
 #include <gtest/gtest.h>
 
@@ -32,7 +32,7 @@ struct UnequalWeightRule {
 
 } // namespace
 
-TEST(TensorProductQuadrature, OrdersPointsWithLastAxisFastest) {
+TEST(TensorProductQuadrature3D, OrdersPointsWithLastAxisFastest) {
     constexpr double a = 0.21132486540518713;
     constexpr double b = 0.7886751345948129;
     Eigen::Matrix<double, 8, 3> expected;
@@ -46,7 +46,7 @@ TEST(TensorProductQuadrature, OrdersPointsWithLastAxisFastest) {
     EXPECT_DOUBLE_EQ(litepgo::GaussLegendre3D<2>::weights().sum(), 1.0);
 }
 
-TEST(TensorProductQuadrature, IntegratesMonomialsThroughDegreeThreeInEachVariable) {
+TEST(TensorProductQuadrature3D, IntegratesMonomialsThroughDegreeThreeInEachVariable) {
     for (int i = 0; i <= 3; ++i) {
         for (int j = 0; j <= 3; ++j) {
             for (int k = 0; k <= 3; ++k) {
@@ -63,7 +63,7 @@ TEST(TensorProductQuadrature, IntegratesMonomialsThroughDegreeThreeInEachVariabl
     }
 }
 
-TEST(TensorProductQuadrature, SupportsOtherPointCountsAndUnequalWeights) {
+TEST(TensorProductQuadrature3D, SupportsOtherPointCountsAndUnequalWeights) {
 
     static_assert(litepgo::TensorProductQuadrature3D<UnequalWeightRule>::num_points == 27);
     const auto& points = litepgo::TensorProductQuadrature3D<UnequalWeightRule>::points();

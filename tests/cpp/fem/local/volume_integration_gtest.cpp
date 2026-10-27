@@ -1,13 +1,13 @@
 #include "litepgo/energy/energy.hpp"
-#include "litepgo/fem/basis/hex_q1_basis.hpp"
+#include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "test_material_sources.hpp"
 
 #include "litepgo/fem/local/integrate_volume.hpp"
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
-#include "litepgo/fem/quadrature/gauss_legendre_1d.hpp"
-#include "litepgo/fem/quadrature/gauss_legendre_3d.hpp"
-#include "litepgo/fem/quadrature/tensor_product_quadrature.hpp"
+#include "litepgo/fem/quadrature/1d/gauss_legendre_1d.hpp"
+#include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
+#include "litepgo/fem/quadrature/3d/tensor_product_quadrature_3d.hpp"
 #include "quadratic_parameter_material.hpp"
 
 #include "litepgo/fem/kinematics/reference_mapping.hpp"

@@ -1,10 +1,10 @@
-#include "litepgo/fem/basis/tet_p1_basis.hpp"
+#include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
 #include "test_material_sources.hpp"
 
 #include "litepgo/fem/local/integrate_volume.hpp"
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
-#include "litepgo/fem/quadrature/tet_centroid_quadrature.hpp"
+#include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 
 #include <gtest/gtest.h>
 

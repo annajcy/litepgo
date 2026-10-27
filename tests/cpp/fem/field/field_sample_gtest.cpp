@@ -1,4 +1,4 @@
-#include "litepgo/fem/basis/hex_q1_basis.hpp"
+#include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
 #include <gtest/gtest.h>

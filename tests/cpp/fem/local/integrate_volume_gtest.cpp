@@ -1,8 +1,8 @@
-#include "litepgo/fem/basis/hex_q1_basis.hpp"
+#include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/kinematics/reference_mapping.hpp"
 #include "litepgo/fem/local/integrate_volume.hpp"
-#include "litepgo/fem/quadrature/gauss_legendre_3d.hpp"
+#include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include <gtest/gtest.h>
 #include <limits>
 #include <stdexcept>

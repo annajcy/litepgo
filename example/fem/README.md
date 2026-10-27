@@ -18,12 +18,14 @@ flowchart TD
 
 | Module | Responsibility |
 | --- | --- |
-| `fem/basis/` | Scalar basis values `N` and reference derivatives `dN_dxi` |
-| `fem/quadrature/` | Reference points and weights |
+| `fem/basis/` | Scalar basis values `N` and reference derivatives `dN_dxi`, grouped into `1d/` and `3d/` |
+| `fem/quadrature/` | Reference points and weights, grouped into `1d/` and `3d/` |
 | `fem/field/` | `InterpolatedField`, `IdentityField`, and the Hex Hermite coefficient transform |
 | `fem/kinematics/` | `ReferenceMapping` and `DeformationGradient` |
 | `fem/material/` | Numerical constitutive inputs, density, and material derivatives |
 | `fem/local/` | Active-input binding, derivative contractions, and volume integration |
+
+The 1D basis building blocks are `LinearLagrangeBasis` and `CubicHermiteBasis`. Tensor-product types retain the `3D` suffix, mirrored as `_3d` in their filenames.
 
 Fields own coefficient snapshots. `DeformationGradient` owns its two fields by value, accepting moves. Field samples and deformation samples own their data and remain valid after their producers are destroyed. Samples expose read-only data and can only be constructed by their corresponding evaluation methods. No global field numbering or geometry context is required by basic field evaluation.
 
@@ -62,8 +64,8 @@ vec(F)[i+3*d] = F(i,d)
 ## Basic fields and samples
 
 ```cpp
-#include "litepgo/fem/basis/hex_q1_basis.hpp"
-#include "litepgo/fem/basis/hex_hermite_basis.hpp"
+#include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
+#include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 
@@ -130,7 +132,7 @@ Material APIs keep numerical `MaterialInputs{F, Fp, theta}`. They do not sample 
 
 ```cpp
 #include "litepgo/fem/material/neo_hookean.hpp"
-#include "litepgo/fem/quadrature/gauss_legendre_3d.hpp"
+#include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/local/integrate_volume.hpp"
 
@@ -143,6 +145,8 @@ Eigen::MatrixXd d2E_du_local2;
 const double E_element = litepgo::integrate_volume<litepgo::GaussLegendre3D<2>>(
     local_energy, &dE_du_local, &d2E_du_local2);
 ```
+
+`GaussLegendre3D<PointsPerAxis>` uses `PointsPerAxis^3` integration points on `[0,1]^3`; `<2>` therefore uses eight points.
 
 `MaterialVariable::F`, `Fp`, or `Theta` selects one constitutive input and pulls its derivatives back to that source's coefficient block. With a `DeformationGradient` source for `F`, the active coefficients are `u_local`. A plastic displacement can similarly supply `Fp` via its own deformation evaluator. Direct matrix-valued `F` coefficients use `IdentityField<Matrix3d>`; that factory call takes a fourth argument `X_field`, binding the volume mapping at construction. A deformation source already owns its coordinates, and the factory rejects a separate fourth coordinate argument for it.
 

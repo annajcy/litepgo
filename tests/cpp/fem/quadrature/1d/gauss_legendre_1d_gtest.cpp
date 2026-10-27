@@ -1,4 +1,4 @@
-#include "litepgo/fem/quadrature/gauss_legendre_1d.hpp"
+#include "litepgo/fem/quadrature/1d/gauss_legendre_1d.hpp"
 #include "litepgo/fem/quadrature/quadrature.hpp"
 
 #include <gtest/gtest.h>

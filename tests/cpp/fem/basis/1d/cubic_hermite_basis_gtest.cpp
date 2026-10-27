@@ -1,5 +1,5 @@
 #include "litepgo/fem/basis/basis.hpp"
-#include "litepgo/fem/basis/cubic_hermite_basis.hpp"
+#include "litepgo/fem/basis/1d/cubic_hermite_basis.hpp"
 
 #include <gtest/gtest.h>
 
