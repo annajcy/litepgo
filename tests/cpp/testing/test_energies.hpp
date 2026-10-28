@@ -92,7 +92,7 @@ class DoubleWellChain final : public FixedPatternEnergy {
     }
 };
 
-// E(x) = -log(1 - x_k), defined for x_k < 1; elsewhere it throws InfeasibleState.
+// E(x) = -log(1 - x_k), defined for x_k < 1; elsewhere it throws std::domain_error.
 // Its feasible step keeps 10% of the remaining distance to the boundary.
 class HalfSpaceBarrier final : public FixedPatternEnergy {
   public:
@@ -109,7 +109,7 @@ class HalfSpaceBarrier final : public FixedPatternEnergy {
     double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const override {
         const double gap = 1.0 - x[k_];
         if (!(gap > 0.0)) {
-            throw InfeasibleState("HalfSpaceBarrier: x_k must be below 1");
+            throw std::domain_error("HalfSpaceBarrier: x_k must be below 1");
         }
         if (gradient != nullptr) {
             gradient->setZero();

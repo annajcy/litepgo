@@ -6,9 +6,35 @@
 #include <cmath>
 #include <gtest/gtest.h>
 #include <limits>
+#include <stdexcept>
 
 namespace litepgo {
 namespace {
+
+TEST(NeoHookean, FiniteInputsWithOverflowingValuesOrDerivativesThrowDomainError) {
+    const Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
+    VolumetricMaterialInputs input{I, I, Eigen::Vector2d(2, 3)};
+    input.F(0, 0) = 1e155;
+    ASSERT_TRUE(input.F.allFinite());
+    ASSERT_TRUE(std::isfinite(input.F.determinant()));
+    EXPECT_THROW(NeoHookean::eval_W(input), std::domain_error);
+    EXPECT_THROW(NeoHookean::eval_dW_dtheta(input), std::domain_error);
+
+    input = {1e110 * I, 1e100 * I, Eigen::Vector2d(2, 3)};
+    EXPECT_THROW(NeoHookean::eval_dW_dtheta(input), std::domain_error);
+
+    input = {I, I, Eigen::Vector2d(0, 1e308)};
+    input.F(0, 0) = 2;
+    ASSERT_TRUE(std::isfinite(NeoHookean::eval_W(input)));
+    EXPECT_THROW(NeoHookean::eval_dW_dF(input), std::domain_error);
+    EXPECT_THROW(NeoHookean::eval_dW_dFp(input), std::domain_error);
+
+    input.F = I;
+    ASSERT_DOUBLE_EQ(NeoHookean::eval_W(input), 0);
+    ASSERT_TRUE(NeoHookean::eval_dW_dF(input).allFinite());
+    EXPECT_THROW(NeoHookean::eval_d2W_dF2(input), std::domain_error);
+    EXPECT_THROW(NeoHookean::eval_d2W_dFp2(input), std::domain_error);
+}
 
 TEST(NeoHookean, StressFreeAndLinearElasticTangent) {
     const Eigen::Vector2d theta(2.0, 3.0);
@@ -215,13 +241,13 @@ TEST(NeoHookean, RejectsInvalidStatesAndParametersInEveryEntryPoint) {
     const Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
     const Eigen::Vector2d theta(2, 3);
     const auto bad_state = [&](const Eigen::Matrix3d& F, const Eigen::Matrix3d& Fp) {
-        EXPECT_THROW(NeoHookean::eval_W({F, Fp, theta}), InfeasibleState);
-        EXPECT_THROW(NeoHookean::eval_dW_dF({F, Fp, theta}), InfeasibleState);
-        EXPECT_THROW(NeoHookean::eval_d2W_dF2({F, Fp, theta}), InfeasibleState);
-        EXPECT_THROW(NeoHookean::eval_dW_dFp({F, Fp, theta}), InfeasibleState);
-        EXPECT_THROW(NeoHookean::eval_d2W_dFp2({F, Fp, theta}), InfeasibleState);
-        EXPECT_THROW(NeoHookean::eval_dW_dtheta({F, Fp, theta}), InfeasibleState);
-        EXPECT_THROW(NeoHookean::eval_d2W_dtheta2({F, Fp, theta}), InfeasibleState);
+        EXPECT_THROW(NeoHookean::eval_W({F, Fp, theta}), std::domain_error);
+        EXPECT_THROW(NeoHookean::eval_dW_dF({F, Fp, theta}), std::domain_error);
+        EXPECT_THROW(NeoHookean::eval_d2W_dF2({F, Fp, theta}), std::domain_error);
+        EXPECT_THROW(NeoHookean::eval_dW_dFp({F, Fp, theta}), std::domain_error);
+        EXPECT_THROW(NeoHookean::eval_d2W_dFp2({F, Fp, theta}), std::domain_error);
+        EXPECT_THROW(NeoHookean::eval_dW_dtheta({F, Fp, theta}), std::domain_error);
+        EXPECT_THROW(NeoHookean::eval_d2W_dtheta2({F, Fp, theta}), std::domain_error);
     };
     for (double x : {0.0, -1.0}) {
         Eigen::Matrix3d bad = I;
@@ -249,6 +275,59 @@ TEST(NeoHookean, RejectsInvalidStatesAndParametersInEveryEntryPoint) {
     EXPECT_THROW(NeoHookean::eval_d2W_dFp2({bad, I, theta}), std::invalid_argument);
     EXPECT_THROW(NeoHookean::eval_dW_dtheta({bad, I, theta}), std::invalid_argument);
     EXPECT_THROW(NeoHookean::eval_d2W_dtheta2({bad, I, theta}), std::invalid_argument);
+}
+
+TEST(NeoHookean, FeasibleStepLimitsBothTotalAndPlasticGradients) {
+    const Eigen::Matrix3d I = Eigen::Matrix3d::Identity(), Z = Eigen::Matrix3d::Zero();
+    const Eigen::Matrix3d dF = Eigen::Vector3d(-4, -4, 0).asDiagonal();
+    const Eigen::Matrix3d dFp = Eigen::Vector3d(-8, 0, 0).asDiagonal();
+    const VolumetricMaterialInputs input{I, I, Eigen::Vector2d(2, 3)};
+    for (bool plastic : {false, true}) {
+        const VolumetricMaterialInputs delta{dF, plastic ? dFp : Z, Eigen::Vector2d::Zero()};
+        const double alpha = NeoHookean::eval_feasible_step(input, delta);
+        EXPECT_NEAR(alpha, plastic ? 0.1125 : 0.225, 1e-6);
+        for (int i = 0; i <= 100; ++i) {
+            const double t = alpha * i / 100;
+            EXPECT_TRUE(std::isfinite(NeoHookean::eval_W({I + t * delta.F, I + t * delta.Fp, input.theta})));
+        }
+    }
+}
+
+TEST(NeoHookean, FeasibleStepKeepsParametersInTheirDomainIncludingZeroLambda) {
+    const Eigen::Matrix3d I = Eigen::Matrix3d::Identity(), Z = Eigen::Matrix3d::Zero();
+    VolumetricMaterialInputs input{I, I, Eigen::Vector2d(2, 3)};
+    VolumetricMaterialInputs delta{Z, Z, Eigen::Vector2d(-8, 0)};
+    EXPECT_NEAR(NeoHookean::eval_feasible_step(input, delta), 0.225, 1e-14);
+    delta.theta << 0, -12;
+    EXPECT_NEAR(NeoHookean::eval_feasible_step(input, delta), 0.225, 1e-14);
+    input.theta[0] = 0;
+    delta.theta << -1, 0;
+    EXPECT_EQ(NeoHookean::eval_feasible_step(input, delta), 0);
+    delta.theta << 1, 1;
+    EXPECT_EQ(NeoHookean::eval_feasible_step(input, delta), 1);
+    input.theta[0] = 1e308;
+    delta.theta << 1e308, 0;
+    const double alpha = NeoHookean::eval_feasible_step(input, delta);
+    EXPECT_GT(alpha, 0);
+    EXPECT_LT(alpha, 1);
+    EXPECT_TRUE(std::isfinite(NeoHookean::eval_W({I, I, input.theta + alpha * delta.theta})));
+}
+
+TEST(NeoHookean, FeasibleStepRejectsMalformedDirectionsAndInfeasibleStarts) {
+    const Eigen::Matrix3d I = Eigen::Matrix3d::Identity(), Z = Eigen::Matrix3d::Zero();
+    const VolumetricMaterialInputs input{I, I, Eigen::Vector2d(2, 3)};
+    VolumetricMaterialInputs delta{Z, Z, Eigen::Vector2d::Zero()};
+    EXPECT_THROW(NeoHookean::eval_feasible_step({-I, I, input.theta}, delta), std::domain_error);
+    EXPECT_THROW(NeoHookean::eval_feasible_step({I, Z, input.theta}, delta), std::domain_error);
+    EXPECT_THROW(NeoHookean::eval_feasible_step({I, I, Eigen::Vector2d(-1, 3)}, delta), std::invalid_argument);
+    delta.theta.resize(1);
+    EXPECT_THROW(NeoHookean::eval_feasible_step(input, delta), std::invalid_argument);
+    delta.theta = Eigen::Vector2d::Zero();
+    delta.Fp(0, 0) = std::numeric_limits<double>::infinity();
+    EXPECT_THROW(NeoHookean::eval_feasible_step(input, delta), std::invalid_argument);
+    delta.Fp.setZero();
+    delta.theta[1] = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_THROW(NeoHookean::eval_feasible_step(input, delta), std::invalid_argument);
 }
 
 } // namespace

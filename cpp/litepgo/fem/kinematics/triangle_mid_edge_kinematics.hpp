@@ -18,7 +18,7 @@ struct TriangleMidEdgeKinematics {
 // dab_dx is 6-by-3n; each d2ab_dx2 entry is 3n-by-3n.
 // Both derivative orders use analytic formulas; second derivatives are computed only when requested.
 // Invalid layout/non-finite inputs throw invalid_argument; degenerate faces,
-// cancelling adjacent normals, or unrepresentable results throw InfeasibleState.
+// cancelling adjacent normals, or unrepresentable results throw std::domain_error.
 TriangleMidEdgeKinematics eval_triangle_mid_edge_kinematics(const Eigen::Ref<const Eigen::MatrixXd>& x,
                                                             const std::array<int, 3>& opposite,
                                                             Eigen::MatrixXd* dab_dx = nullptr,

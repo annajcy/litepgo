@@ -7,8 +7,8 @@
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 
-#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include <Eigen/LU>
@@ -16,6 +16,7 @@
 #include <cmath>
 #include <gtest/gtest.h>
 #include <limits>
+#include <stdexcept>
 #include <tbb/global_control.h>
 
 namespace {
@@ -256,12 +257,12 @@ TEST(MeshEnergy, FeasibleStepUsesMatchingLocalDofValuesAndDeltas) {
         ElementDofMap(topology, 2),
         [](int, const Eigen::VectorXd& x_local, Vec*, Eigen::MatrixXd*) {
             if (x_local.minCoeff() <= 0)
-                throw InfeasibleState("positive only");
+                throw std::domain_error("positive only");
             return x_local.sum();
         },
         [](int, const Eigen::VectorXd& x_local, const Eigen::VectorXd& dx_local) {
             if (x_local.minCoeff() <= 0)
-                throw InfeasibleState("positive only");
+                throw std::domain_error("positive only");
             double alpha = 1;
             for (int j = 0; j < 2; ++j)
                 if (dx_local[j] < 0)
@@ -274,8 +275,8 @@ TEST(MeshEnergy, FeasibleStepUsesMatchingLocalDofValuesAndDeltas) {
     EXPECT_DOUBLE_EQ(energy.max_feasible_step(x, dx), 0.225);
     EXPECT_NO_THROW(energy.eval_value(x + energy.max_feasible_step(x, dx) * dx));
     x[2] = -1;
-    EXPECT_THROW(energy.eval_value(x), InfeasibleState);
-    EXPECT_THROW(energy.max_feasible_step(x, dx), InfeasibleState);
+    EXPECT_THROW(energy.eval_value(x), std::domain_error);
+    EXPECT_THROW(energy.max_feasible_step(x, dx), std::domain_error);
 }
 
 TEST(MeshEnergy, RejectsMalformedOutputsAndHandlesIndependentRequests) {
@@ -356,7 +357,32 @@ TEST(MeshEnergy, RejectsProjectionOverflowBeforeScatter) {
     });
     const Vec x = Vec::Zero(2);
     EXPECT_TRUE(Eigen::MatrixXd(energy.eval_hessian(x)).allFinite());
-    EXPECT_THROW(energy.eval_hessian(x, HessianKind::Projected), std::logic_error);
+    EXPECT_THROW(energy.eval_hessian(x, HessianKind::Projected), std::domain_error);
+}
+
+TEST(MeshEnergy, OverflowingSumsOfFiniteElementValuesAndDerivativesThrowDomainError) {
+    const ConstantDofMap map(TriangleTopology(3, {{0, 1, 2}, {0, 1, 2}}), 2);
+    const Vec x = Vec::Zero(2);
+    for (int request : {0, 1, 2}) {
+        double scale = std::numeric_limits<double>::max();
+        MeshEnergy energy(map, [&](int, const Vec&, Vec* g, Eigen::MatrixXd* H) {
+            if (g)
+                g->setConstant(2, request == 1 ? scale : 0);
+            if (H)
+                H->setConstant(2, 2, request == 2 ? scale : 0);
+            return request == 0 ? scale : 0;
+        });
+        if (request == 0)
+            EXPECT_THROW(energy.eval_value(x), std::domain_error);
+        if (request == 1)
+            EXPECT_THROW(energy.eval_gradient(x), std::domain_error);
+        if (request == 2)
+            EXPECT_THROW(energy.eval_hessian(x), std::domain_error);
+        scale = 1;
+        EXPECT_TRUE(std::isfinite(energy.eval_value(x)));
+        EXPECT_TRUE(energy.eval_gradient(x).allFinite());
+        EXPECT_TRUE(Eigen::MatrixXd(energy.eval_hessian(x)).allFinite());
+    }
 }
 
 struct SharedDofMap {
@@ -462,7 +488,7 @@ TEST(MeshEnergy, ParallelFeasibleStepMatchesSerialAndPropagatesErrors) {
         double alpha = 1;
         for (Eigen::Index j = 0; j < x_local.size(); ++j) {
             if (x_local[j] <= 0)
-                throw InfeasibleState("positive DOFs required");
+                throw std::domain_error("positive DOFs required");
             if (dx_local[j] < 0)
                 alpha = std::min(alpha, 0.8 * x_local[j] / -dx_local[j]);
         }
@@ -483,7 +509,7 @@ TEST(MeshEnergy, ParallelFeasibleStepMatchesSerialAndPropagatesErrors) {
         EXPECT_THROW(energy.max_feasible_step(x, dx), std::logic_error);
         bad_bound = false;
         x[0] = -1;
-        EXPECT_THROW(energy.max_feasible_step(x, dx), InfeasibleState);
+        EXPECT_THROW(energy.max_feasible_step(x, dx), std::domain_error);
         x[0] = 1;
         EXPECT_DOUBLE_EQ(energy.max_feasible_step(x, dx), expected);
     }

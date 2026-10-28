@@ -58,10 +58,10 @@ struct NewtonResult {
 // stop if converged, solve for a descent direction (shifting the diagonal when the
 // system does not factor or the solution is not a descent direction), then search
 // along it: start at max_feasible_step, shrink until the energy decreases or stays
-// within floating-point noise of it; an InfeasibleState trial point counts as a
-// rejection.
+// within floating-point noise of it. Evaluation exceptions propagate immediately;
+// a std::domain_error trial point aborts the solve without retrying.
 //
-// Outcomes are statuses. An infeasible x0 throws InfeasibleState; a broken energy
+// Outcomes are statuses. Any infeasible state throws std::domain_error; a broken energy
 // (a non-finite gradient) throws std::logic_error.
 NewtonResult newton_solve(Energy& energy, const DofReduction& fixed, const ConstVecRef& x0,
                           const NewtonOptions& options, SparseSolver& solver,

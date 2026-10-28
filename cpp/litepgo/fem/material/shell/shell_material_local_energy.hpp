@@ -1,6 +1,5 @@
 #pragma once
 
-#include "litepgo/energy/energy.hpp"
 #include "litepgo/fem/kinematics/triangle_mid_edge_kinematics.hpp"
 #include "litepgo/fem/local/local_energy.hpp"
 #include "litepgo/fem/material/shell/shell_material_inputs.hpp"
@@ -22,7 +21,7 @@ struct TriangleMidEdgeRestData {
         b_bar = reference.b;
         sqrt_det_a_bar = std::sqrt(a_bar.determinant());
         if (!std::isfinite(sqrt_det_a_bar) || sqrt_det_a_bar <= 0)
-            throw InfeasibleState("TriangleMidEdgeRestData: unrepresentable reference area");
+            throw std::domain_error("TriangleMidEdgeRestData: unrepresentable reference area");
     }
 
     Eigen::MatrixXd X_local;
@@ -48,7 +47,7 @@ template <class Material> class ShellMaterialLocalEnergy2D final : public LocalE
             throw std::invalid_argument("ShellMaterialLocalEnergy2D: invalid stencil, thickness, or parameters");
         x_local_ += rest.X_local;
         if (!x_local_.allFinite())
-            throw InfeasibleState("ShellMaterialLocalEnergy2D: non-finite current positions");
+            throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite current positions");
     }
 
     int num_dofs() const override {
@@ -83,16 +82,16 @@ template <class Material> class ShellMaterialLocalEnergy2D final : public LocalE
         const double W = eval_density(xi, gradient ? &g : nullptr, hessian ? &H : nullptr);
         const double result = weight * W;
         if (!std::isfinite(result))
-            throw InfeasibleState("ShellMaterialLocalEnergy2D: non-finite weighted density");
+            throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite weighted density");
         if (gradient) {
             *gradient += weight * g;
             if (!gradient->allFinite())
-                throw InfeasibleState("ShellMaterialLocalEnergy2D: non-finite accumulated gradient");
+                throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite accumulated gradient");
         }
         if (hessian) {
             *hessian += weight * H;
             if (!hessian->allFinite())
-                throw InfeasibleState("ShellMaterialLocalEnergy2D: non-finite accumulated Hessian");
+                throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite accumulated Hessian");
         }
         return result;
     }
@@ -108,25 +107,29 @@ template <class Material> class ShellMaterialLocalEnergy2D final : public LocalE
         const ShellMaterialInputs inputs{current.a, current.b, a_bar_, b_bar_, thickness_, theta_};
         const double W = Material::eval_W(inputs);
         if (!std::isfinite(W))
-            throw InfeasibleState("ShellMaterialLocalEnergy2D: non-finite density");
+            throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite density");
         if (gradient || hessian) {
             const Eigen::VectorXd dW_dab = Material::eval_dW_dab(inputs);
-            if (dW_dab.size() != 6 || !dW_dab.allFinite())
+            if (dW_dab.size() != 6)
                 throw std::logic_error("ShellMaterialLocalEnergy2D: invalid material gradient");
+            if (!dW_dab.allFinite())
+                throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite material gradient");
             if (gradient) {
                 *gradient = dab_dx.transpose() * dW_dab;
                 if (!gradient->allFinite())
-                    throw InfeasibleState("ShellMaterialLocalEnergy2D: non-finite gradient");
+                    throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite gradient");
             }
             if (hessian) {
                 const Eigen::MatrixXd d2W_dab2 = Material::eval_d2W_dab2(inputs);
-                if (d2W_dab2.rows() != 6 || d2W_dab2.cols() != 6 || !d2W_dab2.allFinite())
+                if (d2W_dab2.rows() != 6 || d2W_dab2.cols() != 6)
                     throw std::logic_error("ShellMaterialLocalEnergy2D: invalid material Hessian");
+                if (!d2W_dab2.allFinite())
+                    throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite material Hessian");
                 *hessian = dab_dx.transpose() * d2W_dab2 * dab_dx;
                 for (std::size_t i = 0; i < d2ab_dx2.size(); ++i)
                     *hessian += dW_dab[static_cast<Eigen::Index>(i)] * d2ab_dx2[i];
                 if (!hessian->allFinite())
-                    throw InfeasibleState("ShellMaterialLocalEnergy2D: non-finite Hessian");
+                    throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite Hessian");
             }
         }
         return W;

@@ -17,7 +17,7 @@ struct WeightedEnergy {
 // be negative. The pattern is fixed if every term's is.
 //
 // The projected Hessian is sum_i w_i P_i, so it is PSD only when every weight is
-// positive and every term's P_i is. A term's InfeasibleState passes through the
+// positive and every term's P_i is. A term's std::domain_error passes through the
 // sum whatever its weight. The feasible step is the smallest over terms.
 //
 // The Hessian pattern is the union of the terms' patterns. Each term has its own

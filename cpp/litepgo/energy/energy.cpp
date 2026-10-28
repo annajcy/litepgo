@@ -59,7 +59,7 @@ double Energy::eval(const ConstVecRef& x, Vec* gradient, SpMat* hessian, Hessian
     const double value = eval_values(x, gradient, hessian, kind);
     if (!std::isfinite(value)) {
         throw std::logic_error("Energy::eval: the energy returned " + std::to_string(value) +
-                               "; values must be finite, with InfeasibleState thrown at infeasible states");
+                               "; values must be finite, with std::domain_error thrown at infeasible states");
     }
     return value;
 }

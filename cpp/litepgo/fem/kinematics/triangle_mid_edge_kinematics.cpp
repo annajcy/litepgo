@@ -1,5 +1,4 @@
 #include "litepgo/fem/kinematics/triangle_mid_edge_kinematics.hpp"
-#include "litepgo/energy/energy.hpp"
 
 #include <Eigen/Geometry>
 #include <algorithm>
@@ -17,7 +16,7 @@ Eigen::Vector3d checked_normal(const Eigen::Vector3d& e1, const Eigen::Vector3d&
     const double norm_N = N.norm();
     const double scale = e1.norm() * e2.norm();
     if (!std::isfinite(norm_N) || !std::isfinite(scale) || !(norm_N > geometry_tolerance * scale))
-        throw InfeasibleState("Triangle mid-edge kinematics: degenerate or unrepresentable face");
+        throw std::domain_error("Triangle mid-edge kinematics: degenerate or unrepresentable face");
     return N;
 }
 
@@ -35,7 +34,7 @@ void check_input(const Eigen::Ref<const Eigen::MatrixXd>& x, const std::array<in
         const Eigen::Vector3d N_k = checked_normal(x.row((k + 2) % 3) - x.row(p), x.row((k + 1) % 3) - x.row(p));
         const double norm_sum = (N + N_k).norm();
         if (!std::isfinite(norm_sum) || !(norm_sum > geometry_tolerance * (N.norm() + N_k.norm())))
-            throw InfeasibleState("Triangle mid-edge kinematics: adjacent face normals cancel");
+            throw std::domain_error("Triangle mid-edge kinematics: adjacent face normals cancel");
     }
 }
 
@@ -148,13 +147,13 @@ TriangleMidEdgeKinematics eval_triangle_mid_edge_kinematics(const Eigen::Ref<con
     result.a << e1.dot(e1), e1.dot(e2), e1.dot(e2), e2.dot(e2);
     result.b << c[0] + c[1], c[0], c[0], c[0] + c[2];
     if (!result.a.allFinite() || !result.b.allFinite())
-        throw InfeasibleState("Triangle mid-edge kinematics: non-finite fundamental forms");
+        throw std::domain_error("Triangle mid-edge kinematics: non-finite fundamental forms");
     if (dab_dx && !D.allFinite())
-        throw InfeasibleState("Triangle mid-edge kinematics: non-finite first derivatives");
+        throw std::domain_error("Triangle mid-edge kinematics: non-finite first derivatives");
     if (d2ab_dx2)
         for (const auto& h : H)
             if (!h.allFinite())
-                throw InfeasibleState("Triangle mid-edge kinematics: non-finite second derivatives");
+                throw std::domain_error("Triangle mid-edge kinematics: non-finite second derivatives");
     if (dab_dx)
         *dab_dx = std::move(D);
     if (d2ab_dx2)
@@ -171,7 +170,7 @@ double eval_triangle_mid_edge_feasible_step(const Eigen::Ref<const Eigen::Matrix
     double alpha = 1;
     const auto bound = [&](double margin, double rate) {
         if (!(margin > 0) || !std::isfinite(margin))
-            throw InfeasibleState("Triangle mid-edge feasible step: invalid starting geometry");
+            throw std::domain_error("Triangle mid-edge feasible step: invalid starting geometry");
         if (!std::isfinite(rate))
             alpha = 0;
         else if (rate > 0)

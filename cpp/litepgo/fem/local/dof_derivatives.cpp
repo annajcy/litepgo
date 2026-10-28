@@ -10,7 +10,11 @@ Eigen::VectorXd eval_gradient_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& 
     if (dvalue_dcoeffs.rows() != gradient.size() || dvalue_dcoeffs.rows() == 0 || dvalue_dcoeffs.cols() == 0)
         throw std::invalid_argument("eval_gradient_wrt_dofs: incompatible Jacobian and gradient");
     const Eigen::MatrixXd packed = gradient;
-    return dvalue_dcoeffs.transpose() * Eigen::Map<const Eigen::VectorXd>(packed.data(), packed.size());
+    Eigen::VectorXd result =
+        dvalue_dcoeffs.transpose() * Eigen::Map<const Eigen::VectorXd>(packed.data(), packed.size());
+    if (!result.allFinite())
+        throw std::domain_error("eval_gradient_wrt_dofs: non-finite pullback");
+    return result;
 }
 
 Eigen::MatrixXd eval_hessian_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoeffs,
@@ -18,7 +22,10 @@ Eigen::MatrixXd eval_hessian_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& d
     if (dvalue_dcoeffs.rows() != hessian.rows() || dvalue_dcoeffs.rows() != hessian.cols() ||
         dvalue_dcoeffs.rows() == 0 || dvalue_dcoeffs.cols() == 0)
         throw std::invalid_argument("eval_hessian_wrt_dofs: incompatible Jacobian and Hessian");
-    return dvalue_dcoeffs.transpose() * hessian * dvalue_dcoeffs;
+    Eigen::MatrixXd result = dvalue_dcoeffs.transpose() * hessian * dvalue_dcoeffs;
+    if (!result.allFinite())
+        throw std::domain_error("eval_hessian_wrt_dofs: non-finite pullback");
+    return result;
 }
 
 void add_gradient_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoeffs,
@@ -28,6 +35,8 @@ void add_gradient_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoef
         output.size() != dvalue_dcoeffs.cols() || !std::isfinite(weight))
         throw std::invalid_argument("add_gradient_wrt_dofs: incompatible dimensions or non-finite weight");
     output.noalias() += weight * (dvalue_dcoeffs.transpose() * gradient.reshaped());
+    if (!output.allFinite())
+        throw std::domain_error("add_gradient_wrt_dofs: non-finite accumulation");
 }
 
 void add_hessian_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoeffs,
@@ -38,6 +47,8 @@ void add_hessian_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoeff
         output.cols() != dvalue_dcoeffs.cols() || !std::isfinite(weight))
         throw std::invalid_argument("add_hessian_wrt_dofs: incompatible dimensions or non-finite weight");
     output.noalias() += weight * (dvalue_dcoeffs.transpose() * hessian * dvalue_dcoeffs);
+    if (!output.allFinite())
+        throw std::domain_error("add_hessian_wrt_dofs: non-finite accumulation");
 }
 
 } // namespace litepgo

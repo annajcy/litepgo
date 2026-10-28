@@ -8,7 +8,7 @@ namespace litepgo {
 // psi(S) = lambda_ps/2*tr(a_bar^-1*S)^2 + mu*tr(a_bar^-1*S*a_bar^-1*S).
 // theta = [lambda_ps, mu] uses 2D plane-stress Lame parameters, not 3D lambda.
 // Requires finite symmetric forms, t > 0, mu > 0, lambda_ps+mu > 0 (invalid_argument).
-// Non-positive-definite metrics or unrepresentable results throw InfeasibleState.
+// Non-positive-definite metrics or unrepresentable results throw std::domain_error.
 // Derivatives use (a11,a12,a22,b11,b12,b22); mixed entries are independent, unscaled.
 class KoiterStVK final {
   public:

@@ -4,6 +4,7 @@
 #include "litepgo/fem/field/interpolated_field.hpp"
 
 #include <gtest/gtest.h>
+#include <stdexcept>
 
 #include <array>
 #include <cmath>
@@ -149,7 +150,7 @@ TEST(InterpolatedField2D, RejectsInvalidCoefficientsCoordinatesAndOverflow) {
         EXPECT_THROW(field.eval_dhess_xi_dcoeffs(xi), std::invalid_argument);
     }
     const F enormous(Eigen::MatrixXd::Constant(16, 3, std::numeric_limits<double>::max()));
-    EXPECT_THROW(enormous.eval_d2value_dxi2(Eigen::Vector2d(2, 2)), std::invalid_argument);
+    EXPECT_THROW(enormous.eval_d2value_dxi2(Eigen::Vector2d(2, 2)), std::domain_error);
     EXPECT_TRUE(enormous.eval_dhess_xi_dcoeffs(Eigen::Vector2d(2, 2)).allFinite());
 }
 

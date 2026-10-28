@@ -4,8 +4,7 @@ import numpy as np
 import pytest
 import scipy.sparse as sp
 
-from litepgo.energy import (AffineMappedEnergy, Energy, HessianKind, InfeasibleStateError, QuadraticEnergy,
-                            WeightedEnergySum)
+from litepgo.energy import AffineMappedEnergy, Energy, HessianKind, QuadraticEnergy, WeightedEnergySum
 
 
 def laplacian(n):
@@ -132,8 +131,3 @@ def test_energy_base_is_abstract():
     with pytest.raises(TypeError):
         Energy()
     assert issubclass(WeightedEnergySum, Energy) and issubclass(AffineMappedEnergy, Energy)
-
-
-def test_infeasible_state_error_is_a_value_error():
-    # No Python-visible energy has a bounded domain yet; the C++ tests trigger it.
-    assert issubclass(InfeasibleStateError, ValueError)

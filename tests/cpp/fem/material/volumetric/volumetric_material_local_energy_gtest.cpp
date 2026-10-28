@@ -5,9 +5,11 @@
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "quadratic_parameter_material.hpp"
+#include <cmath>
 #include <gtest/gtest.h>
 #include <limits>
 #include <memory>
+#include <stdexcept>
 #include <type_traits>
 
 namespace {
@@ -17,6 +19,26 @@ auto coordinates(double scale = 1) {
     for (int a = 0; a < 8; ++a)
         X_local.row(a) = scale * HexQ1Basis::reference_node(a).transpose();
     return InterpolatedField3D<HexQ1Basis>(X_local);
+}
+
+TEST(VolumetricMaterialLocalEnergy3D, OverflowingDensityWeightAndAccumulationsThrowDomainError) {
+    const IdentityField3D F(Eigen::Matrix3d::Identity().reshaped());
+    IdentityField3D theta(Eigen::Vector2d(1e155, 0));
+    const VolumetricMaterialLocalEnergyTheta3D<QuadraticParameterMaterial<2>> energy(F, F, theta);
+    const Eigen::Vector3d xi = Eigen::Vector3d::Zero();
+    EXPECT_THROW(energy.eval_value(xi), std::domain_error);
+    EXPECT_THROW(energy.accumulate(xi, 1, nullptr, nullptr), std::domain_error);
+
+    theta = IdentityField3D(Eigen::Vector2d(1e150, 0));
+    ASSERT_TRUE(std::isfinite(energy.eval_value(xi)));
+    EXPECT_THROW(energy.accumulate(xi, 1e100, nullptr, nullptr), std::domain_error);
+
+    theta = IdentityField3D(Eigen::Vector2d(1, 0));
+    const double max = std::numeric_limits<double>::max();
+    Eigen::VectorXd g = Eigen::Vector2d::Constant(max);
+    Eigen::MatrixXd H = Eigen::Matrix2d::Constant(max);
+    EXPECT_THROW(energy.accumulate(xi, max, &g, nullptr), std::domain_error);
+    EXPECT_THROW(energy.accumulate(xi, max, nullptr, &H), std::domain_error);
 }
 struct ValueOnlyField : Field3D {
     int num_dofs() const override {
@@ -205,6 +227,55 @@ TEST(VolumetricMaterialLocalEnergy3D, AccumulationReusesInputValuesAndTheActiveD
         EXPECT_EQ(g, before);
     }
 }
+TEST(VolumetricMaterialLocalEnergy3D, FeasibleStepMapsOnlyTheActiveCoefficientDirection) {
+    Eigen::Matrix3d A;
+    A << 1.2, 0.2, 0, 0, 0.9, 0.1, 0.05, 0, 1.1;
+    const IdentityField3D F(A.reshaped()), Fp(A.reshaped());
+    const ValueOnlyParameters parameters;
+    const VolumetricMaterialLocalEnergyF3D<NeoHookean> total(F, Fp, parameters);
+    const VolumetricMaterialLocalEnergyFp3D<NeoHookean> plastic(F, Fp, parameters);
+    const Eigen::Matrix3d dA = A * Eigen::Vector3d(-4, -4, 0).asDiagonal();
+    const Eigen::VectorXd direction = dA.reshaped();
+    const Eigen::Vector3d xi(0.2, 0.3, 0.4);
+    const double expected =
+        NeoHookean::eval_feasible_step({A, A, parameters.data}, {dA, Eigen::Matrix3d::Zero(), Eigen::Vector2d::Zero()});
+    EXPECT_EQ(total.eval_feasible_step(xi, direction), expected);
+    EXPECT_EQ(plastic.eval_feasible_step(xi, direction), expected);
+    const ValueOnlyF passive;
+    const IdentityField3D theta(Eigen::Vector2d(2, 3));
+    const VolumetricMaterialLocalEnergyTheta3D<NeoHookean> material(passive, passive, theta);
+    EXPECT_NEAR(material.eval_feasible_step(xi, Eigen::Vector2d(0, -12)), 0.225, 1e-14);
+    EXPECT_THROW(total.eval_feasible_step(xi, Eigen::VectorXd::Zero(8)), std::invalid_argument);
+    Eigen::VectorXd bad = direction;
+    bad[0] = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_THROW(total.eval_feasible_step(xi, bad), std::invalid_argument);
+    EXPECT_THROW(
+        total.eval_feasible_step(Eigen::Vector3d::Constant(std::numeric_limits<double>::infinity()), direction),
+        std::invalid_argument);
+}
+
+TEST(VolumetricMaterialLocalEnergy3D, FeasibleStepUsesTheDeformationFieldAffineMapWithoutAnIdentityIncrement) {
+    const auto X = coordinates(2);
+    Eigen::MatrixXd u = Eigen::MatrixXd::Zero(8, 3), du(8, 3);
+    const Eigen::Matrix3d dF = Eigen::Vector3d(-4, -4, 0).asDiagonal();
+    for (int v = 0; v < 8; ++v)
+        du.row(v) = (dF * (2 * HexQ1Basis::reference_node(v))).transpose();
+    const InterpolatedField3D<HexQ1Basis> displacement(u);
+    const DeformationGradientField3D deformation(displacement, X);
+    const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped()), theta(Eigen::Vector2d(2, 3));
+    const VolumetricMaterialLocalEnergyF3D<NeoHookean> local(deformation, Fp, theta);
+    const Eigen::VectorXd direction = du.reshaped<Eigen::RowMajor>();
+    const Eigen::Vector3d xi(0.2, 0.3, 0.4);
+    const double alpha = local.eval_feasible_step(xi, direction);
+    EXPECT_NEAR(alpha, 0.225, 1e-6);
+    for (int i = 0; i <= 20; ++i) {
+        const InterpolatedField3D<HexQ1Basis> trial_u((alpha * i / 20) * du);
+        const DeformationGradientField3D trial_F(trial_u, X);
+        const VolumetricMaterialLocalEnergyF3D<NeoHookean> trial(trial_F, Fp, theta);
+        EXPECT_TRUE(std::isfinite(trial.eval_value(xi)));
+    }
+}
+
 } // namespace
 
 namespace {
@@ -243,6 +314,17 @@ TEST(VolumetricMaterialLocalEnergy3D, RejectsInvalidActiveDerivativeShapesCounts
     bad.n = 0;
     EXPECT_THROW(bind(bad), std::invalid_argument);
 }
+
+TEST(VolumetricMaterialLocalEnergy3D, OverflowingMappedFeasibleDirectionThrowsDomainError) {
+    BadActiveField F;
+    F.derivative = 1e200 * Eigen::MatrixXd::Identity(9, 9);
+    const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
+    const ValueOnlyParameters parameters;
+    const VolumetricMaterialLocalEnergyF3D<NeoHookean> local(F, Fp, parameters);
+    const Eigen::VectorXd direction = Eigen::VectorXd::Constant(9, 1e200);
+    EXPECT_THROW(local.eval_feasible_step(Eigen::Vector3d::Zero(), direction), std::domain_error);
+}
+
 struct SpatialOnlyDisplacement final : Field3D {
     int num_components() const override {
         return 3;

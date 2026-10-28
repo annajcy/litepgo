@@ -20,6 +20,7 @@ template <int ParamDim> class LocalEnergyT {
 
     // The caller supplies the complete weight; no geometry or measure is applied here.
     // Adds requested derivatives to initialized, non-aliasing buffers without resizing them.
+    // Non-finite numerical results throw std::domain_error.
     virtual double accumulate(const Coordinate& xi, double weight, Eigen::VectorXd* gradient,
                               Eigen::MatrixXd* hessian) const;
 };

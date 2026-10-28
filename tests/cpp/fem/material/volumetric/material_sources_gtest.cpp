@@ -1,16 +1,17 @@
-#include "quadratic_parameter_material.hpp"
 #include "litepgo/dof/constant_dof_map.hpp"
 #include "litepgo/dof/element_dof_map.hpp"
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/energy/energy.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
+#include "quadratic_parameter_material.hpp"
 #include "test_material_sources.hpp"
 
 #include <Eigen/LU>
+#include <stdexcept>
 
-#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/1d/gauss_legendre_1d.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/quadrature/3d/tensor_product_quadrature_3d.hpp"
@@ -335,11 +336,11 @@ TEST(MaterialSources, DirectInfeasiblePlasticStateReachesMaterialValidation) {
     Eigen::VectorXd g;
     Eigen::MatrixXd h;
     EXPECT_THROW(element_energy(X_field, bind_energy<VolumetricMaterialLocalEnergyFp3D<NeoHookean>>(fields)),
-                 InfeasibleState);
+                 std::domain_error);
     EXPECT_THROW(element_energy(X_field, bind_energy<VolumetricMaterialLocalEnergyFp3D<NeoHookean>>(fields), &g),
-                 InfeasibleState);
+                 std::domain_error);
     EXPECT_THROW(
         element_energy(X_field, bind_energy<VolumetricMaterialLocalEnergyFp3D<NeoHookean>>(fields), nullptr, &h),
-        InfeasibleState);
+        std::domain_error);
 }
 } // namespace

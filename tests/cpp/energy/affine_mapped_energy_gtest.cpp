@@ -94,7 +94,7 @@ TEST(AffineMappedEnergy, ForwardsTheFeasibleStep) {
 TEST(AffineMappedEnergy, InfeasibleInnerStateThrowsThrough) {
     const auto barrier = std::make_shared<HalfSpaceBarrier>(5, 4);
     const AffineMappedEnergy mapped(barrier, periodic_map());
-    EXPECT_THROW(mapped.eval_value((Vec(4) << 2.0, 0.0, 0.0, 0.0).finished()), litepgo::InfeasibleState);
+    EXPECT_THROW(mapped.eval_value((Vec(4) << 2.0, 0.0, 0.0, 0.0).finished()), std::domain_error);
 }
 
 TEST(AffineMappedEnergy, RejectsInvalidInput) {

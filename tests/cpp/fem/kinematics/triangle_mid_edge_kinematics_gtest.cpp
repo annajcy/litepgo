@@ -202,13 +202,13 @@ TEST(TriangleMidEdgeKinematics, RejectsDegenerateFacesCancellingNormalsAndOverfl
     const Eigen::MatrixXd x = curved_stencil();
     Eigen::MatrixXd bad = x;
     bad.row(2) = bad.row(0);
-    EXPECT_THROW(eval_triangle_mid_edge_kinematics(bad, {3, 4, 5}), InfeasibleState);
+    EXPECT_THROW(eval_triangle_mid_edge_kinematics(bad, {3, 4, 5}), std::domain_error);
     bad = x;
     bad.row(3) = bad.row(1);
-    EXPECT_THROW(eval_triangle_mid_edge_kinematics(bad, {3, 4, 5}), InfeasibleState);
+    EXPECT_THROW(eval_triangle_mid_edge_kinematics(bad, {3, 4, 5}), std::domain_error);
     Eigen::Matrix<double, 4, 3> cancelling;
     cancelling << 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0;
-    EXPECT_THROW(eval_triangle_mid_edge_kinematics(cancelling, {-1, -1, 3}), InfeasibleState);
-    EXPECT_THROW(eval_triangle_mid_edge_kinematics(1e200 * x, {3, 4, 5}), InfeasibleState);
+    EXPECT_THROW(eval_triangle_mid_edge_kinematics(cancelling, {-1, -1, 3}), std::domain_error);
+    EXPECT_THROW(eval_triangle_mid_edge_kinematics(1e200 * x, {3, 4, 5}), std::domain_error);
 }
 } // namespace

@@ -127,8 +127,8 @@ TEST(Energy, RejectsNonFiniteValuesAsABrokenEnergy) {
         EXPECT_THROW(mapped.eval_value(Vec::Zero(2)), std::logic_error);
         try {
             sum.eval_value(Vec::Zero(2));
-        } catch (const litepgo::InfeasibleState&) {
-            ADD_FAILURE() << "a non-finite value must not be reported as InfeasibleState";
+        } catch (const std::domain_error&) {
+            ADD_FAILURE() << "a non-finite value must not be reported as std::domain_error";
         } catch (const std::logic_error&) {
         }
     }

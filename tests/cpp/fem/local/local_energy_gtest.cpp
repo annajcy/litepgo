@@ -1,3 +1,4 @@
+#include "litepgo/energy/energy.hpp"
 #include "litepgo/fem/local/local_energy.hpp"
 
 #include <gtest/gtest.h>
@@ -40,6 +41,20 @@ struct FullEnergy : FirstOnly {
         return (1 + xi.x()) * Eigen::Matrix3d::Identity();
     }
 };
+
+TEST(LocalEnergy3D, OverflowingWeightedDensityAndDerivativeAccumulationsThrowDomainError) {
+    FullEnergy energy;
+    const Eigen::Vector3d xi = Eigen::Vector3d::Zero();
+    const double max = std::numeric_limits<double>::max();
+    energy.coefficients.setConstant(2);
+    EXPECT_THROW(energy.accumulate(xi, max, nullptr, nullptr), std::domain_error);
+
+    energy.coefficients << 1, 0, 0;
+    Eigen::VectorXd g = Eigen::Vector3d::Constant(max);
+    Eigen::MatrixXd H = Eigen::Matrix3d::Constant(max);
+    EXPECT_THROW(energy.accumulate(xi, max, &g, nullptr), std::domain_error);
+    EXPECT_THROW(energy.accumulate(xi, max, nullptr, &H), std::domain_error);
+}
 
 TEST(LocalEnergy3D, DerivativeCapabilitiesAreIndependent) {
     ValueOnly value;

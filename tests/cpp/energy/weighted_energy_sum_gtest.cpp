@@ -95,9 +95,9 @@ TEST(WeightedEnergySum, InfeasibleTermThrowsThroughTheSumWhateverItsWeight) {
         const WeightedEnergySum sum(
             {{std::make_shared<DoubleWellChain>(3), 1.0}, {std::make_shared<HalfSpaceBarrier>(3, 1), weight}});
         const Vec infeasible = (Vec(3) << 0.0, 2.0, 0.0).finished();
-        EXPECT_THROW(sum.eval_value(infeasible), litepgo::InfeasibleState);
+        EXPECT_THROW(sum.eval_value(infeasible), std::domain_error);
         Vec gradient;
-        EXPECT_THROW(sum.eval(infeasible, &gradient, nullptr), litepgo::InfeasibleState);
+        EXPECT_THROW(sum.eval(infeasible, &gradient, nullptr), std::domain_error);
     }
 }
 

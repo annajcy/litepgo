@@ -63,7 +63,7 @@ TEST(ShellStVKExample, FeasibleStepPreventsInteriorCollapseEvenWhenEndpointIsFea
     auto energy = example::make_shell_stvk_mesh_energy(X_nodes);
     const Vec u = Vec::Zero(18), du = -2 * X_nodes;
     EXPECT_NO_THROW(energy.eval_value(u + du));
-    EXPECT_THROW(energy.eval_value(u + 0.5 * du), InfeasibleState);
+    EXPECT_THROW(energy.eval_value(u + 0.5 * du), std::domain_error);
     const double alpha = energy.max_feasible_step(u, du);
     EXPECT_GT(alpha, 0);
     EXPECT_LT(alpha, 0.5);
@@ -82,12 +82,12 @@ TEST(ShellStVKExample, FeasibleStepKeepsAdjacentNormalsFromCancelling) {
     u.segment<3>(9) << -1, -1.5, 1;
     du.segment<3>(9) << -1, -0.5, -1;
     EXPECT_NO_THROW(energy.eval_value(u));
-    EXPECT_THROW(energy.eval_value(u + du), InfeasibleState);
+    EXPECT_THROW(energy.eval_value(u + du), std::domain_error);
     const double alpha = energy.max_feasible_step(u, du);
     EXPECT_GT(alpha, 0);
     EXPECT_LT(alpha, 1);
     expect_safe_segment(energy, u, du, alpha);
-    EXPECT_THROW(energy.max_feasible_step(u + du, du), InfeasibleState);
+    EXPECT_THROW(energy.max_feasible_step(u + du, du), std::domain_error);
 }
 
 TEST(ShellStVKExample, NewtonRelaxesBentPatchWhileKeepingCentralTriangleFixed) {
@@ -116,16 +116,16 @@ TEST(ShellStVKExample, OwnsReferenceDataAndRejectsInvalidRestAndTrialGeometry) {
     X_nodes.setZero();
     EXPECT_DOUBLE_EQ(energy.eval_value(u), W);
     EXPECT_THROW(example::make_shell_stvk_mesh_energy(Vec::Zero(17)), std::invalid_argument);
-    EXPECT_THROW(example::make_shell_stvk_mesh_energy(Vec::Zero(18)), InfeasibleState);
+    EXPECT_THROW(example::make_shell_stvk_mesh_energy(Vec::Zero(18)), std::domain_error);
     X_nodes = example::shell_stvk_rest_positions();
     X_nodes[0] = std::numeric_limits<double>::quiet_NaN();
     EXPECT_THROW(example::make_shell_stvk_mesh_energy(X_nodes), std::invalid_argument);
     Vec collapsed = Vec::Zero(18);
     collapsed.segment<3>(3) = -example::shell_stvk_rest_positions().segment<3>(3);
-    EXPECT_THROW(energy.eval_value(collapsed), InfeasibleState);
-    EXPECT_THROW(energy.eval_gradient(collapsed), InfeasibleState);
-    EXPECT_THROW(energy.eval_hessian(collapsed), InfeasibleState);
-    EXPECT_THROW(energy.max_feasible_step(collapsed, Vec::Zero(18)), InfeasibleState);
+    EXPECT_THROW(energy.eval_value(collapsed), std::domain_error);
+    EXPECT_THROW(energy.eval_gradient(collapsed), std::domain_error);
+    EXPECT_THROW(energy.eval_hessian(collapsed), std::domain_error);
+    EXPECT_THROW(energy.max_feasible_step(collapsed, Vec::Zero(18)), std::domain_error);
 
     const auto stencils = make_triangle_mid_edge_stencils(example::shell_stvk_topology());
     const TriangleMidEdgeRestData rest(example::shell_stvk_rest_positions().reshaped<Eigen::RowMajor>(6, 3),

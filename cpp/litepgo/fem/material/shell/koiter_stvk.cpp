@@ -1,5 +1,4 @@
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
-#include "litepgo/energy/energy.hpp"
 
 #include <Eigen/Cholesky>
 #include <array>
@@ -14,7 +13,7 @@ Eigen::Matrix<double, 6, 1> eval_delta_ab(const ShellMaterialInputs& inputs) {
     Eigen::Matrix<double, 6, 1> delta_ab;
     delta_ab << da(0, 0), da(0, 1), da(1, 1), db(0, 0), db(0, 1), db(1, 1);
     if (!delta_ab.allFinite())
-        throw InfeasibleState("KoiterStVK: non-finite form differences");
+        throw std::domain_error("KoiterStVK: non-finite form differences");
     return delta_ab;
 }
 
@@ -28,10 +27,10 @@ Eigen::Matrix<double, 6, 6> eval_stiffness(const ShellMaterialInputs& inputs) {
     const Eigen::LLT<Eigen::Matrix2d> current_metric(inputs.a);
     const Eigen::LLT<Eigen::Matrix2d> reference_metric(inputs.a_bar);
     if (current_metric.info() != Eigen::Success || reference_metric.info() != Eigen::Success)
-        throw InfeasibleState("KoiterStVK requires positive-definite current and reference metrics");
+        throw std::domain_error("KoiterStVK requires positive-definite current and reference metrics");
     const Eigen::Matrix2d inv_a_bar = reference_metric.solve(Eigen::Matrix2d::Identity());
     if (!inv_a_bar.allFinite())
-        throw InfeasibleState("KoiterStVK: non-finite inverse reference metric");
+        throw std::domain_error("KoiterStVK: non-finite inverse reference metric");
 
     std::array<Eigen::Matrix2d, 3> E;
     E[0] << 1, 0, 0, 0;
@@ -52,7 +51,7 @@ Eigen::Matrix<double, 6, 6> eval_stiffness(const ShellMaterialInputs& inputs) {
     H.topLeftCorner<3, 3>() = (inputs.thickness / 4) * C;
     H.bottomRightCorner<3, 3>() = ((inputs.thickness / 12) * inputs.thickness * inputs.thickness) * C;
     if (!H.allFinite())
-        throw InfeasibleState("KoiterStVK: non-finite material stiffness");
+        throw std::domain_error("KoiterStVK: non-finite material stiffness");
     return H;
 }
 
@@ -63,7 +62,7 @@ double KoiterStVK::eval_W(const ShellMaterialInputs& inputs) {
     const auto delta_ab = eval_delta_ab(inputs);
     const double W = 0.5 * delta_ab.dot(H * delta_ab);
     if (!std::isfinite(W))
-        throw InfeasibleState("KoiterStVK: non-finite density");
+        throw std::domain_error("KoiterStVK: non-finite density");
     return W;
 }
 
@@ -71,7 +70,7 @@ Eigen::Matrix<double, 6, 1> KoiterStVK::eval_dW_dab(const ShellMaterialInputs& i
     const auto H = eval_stiffness(inputs);
     const Eigen::Matrix<double, 6, 1> gradient = H * eval_delta_ab(inputs);
     if (!gradient.allFinite())
-        throw InfeasibleState("KoiterStVK: non-finite material gradient");
+        throw std::domain_error("KoiterStVK: non-finite material gradient");
     return gradient;
 }
 

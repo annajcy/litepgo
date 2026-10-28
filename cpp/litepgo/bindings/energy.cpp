@@ -24,9 +24,6 @@ namespace litepgo::bindings {
 void bind_energy(nb::module_& m) {
     m.doc() = "Energies and their composites (cpp/litepgo/energy)";
 
-    // InfeasibleState: evaluating at an infeasible state, recoverable by a shorter step.
-    nb::exception<InfeasibleState>(m, "InfeasibleStateError", PyExc_ValueError);
-
     nb::enum_<HessianKind>(m, "HessianKind")
         .value("Exact", HessianKind::Exact, "The exact Hessian.")
         .value("Projected", HessianKind::Projected, "A PSD approximation assembled from per-element projections.");

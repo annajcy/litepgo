@@ -23,7 +23,10 @@ template <class Material> class VolumetricMaterialLocalEnergy3D : public LocalEn
         return true;
     }
     double eval_value(const Eigen::Vector3d& xi) const override {
-        return Material::eval_W(eval_inputs(xi));
+        const double W = Material::eval_W(eval_inputs(xi));
+        if (!std::isfinite(W))
+            throw std::domain_error("VolumetricMaterialLocalEnergy3D: non-finite density");
+        return W;
     }
     Eigen::VectorXd eval_gradient(const Eigen::Vector3d& xi) const override {
         const auto input = eval_inputs(xi);
@@ -33,6 +36,20 @@ template <class Material> class VolumetricMaterialLocalEnergy3D : public LocalEn
         const auto input = eval_inputs(xi);
         return eval_hessian_wrt_dofs(eval_active_derivative(xi), eval_material_hessian(input));
     }
+    // Available when Material supplies eval_feasible_step(inputs, delta_inputs).
+    // The increment follows the same flattened coefficient order as the derivatives.
+    double eval_feasible_step(const Eigen::Vector3d& xi, const Eigen::Ref<const Eigen::VectorXd>& delta_coeffs) const {
+        if (delta_coeffs.size() != num_dofs() || !delta_coeffs.allFinite())
+            throw std::invalid_argument("VolumetricMaterialLocalEnergy3D: invalid coefficient increment");
+        const auto inputs = eval_inputs(xi);
+        const Eigen::VectorXd delta_value = eval_active_derivative(xi) * delta_coeffs;
+        if (!delta_value.allFinite())
+            throw std::domain_error("VolumetricMaterialLocalEnergy3D: non-finite input increment");
+        VolumetricMaterialInputs delta{Eigen::Matrix3d::Zero(), Eigen::Matrix3d::Zero(),
+                                       Eigen::VectorXd::Zero(inputs.theta.size())};
+        set_material_direction(delta, delta_value);
+        return Material::eval_feasible_step(inputs, delta);
+    }
     double accumulate(const Eigen::Vector3d& xi, double weight, Eigen::VectorXd* gradient,
                       Eigen::MatrixXd* hessian) const override {
         if (!xi.allFinite() || !std::isfinite(weight))
@@ -40,6 +57,8 @@ template <class Material> class VolumetricMaterialLocalEnergy3D : public LocalEn
                 "VolumetricMaterialLocalEnergy3D::accumulate requires finite parameters and weight");
         const auto input = eval_inputs(xi);
         const double result = weight * Material::eval_W(input);
+        if (!std::isfinite(result))
+            throw std::domain_error("VolumetricMaterialLocalEnergy3D: non-finite weighted density");
         if (gradient || hessian) {
             const auto derivative = eval_active_derivative(xi);
             if (gradient)
@@ -61,6 +80,9 @@ template <class Material> class VolumetricMaterialLocalEnergy3D : public LocalEn
   private:
     virtual Eigen::MatrixXd eval_material_gradient(const VolumetricMaterialInputs& input) const = 0;
     virtual Eigen::MatrixXd eval_material_hessian(const VolumetricMaterialInputs& input) const = 0;
+    virtual void set_material_direction(VolumetricMaterialInputs&, const Eigen::VectorXd&) const {
+        throw std::logic_error("VolumetricMaterialLocalEnergy3D does not support material input directions");
+    }
 
     VolumetricMaterialInputs eval_inputs(const Eigen::Vector3d& xi) const {
         if (!xi.allFinite())
@@ -98,6 +120,11 @@ class VolumetricMaterialLocalEnergyF3D final : public VolumetricMaterialLocalEne
     VolumetricMaterialLocalEnergyF3D(const Field3D&, const Field3D&, const Field3D&&) = delete;
 
   private:
+    void set_material_direction(VolumetricMaterialInputs& delta, const Eigen::VectorXd& value) const override {
+        if (value.size() != 9)
+            throw std::invalid_argument("VolumetricMaterialLocalEnergyF3D requires nine F increments");
+        delta.F = value.reshaped(3, 3);
+    }
     Eigen::MatrixXd eval_material_gradient(const VolumetricMaterialInputs& input) const override {
         return Material::eval_dW_dF(input);
     }
@@ -118,6 +145,11 @@ class VolumetricMaterialLocalEnergyFp3D final : public VolumetricMaterialLocalEn
     VolumetricMaterialLocalEnergyFp3D(const Field3D&, const Field3D&, const Field3D&&) = delete;
 
   private:
+    void set_material_direction(VolumetricMaterialInputs& delta, const Eigen::VectorXd& value) const override {
+        if (value.size() != 9)
+            throw std::invalid_argument("VolumetricMaterialLocalEnergyFp3D requires nine Fp increments");
+        delta.Fp = value.reshaped(3, 3);
+    }
     Eigen::MatrixXd eval_material_gradient(const VolumetricMaterialInputs& input) const override {
         return Material::eval_dW_dFp(input);
     }
@@ -138,6 +170,11 @@ class VolumetricMaterialLocalEnergyTheta3D final : public VolumetricMaterialLoca
     VolumetricMaterialLocalEnergyTheta3D(const Field3D&, const Field3D&, const Field3D&&) = delete;
 
   private:
+    void set_material_direction(VolumetricMaterialInputs& delta, const Eigen::VectorXd& value) const override {
+        if (value.size() != delta.theta.size())
+            throw std::invalid_argument("VolumetricMaterialLocalEnergyTheta3D: incompatible parameter increment");
+        delta.theta = value;
+    }
     Eigen::MatrixXd eval_material_gradient(const VolumetricMaterialInputs& input) const override {
         return Material::eval_dW_dtheta(input);
     }

@@ -4,9 +4,24 @@
 #include <Eigen/LU>
 #include <gtest/gtest.h>
 #include <limits>
+#include <stdexcept>
 
 namespace litepgo {
 namespace {
+
+TEST(MultiplicativeKinematics, FiniteTransformInputsWithOverflowingResultsThrowDomainError) {
+    const Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
+    const MultiplicativeKinematics volume(1e100 * I, 1e100 * I);
+    EXPECT_THROW(volume.eval_W(1e20), std::domain_error);
+    EXPECT_THROW(volume.eval_dW_dFp(1e200, Eigen::Matrix3d::Zero()), std::domain_error);
+
+    const Eigen::Matrix3d Fp = Eigen::Vector3d(1e-200, 1e100, 1e100).asDiagonal();
+    const MultiplicativeKinematics anisotropic(Fp, Fp);
+    EXPECT_THROW(anisotropic.eval_dW_dF(1e200 * I), std::domain_error);
+    const Eigen::Matrix<double, 9, 9> H = Eigen::Matrix<double, 9, 9>::Identity();
+    EXPECT_THROW(anisotropic.eval_d2W_dF2(H), std::domain_error);
+    EXPECT_THROW(anisotropic.eval_d2W_dFp2(1, Eigen::Matrix3d::Zero(), H), std::domain_error);
+}
 
 TEST(MultiplicativeKinematics, IdentityAndOwnedSnapshot) {
     Eigen::Matrix3d F = Eigen::Matrix3d::Random();
@@ -114,9 +129,9 @@ TEST(MultiplicativeKinematics, ValidatesPlasticButLeavesElasticDomainToMaterial)
     const Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
     Eigen::Matrix3d bad = I;
     bad(0, 0) = 0;
-    EXPECT_THROW(MultiplicativeKinematics(I, bad), InfeasibleState);
+    EXPECT_THROW(MultiplicativeKinematics(I, bad), std::domain_error);
     bad(0, 0) = -1;
-    EXPECT_THROW(MultiplicativeKinematics(I, bad), InfeasibleState);
+    EXPECT_THROW(MultiplicativeKinematics(I, bad), std::domain_error);
     EXPECT_NO_THROW(MultiplicativeKinematics(bad, I));
     EXPECT_NO_THROW(MultiplicativeKinematics(Eigen::Matrix3d::Zero(), I));
     for (double value : {std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {
@@ -125,7 +140,7 @@ TEST(MultiplicativeKinematics, ValidatesPlasticButLeavesElasticDomainToMaterial)
         EXPECT_THROW(MultiplicativeKinematics(bad, I), std::invalid_argument);
     }
     bad = 1e200 * I;
-    EXPECT_THROW(MultiplicativeKinematics(I, bad), InfeasibleState);
+    EXPECT_THROW(MultiplicativeKinematics(I, bad), std::domain_error);
 }
 
 } // namespace

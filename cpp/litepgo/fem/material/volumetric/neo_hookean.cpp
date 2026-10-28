@@ -1,9 +1,11 @@
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
-#include "litepgo/energy/energy.hpp"
+#include "litepgo/fem/kinematics/positive_det_feasible_step.hpp"
 #include "litepgo/fem/material/volumetric/multiplicative_kinematics.hpp"
 
 #include <Eigen/LU>
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace litepgo {
@@ -15,7 +17,7 @@ double eval_log_det_Fe(const Eigen::Matrix3d& Fe, const Eigen::VectorXd& theta) 
     }
     const double det_Fe = Fe.determinant();
     if (!std::isfinite(det_Fe) || det_Fe <= 0.0) {
-        throw InfeasibleState("NeoHookean requires finite det(Fe) > 0");
+        throw std::domain_error("NeoHookean requires finite det(Fe) > 0");
     }
     return std::log(det_Fe);
 }
@@ -23,7 +25,7 @@ double eval_log_det_Fe(const Eigen::Matrix3d& Fe, const Eigen::VectorXd& theta) 
 Eigen::Matrix3d eval_inv_Fe_T(const Eigen::Matrix3d& Fe) {
     const Eigen::Matrix3d inv_Fe_T = Fe.inverse().transpose();
     if (!inv_Fe_T.allFinite()) {
-        throw InfeasibleState("NeoHookean: non-finite elastic inverse");
+        throw std::domain_error("NeoHookean: non-finite elastic inverse");
     }
     return inv_Fe_T;
 }
@@ -109,7 +111,10 @@ Eigen::Vector2d NeoHookean::eval_dW_dtheta(const VolumetricMaterialInputs& input
     const double log_det_Fe = eval_log_det_Fe(Fe, theta);
     Eigen::Vector2d dW_dtheta;
     dW_dtheta << 0.5 * log_det_Fe * log_det_Fe, 0.5 * (Fe.squaredNorm() - 3.0) - log_det_Fe;
-    return kinematics.plastic_volume_ratio() * dW_dtheta;
+    dW_dtheta *= kinematics.plastic_volume_ratio();
+    if (!dW_dtheta.allFinite())
+        throw std::domain_error("NeoHookean: non-finite parameter gradient");
+    return dW_dtheta;
 }
 
 Eigen::Matrix2d NeoHookean::eval_d2W_dtheta2(const VolumetricMaterialInputs& inputs) {
@@ -117,6 +122,24 @@ Eigen::Matrix2d NeoHookean::eval_d2W_dtheta2(const VolumetricMaterialInputs& inp
     const MultiplicativeKinematics kinematics(F, Fp);
     eval_log_det_Fe(kinematics.elastic_gradient(), theta);
     return Eigen::Matrix2d::Zero();
+}
+
+double NeoHookean::eval_feasible_step(const VolumetricMaterialInputs& inputs,
+                                      const VolumetricMaterialInputs& delta_inputs) {
+    if (!delta_inputs.F.allFinite() || !delta_inputs.Fp.allFinite() || delta_inputs.theta.size() != num_parameters ||
+        !delta_inputs.theta.allFinite())
+        throw std::invalid_argument("NeoHookean step requires finite, compatible input increments");
+    eval_W(inputs);
+    double alpha = std::min(eval_positive_det_feasible_step(inputs.F, delta_inputs.F),
+                            eval_positive_det_feasible_step(inputs.Fp, delta_inputs.Fp));
+    for (int j = 0; j < num_parameters; ++j) {
+        if (delta_inputs.theta[j] < 0)
+            alpha = std::min(alpha, 0.9 * (inputs.theta[j] / -delta_inputs.theta[j]));
+        else if (delta_inputs.theta[j] > 0)
+            alpha =
+                std::min(alpha, 0.9 * ((std::numeric_limits<double>::max() - inputs.theta[j]) / delta_inputs.theta[j]));
+    }
+    return alpha;
 }
 
 } // namespace litepgo

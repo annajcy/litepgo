@@ -1,7 +1,9 @@
+#include "litepgo/energy/energy.hpp"
 #include "litepgo/fem/local/dof_derivatives.hpp"
 
 #include <gtest/gtest.h>
 #include <limits>
+#include <stdexcept>
 
 namespace {
 TEST(DofDerivatives, AffineChainRuleMatchesFiniteDifferences) {
@@ -41,6 +43,18 @@ TEST(DofDerivatives, RejectsMismatchedDynamicSizes) {
     Eigen::MatrixXd dvalue_dcoeffs = Eigen::MatrixXd::Zero(4, 3);
     EXPECT_THROW(litepgo::eval_gradient_wrt_dofs(dvalue_dcoeffs, Eigen::Vector3d::Zero()), std::invalid_argument);
     EXPECT_THROW(litepgo::eval_hessian_wrt_dofs(dvalue_dcoeffs, Eigen::Matrix3d::Zero()), std::invalid_argument);
+}
+
+TEST(DofDerivatives, OverflowingPullbacksAndAccumulationsThrowDomainError) {
+    const Eigen::MatrixXd D = Eigen::MatrixXd::Constant(1, 1, 1e200);
+    const Eigen::VectorXd gradient = Eigen::VectorXd::Constant(1, 1e200);
+    const Eigen::MatrixXd H = Eigen::MatrixXd::Identity(1, 1);
+    EXPECT_THROW(litepgo::eval_gradient_wrt_dofs(D, gradient), std::domain_error);
+    EXPECT_THROW(litepgo::eval_hessian_wrt_dofs(D, H), std::domain_error);
+    Eigen::VectorXd g = Eigen::VectorXd::Zero(1);
+    Eigen::MatrixXd h = Eigen::MatrixXd::Zero(1, 1);
+    EXPECT_THROW(litepgo::add_gradient_wrt_dofs(D, gradient, 1, g), std::domain_error);
+    EXPECT_THROW(litepgo::add_hessian_wrt_dofs(D, H, 1, h), std::domain_error);
 }
 
 TEST(DofDerivatives, WeightedContractionsAddToBuffersAndPackStridedGradientsByColumn) {

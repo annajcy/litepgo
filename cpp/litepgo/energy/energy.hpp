@@ -4,17 +4,8 @@
 
 #include <atomic>
 #include <optional>
-#include <stdexcept>
 
 namespace litepgo {
-
-// Thrown when an energy is evaluated at an infeasible state (an inverted element,
-// a penetrating contact). It is recoverable: a line search catches it and shortens
-// the step. Any other exception from an energy is an error.
-class InfeasibleState : public std::domain_error {
-  public:
-    using std::domain_error::domain_error;
-};
 
 // Which second derivative an energy assembles.
 enum class HessianKind {
@@ -69,15 +60,15 @@ class Energy {
     // otherwise); only its values are written. The asymmetry is deliberate: a
     // vector's size is unambiguous, but a change of Hessian pattern must be handled
     // by the caller. The value is always finite: at an infeasible x, eval()
-    // throws InfeasibleState instead. If an exception escapes after the checks,
+    // throws std::domain_error instead. If an exception escapes after the checks,
     // output values are unspecified, but the hessian's pattern never changes.
     double eval(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind = HessianKind::Exact) const;
 
     // The largest alpha in [0, 1] such that x + t * dx is feasible (evaluating there
-    // does not throw InfeasibleState) for every t in [0, alpha], including alpha
+    // does not throw std::domain_error) for every t in [0, alpha], including alpha
     // itself: the energy keeps its own safety margin. x must be feasible. 1 means
-    // the full step is feasible. This is the line search's first line of defense;
-    // InfeasibleState is the fallback when rounding defeats it.
+    // the full step is feasible. Newton starts its line search at this bound;
+    // std::domain_error from any evaluation propagates without retrying.
     double max_feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const;
 
     double eval_value(const ConstVecRef& x) const;
@@ -97,7 +88,7 @@ class Energy {
     // installation that follows cannot fail.
     // eval_values receives a gradient of size num_dofs() and a hessian with the
     // current pattern, and must overwrite every gradient entry and stored value. It
-    // returns a finite value or throws InfeasibleState; anything else (+-infinity,
+    // returns a finite value or throws std::domain_error; anything else (+-infinity,
     // NaN) is rejected as a broken energy with std::logic_error.
     virtual std::optional<SpMat> refresh_pattern(const ConstVecRef& x) = 0;
     virtual double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const = 0;

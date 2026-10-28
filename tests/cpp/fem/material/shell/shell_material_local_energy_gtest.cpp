@@ -1,8 +1,8 @@
 #include "../../../testing/finite_difference.hpp"
 #include "litepgo/dof/stencil_dof_map.hpp"
 #include "litepgo/energy/mesh_energy.hpp"
-#include "litepgo/fem/material/shell/shell_material_local_energy.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
+#include "litepgo/fem/material/shell/shell_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/2d/triangle_centroid_quadrature.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 
@@ -33,6 +33,34 @@ Eigen::MatrixXd displacements(int vertices) {
         for (int c = 0; c < 3; ++c)
             u(v, c) = 0.03 * std::sin(0.7 * (3 * v + c + 1));
     return u;
+}
+
+struct NonFiniteGradientMaterial {
+    static constexpr int num_parameters = KoiterStVK::num_parameters;
+    static constexpr auto eval_W = KoiterStVK::eval_W;
+    static constexpr auto eval_d2W_dab2 = KoiterStVK::eval_d2W_dab2;
+    static Eigen::VectorXd eval_dW_dab(const ShellMaterialInputs&) {
+        return Eigen::VectorXd::Constant(6, std::numeric_limits<double>::infinity());
+    }
+};
+struct NonFiniteHessianMaterial {
+    static constexpr int num_parameters = KoiterStVK::num_parameters;
+    static constexpr auto eval_W = KoiterStVK::eval_W;
+    static constexpr auto eval_dW_dab = KoiterStVK::eval_dW_dab;
+    static Eigen::MatrixXd eval_d2W_dab2(const ShellMaterialInputs&) {
+        return Eigen::MatrixXd::Constant(6, 6, std::numeric_limits<double>::quiet_NaN());
+    }
+};
+
+TEST(ShellMaterialLocalEnergy2D, NonFiniteMaterialDerivativesThrowDomainError) {
+    const TriangleMidEdgeRestData rest(coordinates(), {3, 4, 5});
+    const auto u = displacements(6);
+    const ShellMaterialLocalEnergy2D<NonFiniteGradientMaterial> bad_gradient(rest, u, 0.2, Eigen::Vector2d(2, 3));
+    const ShellMaterialLocalEnergy2D<NonFiniteHessianMaterial> bad_hessian(rest, u, 0.2, Eigen::Vector2d(2, 3));
+    EXPECT_TRUE(std::isfinite(bad_gradient.eval_value(Eigen::Vector2d::Zero())));
+    EXPECT_THROW(bad_gradient.eval_gradient(Eigen::Vector2d::Zero()), std::domain_error);
+    EXPECT_THROW(bad_gradient.eval_hessian(Eigen::Vector2d::Zero()), std::domain_error);
+    EXPECT_THROW(bad_hessian.eval_hessian(Eigen::Vector2d::Zero()), std::domain_error);
 }
 
 void check_derivatives(const TriangleMidEdgeRestData& rest) {
@@ -167,7 +195,7 @@ TEST(ShellMaterialLocalEnergy2D, RejectsMalformedInputsInvalidCoordinatesAndOutp
     EXPECT_THROW(energy.accumulate({0.2, 0.3}, std::numeric_limits<double>::infinity(), nullptr, nullptr),
                  std::invalid_argument);
     EXPECT_THROW((TriangleMidEdgeRestData(coordinates(), {0, 4, 5})), std::invalid_argument);
-    EXPECT_THROW((TriangleMidEdgeRestData(Eigen::MatrixXd::Zero(3, 3), {-1, -1, -1})), InfeasibleState);
+    EXPECT_THROW((TriangleMidEdgeRestData(Eigen::MatrixXd::Zero(3, 3), {-1, -1, -1})), std::domain_error);
 }
 
 TEST(ShellMaterialLocalEnergy2D, RejectsDegenerateCurrentGeometryAndInvalidMaterialDomain) {
@@ -175,9 +203,9 @@ TEST(ShellMaterialLocalEnergy2D, RejectsDegenerateCurrentGeometryAndInvalidMater
     Eigen::MatrixXd u = Eigen::MatrixXd::Zero(6, 3);
     u.row(1) = rest.X_local.row(0) - rest.X_local.row(1);
     const Shell collapsed(rest, u, 0.2, Eigen::Vector2d(2, 3));
-    EXPECT_THROW(collapsed.eval_value({0.2, 0.3}), InfeasibleState);
-    EXPECT_THROW(collapsed.eval_gradient({0.2, 0.3}), InfeasibleState);
-    EXPECT_THROW(collapsed.eval_hessian({0.2, 0.3}), InfeasibleState);
+    EXPECT_THROW(collapsed.eval_value({0.2, 0.3}), std::domain_error);
+    EXPECT_THROW(collapsed.eval_gradient({0.2, 0.3}), std::domain_error);
+    EXPECT_THROW(collapsed.eval_hessian({0.2, 0.3}), std::domain_error);
     const Shell bad_material(rest, displacements(6), 0.2, Eigen::Vector2d(-3, 2));
     EXPECT_THROW(bad_material.eval_value({0.2, 0.3}), std::invalid_argument);
 }

@@ -1,5 +1,4 @@
 #include "litepgo/fem/material/volumetric/multiplicative_kinematics.hpp"
-#include "litepgo/energy/energy.hpp"
 
 #include <Eigen/LU>
 #include <cmath>
@@ -13,21 +12,27 @@ MultiplicativeKinematics::MultiplicativeKinematics(const Eigen::Matrix3d& F, con
     }
     det_Fp_ = Fp.determinant();
     if (!std::isfinite(det_Fp_) || det_Fp_ <= 0.0) {
-        throw InfeasibleState("MultiplicativeKinematics requires finite det(Fp) > 0");
+        throw std::domain_error("MultiplicativeKinematics requires finite det(Fp) > 0");
     }
     inv_Fp_ = Fp.inverse();
     Fe_ = F * inv_Fp_;
     if (!inv_Fp_.allFinite() || !Fe_.allFinite()) {
-        throw InfeasibleState("MultiplicativeKinematics: non-finite inverse or elastic gradient");
+        throw std::domain_error("MultiplicativeKinematics: non-finite inverse or elastic gradient");
     }
 }
 
 double MultiplicativeKinematics::eval_W(double psi) const {
-    return det_Fp_ * psi;
+    const double W = det_Fp_ * psi;
+    if (!std::isfinite(W))
+        throw std::domain_error("MultiplicativeKinematics: non-finite density");
+    return W;
 }
 
 Eigen::Matrix3d MultiplicativeKinematics::eval_dW_dF(const Eigen::Matrix3d& dpsi_dFe) const {
-    return det_Fp_ * dpsi_dFe * inv_Fp_.transpose();
+    const Eigen::Matrix3d gradient = det_Fp_ * dpsi_dFe * inv_Fp_.transpose();
+    if (!gradient.allFinite())
+        throw std::domain_error("MultiplicativeKinematics: non-finite F gradient");
+    return gradient;
 }
 
 Eigen::Matrix<double, 9, 9>
@@ -39,12 +44,18 @@ MultiplicativeKinematics::eval_d2W_dF2(const Eigen::Matrix<double, 9, 9>& d2psi_
             dFe_dF.block<3, 3>(3 * i, 3 * j).diagonal().setConstant(inv_Fp_(j, i));
         }
     }
-    return det_Fp_ * dFe_dF.transpose() * d2psi_dFe2 * dFe_dF;
+    const Eigen::Matrix<double, 9, 9> hessian = det_Fp_ * dFe_dF.transpose() * d2psi_dFe2 * dFe_dF;
+    if (!hessian.allFinite())
+        throw std::domain_error("MultiplicativeKinematics: non-finite F Hessian");
+    return hessian;
 }
 
 Eigen::Matrix3d MultiplicativeKinematics::eval_dW_dFp(double psi, const Eigen::Matrix3d& dpsi_dFe) const {
     const Eigen::Matrix3d R = psi * Eigen::Matrix3d::Identity() - Fe_.transpose() * dpsi_dFe;
-    return det_Fp_ * R * inv_Fp_.transpose();
+    const Eigen::Matrix3d gradient = det_Fp_ * R * inv_Fp_.transpose();
+    if (!gradient.allFinite())
+        throw std::domain_error("MultiplicativeKinematics: non-finite Fp gradient");
+    return gradient;
 }
 
 Eigen::Matrix<double, 9, 9>
@@ -70,6 +81,8 @@ MultiplicativeKinematics::eval_d2W_dFp2(double psi, const Eigen::Matrix3d& dpsi_
                        R * inv_Fp.transpose() * delta_Fp.transpose() * inv_Fp.transpose());
         d2W_dFp2.col(column) = Eigen::Map<const Eigen::Matrix<double, 9, 1>>(delta_dW_dFp.data());
     }
+    if (!d2W_dFp2.allFinite())
+        throw std::domain_error("MultiplicativeKinematics: non-finite Fp Hessian");
     return d2W_dFp2;
 }
 

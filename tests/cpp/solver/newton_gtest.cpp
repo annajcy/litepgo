@@ -1,8 +1,14 @@
 #include "litepgo/solver/newton.hpp"
 
+#include "litepgo/dof/constant_dof_map.hpp"
+#include "litepgo/energy/mesh_energy.hpp"
 #include "litepgo/energy/quadratic_energy.hpp"
 #include "litepgo/energy/weighted_energy_sum.hpp"
+#include "litepgo/fem/field/identity_field.hpp"
+#include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
+#include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
 
 #include "../testing/test_energies.hpp"
 
@@ -108,6 +114,77 @@ TEST(Newton, SolvesAQuadraticInOneStep) {
     EXPECT_LE(result.gradient_norm, 1e-10);
 }
 
+TEST(Newton, PropagatesNeoHookeanTrialOverflowWithoutRetrying) {
+    using namespace litepgo;
+    const ConstantDofMap map(TetTopology(4, {{0, 1, 2, 3}}), 9);
+    const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
+    // A tiny stiffness gives a finite Newton direction whose initial trial overflows ||F||^2.
+    const IdentityField3D theta(Eigen::Vector2d(0, 1e-155));
+    int trial_evaluations = 0;
+    auto elastic = std::make_shared<MeshEnergy>(
+        map,
+        [Fp, theta, &trial_evaluations](int, const Vec& x, Vec* g, Eigen::MatrixXd* H) {
+            if (!g && !H)
+                ++trial_evaluations;
+            const IdentityField3D F(x);
+            const VolumetricMaterialLocalEnergyF3D<NeoHookean> local(F, Fp, theta);
+            if (g)
+                g->setZero(9);
+            if (H)
+                H->setZero(9, 9);
+            return local.accumulate(Eigen::Vector3d::Zero(), 1, g, H);
+        },
+        [](int, const Vec& x, const Vec& dx) {
+            const VolumetricMaterialInputs input{x.reshaped(3, 3), Eigen::Matrix3d::Identity(),
+                                                 Eigen::Vector2d(0, 1e-155)};
+            const VolumetricMaterialInputs delta{dx.reshaped(3, 3), Eigen::Matrix3d::Zero(), Eigen::Vector2d::Zero()};
+            return NeoHookean::eval_feasible_step(input, delta);
+        });
+    const Vec x0 = Eigen::Matrix3d::Identity().reshaped();
+    Vec direction = Vec::Zero(9);
+    direction[0] = 5e154;
+    EXPECT_DOUBLE_EQ(elastic->max_feasible_step(x0, direction), 1);
+    const Vec trial = x0 + direction;
+    ASSERT_TRUE(trial.allFinite());
+    EXPECT_THROW(elastic->eval_value(trial), std::domain_error);
+
+    Vec load = Vec::Zero(9);
+    load[0] = -1;
+    auto loading = std::make_shared<QuadraticEnergy>(SpMat(9, 9), load);
+    WeightedEnergySum energy({{elastic, 1}, {loading, 1}});
+    ASSERT_TRUE(std::isfinite(energy.eval_value(x0)));
+    NewtonOptions opts = options();
+    opts.max_iterations = 1;
+    opts.hessian = HessianKind::Exact;
+    EigenLDLT solver;
+    std::vector<NewtonStep> steps;
+    trial_evaluations = 0;
+    EXPECT_THROW(newton_solve(energy, DofReduction(9, {1, 2, 3, 4, 5, 6, 7, 8}), x0, opts, solver,
+                              [&](const NewtonStep& step) { steps.push_back(step); }),
+                 std::domain_error);
+    EXPECT_EQ(trial_evaluations, 1);
+    EXPECT_TRUE(steps.empty());
+}
+
+TEST(Newton, StillBacktracksWhenFiniteTrialEnergyIncreases) {
+    DoubleWellChain energy(3);
+    const Vec x0 = Vec::Constant(3, 0.6);
+    const double initial_energy = energy.eval_value(x0);
+    NewtonOptions opts = options();
+    opts.max_iterations = 1;
+    opts.hessian = HessianKind::Exact;
+    std::vector<NewtonStep> steps;
+    const auto result = solve(energy, x0, {}, opts, &steps);
+    EXPECT_EQ(result.status, NewtonStatus::MaxIterations);
+    EXPECT_EQ(result.iterations, 1);
+    EXPECT_LT(result.energy, initial_energy);
+    ASSERT_FALSE(steps.empty());
+    EXPECT_DOUBLE_EQ(steps.front().feasible_step, 1);
+    EXPECT_GT(steps.front().step, 0);
+    EXPECT_LT(steps.front().step, 1);
+    EXPECT_GT(steps.front().line_search_evaluations, 1);
+}
+
 TEST(Newton, StopsAtOnceWhenAlreadyConverged) {
     litepgo::QuadraticEnergy energy(spd_matrix(4));
     std::vector<NewtonStep> steps;
@@ -189,7 +266,7 @@ TEST(Newton, StaysFeasibleAgainstABarrier) {
 
 TEST(Newton, RejectsAnInfeasibleStart) {
     HalfSpaceBarrier energy(2, 0);
-    EXPECT_THROW(solve(energy, Vec::Constant(2, 2.0)), litepgo::InfeasibleState);
+    EXPECT_THROW(solve(energy, Vec::Constant(2, 2.0)), std::domain_error);
 }
 
 TEST(Newton, FollowsAChangingPattern) {

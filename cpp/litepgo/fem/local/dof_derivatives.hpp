@@ -5,6 +5,7 @@ namespace litepgo {
 
 // dvalue_dcoeffs has output components in rows and local scalar DOFs in columns.
 // Input matrices flatten by column, independently of their storage order.
+// Non-finite numerical results throw std::domain_error; incompatible sizes throw invalid_argument.
 Eigen::VectorXd eval_gradient_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoeffs,
                                        const Eigen::Ref<const Eigen::MatrixXd>& gradient);
 

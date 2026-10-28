@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <numeric>
+#include <stdexcept>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
@@ -16,7 +17,7 @@ void project_hessian(Eigen::MatrixXd& hessian) {
     const Eigen::MatrixXd symmetric = 0.5 * hessian + 0.5 * hessian.transpose();
     Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> solver(symmetric);
     if (solver.info() != Eigen::Success)
-        throw std::logic_error("MeshEnergy: local Hessian eigendecomposition failed");
+        throw std::domain_error("MeshEnergy: local Hessian eigendecomposition failed");
     hessian =
         solver.eigenvectors() * solver.eigenvalues().cwiseMax(0.0).asDiagonal() * solver.eigenvectors().transpose();
 }
@@ -58,7 +59,7 @@ double MeshEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessi
                 if (kind == HessianKind::Projected) {
                     project_hessian(*h);
                     if (!h->allFinite())
-                        throw std::logic_error("MeshEnergy: non-finite projected Hessian");
+                        throw std::domain_error("MeshEnergy: non-finite projected Hessian");
                 }
             }
             local_values_[index] = value;
@@ -69,8 +70,14 @@ double MeshEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessi
         throw;
     }
     assembler_.assemble(local_gradients_, local_hessians_, gradient, hessian);
+    if (gradient && !gradient->allFinite())
+        throw std::domain_error("MeshEnergy: non-finite assembled gradient");
+    if (hessian && !Eigen::Map<const Vec>(hessian->valuePtr(), hessian->nonZeros()).allFinite())
+        throw std::domain_error("MeshEnergy: non-finite assembled Hessian");
     // Retain the original element order for the scalar energy sum.
     const double value = std::accumulate(local_values_.begin(), local_values_.end(), 0.0);
+    if (!std::isfinite(value))
+        throw std::domain_error("MeshEnergy: non-finite energy sum");
     return value;
 }
 

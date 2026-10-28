@@ -14,6 +14,8 @@ namespace litepgo {
 // elements and own (or safely share) their captures. Callbacks must be copyable.
 // x_local = map.gather(e, x) preserves the map's matrix or vector shape.
 // Derivatives use the corresponding flattened scalar-slot order, without repacking.
+// Numerical overflow in projection or assembly throws std::domain_error; invalid
+// callback outputs (including non-finite values) remain logic_error.
 class MeshEnergy final : public FixedPatternEnergy {
   public:
     // Only for energies feasible along every finite segment: step defaults to 1.
@@ -26,7 +28,7 @@ class MeshEnergy final : public FixedPatternEnergy {
 
     // step(e, x_local, dx_local) returns a safe inclusive bound in [0,1].
     // Trial values are x_local + alpha * dx_local (delta is unscaled).
-    // It must reject infeasible starting states, e.g. by throwing InfeasibleState.
+    // It must reject infeasible starting states, e.g. by throwing std::domain_error.
     // Like eval_local, step may run concurrently on different elements.
     template <class DofMap, class Lambda, class Step>
     MeshEnergy(const DofMap& map, Lambda eval_local, Step step) : MeshEnergy(make_assembler(map)) {

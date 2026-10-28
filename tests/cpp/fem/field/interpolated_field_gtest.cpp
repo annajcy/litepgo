@@ -3,6 +3,7 @@
 #include "litepgo/fem/field/interpolated_field.hpp"
 
 #include <Eigen/LU>
+#include <stdexcept>
 
 #include <cmath>
 #include <gtest/gtest.h>
@@ -192,9 +193,9 @@ TEST(InterpolatedField3D, RejectsIncompatibleCoefficientsAndNonFiniteInputsOrRes
         EXPECT_THROW(field.eval_dhess_xi_dcoeffs(xi), std::invalid_argument);
     }
     const InterpolatedField3D<HexQ1Basis> enormous(Eigen::MatrixXd::Constant(8, 3, std::numeric_limits<double>::max()));
-    EXPECT_THROW(enormous.eval_value(Eigen::Vector3d::Constant(2)), std::invalid_argument);
-    EXPECT_THROW(enormous.eval_dvalue_dxi(Eigen::Vector3d::Constant(2)), std::invalid_argument);
-    EXPECT_THROW(enormous.eval_d2value_dxi2(Eigen::Vector3d::Constant(2)), std::invalid_argument);
+    EXPECT_THROW(enormous.eval_value(Eigen::Vector3d::Constant(2)), std::domain_error);
+    EXPECT_THROW(enormous.eval_dvalue_dxi(Eigen::Vector3d::Constant(2)), std::domain_error);
+    EXPECT_THROW(enormous.eval_d2value_dxi2(Eigen::Vector3d::Constant(2)), std::domain_error);
     EXPECT_TRUE(enormous.eval_dvalue_dcoeffs(Eigen::Vector3d::Constant(2)).allFinite());
     EXPECT_TRUE(enormous.eval_dgrad_xi_dcoeffs(Eigen::Vector3d::Constant(2)).allFinite());
     EXPECT_TRUE(enormous.eval_dhess_xi_dcoeffs(Eigen::Vector3d::Constant(2)).allFinite());

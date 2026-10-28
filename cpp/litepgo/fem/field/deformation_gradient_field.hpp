@@ -4,6 +4,7 @@
 
 #include <Eigen/LU>
 #include <cmath>
+#include <stdexcept>
 #include <unsupported/Eigen/KroneckerProduct>
 
 namespace litepgo {
@@ -35,7 +36,7 @@ class DeformationGradientField3D final : public Field3D {
             throw std::invalid_argument("DeformationGradientField3D requires finite three-component displacement data");
         const Eigen::Matrix3d F = Eigen::Matrix3d::Identity() + du_dxi * dxi_dX;
         if (!F.allFinite())
-            throw std::invalid_argument("DeformationGradientField3D::eval_value: non-finite result");
+            throw std::domain_error("DeformationGradientField3D::eval_value: non-finite result");
         return F.reshaped();
     }
     Eigen::MatrixXd eval_dvalue_dcoeffs(const Eigen::Vector3d& xi) const override {
@@ -47,7 +48,7 @@ class DeformationGradientField3D final : public Field3D {
         Eigen::MatrixXd derivative =
             Eigen::kroneckerProduct(dxi_dX.transpose(), Eigen::Matrix3d::Identity()) * dgrad_xi_dcoeffs;
         if (!derivative.allFinite())
-            throw std::invalid_argument("DeformationGradientField3D::eval_dvalue_dcoeffs: non-finite result");
+            throw std::domain_error("DeformationGradientField3D::eval_dvalue_dcoeffs: non-finite result");
         return derivative;
     }
 

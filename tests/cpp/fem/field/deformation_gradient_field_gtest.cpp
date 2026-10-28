@@ -6,6 +6,7 @@
 #include "litepgo/fem/field/interpolated_field.hpp"
 
 #include <Eigen/LU>
+#include <stdexcept>
 
 #include <array>
 #include <cmath>
@@ -101,10 +102,10 @@ TEST(DeformationGradientField3D, ValidatesComponentsParametersGeometryAndOverflo
     const InterpolatedField3D<HexQ1Basis> tiny(nodes() * Eigen::Vector3d(1e-200, 1e100, 1e100).asDiagonal());
     const InterpolatedField3D<HexQ1Basis> enormous(1e200 * nodes());
     const DeformationGradientField3D overflow(enormous, tiny);
-    EXPECT_THROW(overflow.eval_value({0.2, 0.3, 0.4}), std::invalid_argument);
+    EXPECT_THROW(overflow.eval_value({0.2, 0.3, 0.4}), std::domain_error);
     const InterpolatedField3D<HexQ1Basis> large_inverse(nodes() * Eigen::Vector3d(1e-308, 1e154, 1e154).asDiagonal());
     const DeformationGradientField3D overflow_derivative(u_field, large_inverse);
-    EXPECT_THROW(overflow_derivative.eval_dvalue_dcoeffs({2, 2, 2}), std::invalid_argument);
+    EXPECT_THROW(overflow_derivative.eval_dvalue_dcoeffs({2, 2, 2}), std::domain_error);
 }
 
 TEST(DeformationGradientField3D, ConstantDisplacementHasIdentityValueAndZeroCoefficientDerivative) {

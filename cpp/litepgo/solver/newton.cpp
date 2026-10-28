@@ -96,8 +96,8 @@ bool accepts(double energy, double trial_energy) {
 }
 
 // Line search along a descent direction: starts at max_feasible_step and shrinks
-// until the trial point is accepted. An InfeasibleState trial point is rejected
-// like any other; a step that no longer moves x ends the search. Leaves the
+// until the finite trial energy is accepted. Evaluation exceptions propagate;
+// a step that no longer moves x ends the search. Leaves the
 // accepted point in trial and returns its step length, or nullopt.
 std::optional<double> line_search(const Energy& energy, const Vec& x, const Vec& direction,
                                   const NewtonOptions& options, Vec& trial, NewtonStep& step) {
@@ -109,12 +109,8 @@ std::optional<double> line_search(const Energy& energy, const Vec& x, const Vec&
             return std::nullopt; // accepting a step that does not move x would make no progress
         }
         ++step.line_search_evaluations;
-        try {
-            if (accepts(step.energy, energy.eval_value(trial))) {
-                return alpha;
-            }
-        } catch (const InfeasibleState&) {
-            // Rounding defeated max_feasible_step; shrink as for any rejection.
+        if (accepts(step.energy, energy.eval_value(trial))) {
+            return alpha;
         }
         alpha *= options.line_search_shrink;
     }

@@ -2,8 +2,8 @@
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "test_material_sources.hpp"
 
-#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/1d/gauss_legendre_1d.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/quadrature/3d/tensor_product_quadrature_3d.hpp"
@@ -13,6 +13,7 @@
 #include <cmath>
 #include <gtest/gtest.h>
 #include <limits>
+#include <stdexcept>
 
 namespace {
 using namespace litepgo;
@@ -204,7 +205,7 @@ TEST(VolumeIntegration, NonzeroParameterHessian) {
     });
 }
 
-TEST(VolumeIntegration, PropagatesInvalidFieldsAndInfeasibleStates) {
+TEST(VolumeIntegration, PropagatesInvalidFieldsAndDomainErrors) {
     const InterpolatedField3D<HexQ1Basis> X_field(coordinates(false));
     const auto check = [&](auto bind_energy) {
         Eigen::VectorXd g;
@@ -233,9 +234,10 @@ TEST(VolumeIntegration, PropagatesInvalidFieldsAndInfeasibleStates) {
             auto& C = plastic ? bad.up : bad.u;
             C.setZero();
             C.col(0) = -2 * coordinates(false).col(0);
-            EXPECT_THROW(element_energy(X_field, bind_energy(eval_fields(bad, X_field))), InfeasibleState);
-            EXPECT_THROW(element_energy(X_field, bind_energy(eval_fields(bad, X_field)), &g), InfeasibleState);
-            EXPECT_THROW(element_energy(X_field, bind_energy(eval_fields(bad, X_field)), nullptr, &h), InfeasibleState);
+            EXPECT_THROW(element_energy(X_field, bind_energy(eval_fields(bad, X_field))), std::domain_error);
+            EXPECT_THROW(element_energy(X_field, bind_energy(eval_fields(bad, X_field)), &g), std::domain_error);
+            EXPECT_THROW(element_energy(X_field, bind_energy(eval_fields(bad, X_field)), nullptr, &h),
+                         std::domain_error);
         }
     };
     check([&](const auto& local_fields) {

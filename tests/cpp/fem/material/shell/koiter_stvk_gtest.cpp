@@ -147,21 +147,21 @@ TEST(KoiterStVK, RejectsInvalidParametersFormsAndMetricDomains) {
     for (bool reference : {false, true}) {
         auto bad = p;
         (reference ? bad.a_bar : bad.a).setZero();
-        expect_invalid<InfeasibleState>(bad);
+        expect_invalid<std::domain_error>(bad);
         (reference ? bad.a_bar : bad.a) = -Eigen::Matrix2d::Identity();
-        expect_invalid<InfeasibleState>(bad);
+        expect_invalid<std::domain_error>(bad);
     }
 }
 
 TEST(KoiterStVK, RejectsUnrepresentableStiffnessAndDensity) {
     auto bad = inputs();
     bad.thickness = 1e200;
-    expect_invalid<InfeasibleState>(bad);
+    expect_invalid<std::domain_error>(bad);
     bad = inputs();
     bad.a_bar = 1e-320 * Eigen::Matrix2d::Identity();
-    expect_invalid<InfeasibleState>(bad);
+    expect_invalid<std::domain_error>(bad);
     bad = inputs();
     bad.b.setConstant(1e200);
-    EXPECT_THROW(KoiterStVK::eval_W(bad), InfeasibleState);
+    EXPECT_THROW(KoiterStVK::eval_W(bad), std::domain_error);
 }
 } // namespace

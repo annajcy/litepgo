@@ -38,16 +38,20 @@ class InterpolatedFieldT final : public FieldT<ParamDim> {
         check_coordinate(xi);
         const auto N = B::eval_N(xi);
         Eigen::VectorXd result = coeffs_.transpose() * N;
-        if (!N.allFinite() || !result.allFinite())
-            throw std::invalid_argument("InterpolatedFieldT::eval_value: non-finite data");
+        if (!N.allFinite())
+            throw std::invalid_argument("InterpolatedFieldT::eval_value: non-finite basis values");
+        if (!result.allFinite())
+            throw std::domain_error("InterpolatedFieldT::eval_value: non-finite result");
         return result;
     }
     SpatialDerivative eval_dvalue_dxi(const Coordinate& xi) const override {
         check_coordinate(xi);
         const auto dN_dxi = B::eval_dN_dxi(xi);
         SpatialDerivative result = coeffs_.transpose() * dN_dxi;
-        if (!dN_dxi.allFinite() || !result.allFinite())
-            throw std::invalid_argument("InterpolatedFieldT::eval_dvalue_dxi: non-finite data");
+        if (!dN_dxi.allFinite())
+            throw std::invalid_argument("InterpolatedFieldT::eval_dvalue_dxi: non-finite basis gradients");
+        if (!result.allFinite())
+            throw std::domain_error("InterpolatedFieldT::eval_dvalue_dxi: non-finite result");
         return result;
     }
     Eigen::MatrixXd eval_dvalue_dcoeffs(const Coordinate& xi) const override {
@@ -69,8 +73,10 @@ class InterpolatedFieldT final : public FieldT<ParamDim> {
         check_coordinate(xi);
         const auto d2N_dxi2 = B::eval_d2N_dxi2(xi);
         SpatialHessian result = coeffs_.transpose() * d2N_dxi2;
-        if (!d2N_dxi2.allFinite() || !result.allFinite())
-            throw std::invalid_argument("InterpolatedFieldT::eval_d2value_dxi2: non-finite data");
+        if (!d2N_dxi2.allFinite())
+            throw std::invalid_argument("InterpolatedFieldT::eval_d2value_dxi2: non-finite basis Hessians");
+        if (!result.allFinite())
+            throw std::domain_error("InterpolatedFieldT::eval_d2value_dxi2: non-finite result");
         return result;
     }
     Eigen::MatrixXd eval_dhess_xi_dcoeffs(const Coordinate& xi) const override {
