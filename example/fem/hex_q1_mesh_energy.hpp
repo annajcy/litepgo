@@ -6,13 +6,13 @@
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
-#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
+#include "litepgo/fem/kinematics/volumetric_element.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 
-#include <Eigen/LU>
-#include <cmath>
-#include <stdexcept>
+#include <memory>
+#include <utility>
 #include <vector>
 
 namespace litepgo::example {
@@ -26,49 +26,38 @@ inline Vec hex_q1_rest_positions() {
 }
 
 inline MeshEnergy make_hex_q1_mesh_energy(const Vec& X_nodes) {
-    // Shared face vertices 1, 2, 5, 6 reuse the same displacement DOFs in both cells.
     const HexTopology topology(12, {{0, 1, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 2, 5, 10, 11, 6}});
-    // Three physical displacement components per vertex: global index 3*vertex + component.
+    // Three displacement components per vertex; shared vertices reuse the same DOFs.
     const VertexDofMap map(topology, 3);
-    std::vector<InterpolatedField3D<HexQ1Basis>> X_fields;
-    for (int e = 0; e < map.num_elements(); ++e)
-        X_fields.emplace_back(map.gather(e, X_nodes));
+    std::vector<InterpolatedField3D<HexQ1Basis>> reference_fields;
+    std::vector<VolumetricElement3D<GaussLegendre3D<2>>> elements;
+    for (int e = 0; e < map.num_elements(); ++e) {
+        const InterpolatedField3D<HexQ1Basis> X_field(map.gather(e, X_nodes));
+        elements.emplace_back(X_field);
+        reference_fields.push_back(X_field);
+    }
+    const auto reference_data = std::make_shared<const decltype(reference_fields)>(std::move(reference_fields));
+    const auto element_data = std::make_shared<const decltype(elements)>(std::move(elements));
     const IdentityField3D Fp_field(Eigen::Matrix3d::Identity().reshaped());
     const IdentityField3D theta_field(Eigen::Vector2d(2, 3));
-
     return MeshEnergy(
         map,
-        [X_fields, Fp_field, theta_field](int e, const Eigen::MatrixXd& x_local, Vec* dE_dx_local,
-                                          Eigen::MatrixXd* d2E_dx_local2) {
-            // Geometry and gathered displacement both belong to element e.
-            const auto& X_field = X_fields[static_cast<std::size_t>(e)];
-            const auto& u_local = x_local;
-            const auto u_field = InterpolatedField3D<HexQ1Basis>(u_local);
-            const auto deformation = DeformationGradientField3D(u_field, X_field);
+        [element_data, reference_data, Fp_field, theta_field](int e, const Eigen::MatrixXd& u_local, Vec* gradient,
+                                                              Eigen::MatrixXd* hessian) {
+            const auto& element = (*element_data)[static_cast<std::size_t>(e)];
+            const InterpolatedField3D<HexQ1Basis> displacement(u_local);
+            const DeformationGradientField3D deformation(displacement, (*reference_data)[static_cast<std::size_t>(e)]);
             const VolumetricMaterialLocalEnergyF3D<NeoHookean> local_energy(deformation, Fp_field, theta_field);
-            if (dE_dx_local)
-                dE_dx_local->setZero(local_energy.num_dofs());
-            if (d2E_dx_local2)
-                d2E_dx_local2->setZero(local_energy.num_dofs(), local_energy.num_dofs());
-            using Q = GaussLegendre3D<2>;
-            double E_element = 0;
-            for (int q = 0; q < Q::num_points; ++q) {
-                const Eigen::Vector3d xi = Q::points().row(q).transpose();
-                const auto dX_dxi = X_field.eval_dvalue_dxi(xi);
-                if (dX_dxi.rows() != 3 || dX_dxi.cols() != 3 || !dX_dxi.allFinite())
-                    throw std::invalid_argument("hex_q1 requires a finite 3-by-3 coordinate derivative");
-                const double determinant = Eigen::Matrix3d(dX_dxi).determinant();
-                const double weight = Q::weights()[q] * determinant;
-                if (!std::isfinite(determinant) || determinant <= 0 || !std::isfinite(weight))
-                    throw std::invalid_argument(
-                        "hex_q1 requires a finite positive coordinate determinant and finite volume weight");
-                E_element += local_energy.accumulate(xi, weight, dE_dx_local, d2E_dx_local2);
-            }
-            return E_element;
+            return element.eval(local_energy, gradient, hessian);
         },
-        [](int, const auto&, const auto&) -> double {
-            // shortcut: evaluation only; supply feasible step bounds before using a solver.
-            throw std::logic_error("Feasible step bounds are not implemented in this example");
+        [element_data, reference_data, Fp_field, theta_field](int e, const Eigen::MatrixXd& u_local,
+                                                              const Eigen::MatrixXd& du_local) {
+            const auto& element = (*element_data)[static_cast<std::size_t>(e)];
+            const InterpolatedField3D<HexQ1Basis> displacement(u_local);
+            const DeformationGradientField3D deformation(displacement, (*reference_data)[static_cast<std::size_t>(e)]);
+            const VolumetricMaterialLocalEnergyF3D<NeoHookean> local_energy(deformation, Fp_field, theta_field);
+            const Vec delta_coeffs = du_local.reshaped<Eigen::RowMajor>();
+            return element.max_feasible_step(local_energy, delta_coeffs);
         });
 }
 

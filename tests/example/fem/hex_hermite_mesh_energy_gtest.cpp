@@ -1,6 +1,8 @@
 #include "../../../example/fem/hex_hermite_mesh_energy.hpp"
+#include "litepgo/fem/field/deformation_gradient_field.hpp"
 
 #include <gtest/gtest.h>
+#include <stdexcept>
 
 #include <algorithm>
 #include <array>
@@ -178,4 +180,30 @@ TEST(HexHermiteExample, RejectsUnsupportedGeometryAndIncorrectDofShapes) {
                  std::invalid_argument);
     EXPECT_THROW(example::hex_hermite_reference_coefficients(Eigen::MatrixXd::Zero(8, 24), Vec::Ones(191)),
                  std::invalid_argument);
+    EXPECT_THROW(example::hex_hermite_reference_coefficients(
+                     Eigen::MatrixXd::Constant(8, 24, std::numeric_limits<double>::infinity()), Vec::Ones(192)),
+                 std::invalid_argument);
+    EXPECT_THROW(example::hex_hermite_reference_coefficients(
+                     Eigen::MatrixXd::Ones(8, 24), Vec::Constant(192, std::numeric_limits<double>::quiet_NaN())),
+                 std::invalid_argument);
+    EXPECT_THROW(
+        example::hex_hermite_reference_coefficients(Eigen::MatrixXd::Constant(8, 24, 1e200), Vec::Constant(192, 1e200)),
+        std::domain_error);
+}
+
+TEST(HexHermiteExample, FeasibleStepMapsPhysicalDerivativeDofsAndChecksAllQuadraturePoints) {
+    const Vec X = example::hex_hermite_rest_positions(), zero = Vec::Zero(288);
+    auto energy = example::make_hex_hermite_mesh_energy(X);
+    EXPECT_EQ(energy.max_feasible_step(zero, zero), 1);
+    EXPECT_EQ(energy.max_feasible_step(zero, affine_dofs(X, 0.1 * Eigen::Matrix3d::Identity())), 1);
+    const Eigen::Matrix3d dF = Eigen::Vector3d(-4, -4, 0).asDiagonal();
+    const Vec direction = affine_dofs(X, dF);
+    EXPECT_TRUE(std::isfinite(energy.eval_value(direction)));
+    const double alpha = energy.max_feasible_step(zero, direction);
+    EXPECT_NEAR(alpha, 0.225, 1e-6);
+    for (int i = 0; i <= 12; ++i)
+        EXPECT_TRUE(std::isfinite(energy.eval_value((alpha * i / 12) * direction)));
+    const Vec current = affine_dofs(X, 0.1 * Eigen::Matrix3d::Identity());
+    EXPECT_NEAR(energy.max_feasible_step(current, direction), 0.2475, 1e-6);
+    EXPECT_THROW(energy.max_feasible_step(affine_dofs(X, -Eigen::Matrix3d::Identity()), zero), std::domain_error);
 }

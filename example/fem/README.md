@@ -1,19 +1,19 @@
 # FEM with MeshEnergy
 
-Quadrature supplies reference coordinates `xi` and weights. A `Field3D` computes values and derivatives at `xi` through virtual functions. `DeformationGradientField3D` composes displacement and coordinate fields at one `xi`, returning column-flattened `F`. Materials consume numerical `F`, `Fp`, and `theta`. Local energies bind one active coefficient block and supply density and coefficient derivatives. The element lambda applies geometric weights and sums quadrature contributions; `MeshEnergy` gathers and assembles the element results.
+Quadrature supplies reference coordinates `xi` and weights. A `Field3D` computes values and derivatives at `xi` through virtual functions. `DeformationGradientField3D` composes displacement and coordinate fields at one `xi`, returning column-flattened `F`. Materials consume numerical `F`, `Fp`, and `theta`. Local energies bind one active coefficient block and supply density and coefficient derivatives. `VolumetricElement3D` caches fixed reference geometry and integrates the supplied local energy; `MeshEnergy` gathers and assembles the element results.
 
 ```mermaid
 flowchart TD
-    Q["Quadrature: xi, weight"] --> D["DeformationGradientField3D.eval_value / eval_dvalue_dcoeffs"]
-    U["u_field"] --> D
-    X["X_field"] --> D
-    D --> L["Local energy: material inputs and coefficient derivatives"]
-    X --> M["X_field.eval_dvalue_dxi(xi)"]
-    M -->|inverse| D
-    M -->|determinant| I
-    P["Fp and theta sources"] --> L
-    L --> I["Element lambda: apply volume weight and sum over q"]
-    I --> A["MeshEnergy: global assembly"]
+    Q["Quadrature: xi, weight"] --> E["VolumetricElement3D: reference cache + integration"]
+    X["X_field"] -->|"setup"| E
+    E --> R["Cached xi, w_dV"]
+    U["u_field"] --> D["DeformationGradientField3D"]
+    X --> D
+    R --> E
+    D --> L["Local energy: density + coefficient derivatives"]
+    P["Fp and theta fields"] --> L
+    L -->|"accumulate(xi, w_dV)"| E
+    E --> A["MeshEnergy: global assembly"]
 ```
 
 ## Modules and ownership
@@ -22,8 +22,8 @@ flowchart TD
 | --- | --- |
 | `fem/basis/` | Scalar basis values `N`, reference derivatives `dN_dxi`, and `d2N_dxi2`, grouped into `1d/`, `2d/`, and `3d/` |
 | `fem/quadrature/` | Reference points and weights, grouped into `1d/`, `2d/`, and `3d/` |
-| `fem/field/` | `Field2D/3D`, `InterpolatedField2D/3D`, `IdentityField2D/3D`, and `DeformationGradientField3D` |
-| `fem/kinematics/` | Triangle mid-edge fundamental forms and the Hex Hermite coefficient transform |
+| `fem/field/` | `Field2D/3D`, `InterpolatedField2D/3D`, `IdentityField2D/3D`, and deformation-gradient fields |
+| `fem/kinematics/` | Triangle mid-edge forms, reference geometry caching, quadrature integration of supplied local energies, determinant bounds, and the Hex Hermite coefficient transform |
 | `fem/material/volumetric/` | Volumetric inputs, multiplicative kinematics, Neo-Hookean material, and the `VolumetricMaterialLocalEnergy3D` family |
 | `fem/material/shell/` | Shell inputs, Koiter StVK material, `ShellMaterialLocalEnergy2D`, and fixed triangle mid-edge reference data |
 | `fem/local/` | Shared `LocalEnergy2D/3D` interfaces and derivative contractions |
@@ -180,7 +180,7 @@ $$
 =\left(\frac{\partial X}{\partial\xi}\right)^{-1}.
 $$
 
-`Field3D` assigns no geometric meaning to its values or derivatives. `DeformationGradientField3D` requests `X_field.eval_dvalue_dxi(xi)`, checks three components, a finite 3-by-3 derivative and a finite positive determinant, then computes and validates the inverse. The element lambda requests the same derivative and validates its shape, finiteness and positive finite determinant for volume weights; the weighting step does not need an inverse. Neither query needs `X_field.eval_value(xi)`. `coordinate_field()` exposes the coordinate field borrowed by the deformation field.
+`Field3D` assigns no geometric meaning to its values or derivatives. `DeformationGradientField3D` requests `X_field.eval_dvalue_dxi(xi)`, checks three components, a finite 3-by-3 derivative and a finite positive determinant, then computes and validates the inverse. For fixed reference geometry, `VolumetricElement3D` validates the Jacobian and determinant once at construction to compute volume weights; it does not compute or cache the inverse. Neither path needs `X_field.eval_value(xi)`. `coordinate_field()` exposes the coordinate field borrowed by the deformation field.
 
 $$
 F=I+u_{,\xi}X_{,\xi}^{-1},\qquad
@@ -205,45 +205,51 @@ The implementation obtains `eval_dgrad_xi_dcoeffs(xi)` from the displacement fie
 
 Material APIs keep numerical `VolumetricMaterialInputs{F, Fp, theta}`. They do not sample fields or select quadrature. `eval_W` returns the density. `eval_dW_dF` and `eval_dW_dFp` return 3-by-3 matrices; their Hessians `eval_d2W_dF2` and `eval_d2W_dFp2` are 9-by-9 over column-major vectorization. `eval_dW_dtheta` and `eval_d2W_dtheta2` differentiate the pointwise parameter vector. Elastic derivative helpers use `eval_dpsi_dFe` and `eval_d2psi_dFe2`; inverse/determinant variables use `inv_Fp`, `inv_Fe_T`, `det_Fe`, `det_Fp`, and `log_det_Fe`. Directional changes use `delta_`; optimizer steps retain `dx` and `dx_local`.
 
-The element callback keeps geometry, material binding, and quadrature together. Here `X_fields` owns the coordinate fields for the elements, and `x_local` contains the gathered Q1 displacement coefficients:
+`VolumetricElement3D<Q>` in `fem/kinematics/volumetric_element.hpp` owns fixed
+reference geometry and integrates a supplied `LocalEnergy3D`. Its only template
+argument is the quadrature rule; it has no basis or material dependency.
+Construction takes a `const Field3D& X_field` and snapshots each quadrature point's
+`xi` and `w_dV = w_q * det(dX_dxi)`. It queries the
+reference Jacobian exactly once per point and rejects malformed quadrature or
+reference geometry. Changing rest geometry requires rebuilding the element.
+
+The deformation field borrows `u_field` and `X_field` and evaluates the reference
+Jacobian through the existing Field API. Its inverse is not cached by the element.
+Both fields must outlive the deformation field.
 
 ```cpp
+#include "litepgo/fem/kinematics/volumetric_element.hpp"
+#include "litepgo/fem/field/deformation_gradient_field.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
-#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 
-#include <Eigen/LU>
-#include <cmath>
-#include <stdexcept>
-
-const auto eval_element =
-    [X_fields, Fp_field, theta_field](int e, const Eigen::MatrixXd& x_local,
-                                    Eigen::VectorXd* g, Eigen::MatrixXd* H) {
-        const auto& X_field = X_fields[static_cast<std::size_t>(e)];
-        const litepgo::InterpolatedField3D<litepgo::HexQ1Basis> u_field(x_local);
-        const litepgo::DeformationGradientField3D deformation(u_field, X_field);
-        const litepgo::VolumetricMaterialLocalEnergyF3D<litepgo::NeoHookean> local_energy(
-            deformation, Fp_field, theta_field);
-        if (g)
-            g->setZero(local_energy.num_dofs());
-        if (H)
-            H->setZero(local_energy.num_dofs(), local_energy.num_dofs());
-        using Q = litepgo::GaussLegendre3D<2>;
-        double E_element = 0;
-        for (int q = 0; q < Q::num_points; ++q) {
-            const Eigen::Vector3d xi = Q::points().row(q).transpose();
-            const auto dX_dxi = X_field.eval_dvalue_dxi(xi);
-            if (dX_dxi.rows() != 3 || dX_dxi.cols() != 3 || !dX_dxi.allFinite())
-                throw std::invalid_argument("Invalid coordinate derivative");
-            const double determinant = Eigen::Matrix3d(dX_dxi).determinant();
-            const double weight = Q::weights()[q] * determinant;
-            if (!std::isfinite(determinant) || determinant <= 0 || !std::isfinite(weight))
-                throw std::invalid_argument("Invalid coordinate determinant or volume weight");
-            E_element += local_energy.accumulate(xi, weight, g, H);
-        }
-        return E_element;
-    };
+const litepgo::VolumetricElement3D<litepgo::GaussLegendre3D<2>> element(X_field);
+const litepgo::DeformationGradientField3D F(u_field, X_field);
+const litepgo::VolumetricMaterialLocalEnergyF3D<litepgo::NeoHookean> local_energy(
+    F, Fp_field, theta_field);
+const double E = element.eval(local_energy, g, H);
+const double alpha = element.max_feasible_step(local_energy, delta_coeffs);
 ```
+
+`eval` takes `const LocalEnergy3D&`, obtains the DOF count from it, zeros and resizes
+each independently nullable output, and calls
+`local_energy.accumulate(xi, w_dV, g, H)` at each saved point. The local energy owns
+density evaluation, material input sampling, and coefficient pullbacks. Outputs
+must not alias local-energy inputs. Non-material local energies and different
+active coefficient blocks use the same integrator.
+
+`max_feasible_step` takes a local energy with
+`eval_feasible_step(xi, delta_coeffs)` and returns the minimum pointwise bound.
+The increment uses that local energy's DOF order. The pointwise step method is
+required only when the element step method is used; it is not added to the
+`LocalEnergy3D` virtual interface. Exceptions propagate without retrying.
+
+The three solid examples share immutable element arrays between MeshEnergy's
+evaluation and step callbacks. Each callback binds the current displacement,
+deformation field, and material local energy. MeshEnergy still handles
+gathering, projection, and global assembly. Element const methods use call-local
+scratch and may run concurrently when the supplied local energy supports it.
 
 `GaussLegendre3D<PointsPerAxis>` uses `PointsPerAxis^3` integration points on `[0,1]^3`; `<2>` therefore uses eight points.
 
@@ -251,11 +257,54 @@ const auto eval_element =
 
 All three input fields must outlive the energy, and temporary input fields are rejected. A copied energy borrows the same fields, so subsequent field updates are visible. A composed `F` field activates displacement coefficients; direct `F` or `Fp` coefficients can use a nine-component `IdentityField3D`. Non-positive active DOF counts are rejected at construction.
 
+`local_energy.eval_feasible_step(xi, delta_coeffs)` maps the coefficient direction
+through the active field's `eval_dvalue_dcoeffs`, places the increment in `F`, `Fp`,
+or `theta`, and calls `Material::eval_feasible_step(inputs, delta_inputs)`. Inactive
+input increments are zero. This method is available for materials that supply the
+pointwise step API; other materials can still use the existing value and derivative
+APIs. Direction coefficients use the same packing as gradients and Hessians.
+
+`NeoHookean::eval_feasible_step` requires a feasible initial material state and
+preserves `det(F)>0`, `det(Fp)>0`, `lambda>=0`, and `mu>0` along the affine input
+path. It also bounds positive parameter increments before floating-point overflow.
+Since `det(Fe)=det(F)/det(Fp)`, separately bounding `F` and `Fp` also handles paths
+where both change and `Fe` is not affine in the step.
+
+The numerical helper `eval_positive_det_feasible_step(A, delta_A)` lives in
+`fem/kinematics/positive_det_feasible_step.hpp`. It expands
+`det(A+t*delta_A)` as a cubic using column multilinearity, splits `[0,1]` at its
+stationary points, and bisects the first interval approaching zero. Stationary
+values also detect repeated roots with no sign change. A relative rounding margin
+and a factor of `0.9` keep the returned endpoint inside the domain. Linear,
+quadratic, and constant cases follow the same logic. Invalid/non-finite inputs
+are rejected; an infeasible initial determinant throws `std::domain_error`.
+
+All three solid examples supply a `MeshEnergy` step callback that takes the
+minimum of these bounds over the same quadrature points used by the energy.
+For Hex Hermite, both displacement and direction use the physical-to-reference
+coefficient transform. This certifies the quadrature-based energy's domain over
+the full search segment. Tet P1 has constant `F` over each element; Hex Q1 and
+Hermite need additional spatial checks to certify an entire element between
+quadrature points. The Newton solver starts its line search at this bound and
+shrinks only when a finite trial energy fails the decrease test. `std::domain_error`
+propagates immediately to the caller and aborts the solve without retrying.
+A positive determinant does not guarantee representable energy or
+derivatives: finite inputs can overflow material evaluation, coefficient pullbacks,
+weighted accumulation, Hessian projection, or global assembly. These numerical
+failures throw `std::domain_error` and stop the solve, including at a trial point.
+Invalid input dimensions, non-finite supplied data, and malformed callback outputs
+retain their existing argument or contract errors.
+
 `LocalEnergy3D::eval_value(xi)`, `eval_gradient(xi)`, and `eval_hessian(xi)` return pointwise density `W` and coefficient derivatives. `accumulate(xi, weight, ...)` receives a complete weight from its caller and adds weighted values and requested derivatives to initialized buffers. It performs no geometry evaluation. The material implementation samples each input once and computes the active coefficient derivative once per accumulation, sharing it between gradient and Hessian. Inactive derivatives and unrequested material derivatives are not evaluated.
 
-The element lambda owns the geometric weighting step: at each quadrature point it validates `X_field.eval_dvalue_dxi(xi)`, computes `weight = w_q * det(dX_dxi)`, and passes that weight to the accumulator exactly once. Computing this weight requires neither coordinate position values nor an inverse. Geometry, material fields, and quadrature must refer to the same element and parameter domain; in particular, use the same coordinates as any composed deformation field. Geometry is fixed when taking coefficient derivatives.
-
-The element lambda initializes each requested output to zero, traverses `q`, and sums the weighted contributions in one pass. Gradient and Hessian pointers are independently nullable; each evaluation overwrites the requested outputs. `accumulate` adds to those buffers without resizing them, so callers must initialize their dimensions and keep them separate from energy data. The examples use fixed quadrature rules with finite points and weights, validate geometry at every evaluated point, and reject non-finite volume weights. Field3D and local-energy evaluation retain coefficient, derivative-shape, and finite-map checks. The Hex Hermite callback integrates in reference coefficients before applying its physical-DOF transform.
+For custom integration, callers can still compute `weight = w_q * det(dX_dxi)`
+and use `local_energy.accumulate`. That lower-level API adds into initialized
+buffers without resizing them. Geometry, material fields, and quadrature must use
+the same element parameter domain. Cached elements apply the saved measure once,
+delegate pointwise values and derivatives to the supplied local energy, and retain numerical
+`std::domain_error` checks. The Hex Hermite callback converts physical DOFs to
+reference coefficients before calling the element, then transforms the integrated
+gradient and Hessian back to physical DOFs.
 
 For an affine active map `D`, pointwise pullbacks are
 
@@ -315,7 +364,7 @@ c_k=-\frac{[(x_{k+1}-x_k)+(x_{k+2}-x_k)]\cdot N_k}{\|N+N_k\|},\qquad
 b=\begin{bmatrix}c_0+c_1&c_0\\c_0&c_0+c_2\end{bmatrix},
 $$
 
-where central vertex indices are modulo 3. Boundary edges use `c_k = 0`, equivalent to a one-sided face-normal extrapolation; clamped boundary directors are not implemented. Degenerate central or neighboring triangles, or cancelling averaged normals, throw `InfeasibleState`. Layout errors and non-finite inputs throw `std::invalid_argument`. Geometry singularity checks use a relative tolerance of `1e-12`. This function performs no area integration or material evaluation.
+where central vertex indices are modulo 3. Boundary edges use `c_k = 0`, equivalent to a one-sided face-normal extrapolation; clamped boundary directors are not implemented. Degenerate central or neighboring triangles, or cancelling averaged normals, throw `std::domain_error`. Layout errors and non-finite inputs throw `std::invalid_argument`. Geometry singularity checks use a relative tolerance of `1e-12`. This function performs no area integration or material evaluation.
 
 `eval_triangle_mid_edge_feasible_step(x, dx, opposite)` returns a conservative inclusive step bound. For `0 <= alpha <= 1`, each face normal is `N(alpha)=N0+alpha*N1+alpha^2*N2`, so its change is bounded by `alpha*(norm(N1)+norm(N2))`. Together with edge-length-product bounds, this preserves half of the initial relative area and averaged-normal feasibility margins over the whole segment. It can return zero for an unrepresentable direction. The caller validates material feasibility separately; the shell example delegates its geometric step calculation to this function.
 
@@ -369,7 +418,7 @@ The current shell path optimizes displacement only and uses per-face constant pa
 
 ## Hex Hermite physical DOFs
 
-`eval_hex_hermite_dof_transform` accepts an `8`-by-`3` matrix `X_nodes` containing one reference element's physical vertex coordinates, ordered as the corners of `HexHermiteBasis`. The example separately constructs a Q1 coordinate field for deformation evaluation. Displacement uses 64 reference coefficients per component. Each vertex supplies the physical slots `u, u_X, u_Y, u_Z, u_XY, u_XZ, u_YZ, u_XYZ`, each a three-vector. The gathered `u_physical_local` has shape 8-by-24; the field's `u_local` has shape 64-by-3.
+`eval_hex_hermite_dof_transform` accepts an `8`-by-`3` matrix `X_nodes` containing one reference element's physical vertex coordinates, ordered as the corners of `HexHermiteBasis`. The example uses a Q1 coordinate field to construct the cached volumetric element. Displacement uses 64 reference coefficients per component. Each vertex supplies the physical slots `u, u_X, u_Y, u_Z, u_XY, u_XZ, u_YZ, u_XYZ`, each a three-vector. The gathered `u_physical_local` has shape 8-by-24; the field's `u_local` has shape 64-by-3.
 
 ```cpp
 #include "litepgo/fem/kinematics/hex_hermite_dof_transform.hpp"
@@ -420,7 +469,7 @@ Use explicit `2D` / `3D` names for dimension-specific types. The dimensionless n
 | `fem/local/shell_material_local_energy.hpp` or `fem/local/shell/shell_material_local_energy.hpp` | `fem/material/shell/shell_material_local_energy.hpp` |
 | `MaterialLocalEnergy3D` and `MaterialLocalEnergyF3D/Fp3D/Theta3D` | `VolumetricMaterialLocalEnergy3D` and `VolumetricMaterialLocalEnergyF3D/Fp3D/Theta3D` |
 | `MaterialLocalEnergy3D<Material>(F, Fp, theta, active)` or `make_material_local_energy<Material, Active>` | `VolumetricMaterialLocalEnergyF3D`, `VolumetricMaterialLocalEnergyFp3D`, or `VolumetricMaterialLocalEnergyTheta3D`, with named `Field3D` inputs |
-| Volume integration helper | Quadrature loop inside the element lambda, passing `w_q * det(dX_dxi)` to `local_energy.accumulate` |
+| Volume integration helper | `VolumetricElement3D<Q>::eval(local_energy, ...)`; custom loops can still use `local_energy.accumulate` |
 | `B::evaluate(xi)` and `Basis::Sample` | `B::eval_N(xi)`, `B::eval_dN_dxi(xi)`, `B::eval_d2N_dxi2(xi)` |
 | `RestPointData::position`, `jacobian`, `inverse_jacobian`, `jacobian_determinant` | Field3D values, coordinate Jacobians, their inverses, and their determinants |
 | Material `gradient_F`, `hessian_F` and corresponding `Fp`/`theta` names | `eval_dW_dF`, `eval_d2W_dF2` and corresponding names |
@@ -447,4 +496,6 @@ The shell StVK example is implemented in `shell_stvk_mesh_energy.hpp` and `shell
 
 All four executables follow the same flow: construct fixed reference coordinates, set a uniform stretch, assemble energy/gradient/Hessian, verify the zero and analytical energies, and print one line containing `E`, `|g|`, and `H nnz`. For the shell, `u=0.1*X` gives `a=1.21*a_bar` and `b=b_bar=0`; density is constant across the patch, whose total reference area is `5.5`. Its callback validates the starting material state and delegates feasible-step bounds to the kinematics helper.
 
-Tests cover row/column packing, coefficient and physical finite differences, warped coordinate mappings, different displacement/coordinate bases, direct and derived deformation inputs, all active material inputs, shared/element/global DOF assembly, coefficient ownership, coefficient-transform validation, unsupported capabilities, and pointwise evaluation counts. Basis and interpolated-field tests also verify that unrequested quantities are not evaluated. Bent shell fixtures, constrained Newton relaxation, and feasible-segment checks stay in the shell tests. The three solid example factories still require feasible solver step bounds before use with a solver.
+Tests cover row/column packing, coefficient and physical finite differences, warped coordinate mappings, different displacement/coordinate bases, direct and derived deformation inputs, all active material inputs, shared/element/global DOF assembly, coefficient ownership, coefficient-transform validation, unsupported capabilities, and pointwise evaluation counts. Basis and interpolated-field tests also verify that unrequested quantities are not evaluated. Feasible-segment tests cover polynomial degree reduction, interior and repeated determinant roots, material parameter bounds, and physical Hermite directions. Constrained Newton relaxation is exercised by both tet and shell tests.
+
+Element tests compare energy, both derivatives, and feasible steps against explicit quadrature integration for Tet P1, warped Hex Q1, and Hermite displacement with Q1 geometry. They also check directional finite differences, fixed integration weights, live material fields, independent output requests, construction-time geometry validation, non-material local energies with arbitrary DOF counts, and numerical overflow.

@@ -1,6 +1,9 @@
 #include "../../../example/fem/tet_p1_mesh_energy.hpp"
+#include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
+#include "litepgo/solver/newton.hpp"
 
 #include <gtest/gtest.h>
+#include <stdexcept>
 
 #include <cmath>
 #include <limits>
@@ -70,18 +73,12 @@ TEST(TetP1Example, GradientAndHessianMatchFiniteDifferences) {
     }
 }
 
-TEST(TetP1Example, ElementLambdaRejectsInvalidGeometry) {
+TEST(TetP1Example, ConstructionRejectsInvalidGeometry) {
     using namespace litepgo;
     for (double scale : {0., -1., 1e200}) {
         SCOPED_TRACE(scale);
         const Vec X_nodes = scale * example::tet_p1_rest_positions();
-        auto energy = example::make_tet_p1_mesh_energy(X_nodes);
-        const Vec x = Vec::Zero(15);
-        Vec g;
-        SpMat H = energy.hessian_pattern();
-        EXPECT_THROW(energy.eval_value(x), std::invalid_argument);
-        EXPECT_THROW(energy.eval(x, &g, nullptr), std::invalid_argument);
-        EXPECT_THROW(energy.eval(x, nullptr, &H), std::invalid_argument);
+        EXPECT_THROW(example::make_tet_p1_mesh_energy(X_nodes), std::invalid_argument);
     }
     EXPECT_THROW(example::make_tet_p1_mesh_energy(Vec::Zero(14)), std::invalid_argument);
     for (double bad : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
@@ -90,4 +87,45 @@ TEST(TetP1Example, ElementLambdaRejectsInvalidGeometry) {
         X_nodes[0] = bad;
         EXPECT_THROW(example::make_tet_p1_mesh_energy(X_nodes), std::invalid_argument);
     }
+}
+
+TEST(TetP1Example, FeasibleStepBoundsTheWholeSegmentAndUsesBothElements) {
+    using namespace litepgo;
+    const Vec X = example::tet_p1_rest_positions(), zero = Vec::Zero(X.size());
+    auto energy = example::make_tet_p1_mesh_energy(X);
+    EXPECT_EQ(energy.max_feasible_step(zero, zero), 1);
+    EXPECT_EQ(energy.max_feasible_step(zero, 0.1 * X), 1);
+    Vec direction = zero;
+    for (int v = 0; v < X.size() / 3; ++v) {
+        direction[3 * v] = -4 * X[3 * v];
+        direction[3 * v + 1] = -4 * X[3 * v + 1];
+    }
+    EXPECT_TRUE(std::isfinite(energy.eval_value(direction)));
+    const double alpha = energy.max_feasible_step(zero, direction);
+    EXPECT_NEAR(alpha, 0.225, 1e-6);
+    for (int i = 0; i <= 20; ++i)
+        EXPECT_TRUE(std::isfinite(energy.eval_value((alpha * i / 20) * direction)));
+    direction.setZero();
+    direction[14] = 16;
+    EXPECT_NEAR(energy.max_feasible_step(zero, direction), 0.1125, 1e-12);
+    EXPECT_THROW(energy.max_feasible_step(-X, zero), std::domain_error);
+}
+
+TEST(TetP1Example, NewtonRelaxesTheFreeVerticesWithFeasibleSteps) {
+    using namespace litepgo;
+    auto energy = example::make_tet_p1_mesh_energy(example::tet_p1_rest_positions());
+    Vec u = Vec::Zero(15);
+    u[11] = 0.3;
+    u[14] = -0.2;
+    const double initial = energy.eval_value(u);
+    const DofReduction fixed(15, {0, 1, 2, 3, 4, 5, 6, 7, 8});
+    NewtonOptions options;
+    options.gradient_tolerance = 1e-9;
+    EigenLDLT solver;
+    const auto result = newton_solve(energy, fixed, u, options, solver);
+    EXPECT_EQ(result.status, NewtonStatus::Converged);
+    EXPECT_GT(result.iterations, 0);
+    EXPECT_LT(result.energy, initial);
+    EXPECT_LT(std::abs(result.energy), 1e-12);
+    EXPECT_TRUE(result.x.head(9).isZero(0));
 }
