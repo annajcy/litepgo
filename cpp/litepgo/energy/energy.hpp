@@ -64,11 +64,11 @@ class Energy {
     // output values are unspecified, but the hessian's pattern never changes.
     double eval(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind = HessianKind::Exact) const;
 
-    // The largest alpha in [0, 1] such that x + t * dx is feasible (evaluating there
-    // does not throw std::domain_error) for every t in [0, alpha], including alpha
-    // itself: the energy keeps its own safety margin. x must be feasible. 1 means
-    // the full step is feasible. Newton starts its line search at this bound;
-    // std::domain_error from any evaluation propagates without retrying.
+    // A conservative alpha in [0, 1] satisfying the implemented feasibility constraints
+    // along x + t * dx for every t in [0, alpha], including alpha. x must be feasible.
+    // Each energy supplies its own safety margin; 1 permits the full step.
+    // This bound does not guarantee representable floating-point evaluation results.
+    // Newton starts at this bound; evaluation exceptions propagate without retrying.
     double max_feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const;
 
     double eval_value(const ConstVecRef& x) const;
