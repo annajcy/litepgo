@@ -4,17 +4,18 @@
 #include <Eigen/Geometry>
 #include <cmath>
 #include <stdexcept>
-#include <unsupported/Eigen/AutoDiff>
 #include <utility>
 
 namespace litepgo {
 namespace {
 
+constexpr double geometry_tolerance = 1e-12;
+
 Eigen::Vector3d checked_normal(const Eigen::Vector3d& e1, const Eigen::Vector3d& e2) {
     const Eigen::Vector3d N = e1.cross(e2);
     const double norm_N = N.norm();
     const double scale = e1.norm() * e2.norm();
-    if (!std::isfinite(norm_N) || !std::isfinite(scale) || !(norm_N > 1e-12 * scale))
+    if (!std::isfinite(norm_N) || !std::isfinite(scale) || !(norm_N > geometry_tolerance * scale))
         throw InfeasibleState("Triangle mid-edge kinematics: degenerate or unrepresentable face");
     return N;
 }
@@ -32,30 +33,15 @@ void check_input(const Eigen::Ref<const Eigen::MatrixXd>& x, const std::array<in
             continue;
         const Eigen::Vector3d N_k = checked_normal(x.row((k + 2) % 3) - x.row(p), x.row((k + 1) % 3) - x.row(p));
         const double norm_sum = (N + N_k).norm();
-        if (!std::isfinite(norm_sum) || !(norm_sum > 1e-12 * (N.norm() + N_k.norm())))
+        if (!std::isfinite(norm_sum) || !(norm_sum > geometry_tolerance * (N.norm() + N_k.norm())))
             throw InfeasibleState("Triangle mid-edge kinematics: adjacent face normals cancel");
     }
 }
 
-template <class Scalar>
-Eigen::Matrix<Scalar, 6, 1> eval_ab(const Eigen::Matrix<Scalar, Eigen::Dynamic, 3>& x,
-                                    const std::array<int, 3>& opposite) {
-    const Eigen::Matrix<Scalar, 3, 1> e1 = x.row(1) - x.row(0), e2 = x.row(2) - x.row(0);
-    const Eigen::Matrix<Scalar, 3, 1> N = e1.cross(e2);
-    Eigen::Matrix<Scalar, 3, 1> c = Eigen::Matrix<Scalar, 3, 1>::Zero();
-    for (int k = 0; k < 3; ++k) {
-        const int p = opposite[static_cast<std::size_t>(k)];
-        if (p < 0)
-            continue;
-        const Eigen::Matrix<Scalar, 3, 1> v1 = x.row((k + 2) % 3) - x.row(p);
-        const Eigen::Matrix<Scalar, 3, 1> v2 = x.row((k + 1) % 3) - x.row(p);
-        const Eigen::Matrix<Scalar, 3, 1> N_k = v1.cross(v2);
-        const Eigen::Matrix<Scalar, 3, 1> q = (x.row((k + 1) % 3) - x.row(k)) + (x.row((k + 2) % 3) - x.row(k));
-        c[k] = -q.dot(N_k) / (N + N_k).norm();
-    }
-    Eigen::Matrix<Scalar, 6, 1> ab;
-    ab << e1.dot(e1), e1.dot(e2), e2.dot(e2), c[0] + c[1], c[0], c[0] + c[2];
-    return ab;
+Eigen::Matrix3d cross_matrix(const Eigen::Vector3d& v) {
+    Eigen::Matrix3d result;
+    result << 0, -v[2], v[1], v[2], 0, -v[0], -v[1], v[0], 0;
+    return result;
 }
 
 } // namespace
@@ -64,50 +50,114 @@ TriangleMidEdgeKinematics eval_triangle_mid_edge_kinematics(const Eigen::Ref<con
                                                             const std::array<int, 3>& opposite, Eigen::MatrixXd* dab_dx,
                                                             std::array<Eigen::MatrixXd, 6>* d2ab_dx2) {
     check_input(x, opposite);
-    Eigen::Matrix<double, 6, 1> ab;
-    if (!dab_dx && !d2ab_dx2) {
-        ab = eval_ab<double>(x, opposite);
-    } else {
-        // shortcut: all derivative requests use second-order AD; split first-order work if profiling warrants it.
-        constexpr int max_dofs = 18;
-        using First = Eigen::AutoDiffScalar<Eigen::Matrix<double, max_dofs, 1>>;
-        using Second = Eigen::AutoDiffScalar<Eigen::Matrix<First, max_dofs, 1>>;
-        Eigen::Matrix<Second, Eigen::Dynamic, 3> active(x.rows(), 3);
-        const int n = static_cast<int>(x.size());
-        for (int i = 0; i < x.rows(); ++i)
-            for (int c = 0; c < 3; ++c) {
-                Second value{First(x(i, c))};
-                value.value().derivatives()[3 * i + c] = 1;
-                value.derivatives()[3 * i + c].value() = 1;
-                active(i, c) = value;
+    const Eigen::Vector3d e1 = x.row(1) - x.row(0), e2 = x.row(2) - x.row(0);
+    const Eigen::Vector3d N = e1.cross(e2);
+    const int n = static_cast<int>(x.size());
+    const bool derivatives = dab_dx || d2ab_dx2;
+    constexpr std::array<int, 4> alpha{-1, 1, 0, 0}, beta{-1, 0, 1, 0};
+    constexpr std::array<std::array<int, 3>, 3> b_rows{{{3, 4, 5}, {3, -1, -1}, {5, -1, -1}}};
+    Eigen::MatrixXd D;
+    std::array<Eigen::MatrixXd, 6> H;
+    if (dab_dx) {
+        D.setZero(6, n);
+        D.block<1, 3>(0, 0) = -2 * e1.transpose();
+        D.block<1, 3>(0, 3) = 2 * e1.transpose();
+        D.block<1, 3>(1, 0) = -(e1 + e2).transpose();
+        D.block<1, 3>(1, 3) = e2.transpose();
+        D.block<1, 3>(1, 6) = e1.transpose();
+        D.block<1, 3>(2, 0) = -2 * e2.transpose();
+        D.block<1, 3>(2, 6) = 2 * e2.transpose();
+    }
+    if (d2ab_dx2) {
+        for (auto& h : H)
+            h.setZero(n, n);
+        for (int u = 0; u < 3; ++u)
+            for (int v = 0; v < 3; ++v) {
+                H[0].block<3, 3>(3 * u, 3 * v).diagonal().setConstant(2 * alpha[u] * alpha[v]);
+                H[1].block<3, 3>(3 * u, 3 * v).diagonal().setConstant(alpha[u] * beta[v] + beta[u] * alpha[v]);
+                H[2].block<3, 3>(3 * u, 3 * v).diagonal().setConstant(2 * beta[u] * beta[v]);
             }
-        const auto values = eval_ab<Second>(active, opposite);
-        Eigen::MatrixXd D(6, n);
-        std::array<Eigen::MatrixXd, 6> H;
-        for (int i = 0; i < 6; ++i) {
-            ab[i] = values[i].value().value();
-            D.row(i) = values[i].value().derivatives().head(n).transpose();
-            if (d2ab_dx2) {
-                H[static_cast<std::size_t>(i)].resize(n, n);
-                for (int j = 0; j < n; ++j)
-                    H[static_cast<std::size_t>(i)].row(j) =
-                        values[i].derivatives()[j].derivatives().head(n).transpose();
-                if (!H[static_cast<std::size_t>(i)].allFinite())
-                    throw InfeasibleState("Triangle mid-edge kinematics: non-finite second derivatives");
+    }
+    std::array<Eigen::Matrix3d, 4> dN_dx;
+    if (derivatives)
+        dN_dx = {cross_matrix(e2 - e1), -cross_matrix(e2), cross_matrix(e1), Eigen::Matrix3d::Zero()};
+    Eigen::Vector3d c = Eigen::Vector3d::Zero();
+    for (int k = 0; k < 3; ++k) {
+        const int p = opposite[static_cast<std::size_t>(k)];
+        if (p < 0)
+            continue;
+        const int j = (k + 1) % 3, l = (k + 2) % 3;
+        const Eigen::Vector3d v1 = x.row(l) - x.row(p), v2 = x.row(j) - x.row(p);
+        const Eigen::Vector3d N_k = v1.cross(v2), m = N + N_k;
+        const Eigen::Vector3d q = (x.row(j) - x.row(k)) + (x.row(l) - x.row(k));
+        const double r = m.norm(), s = q.dot(N_k), s_over_r = s / r;
+        c[k] = -s_over_r;
+        if (!derivatives)
+            continue;
+
+        const std::array<int, 4> rows{0, 1, 2, p};
+        std::array<int, 4> d_q{1, 1, 1, 0};
+        d_q[k] = -2;
+        std::array<Eigen::Matrix3d, 4> dNk_over_r;
+        dNk_over_r[k].setZero();
+        dNk_over_r[3] = cross_matrix((v2 - v1) / r);
+        dNk_over_r[l] = -cross_matrix(v2 / r);
+        dNk_over_r[j] = cross_matrix(v1 / r);
+        const Eigen::Vector3d m_hat = m / r;
+        std::array<Eigen::Matrix3d, 4> dm_over_r;
+        std::array<Eigen::Vector3d, 4> ds_over_r, dr_over_r;
+        for (int u = 0; u < 4; ++u) {
+            dm_over_r[u] = dN_dx[u] / r + dNk_over_r[u];
+            ds_over_r[u] = d_q[u] * (N_k / r) + dNk_over_r[u].transpose() * q;
+            dr_over_r[u] = dm_over_r[u].transpose() * m_hat;
+            if (dab_dx) {
+                const Eigen::Vector3d dc = -ds_over_r[u] + s_over_r * dr_over_r[u];
+                for (int row : b_rows[k])
+                    if (row >= 0)
+                        D.block<1, 3>(row, 3 * rows[u]) += dc.transpose();
             }
         }
-        if (!ab.allFinite() || !D.allFinite())
-            throw InfeasibleState("Triangle mid-edge kinematics: non-finite values or derivatives");
-        if (dab_dx)
-            *dab_dx = std::move(D);
-        if (d2ab_dx2)
-            *d2ab_dx2 = std::move(H);
+        if (!d2ab_dx2)
+            continue;
+        std::array<int, 4> alpha_k{}, beta_k{};
+        alpha_k[3] = beta_k[3] = -1;
+        alpha_k[l] = beta_k[j] = 1;
+        const Eigen::Matrix3d cross_q_over_r = cross_matrix(q / r), cross_m_hat_over_r = cross_matrix(m_hat / r);
+        // For a normal (x1-x0) x (x2-x0), its Hessian contracted with w has block
+        // (alpha_v*beta_u-alpha_u*beta_v)*[w]_x. Here c=-s/r, s=q.N_k, r=|N+N_k|.
+        for (int u = 0; u < 4; ++u)
+            for (int v = u; v < 4; ++v) {
+                const int hN = alpha[v] * beta[u] - alpha[u] * beta[v];
+                const int hNk = alpha_k[v] * beta_k[u] - alpha_k[u] * beta_k[v];
+                const Eigen::Matrix3d d2s_over_r =
+                    d_q[u] * dNk_over_r[v] + d_q[v] * dNk_over_r[u].transpose() + hNk * cross_q_over_r;
+                const Eigen::Matrix3d d2c =
+                    -d2s_over_r + ds_over_r[u] * dr_over_r[v].transpose() + dr_over_r[u] * ds_over_r[v].transpose() +
+                    s_over_r * (dm_over_r[u].transpose() * dm_over_r[v] + (hN + hNk) * cross_m_hat_over_r -
+                                3 * dr_over_r[u] * dr_over_r[v].transpose());
+                for (int row : b_rows[k])
+                    if (row >= 0) {
+                        H[row].block<3, 3>(3 * rows[u], 3 * rows[v]) += d2c;
+                        if (u != v)
+                            H[row].block<3, 3>(3 * rows[v], 3 * rows[u]) += d2c.transpose();
+                    }
+            }
     }
-    if (!ab.allFinite())
-        throw InfeasibleState("Triangle mid-edge kinematics: non-finite fundamental forms");
     TriangleMidEdgeKinematics result;
-    result.a << ab[0], ab[1], ab[1], ab[2];
-    result.b << ab[3], ab[4], ab[4], ab[5];
+    result.a << e1.dot(e1), e1.dot(e2), e1.dot(e2), e2.dot(e2);
+    result.b << c[0] + c[1], c[0], c[0], c[0] + c[2];
+    if (!result.a.allFinite() || !result.b.allFinite())
+        throw InfeasibleState("Triangle mid-edge kinematics: non-finite fundamental forms");
+    if (dab_dx && !D.allFinite())
+        throw InfeasibleState("Triangle mid-edge kinematics: non-finite first derivatives");
+    if (d2ab_dx2)
+        for (const auto& h : H)
+            if (!h.allFinite())
+                throw InfeasibleState("Triangle mid-edge kinematics: non-finite second derivatives");
+    if (dab_dx)
+        *dab_dx = std::move(D);
+    if (d2ab_dx2)
+        *d2ab_dx2 = std::move(H);
     return result;
 }
 

@@ -125,6 +125,54 @@ TEST(TriangleMidEdgeKinematics, FullAndBoundaryStencilDerivativesMatchFiniteDiff
     check_derivatives(x.topRows(3), {-1, -1, -1});
 }
 
+TEST(TriangleMidEdgeKinematics, EveryBoundaryMaskHasCorrectDerivativesAndUnusedRowsStayZero) {
+    const Eigen::MatrixXd x = curved_stencil();
+    for (int mask = 0; mask < 8; ++mask) {
+        SCOPED_TRACE(mask);
+        Eigen::MatrixXd compact = x;
+        std::array<int, 3> opposite{-1, -1, -1};
+        int rows = 3;
+        for (int k = 0; k < 3; ++k)
+            if (mask & (1 << k)) {
+                opposite[k] = rows;
+                compact.row(rows++) = x.row(3 + k);
+            }
+        compact.conservativeResize(rows, 3);
+        check_derivatives(compact, opposite);
+    }
+    Eigen::MatrixXd D;
+    std::array<Eigen::MatrixXd, 6> H;
+    eval_triangle_mid_edge_kinematics(x, {3, 3, -1}, &D, &H);
+    EXPECT_TRUE(D.rightCols(6).isZero(0));
+    for (const auto& h : H) {
+        EXPECT_TRUE(h.bottomRows(6).isZero(0));
+        EXPECT_TRUE(h.rightCols(6).isZero(0));
+    }
+}
+
+TEST(TriangleMidEdgeKinematics, DerivativesRespectTranslationAndHomogeneousScaling) {
+    for (const auto& opposite : {std::array<int, 3>{3, 4, 5}, std::array<int, 3>{3, 3, -1}}) {
+        const Eigen::MatrixXd x = curved_stencil();
+        Eigen::MatrixXd D;
+        std::array<Eigen::MatrixXd, 6> H;
+        const auto ab = pack(eval_triangle_mid_edge_kinematics(x, opposite, &D, &H));
+        const Eigen::VectorXd positions = x.reshaped<Eigen::RowMajor>();
+        for (int i = 0; i < 6; ++i) {
+            const double degree = i < 3 ? 2.0 : 1.0;
+            EXPECT_NEAR(D.row(i).dot(positions), degree * ab[i], 1e-12);
+            EXPECT_LT((H[i] * positions - (degree - 1) * D.row(i).transpose()).norm(), 1e-12);
+        }
+        for (int component = 0; component < 3; ++component) {
+            Eigen::VectorXd translation = Eigen::VectorXd::Zero(x.size());
+            for (int v = 0; v < x.rows(); ++v)
+                translation[3 * v + component] = 1;
+            EXPECT_TRUE((D * translation).isZero(1e-12));
+            for (const auto& h : H)
+                EXPECT_TRUE((h * translation).isZero(1e-12));
+        }
+    }
+}
+
 TEST(TriangleMidEdgeKinematics, DeduplicatedClosedStencilDerivativesMatchFiniteDifferences) {
     const TriangleTopology topology(4, {{0, 1, 2}, {0, 3, 1}, {1, 3, 2}, {2, 3, 0}});
     const auto stencils = make_triangle_mid_edge_stencils(topology);
