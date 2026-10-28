@@ -1,5 +1,5 @@
 #include "litepgo/energy/energy.hpp"
-#include "litepgo/fem/material/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 
 #include <Eigen/Geometry>
 #include <Eigen/LU>

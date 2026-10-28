@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/fem/material/material_inputs.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_inputs.hpp"
 
 namespace litepgo {
 
@@ -15,13 +15,13 @@ class NeoHookean final {
   public:
     static constexpr int num_parameters = 2;
 
-    static double eval_W(const MaterialInputs& inputs);
-    static Eigen::Matrix3d eval_dW_dF(const MaterialInputs& inputs);
-    static Eigen::Matrix<double, 9, 9> eval_d2W_dF2(const MaterialInputs& inputs);
-    static Eigen::Matrix3d eval_dW_dFp(const MaterialInputs& inputs);
-    static Eigen::Matrix<double, 9, 9> eval_d2W_dFp2(const MaterialInputs& inputs);
-    static Eigen::Vector2d eval_dW_dtheta(const MaterialInputs& inputs);
-    static Eigen::Matrix2d eval_d2W_dtheta2(const MaterialInputs& inputs);
+    static double eval_W(const VolumetricMaterialInputs& inputs);
+    static Eigen::Matrix3d eval_dW_dF(const VolumetricMaterialInputs& inputs);
+    static Eigen::Matrix<double, 9, 9> eval_d2W_dF2(const VolumetricMaterialInputs& inputs);
+    static Eigen::Matrix3d eval_dW_dFp(const VolumetricMaterialInputs& inputs);
+    static Eigen::Matrix<double, 9, 9> eval_d2W_dFp2(const VolumetricMaterialInputs& inputs);
+    static Eigen::Vector2d eval_dW_dtheta(const VolumetricMaterialInputs& inputs);
+    static Eigen::Matrix2d eval_d2W_dtheta2(const VolumetricMaterialInputs& inputs);
 };
 
 } // namespace litepgo

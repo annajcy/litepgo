@@ -6,8 +6,8 @@
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
-#include "litepgo/fem/local/material_local_energy.hpp"
-#include "litepgo/fem/material/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
+#include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 
 #include <Eigen/LU>
@@ -44,7 +44,7 @@ inline MeshEnergy make_tet_p1_mesh_energy(const Vec& X_nodes) {
             const auto& u_local = x_local;
             const auto u_field = InterpolatedField3D<TetP1Basis>(u_local);
             const auto deformation = DeformationGradientField3D(u_field, X_field);
-            const MaterialLocalEnergyF3D<NeoHookean> local_energy(deformation, Fp_field, theta_field);
+            const VolumetricMaterialLocalEnergyF3D<NeoHookean> local_energy(deformation, Fp_field, theta_field);
             if (dE_dx_local)
                 dE_dx_local->setZero(local_energy.num_dofs());
             if (d2E_dx_local2)

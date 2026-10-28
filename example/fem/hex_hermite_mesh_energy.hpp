@@ -8,8 +8,8 @@
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/kinematics/hex_hermite_dof_transform.hpp"
-#include "litepgo/fem/local/material_local_energy.hpp"
-#include "litepgo/fem/material/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
+#include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 
 #include <Eigen/LU>
@@ -67,7 +67,7 @@ inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X_nodes) {
             const auto u_local = hex_hermite_reference_coefficients(u_physical_local, dof_scales);
             const auto u_field = InterpolatedField3D<HexHermiteBasis>(u_local);
             const auto deformation = DeformationGradientField3D(u_field, X_field);
-            const MaterialLocalEnergyF3D<NeoHookean> local_energy(deformation, Fp_field, theta_field);
+            const VolumetricMaterialLocalEnergyF3D<NeoHookean> local_energy(deformation, Fp_field, theta_field);
             Vec dE_du_local;
             Eigen::MatrixXd d2E_du_local2;
             if (dE_dx_local)

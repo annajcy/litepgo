@@ -1,5 +1,5 @@
 #include "litepgo/energy/energy.hpp"
-#include "litepgo/fem/material/multiplicative_kinematics.hpp"
+#include "litepgo/fem/material/volumetric/multiplicative_kinematics.hpp"
 
 #include <Eigen/LU>
 #include <gtest/gtest.h>

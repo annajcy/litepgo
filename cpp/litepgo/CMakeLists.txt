@@ -7,8 +7,8 @@ add_library(litepgo STATIC
     energy/energy.cpp
     energy/quadratic_energy.cpp
     energy/weighted_energy_sum.cpp
-    fem/material/multiplicative_kinematics.cpp
-    fem/material/neo_hookean.cpp
+    fem/material/volumetric/multiplicative_kinematics.cpp
+    fem/material/volumetric/neo_hookean.cpp
     fem/local/dof_derivatives.cpp
     fem/local/local_energy.cpp
     fem/kinematics/triangle_mid_edge_kinematics.cpp

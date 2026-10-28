@@ -3,7 +3,7 @@
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
-#include "litepgo/fem/local/material_local_energy.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 
 #include <utility>
 
@@ -37,7 +37,7 @@ template <class FSource, class FpSource, class ThetaSource> struct MaterialSourc
     FSource F;
     FpSource Fp;
     ThetaSource theta;
-    MaterialInputs eval(const Eigen::Vector3d& xi) const {
+    VolumetricMaterialInputs eval(const Eigen::Vector3d& xi) const {
         return {F.eval_value(xi).reshaped(3, 3), Fp.eval_value(xi).reshaped(3, 3), theta.eval_value(xi)};
     }
 };

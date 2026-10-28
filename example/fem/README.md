@@ -24,8 +24,8 @@ flowchart TD
 | `fem/quadrature/` | Reference points and weights, grouped into `1d/`, `2d/`, and `3d/` |
 | `fem/field/` | `Field2D/3D`, `InterpolatedField2D/3D`, `IdentityField2D/3D`, and `DeformationGradientField3D` |
 | `fem/kinematics/` | Triangle mid-edge fundamental forms and the Hex Hermite coefficient transform |
-| `fem/material/` | Numerical constitutive inputs, density, and material derivatives |
-| `fem/local/` | Pointwise local energies, active-input binding, and derivative contractions |
+| `fem/material/volumetric/` | Volumetric inputs, multiplicative kinematics, Neo-Hookean material, and the `VolumetricMaterialLocalEnergy3D` family |
+| `fem/local/` | Shared `LocalEnergy2D/3D` interfaces and derivative contractions |
 
 The 1D basis building blocks are `LinearLagrangeBasis` and `CubicHermiteBasis`. Tensor-product types use `2D` or `3D` suffixes, mirrored as `_2d` or `_3d` in their filenames.
 
@@ -155,7 +155,7 @@ using Q = litepgo::TriangleCentroidQuadrature;
 
 `TriangleCentroidQuadrature` samples `(1/3,1/3)` with weight `1/2`, including the reference triangle's area, and integrates polynomials through degree 1 exactly. Multiply that weight by `norm(X_xi.cross(X_eta))` for the physical reference-area weight; the result is the triangle's area, without another factor of `1/2`. The square rules `GaussLegendre2D` use a different reference domain.
 
-The element callback chooses the geometric measure. For a three-component surface coordinate field, its 3-by-2 derivative supplies reference area `norm(X_xi.cross(X_eta))`; pass this times the quadrature weight to `LocalEnergy2D::accumulate`. `MeshEnergy` and the DOF assembler already accept these elements. The deformation field `DeformationGradientField3D` and the material energies `MaterialLocalEnergyF3D`, `MaterialLocalEnergyFp3D`, and `MaterialLocalEnergyTheta3D` are 3D solid APIs. Koiter kinematics and energy are not part of this 2D foundation.
+The element callback chooses the geometric measure. For a three-component surface coordinate field, its 3-by-2 derivative supplies reference area `norm(X_xi.cross(X_eta))`; pass this times the quadrature weight to `LocalEnergy2D::accumulate`. `MeshEnergy` and the DOF assembler already accept these elements. The deformation field `DeformationGradientField3D` and the material energies `VolumetricMaterialLocalEnergyF3D`, `VolumetricMaterialLocalEnergyFp3D`, and `VolumetricMaterialLocalEnergyTheta3D` are 3D solid APIs. Koiter kinematics and energy are not part of this 2D foundation.
 
 Material input fields inherit `Field3D`. Only the selected active field needs usable coefficient derivatives and a positive DOF count; inactive fields may report zero DOFs and throw from unsupported derivatives. The active map must be affine in its coefficients. Custom affine parameter fields may have a coefficient count different from their number of output components.
 
@@ -202,14 +202,14 @@ The implementation obtains `eval_dgrad_xi_dcoeffs(xi)` from the displacement fie
 
 `F`, `Fp`, and `Fe = F * inverse(Fp)` are 3-by-3 total, plastic, and elastic deformation gradients. `theta` is a pointwise material parameter vector; Neo-Hookean uses `[lambda, mu]`. Its energy density per original rest volume is `W = det_Fp * psi`, with `psi` measured per plastic intermediate volume.
 
-Material APIs keep numerical `MaterialInputs{F, Fp, theta}`. They do not sample fields or select quadrature. `eval_W` returns the density. `eval_dW_dF` and `eval_dW_dFp` return 3-by-3 matrices; their Hessians `eval_d2W_dF2` and `eval_d2W_dFp2` are 9-by-9 over column-major vectorization. `eval_dW_dtheta` and `eval_d2W_dtheta2` differentiate the pointwise parameter vector. Elastic derivative helpers use `eval_dpsi_dFe` and `eval_d2psi_dFe2`; inverse/determinant variables use `inv_Fp`, `inv_Fe_T`, `det_Fe`, `det_Fp`, and `log_det_Fe`. Directional changes use `delta_`; optimizer steps retain `dx` and `dx_local`.
+Material APIs keep numerical `VolumetricMaterialInputs{F, Fp, theta}`. They do not sample fields or select quadrature. `eval_W` returns the density. `eval_dW_dF` and `eval_dW_dFp` return 3-by-3 matrices; their Hessians `eval_d2W_dF2` and `eval_d2W_dFp2` are 9-by-9 over column-major vectorization. `eval_dW_dtheta` and `eval_d2W_dtheta2` differentiate the pointwise parameter vector. Elastic derivative helpers use `eval_dpsi_dFe` and `eval_d2psi_dFe2`; inverse/determinant variables use `inv_Fp`, `inv_Fe_T`, `det_Fe`, `det_Fp`, and `log_det_Fe`. Directional changes use `delta_`; optimizer steps retain `dx` and `dx_local`.
 
 The element callback keeps geometry, material binding, and quadrature together. Here `X_fields` owns the coordinate fields for the elements, and `x_local` contains the gathered Q1 displacement coefficients:
 
 ```cpp
-#include "litepgo/fem/material/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
-#include "litepgo/fem/local/material_local_energy.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 
 #include <Eigen/LU>
 #include <cmath>
@@ -221,7 +221,7 @@ const auto eval_element =
         const auto& X_field = X_fields[static_cast<std::size_t>(e)];
         const litepgo::InterpolatedField3D<litepgo::HexQ1Basis> u_field(x_local);
         const litepgo::DeformationGradientField3D deformation(u_field, X_field);
-        const litepgo::MaterialLocalEnergyF3D<litepgo::NeoHookean> local_energy(
+        const litepgo::VolumetricMaterialLocalEnergyF3D<litepgo::NeoHookean> local_energy(
             deformation, Fp_field, theta_field);
         if (g)
             g->setZero(local_energy.num_dofs());
@@ -246,7 +246,7 @@ const auto eval_element =
 
 `GaussLegendre3D<PointsPerAxis>` uses `PointsPerAxis^3` integration points on `[0,1]^3`; `<2>` therefore uses eight points.
 
-`MaterialLocalEnergyF3D<Material>`, `MaterialLocalEnergyFp3D<Material>`, and `MaterialLocalEnergyTheta3D<Material>` select the active input by their class name. Each constructor accepts `(F_field, Fp_field, theta_field)` as three `const Field3D&` inputs. The abstract `MaterialLocalEnergy3D<Material>` base shares input validation, density evaluation and coefficient pullbacks; each concrete class chooses its active field and calls the matching material gradient and Hessian. There is no runtime activity enum. A material only needs to implement `eval_W` and the derivative pair used by the selected class.
+`VolumetricMaterialLocalEnergyF3D<Material>`, `VolumetricMaterialLocalEnergyFp3D<Material>`, and `VolumetricMaterialLocalEnergyTheta3D<Material>` select the active input by their class name. Each constructor accepts `(F_field, Fp_field, theta_field)` as three `const Field3D&` inputs. The abstract `VolumetricMaterialLocalEnergy3D<Material>` base shares input validation, density evaluation and coefficient pullbacks; each concrete class chooses its active field and calls the matching material gradient and Hessian. There is no runtime activity enum. A material only needs to implement `eval_W` and the derivative pair used by the selected class.
 
 All three input fields must outlive the energy, and temporary input fields are rejected. A copied energy borrows the same fields, so subsequent field updates are visible. A composed `F` field activates displacement coefficients; direct `F` or `Fp` coefficients can use a nine-component `IdentityField3D`. Non-positive active DOF counts are rejected at construction.
 
@@ -362,7 +362,7 @@ Use explicit `2D` / `3D` names for dimension-specific types. The dimensionless n
 | `field.value(point)` | `field.eval_value(xi)`; composed deformation fields return nine components |
 | `dvalue_dx_local(xi)`, `dgrad_xi_dx_local(xi)` | `eval_dvalue_dcoeffs(xi)`, `eval_dgrad_xi_dcoeffs(xi)` |
 | `field.jacobian(point)` / `dF_dx_local` | `field.eval_dvalue_dcoeffs(xi)` |
-| `MaterialLocalEnergy3D<Material>(F, Fp, theta, active)` or `make_material_local_energy<Material, Active>` | `MaterialLocalEnergyF3D`, `MaterialLocalEnergyFp3D`, or `MaterialLocalEnergyTheta3D`, with named `Field3D` inputs |
+| `VolumetricMaterialLocalEnergy3D<Material>(F, Fp, theta, active)` or `make_material_local_energy<Material, Active>` | `VolumetricMaterialLocalEnergyF3D`, `VolumetricMaterialLocalEnergyFp3D`, or `VolumetricMaterialLocalEnergyTheta3D`, with named `Field3D` inputs |
 | Volume integration helper | Quadrature loop inside the element lambda, passing `w_q * det(dX_dxi)` to `local_energy.accumulate` |
 | `B::evaluate(xi)` and `Basis::Sample` | `B::eval_N(xi)`, `B::eval_dN_dxi(xi)`, `B::eval_d2N_dxi2(xi)` |
 | `RestPointData::position`, `jacobian`, `inverse_jacobian`, `jacobian_determinant` | Field3D values, coordinate Jacobians, their inverses, and their determinants |

@@ -1,6 +1,6 @@
-#include "litepgo/fem/material/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/energy/energy.hpp"
-#include "litepgo/fem/material/multiplicative_kinematics.hpp"
+#include "litepgo/fem/material/volumetric/multiplicative_kinematics.hpp"
 
 #include <Eigen/LU>
 #include <cmath>
@@ -59,7 +59,7 @@ Eigen::Matrix<double, 9, 9> eval_d2psi_dFe2(const Eigen::VectorXd& theta, double
 
 } // namespace
 
-double NeoHookean::eval_W(const MaterialInputs& inputs) {
+double NeoHookean::eval_W(const VolumetricMaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics kinematics(F, Fp);
     const Eigen::Matrix3d& Fe = kinematics.elastic_gradient();
@@ -67,7 +67,7 @@ double NeoHookean::eval_W(const MaterialInputs& inputs) {
     return kinematics.eval_W(eval_psi(Fe, theta, log_det_Fe));
 }
 
-Eigen::Matrix3d NeoHookean::eval_dW_dF(const MaterialInputs& inputs) {
+Eigen::Matrix3d NeoHookean::eval_dW_dF(const VolumetricMaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics kinematics(F, Fp);
     const Eigen::Matrix3d& Fe = kinematics.elastic_gradient();
@@ -75,7 +75,7 @@ Eigen::Matrix3d NeoHookean::eval_dW_dF(const MaterialInputs& inputs) {
     return kinematics.eval_dW_dF(eval_dpsi_dFe(Fe, theta, log_det_Fe, eval_inv_Fe_T(Fe)));
 }
 
-Eigen::Matrix<double, 9, 9> NeoHookean::eval_d2W_dF2(const MaterialInputs& inputs) {
+Eigen::Matrix<double, 9, 9> NeoHookean::eval_d2W_dF2(const VolumetricMaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics kinematics(F, Fp);
     const Eigen::Matrix3d& Fe = kinematics.elastic_gradient();
@@ -83,7 +83,7 @@ Eigen::Matrix<double, 9, 9> NeoHookean::eval_d2W_dF2(const MaterialInputs& input
     return kinematics.eval_d2W_dF2(eval_d2psi_dFe2(theta, log_det_Fe, eval_inv_Fe_T(Fe)));
 }
 
-Eigen::Matrix3d NeoHookean::eval_dW_dFp(const MaterialInputs& inputs) {
+Eigen::Matrix3d NeoHookean::eval_dW_dFp(const VolumetricMaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics kinematics(F, Fp);
     const Eigen::Matrix3d& Fe = kinematics.elastic_gradient();
@@ -92,7 +92,7 @@ Eigen::Matrix3d NeoHookean::eval_dW_dFp(const MaterialInputs& inputs) {
                                   eval_dpsi_dFe(Fe, theta, log_det_Fe, eval_inv_Fe_T(Fe)));
 }
 
-Eigen::Matrix<double, 9, 9> NeoHookean::eval_d2W_dFp2(const MaterialInputs& inputs) {
+Eigen::Matrix<double, 9, 9> NeoHookean::eval_d2W_dFp2(const VolumetricMaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics kinematics(F, Fp);
     const Eigen::Matrix3d& Fe = kinematics.elastic_gradient();
@@ -102,7 +102,7 @@ Eigen::Matrix<double, 9, 9> NeoHookean::eval_d2W_dFp2(const MaterialInputs& inpu
                                     eval_d2psi_dFe2(theta, log_det_Fe, inv_Fe_T));
 }
 
-Eigen::Vector2d NeoHookean::eval_dW_dtheta(const MaterialInputs& inputs) {
+Eigen::Vector2d NeoHookean::eval_dW_dtheta(const VolumetricMaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics kinematics(F, Fp);
     const Eigen::Matrix3d& Fe = kinematics.elastic_gradient();
@@ -112,7 +112,7 @@ Eigen::Vector2d NeoHookean::eval_dW_dtheta(const MaterialInputs& inputs) {
     return kinematics.plastic_volume_ratio() * dW_dtheta;
 }
 
-Eigen::Matrix2d NeoHookean::eval_d2W_dtheta2(const MaterialInputs& inputs) {
+Eigen::Matrix2d NeoHookean::eval_d2W_dtheta2(const VolumetricMaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics kinematics(F, Fp);
     eval_log_det_Fe(kinematics.elastic_gradient(), theta);

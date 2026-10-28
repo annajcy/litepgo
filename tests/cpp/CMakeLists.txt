@@ -25,7 +25,7 @@ add_executable(litepgo_tests
     fem/field/field_gtest.cpp
     fem/field/identity_field_gtest.cpp
     fem/field/deformation_gradient_field_gtest.cpp
-    fem/local/material_sources_gtest.cpp
+    fem/material/volumetric/material_sources_gtest.cpp
     fem/quadrature/1d/gauss_legendre_1d_gtest.cpp
     fem/basis/3d/hex_q1_basis_gtest.cpp
     fem/basis/3d/hex_hermite_basis_gtest.cpp
@@ -36,11 +36,11 @@ add_executable(litepgo_tests
     fem/basis/1d/linear_lagrange_basis_gtest.cpp
     fem/local/local_energy_gtest.cpp
     fem/local/dof_derivatives_gtest.cpp
-    fem/material/material_inputs_gtest.cpp
-    fem/material/multiplicative_kinematics_gtest.cpp
+    fem/material/volumetric/volumetric_material_inputs_gtest.cpp
+    fem/material/volumetric/multiplicative_kinematics_gtest.cpp
     fem/kinematics/triangle_mid_edge_kinematics_gtest.cpp
-    fem/material/neo_hookean_gtest.cpp
-    fem/local/material_local_energy_gtest.cpp
+    fem/material/volumetric/neo_hookean_gtest.cpp
+    fem/material/volumetric/volumetric_material_local_energy_gtest.cpp
     fem/quadrature/quadrature_gtest.cpp
     fem/quadrature/2d/tensor_product_quadrature_2d_gtest.cpp
     fem/quadrature/2d/triangle_centroid_quadrature_gtest.cpp
@@ -49,9 +49,9 @@ add_executable(litepgo_tests
     fem/quadrature/3d/tensor_product_quadrature_3d_gtest.cpp
     dof/vertex_dof_map_gtest.cpp
     dof/stencil_dof_map_gtest.cpp
-    fem/local/volume_integration_gtest.cpp
+    fem/material/volumetric/volume_integration_gtest.cpp
     fem/local/surface_integration_gtest.cpp
-    fem/local/tet_p1_integration_gtest.cpp
+    fem/material/volumetric/tet_p1_integration_gtest.cpp
     dof/dof_reduction_gtest.cpp
     linalg/reduced_matrix_gtest.cpp
     linalg/sparse_pattern_gtest.cpp

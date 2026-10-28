@@ -1,4 +1,4 @@
-#include "litepgo/fem/material/multiplicative_kinematics.hpp"
+#include "litepgo/fem/material/volumetric/multiplicative_kinematics.hpp"
 #include "litepgo/energy/energy.hpp"
 
 #include <Eigen/LU>
