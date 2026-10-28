@@ -11,6 +11,6 @@ namespace litepgo {
 // Compute once per fixed rest element. Invalid dimensions, non-finite coordinates, non-box geometry,
 // or non-finite/non-positive lengths or scales throw invalid_argument.
 // shortcut: positive axis-aligned rest boxes only; general rest hexes need a different DOF mapping.
-Eigen::DiagonalMatrix<double, Eigen::Dynamic> hex_hermite_dof_transform(const Eigen::MatrixXd& X_nodes);
+Eigen::DiagonalMatrix<double, Eigen::Dynamic> eval_hex_hermite_dof_transform(const Eigen::MatrixXd& X_nodes);
 
 } // namespace litepgo

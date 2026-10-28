@@ -30,17 +30,17 @@ TEST(QuadraticEnergy, EvaluatesValueGradientAndHessian) {
     const QuadraticEnergy energy(A, b);
     const Vec x = Vec::LinSpaced(3, -1.0, 2.0);
     const Eigen::MatrixXd dense = Eigen::MatrixXd(A);
-    EXPECT_DOUBLE_EQ(energy.value(x), 0.5 * x.dot(dense * x) + b.dot(x));
-    EXPECT_EQ(energy.gradient(x), Vec(dense * x + b));
-    EXPECT_EQ(Eigen::MatrixXd(energy.hessian(x)), dense);
-    EXPECT_EQ(Eigen::MatrixXd(energy.hessian(x, HessianKind::Projected)), dense);
+    EXPECT_DOUBLE_EQ(energy.eval_value(x), 0.5 * x.dot(dense * x) + b.dot(x));
+    EXPECT_EQ(energy.eval_gradient(x), Vec(dense * x + b));
+    EXPECT_EQ(Eigen::MatrixXd(energy.eval_hessian(x)), dense);
+    EXPECT_EQ(Eigen::MatrixXd(energy.eval_hessian(x, HessianKind::Projected)), dense);
     litepgo::testing::expect_derivatives_match(energy, x);
 }
 
 TEST(QuadraticEnergy, DefaultsToNoLinearTerm) {
     const QuadraticEnergy energy(symmetric_matrix());
     const Vec x = Vec::LinSpaced(3, -1.0, 2.0);
-    EXPECT_EQ(energy.gradient(x), Vec(symmetric_matrix() * x));
+    EXPECT_EQ(energy.eval_gradient(x), Vec(symmetric_matrix() * x));
     EXPECT_TRUE(energy.has_fixed_pattern());
 }
 

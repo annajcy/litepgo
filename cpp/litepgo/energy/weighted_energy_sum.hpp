@@ -38,7 +38,7 @@ class WeightedEnergySum final : public Energy {
     explicit WeightedEnergySum(Setup setup);
 
     std::optional<SpMat> refresh_pattern(const ConstVecRef& x) override;
-    double evaluate_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const override;
+    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const override;
     double feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const override;
 
     void rebuild_positions(const SpMat& pattern);

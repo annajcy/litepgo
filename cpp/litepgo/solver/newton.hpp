@@ -54,7 +54,7 @@ struct NewtonResult {
 // their x0 values exactly. solver factors the free block of the Hessian; it is
 // analyzed at the start and whenever the energy's pattern changes.
 //
-// Each iteration: update the pattern, evaluate value, gradient and Hessian once,
+// Each iteration: update the pattern, eval value, gradient and Hessian once,
 // stop if converged, solve for a descent direction (shifting the diagonal when the
 // system does not factor or the solution is not a descent direction), then search
 // along it: start at max_feasible_step, shrink until the energy decreases or stays

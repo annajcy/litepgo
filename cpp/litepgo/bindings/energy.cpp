@@ -41,17 +41,18 @@ void bind_energy(nb::module_& m) {
             "The current Hessian sparsity pattern (zero values), as a copy.")
         .def("update_pattern", &Energy::update_pattern, "x"_a, nb::call_guard<nb::gil_scoped_release>(),
              "Adapt the Hessian pattern to x; returns whether it changed.")
-        .def("value", &Energy::value, "x"_a, nb::call_guard<nb::gil_scoped_release>())
-        .def("gradient", &Energy::gradient, "x"_a, nb::call_guard<nb::gil_scoped_release>())
+        .def("eval_value", &Energy::eval_value, "x"_a, nb::call_guard<nb::gil_scoped_release>())
+        .def("eval_gradient", &Energy::eval_gradient, "x"_a, nb::call_guard<nb::gil_scoped_release>())
         .def(
-            "hessian", [](const Energy& energy, const ConstVecRef& x) { return energy.hessian(x, HessianKind::Exact); },
+            "eval_hessian",
+            [](const Energy& energy, const ConstVecRef& x) { return energy.eval_hessian(x, HessianKind::Exact); },
             "x"_a, nb::call_guard<nb::gil_scoped_release>(), "The exact Hessian.")
         .def(
-            "projected_hessian",
-            [](const Energy& energy, const ConstVecRef& x) { return energy.hessian(x, HessianKind::Projected); }, "x"_a,
-            nb::call_guard<nb::gil_scoped_release>(), "The PSD-projected Hessian.")
+            "eval_projected_hessian",
+            [](const Energy& energy, const ConstVecRef& x) { return energy.eval_hessian(x, HessianKind::Projected); },
+            "x"_a, nb::call_guard<nb::gil_scoped_release>(), "The PSD-projected Hessian.")
         .def(
-            "evaluate",
+            "eval",
             [](const Energy& energy, const ConstVecRef& x, bool want_gradient, std::optional<HessianKind> kind) {
                 Vec gradient;
                 SpMat hessian;
@@ -61,8 +62,8 @@ void bind_energy(nb::module_& m) {
                     if (kind) {
                         hessian = energy.hessian_pattern();
                     }
-                    value = energy.evaluate(x, want_gradient ? &gradient : nullptr, kind ? &hessian : nullptr,
-                                            kind.value_or(HessianKind::Exact));
+                    value = energy.eval(x, want_gradient ? &gradient : nullptr, kind ? &hessian : nullptr,
+                                        kind.value_or(HessianKind::Exact));
                 }
                 return nb::make_tuple(value, want_gradient ? nb::cast(std::move(gradient)) : nb::none(),
                                       kind ? nb::cast(std::move(hessian)) : nb::none());

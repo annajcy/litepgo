@@ -27,27 +27,27 @@ template <int ParamDim> class IdentityFieldT final : public FieldT<ParamDim> {
     int num_components() const override {
         return static_cast<int>(coeffs_.size());
     }
-    Eigen::VectorXd value(const Coordinate& xi) const override {
+    Eigen::VectorXd eval_value(const Coordinate& xi) const override {
         check_xi(xi);
         return coeffs_;
     }
-    SpatialDerivative dvalue_dxi(const Coordinate& xi) const override {
+    SpatialDerivative eval_dvalue_dxi(const Coordinate& xi) const override {
         check_xi(xi);
         return SpatialDerivative::Zero(coeffs_.size(), ParamDim);
     }
-    Eigen::MatrixXd dvalue_dcoeffs(const Coordinate& xi) const override {
+    Eigen::MatrixXd eval_dvalue_dcoeffs(const Coordinate& xi) const override {
         check_xi(xi);
         return Eigen::MatrixXd::Identity(coeffs_.size(), coeffs_.size());
     }
-    Eigen::MatrixXd dgrad_xi_dcoeffs(const Coordinate& xi) const override {
+    Eigen::MatrixXd eval_dgrad_xi_dcoeffs(const Coordinate& xi) const override {
         check_xi(xi);
         return Eigen::MatrixXd::Zero(ParamDim * coeffs_.size(), coeffs_.size());
     }
-    SpatialHessian d2value_dxi2(const Coordinate& xi) const override {
+    SpatialHessian eval_d2value_dxi2(const Coordinate& xi) const override {
         check_xi(xi);
         return SpatialHessian::Zero(coeffs_.size(), Base::num_second_derivatives);
     }
-    Eigen::MatrixXd dhess_xi_dcoeffs(const Coordinate& xi) const override {
+    Eigen::MatrixXd eval_dhess_xi_dcoeffs(const Coordinate& xi) const override {
         check_xi(xi);
         return Eigen::MatrixXd::Zero(Base::num_second_derivatives * coeffs_.size(), coeffs_.size());
     }

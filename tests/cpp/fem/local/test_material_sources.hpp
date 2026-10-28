@@ -22,11 +22,11 @@ template <class UField, class XField> class OwnedDeformationField final : public
     const Field3D& coordinate_field() const {
         return X_field_;
     }
-    Eigen::VectorXd value(const Eigen::Vector3d& xi) const override {
-        return DeformationGradientField3D(u_field_, X_field_).value(xi);
+    Eigen::VectorXd eval_value(const Eigen::Vector3d& xi) const override {
+        return DeformationGradientField3D(u_field_, X_field_).eval_value(xi);
     }
-    Eigen::MatrixXd dvalue_dcoeffs(const Eigen::Vector3d& xi) const override {
-        return DeformationGradientField3D(u_field_, X_field_).dvalue_dcoeffs(xi);
+    Eigen::MatrixXd eval_dvalue_dcoeffs(const Eigen::Vector3d& xi) const override {
+        return DeformationGradientField3D(u_field_, X_field_).eval_dvalue_dcoeffs(xi);
     }
 
   private:
@@ -37,8 +37,8 @@ template <class FSource, class FpSource, class ThetaSource> struct MaterialSourc
     FSource F;
     FpSource Fp;
     ThetaSource theta;
-    MaterialInputs evaluate(const Eigen::Vector3d& xi) const {
-        return {F.value(xi).reshaped(3, 3), Fp.value(xi).reshaped(3, 3), theta.value(xi)};
+    MaterialInputs eval(const Eigen::Vector3d& xi) const {
+        return {F.eval_value(xi).reshaped(3, 3), Fp.eval_value(xi).reshaped(3, 3), theta.eval_value(xi)};
     }
 };
 template <class Energy, class Sources> auto bind_energy(const Sources& fields) {

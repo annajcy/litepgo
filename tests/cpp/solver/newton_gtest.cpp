@@ -66,7 +66,7 @@ class WrongGradientEnergy final : public litepgo::FixedPatternEnergy {
     explicit WrongGradientEnergy(int n) : FixedPatternEnergy(n, litepgo::testing::chain_pattern(n, {})) {}
 
   private:
-    double evaluate_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const override {
+    double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const override {
         if (gradient != nullptr) {
             *gradient = -x;
         }
@@ -83,7 +83,7 @@ class BrokenHessianEnergy final : public litepgo::FixedPatternEnergy {
     explicit BrokenHessianEnergy(int n) : FixedPatternEnergy(n, litepgo::testing::chain_pattern(n, {})) {}
 
   private:
-    double evaluate_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const override {
+    double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const override {
         if (gradient != nullptr) {
             *gradient = x;
         }
@@ -154,7 +154,7 @@ TEST(Newton, ConvergesOnANonlinearEnergyFromFarAway) {
         opts.hessian = kind;
         const NewtonResult result = solve(energy, Vec::LinSpaced(6, 3.0, 4.0), {}, opts);
         EXPECT_EQ(result.status, NewtonStatus::Converged);
-        EXPECT_LE(energy.gradient(result.x).cwiseAbs().maxCoeff(), 1e-9);
+        EXPECT_LE(energy.eval_gradient(result.x).cwiseAbs().maxCoeff(), 1e-9);
     }
 }
 
@@ -235,7 +235,7 @@ TEST(Newton, WithEveryDofFixedJustEvaluates) {
     const NewtonResult result = solve(energy, x0, {0, 1, 2});
     EXPECT_EQ(result.status, NewtonStatus::Converged);
     EXPECT_EQ(result.x, x0);
-    EXPECT_EQ(result.energy, energy.value(x0));
+    EXPECT_EQ(result.energy, energy.eval_value(x0));
 }
 
 TEST(Newton, ChecksItsArguments) {

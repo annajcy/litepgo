@@ -6,15 +6,15 @@
 template <int Parameters> struct QuadraticParameterMaterial {
     QuadraticParameterMaterial() = delete; // The adapter must not construct a material.
     static constexpr int num_parameters = Parameters;
-    static double value(const litepgo::MaterialInputs& inputs) {
+    static double eval_W(const litepgo::MaterialInputs& inputs) {
         check(inputs);
         return 0.5 * inputs.theta.squaredNorm();
     }
-    static Eigen::VectorXd dW_dtheta(const litepgo::MaterialInputs& inputs) {
+    static Eigen::VectorXd eval_dW_dtheta(const litepgo::MaterialInputs& inputs) {
         check(inputs);
         return inputs.theta;
     }
-    static Eigen::MatrixXd d2W_dtheta2(const litepgo::MaterialInputs& inputs) {
+    static Eigen::MatrixXd eval_d2W_dtheta2(const litepgo::MaterialInputs& inputs) {
         check(inputs);
         return Eigen::MatrixXd::Identity(num_parameters, num_parameters);
     }

@@ -37,13 +37,13 @@ void expect_weighted_sum(const Energy& sum, const std::vector<WeightedEnergy>& t
     Vec gradient = Vec::Zero(x.size());
     Eigen::MatrixXd hessian = Eigen::MatrixXd::Zero(x.size(), x.size());
     for (const WeightedEnergy& term : terms) {
-        value += term.weight * term.energy->value(x);
-        gradient += term.weight * term.energy->gradient(x);
-        hessian += term.weight * Eigen::MatrixXd(term.energy->hessian(x, kind));
+        value += term.weight * term.energy->eval_value(x);
+        gradient += term.weight * term.energy->eval_gradient(x);
+        hessian += term.weight * Eigen::MatrixXd(term.energy->eval_hessian(x, kind));
     }
-    EXPECT_NEAR(sum.value(x), value, 1e-12);
-    EXPECT_LE((sum.gradient(x) - gradient).cwiseAbs().maxCoeff(), 1e-12);
-    EXPECT_LE((Eigen::MatrixXd(sum.hessian(x, kind)) - hessian).cwiseAbs().maxCoeff(), 1e-12);
+    EXPECT_NEAR(sum.eval_value(x), value, 1e-12);
+    EXPECT_LE((sum.eval_gradient(x) - gradient).cwiseAbs().maxCoeff(), 1e-12);
+    EXPECT_LE((Eigen::MatrixXd(sum.eval_hessian(x, kind)) - hessian).cwiseAbs().maxCoeff(), 1e-12);
 }
 
 } // namespace
@@ -95,9 +95,9 @@ TEST(WeightedEnergySum, InfeasibleTermThrowsThroughTheSumWhateverItsWeight) {
         const WeightedEnergySum sum(
             {{std::make_shared<DoubleWellChain>(3), 1.0}, {std::make_shared<HalfSpaceBarrier>(3, 1), weight}});
         const Vec infeasible = (Vec(3) << 0.0, 2.0, 0.0).finished();
-        EXPECT_THROW(sum.value(infeasible), litepgo::InfeasibleState);
+        EXPECT_THROW(sum.eval_value(infeasible), litepgo::InfeasibleState);
         Vec gradient;
-        EXPECT_THROW(sum.evaluate(infeasible, &gradient, nullptr), litepgo::InfeasibleState);
+        EXPECT_THROW(sum.eval(infeasible, &gradient, nullptr), litepgo::InfeasibleState);
     }
 }
 
@@ -106,7 +106,7 @@ TEST(WeightedEnergySum, SharedAndNestedTerms) {
     const auto inner = std::make_shared<WeightedEnergySum>(std::vector<WeightedEnergy>{{chain, 1.0}, {chain, 2.0}});
     const WeightedEnergySum outer({{inner, 0.5}, {chain, 1.0}});
     const Vec x = Vec::LinSpaced(4, -1.0, 1.0);
-    EXPECT_NEAR(outer.value(x), 2.5 * chain->value(x), 1e-12);
+    EXPECT_NEAR(outer.eval_value(x), 2.5 * chain->eval_value(x), 1e-12);
     litepgo::testing::expect_derivatives_match(outer, x);
 }
 
@@ -137,9 +137,9 @@ TEST(WeightedEnergySum, DetectsATermUpdatedElsewhere) {
     const Vec x = (Vec(4) << 1.0, 1.0, -2.0, 3.0).finished();
 
     ASSERT_TRUE(switching->update_pattern(x)); // behind the sum's back
-    EXPECT_THROW(sum.hessian(x), std::logic_error);
-    EXPECT_NO_THROW(sum.value(x));
+    EXPECT_THROW(sum.eval_hessian(x), std::logic_error);
+    EXPECT_NO_THROW(sum.eval_value(x));
     // The term already reports no change, but the sum compares patterns and rebuilds.
     EXPECT_TRUE(sum.update_pattern(x));
-    EXPECT_NO_THROW(sum.hessian(x));
+    EXPECT_NO_THROW(sum.eval_hessian(x));
 }

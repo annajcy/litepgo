@@ -37,19 +37,19 @@ template <class B> void check_derivative() {
     EXPECT_EQ(field.num_components(), 9);
     EXPECT_EQ(field.num_dofs(), coefficients.size());
     for (const Eigen::Vector3d xi : {Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(-0.2, 1.1, 0.1)}) {
-        const auto derivative = field.dvalue_dcoeffs(xi);
+        const auto derivative = field.eval_dvalue_dcoeffs(xi);
         const Eigen::MatrixXd expected =
-            Eigen::kroneckerProduct(X_field.dvalue_dxi(xi).inverse().transpose(), Eigen::Matrix3d::Identity()) *
-            u_field.dgrad_xi_dcoeffs(xi);
+            Eigen::kroneckerProduct(X_field.eval_dvalue_dxi(xi).inverse().transpose(), Eigen::Matrix3d::Identity()) *
+            u_field.eval_dgrad_xi_dcoeffs(xi);
         EXPECT_TRUE(derivative.isApprox(expected, 1e-14));
         for (int j = 0; j < coefficients.size(); ++j) {
             auto plus = coefficients, minus = coefficients;
             plus(j / 3, j % 3) += 1e-5;
             minus(j / 3, j % 3) -= 1e-5;
             const InterpolatedField3D<B> a(plus), b(minus);
-            const Eigen::VectorXd fd =
-                (DeformationGradientField3D(a, X_field).value(xi) - DeformationGradientField3D(b, X_field).value(xi)) /
-                2e-5;
+            const Eigen::VectorXd fd = (DeformationGradientField3D(a, X_field).eval_value(xi) -
+                                        DeformationGradientField3D(b, X_field).eval_value(xi)) /
+                                       2e-5;
             EXPECT_LT((fd - derivative.col(j)).norm(), 1e-9 * (1 + derivative.col(j).norm()));
         }
     }
@@ -75,12 +75,12 @@ TEST(DeformationGradientField3D, BorrowsNamedFieldsAndRejectsTemporaryInputs) {
     const auto copy = deformation;
     EXPECT_EQ(&copy.coordinate_field(), &X_field);
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
-    const auto owned_value = deformation.value(xi);
+    const auto owned_value = deformation.eval_value(xi);
     EXPECT_TRUE(owned_value.reshaped(3, 3).isApprox(Eigen::Matrix3d::Identity() + A, 1e-14));
     u_field = UField(2 * coefficients);
-    EXPECT_TRUE(copy.value(xi).reshaped(3, 3).isApprox(Eigen::Matrix3d::Identity() + 2 * A, 1e-14));
+    EXPECT_TRUE(copy.eval_value(xi).reshaped(3, 3).isApprox(Eigen::Matrix3d::Identity() + 2 * A, 1e-14));
     X_field = UField(2 * nodes());
-    EXPECT_TRUE(copy.value(xi).reshaped(3, 3).isApprox(Eigen::Matrix3d::Identity() + A, 1e-14));
+    EXPECT_TRUE(copy.eval_value(xi).reshaped(3, 3).isApprox(Eigen::Matrix3d::Identity() + A, 1e-14));
     EXPECT_TRUE(owned_value.reshaped(3, 3).isApprox(Eigen::Matrix3d::Identity() + A, 1e-14));
 }
 
@@ -92,19 +92,19 @@ TEST(DeformationGradientField3D, ValidatesComponentsParametersGeometryAndOverflo
     const DeformationGradientField3D deformation(u_field, X_field);
     for (double bad : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()}) {
         const Eigen::Vector3d xi = Eigen::Vector3d::Constant(bad);
-        EXPECT_THROW(deformation.value(xi), std::invalid_argument);
-        EXPECT_THROW(deformation.dvalue_dcoeffs(xi), std::invalid_argument);
+        EXPECT_THROW(deformation.eval_value(xi), std::invalid_argument);
+        EXPECT_THROW(deformation.eval_dvalue_dcoeffs(xi), std::invalid_argument);
     }
     const InterpolatedField3D<HexQ1Basis> collapsed(Eigen::MatrixXd::Zero(8, 3));
     const DeformationGradientField3D invalid_geometry(u_field, collapsed);
-    EXPECT_THROW(invalid_geometry.value({0.2, 0.3, 0.4}), std::invalid_argument);
+    EXPECT_THROW(invalid_geometry.eval_value({0.2, 0.3, 0.4}), std::invalid_argument);
     const InterpolatedField3D<HexQ1Basis> tiny(nodes() * Eigen::Vector3d(1e-200, 1e100, 1e100).asDiagonal());
     const InterpolatedField3D<HexQ1Basis> enormous(1e200 * nodes());
     const DeformationGradientField3D overflow(enormous, tiny);
-    EXPECT_THROW(overflow.value({0.2, 0.3, 0.4}), std::invalid_argument);
+    EXPECT_THROW(overflow.eval_value({0.2, 0.3, 0.4}), std::invalid_argument);
     const InterpolatedField3D<HexQ1Basis> large_inverse(nodes() * Eigen::Vector3d(1e-308, 1e154, 1e154).asDiagonal());
     const DeformationGradientField3D overflow_derivative(u_field, large_inverse);
-    EXPECT_THROW(overflow_derivative.dvalue_dcoeffs({2, 2, 2}), std::invalid_argument);
+    EXPECT_THROW(overflow_derivative.eval_dvalue_dcoeffs({2, 2, 2}), std::invalid_argument);
 }
 
 TEST(DeformationGradientField3D, ConstantDisplacementHasIdentityValueAndZeroCoefficientDerivative) {
@@ -112,8 +112,8 @@ TEST(DeformationGradientField3D, ConstantDisplacementHasIdentityValueAndZeroCoef
     const InterpolatedField3D<HexQ1Basis> X_field(nodes());
     const DeformationGradientField3D deformation(u_field, X_field);
     const Field3D& field = deformation;
-    EXPECT_EQ(field.value({0.2, 0.3, 0.4}), Eigen::Matrix3d::Identity().reshaped());
-    EXPECT_TRUE(field.dvalue_dcoeffs({0.2, 0.3, 0.4}).isZero());
+    EXPECT_EQ(field.eval_value({0.2, 0.3, 0.4}), Eigen::Matrix3d::Identity().reshaped());
+    EXPECT_TRUE(field.eval_dvalue_dcoeffs({0.2, 0.3, 0.4}).isZero());
 }
 
 TEST(DeformationGradientField3D, DifferentDisplacementBasisOnWarpedCoordinatesUsesPhysicalChainRule) {
@@ -136,13 +136,13 @@ TEST(DeformationGradientField3D, DifferentDisplacementBasisOnWarpedCoordinatesUs
     const InterpolatedField3D<HexQ1Basis> X_field(X);
     const DeformationGradientField3D deformation(u_field, X_field);
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
-    const Eigen::Matrix3d F = deformation.value(xi).reshaped(3, 3);
+    const Eigen::Matrix3d F = deformation.eval_value(xi).reshaped(3, 3);
     const Eigen::Vector3d position = warped(xi);
     for (int d = 0; d < 3; ++d) {
         Eigen::Vector3d plus = position, minus = position;
         plus[d] += 1e-5;
         minus[d] -= 1e-5;
-        const Eigen::Vector3d fd = (u_field.value(inverse(plus)) - u_field.value(inverse(minus))) / 2e-5;
+        const Eigen::Vector3d fd = (u_field.eval_value(inverse(plus)) - u_field.eval_value(inverse(minus))) / 2e-5;
         EXPECT_TRUE(fd.isApprox((F - Eigen::Matrix3d::Identity()).col(d), 3e-9));
     }
 }
@@ -156,16 +156,16 @@ class InvalidDisplacement final : public Field3D {
     int num_dofs() const override {
         return 3;
     }
-    Eigen::VectorXd value(const Eigen::Vector3d&) const override {
+    Eigen::VectorXd eval_value(const Eigen::Vector3d&) const override {
         return Eigen::Vector3d::Zero();
     }
-    Eigen::MatrixXd dvalue_dcoeffs(const Eigen::Vector3d&) const override {
+    Eigen::MatrixXd eval_dvalue_dcoeffs(const Eigen::Vector3d&) const override {
         return Eigen::Matrix3d::Identity();
     }
-    Eigen::Matrix<double, Eigen::Dynamic, 3> dvalue_dxi(const Eigen::Vector3d&) const override {
+    Eigen::Matrix<double, Eigen::Dynamic, 3> eval_dvalue_dxi(const Eigen::Vector3d&) const override {
         return Eigen::Matrix3d::Zero();
     }
-    Eigen::MatrixXd dgrad_xi_dcoeffs(const Eigen::Vector3d&) const override {
+    Eigen::MatrixXd eval_dgrad_xi_dcoeffs(const Eigen::Vector3d&) const override {
         return mixed;
     }
 };
@@ -176,10 +176,10 @@ TEST(DeformationGradientField3D, RejectsInvalidMixedDerivativeShapesAndValues) {
     const DeformationGradientField3D deformation(u_field, X_field);
     for (const auto& shape : {std::pair{8, 3}, std::pair{9, 2}}) {
         u_field.mixed = Eigen::MatrixXd::Zero(shape.first, shape.second);
-        EXPECT_THROW(deformation.dvalue_dcoeffs({0.2, 0.3, 0.4}), std::invalid_argument);
+        EXPECT_THROW(deformation.eval_dvalue_dcoeffs({0.2, 0.3, 0.4}), std::invalid_argument);
     }
     u_field.mixed = Eigen::MatrixXd::Constant(9, 3, std::numeric_limits<double>::quiet_NaN());
-    EXPECT_THROW(deformation.dvalue_dcoeffs({0.2, 0.3, 0.4}), std::invalid_argument);
+    EXPECT_THROW(deformation.eval_dvalue_dcoeffs({0.2, 0.3, 0.4}), std::invalid_argument);
 }
 
 TEST(DeformationGradientField3D, UnsupportedSpatialDerivativesThrowThroughBaseReference) {
@@ -187,8 +187,8 @@ TEST(DeformationGradientField3D, UnsupportedSpatialDerivativesThrowThroughBaseRe
     const InterpolatedField3D<HexQ1Basis> X_field(nodes());
     const DeformationGradientField3D deformation(u_field, X_field);
     const Field3D& field = deformation;
-    EXPECT_THROW(field.dvalue_dxi({0.2, 0.3, 0.4}), std::logic_error);
-    EXPECT_THROW(field.dgrad_xi_dcoeffs({0.2, 0.3, 0.4}), std::logic_error);
+    EXPECT_THROW(field.eval_dvalue_dxi({0.2, 0.3, 0.4}), std::logic_error);
+    EXPECT_THROW(field.eval_dgrad_xi_dcoeffs({0.2, 0.3, 0.4}), std::logic_error);
 }
 } // namespace
 
@@ -197,7 +197,7 @@ namespace {
 Eigen::Matrix3d inverse_from_deformation(const litepgo::Field3D& X_field, const Eigen::Vector3d& xi) {
     const litepgo::InterpolatedField3D<litepgo::HexQ1Basis> u_field(nodes());
     const litepgo::DeformationGradientField3D deformation(u_field, X_field);
-    return deformation.value(xi).reshaped(3, 3) - Eigen::Matrix3d::Identity();
+    return deformation.eval_value(xi).reshaped(3, 3) - Eigen::Matrix3d::Identity();
 }
 } // namespace
 
@@ -240,10 +240,10 @@ Eigen::Matrix<double, 8, 3> warped_geometry() {
 TEST(DeformationGradientField3D, CoordinateDerivativesOnUnitCubeAtArbitraryParameters) {
     const litepgo::InterpolatedField3D<litepgo::HexQ1Basis> reference(nodes());
     for (const auto& xi : parameters) {
-        EXPECT_TRUE(reference.value(xi).isApprox(xi, 1e-14));
-        EXPECT_TRUE(reference.dvalue_dxi(xi).isApprox(Eigen::Matrix3d::Identity(), 1e-14));
+        EXPECT_TRUE(reference.eval_value(xi).isApprox(xi, 1e-14));
+        EXPECT_TRUE(reference.eval_dvalue_dxi(xi).isApprox(Eigen::Matrix3d::Identity(), 1e-14));
         EXPECT_TRUE(inverse_from_deformation(reference, xi).isIdentity(1e-14));
-        EXPECT_NEAR(reference.dvalue_dxi(xi).determinant(), 1.0, 1e-14);
+        EXPECT_NEAR(reference.eval_dvalue_dxi(xi).determinant(), 1.0, 1e-14);
     }
 }
 
@@ -253,10 +253,10 @@ TEST(DeformationGradientField3D, CoordinateDerivativesOnTranslatedBox) {
     const Eigen::Vector3d origin(1.0, -2.0, 3.0);
     const litepgo::InterpolatedField3D<litepgo::HexQ1Basis> reference(affine_geometry(expected_dX_dxi, origin));
     for (const auto& xi : parameters) {
-        EXPECT_TRUE(reference.value(xi).isApprox(origin + lengths.asDiagonal() * xi, 1e-14));
-        EXPECT_TRUE(reference.dvalue_dxi(xi).isApprox(expected_dX_dxi, 1e-14));
+        EXPECT_TRUE(reference.eval_value(xi).isApprox(origin + lengths.asDiagonal() * xi, 1e-14));
+        EXPECT_TRUE(reference.eval_dvalue_dxi(xi).isApprox(expected_dX_dxi, 1e-14));
         EXPECT_TRUE(inverse_from_deformation(reference, xi).isApprox(expected_dX_dxi.inverse(), 1e-14));
-        EXPECT_NEAR(reference.dvalue_dxi(xi).determinant(), 24.0, 1e-13);
+        EXPECT_NEAR(reference.eval_dvalue_dxi(xi).determinant(), 24.0, 1e-13);
     }
 }
 
@@ -267,10 +267,10 @@ TEST(DeformationGradientField3D, CoordinateDerivativesOnShearedHexAtArbitraryPar
     const litepgo::InterpolatedField3D<litepgo::HexQ1Basis> reference(affine_geometry(dX_dxi, origin));
 
     for (const auto& xi : parameters) {
-        EXPECT_TRUE(reference.value(xi).isApprox(origin + dX_dxi * xi, 1e-13));
-        EXPECT_TRUE(reference.dvalue_dxi(xi).isApprox(dX_dxi, 1e-13));
+        EXPECT_TRUE(reference.eval_value(xi).isApprox(origin + dX_dxi * xi, 1e-13));
+        EXPECT_TRUE(reference.eval_dvalue_dxi(xi).isApprox(dX_dxi, 1e-13));
         EXPECT_TRUE(inverse_from_deformation(reference, xi).isApprox(dX_dxi.inverse(), 1e-13));
-        EXPECT_NEAR(reference.dvalue_dxi(xi).determinant(), dX_dxi.determinant(), 1e-13);
+        EXPECT_NEAR(reference.eval_dvalue_dxi(xi).determinant(), dX_dxi.determinant(), 1e-13);
     }
 }
 
@@ -279,8 +279,8 @@ TEST(DeformationGradientField3D, InverseCoordinateDerivativeMatchesPhysicalFinit
     constexpr double h = 1e-6;
     for (const auto& xi : parameters) {
         const Eigen::Vector3d position = warped_position(xi);
-        EXPECT_TRUE(reference.value(xi).isApprox(position, 1e-14));
-        EXPECT_NEAR(reference.dvalue_dxi(xi).determinant(), 1.0 - alpha * beta * xi.z() * xi.z(), 1e-14);
+        EXPECT_TRUE(reference.eval_value(xi).isApprox(position, 1e-14));
+        EXPECT_NEAR(reference.eval_dvalue_dxi(xi).determinant(), 1.0 - alpha * beta * xi.z() * xi.z(), 1e-14);
         for (int d = 0; d < 3; ++d) {
             Eigen::Vector3d plus = position;
             Eigen::Vector3d minus = position;
@@ -297,7 +297,7 @@ TEST(DeformationGradientField3D, CoordinateDerivativesUseFieldCoefficientSnapsho
     const litepgo::InterpolatedField3D<litepgo::HexQ1Basis> reference(X_nodes);
     X_nodes.setConstant(std::numeric_limits<double>::quiet_NaN());
     const Eigen::Vector3d point_xi = Eigen::Vector3d(0.2, 0.3, 0.4);
-    EXPECT_NEAR(reference.dvalue_dxi(point_xi).determinant(), 1.0, 1e-14);
+    EXPECT_NEAR(reference.eval_dvalue_dxi(point_xi).determinant(), 1.0, 1e-14);
     EXPECT_TRUE(inverse_from_deformation(reference, point_xi).allFinite());
 }
 
@@ -350,7 +350,7 @@ TEST(DeformationGradientField3D, CoordinateDerivativesValidateTheRequestedPoint)
 TEST(DeformationGradientField3D, CoordinateDerivativesAcceptSmallPositiveDeterminantsAndRejectOverflow) {
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
     const litepgo::InterpolatedField3D<litepgo::HexQ1Basis> small(1e-6 * nodes());
-    EXPECT_GT(small.dvalue_dxi(xi).determinant(), 0.0);
+    EXPECT_GT(small.eval_dvalue_dxi(xi).determinant(), 0.0);
     EXPECT_TRUE(inverse_from_deformation(small, xi).allFinite());
     const litepgo::InterpolatedField3D<litepgo::HexQ1Basis> enormous(1e200 * nodes());
     EXPECT_THROW(inverse_from_deformation(enormous, xi), std::invalid_argument);
@@ -363,7 +363,7 @@ TEST(DeformationGradientField3D, CoordinateDerivativesRejectNonVolumeComponentsA
     }
     const litepgo::InterpolatedField3D<litepgo::HexQ1Basis> X_field(nodes() *
                                                                     Eigen::Vector3d(1e-310, 1e100, 1e100).asDiagonal());
-    EXPECT_NO_THROW(X_field.dvalue_dxi(Eigen::Vector3d::Constant(0.5)));
+    EXPECT_NO_THROW(X_field.eval_dvalue_dxi(Eigen::Vector3d::Constant(0.5)));
     EXPECT_THROW(inverse_from_deformation(X_field, Eigen::Vector3d::Constant(0.5)), std::invalid_argument);
 }
 
@@ -378,13 +378,13 @@ class SpatialDerivativeOnlyField final : public litepgo::Field3D {
     int num_dofs() const override {
         return 0;
     }
-    Eigen::VectorXd value(const Eigen::Vector3d&) const override {
+    Eigen::VectorXd eval_value(const Eigen::Vector3d&) const override {
         throw std::logic_error("Field3D value is not needed");
     }
-    Eigen::MatrixXd dvalue_dcoeffs(const Eigen::Vector3d&) const override {
+    Eigen::MatrixXd eval_dvalue_dcoeffs(const Eigen::Vector3d&) const override {
         throw std::logic_error("Field3D coefficients are fixed");
     }
-    Eigen::Matrix<double, Eigen::Dynamic, 3> dvalue_dxi(const Eigen::Vector3d&) const override {
+    Eigen::Matrix<double, Eigen::Dynamic, 3> eval_dvalue_dxi(const Eigen::Vector3d&) const override {
         return derivative;
     }
 };
@@ -396,31 +396,31 @@ TEST(DeformationGradientField3D, CoordinateDerivativesValidateSpatialDerivatives
     const litepgo::InterpolatedField3D<litepgo::HexQ1Basis> u_field(nodes());
     const litepgo::DeformationGradientField3D deformation(u_field, field);
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
-    EXPECT_TRUE(field.dvalue_dxi(xi).isIdentity());
+    EXPECT_TRUE(field.eval_dvalue_dxi(xi).isIdentity());
     EXPECT_TRUE(inverse_from_deformation(field, xi).isIdentity());
     for (int rows : {2, 4}) {
         raw.derivative = Eigen::Matrix<double, Eigen::Dynamic, 3>::Zero(rows, 3);
         EXPECT_THROW(inverse_from_deformation(field, xi), std::invalid_argument);
-        EXPECT_THROW(deformation.dvalue_dcoeffs(xi), std::invalid_argument);
+        EXPECT_THROW(deformation.eval_dvalue_dcoeffs(xi), std::invalid_argument);
     }
     raw.derivative = Eigen::Matrix3d::Identity();
     raw.components = 2;
     EXPECT_THROW(inverse_from_deformation(field, xi), std::invalid_argument);
-    EXPECT_THROW(deformation.dvalue_dcoeffs(xi), std::invalid_argument);
+    EXPECT_THROW(deformation.eval_dvalue_dcoeffs(xi), std::invalid_argument);
     raw.components = 3;
     for (double bad : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
                        -std::numeric_limits<double>::infinity()}) {
         raw.derivative(0, 0) = bad;
         EXPECT_THROW(inverse_from_deformation(field, xi), std::invalid_argument);
-        EXPECT_THROW(deformation.dvalue_dcoeffs(xi), std::invalid_argument);
+        EXPECT_THROW(deformation.eval_dvalue_dcoeffs(xi), std::invalid_argument);
         raw.derivative = Eigen::Matrix3d::Identity();
         EXPECT_THROW(inverse_from_deformation(field, Eigen::Vector3d::Constant(bad)), std::invalid_argument);
-        EXPECT_THROW(deformation.dvalue_dcoeffs(Eigen::Vector3d::Constant(bad)), std::invalid_argument);
+        EXPECT_THROW(deformation.eval_dvalue_dcoeffs(Eigen::Vector3d::Constant(bad)), std::invalid_argument);
     }
     raw.derivative = -Eigen::Matrix3d::Identity();
-    EXPECT_EQ(field.dvalue_dxi(xi), raw.derivative);
+    EXPECT_EQ(field.eval_dvalue_dxi(xi), raw.derivative);
     EXPECT_THROW(inverse_from_deformation(field, xi), std::invalid_argument);
-    EXPECT_THROW(deformation.dvalue_dcoeffs(xi), std::invalid_argument);
+    EXPECT_THROW(deformation.eval_dvalue_dcoeffs(xi), std::invalid_argument);
 }
 
 TEST(DeformationGradientField3D, ValueUsesOnlyDisplacementDerivativesAndRetainsValidation) {
@@ -429,19 +429,19 @@ TEST(DeformationGradientField3D, ValueUsesOnlyDisplacementDerivativesAndRetainsV
     const litepgo::InterpolatedField3D<litepgo::HexQ1Basis> coordinates(2 * nodes());
     const litepgo::DeformationGradientField3D deformation(displacement, coordinates);
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
-    EXPECT_TRUE(deformation.value(xi).reshaped(3, 3).isApprox(
+    EXPECT_TRUE(deformation.eval_value(xi).reshaped(3, 3).isApprox(
         Eigen::Matrix3d::Identity() + 0.5 * displacement.derivative, 1e-14));
     displacement.components = 2;
-    EXPECT_THROW(deformation.value(xi), std::invalid_argument);
+    EXPECT_THROW(deformation.eval_value(xi), std::invalid_argument);
     displacement.components = 3;
     for (int rows : {2, 4}) {
         displacement.derivative = Eigen::Matrix<double, Eigen::Dynamic, 3>::Zero(rows, 3);
-        EXPECT_THROW(deformation.value(xi), std::invalid_argument);
+        EXPECT_THROW(deformation.eval_value(xi), std::invalid_argument);
     }
     displacement.derivative = Eigen::Matrix3d::Zero();
     for (double bad : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
                        -std::numeric_limits<double>::infinity()}) {
         displacement.derivative(0, 0) = bad;
-        EXPECT_THROW(deformation.value(xi), std::invalid_argument);
+        EXPECT_THROW(deformation.eval_value(xi), std::invalid_argument);
     }
 }

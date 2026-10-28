@@ -36,12 +36,12 @@ TEST(DynamicPatternEnergy, ReportsAChangeOnlyWhenThePatternChanges) {
 TEST(DynamicPatternEnergy, HessianNeedsAnUpdatedPattern) {
     SwitchingEnergy energy(4);
     const Vec x = two_pairs_active();
-    EXPECT_THROW(energy.hessian(x), std::logic_error);
-    EXPECT_NO_THROW(energy.value(x)); // values and gradients never need the pattern
-    EXPECT_NO_THROW(energy.gradient(x));
+    EXPECT_THROW(energy.eval_hessian(x), std::logic_error);
+    EXPECT_NO_THROW(energy.eval_value(x)); // values and gradients never need the pattern
+    EXPECT_NO_THROW(energy.eval_gradient(x));
 
     ASSERT_TRUE(energy.update_pattern(x));
-    const SpMat hessian = energy.hessian(x);
+    const SpMat hessian = energy.eval_hessian(x);
     EXPECT_EQ(hessian.coeff(0, 1), 1.0);
     EXPECT_EQ(hessian.coeff(2, 3), 1.0);
 }
@@ -50,5 +50,5 @@ TEST(DynamicPatternEnergy, OldBuffersAreRejectedAfterAChange) {
     SwitchingEnergy energy(4);
     SpMat buffer = energy.hessian_pattern();
     ASSERT_TRUE(energy.update_pattern(two_pairs_active()));
-    EXPECT_THROW(energy.evaluate(two_pairs_active(), nullptr, &buffer), std::invalid_argument);
+    EXPECT_THROW(energy.eval(two_pairs_active(), nullptr, &buffer), std::invalid_argument);
 }

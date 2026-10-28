@@ -120,7 +120,7 @@ std::optional<SpMat> WeightedEnergySum::refresh_pattern(const ConstVecRef& x) {
     return merged;
 }
 
-double WeightedEnergySum::evaluate_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const {
+double WeightedEnergySum::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const {
     if (hessian != nullptr) {
         for (size_t i = 0; i < terms_.size(); ++i) {
             if (!same_pattern(terms_[i].energy->hessian_pattern(), scratch_[i].hessian)) {
@@ -139,8 +139,8 @@ double WeightedEnergySum::evaluate_values(const ConstVecRef& x, Vec* gradient, S
     for (size_t i = 0; i < terms_.size(); ++i) {
         const double weight = terms_[i].weight;
         TermScratch& scratch = scratch_[i];
-        value += weight * terms_[i].energy->evaluate(x, gradient != nullptr ? &scratch.gradient : nullptr,
-                                                     hessian != nullptr ? &scratch.hessian : nullptr, kind);
+        value += weight * terms_[i].energy->eval(x, gradient != nullptr ? &scratch.gradient : nullptr,
+                                                 hessian != nullptr ? &scratch.hessian : nullptr, kind);
         if (gradient != nullptr) {
             *gradient += weight * scratch.gradient;
         }

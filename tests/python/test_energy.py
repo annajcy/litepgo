@@ -24,12 +24,12 @@ def test_quadratic_energy_matches_numpy():
     energy = QuadraticEnergy(A, b)
     x = np.linspace(-1.0, 1.0, 5)
     dense = A.toarray()
-    assert energy.value(x) == pytest.approx(0.5 * x @ dense @ x + b @ x)
-    np.testing.assert_allclose(energy.gradient(x), dense @ x + b)
-    hessian = energy.hessian(x)
+    assert energy.eval_value(x) == pytest.approx(0.5 * x @ dense @ x + b @ x)
+    np.testing.assert_allclose(energy.eval_gradient(x), dense @ x + b)
+    hessian = energy.eval_hessian(x)
     assert isinstance(hessian, sp.csc_matrix)
     np.testing.assert_array_equal(hessian.toarray(), dense)
-    np.testing.assert_array_equal(energy.projected_hessian(x).toarray(), dense)
+    np.testing.assert_array_equal(energy.eval_projected_hessian(x).toarray(), dense)
     assert energy.num_dofs == 5 and energy.has_fixed_pattern
 
 
@@ -40,14 +40,14 @@ def test_quadratic_energy_rejects_invalid_input():
         QuadraticEnergy(laplacian(3), np.ones(2))
 
 
-def test_evaluate_returns_what_was_asked():
+def test_eval_returns_what_was_asked():
     energy = QuadraticEnergy(laplacian(3))
     x = np.array([1.0, 0.0, -1.0])
-    value, gradient, hessian = energy.evaluate(x)
+    value, gradient, hessian = energy.eval(x)
     assert gradient is None and hessian is None
-    value, gradient, hessian = energy.evaluate(x, gradient=True, hessian=HessianKind.Projected)
-    assert value == energy.value(x)
-    np.testing.assert_array_equal(gradient, energy.gradient(x))
+    value, gradient, hessian = energy.eval(x, gradient=True, hessian=HessianKind.Projected)
+    assert value == energy.eval_value(x)
+    np.testing.assert_array_equal(gradient, energy.eval_gradient(x))
     np.testing.assert_array_equal(hessian.toarray(), laplacian(3).toarray())
 
 
@@ -64,10 +64,10 @@ def test_weighted_energy_sum_matches_the_weighted_terms():
     first, second = quadratic(6, 0), quadratic(6, 1)
     total = WeightedEnergySum([(first, 2.0), (second, 0.5)])
     x = np.linspace(-1.0, 1.0, 6)
-    assert total.value(x) == pytest.approx(2.0 * first.value(x) + 0.5 * second.value(x))
-    np.testing.assert_allclose(total.gradient(x), 2.0 * first.gradient(x) + 0.5 * second.gradient(x))
-    np.testing.assert_allclose(total.hessian(x).toarray(),
-                               2.0 * first.hessian(x).toarray() + 0.5 * second.hessian(x).toarray())
+    assert total.eval_value(x) == pytest.approx(2.0 * first.eval_value(x) + 0.5 * second.eval_value(x))
+    np.testing.assert_allclose(total.eval_gradient(x), 2.0 * first.eval_gradient(x) + 0.5 * second.eval_gradient(x))
+    np.testing.assert_allclose(total.eval_hessian(x).toarray(),
+                               2.0 * first.eval_hessian(x).toarray() + 0.5 * second.eval_hessian(x).toarray())
 
 
 @pytest.mark.parametrize("terms", [[], [(QuadraticEnergy(laplacian(3)), 0.0)],
@@ -88,23 +88,23 @@ def test_affine_mapped_energy_matches_dense_products():
     x = T @ z + offset
     dense_T = T.toarray()
     assert mapped.num_dofs == 2
-    assert mapped.value(z) == pytest.approx(inner.value(x))
-    np.testing.assert_allclose(mapped.gradient(z), dense_T.T @ inner.gradient(x))
-    np.testing.assert_allclose(mapped.hessian(z).toarray(), dense_T.T @ inner.hessian(x).toarray() @ dense_T)
+    assert mapped.eval_value(z) == pytest.approx(inner.eval_value(x))
+    np.testing.assert_allclose(mapped.eval_gradient(z), dense_T.T @ inner.eval_gradient(x))
+    np.testing.assert_allclose(mapped.eval_hessian(z).toarray(), dense_T.T @ inner.eval_hessian(x).toarray() @ dense_T)
 
 
 def test_weighted_energy_sum_allows_negative_weights():
     first, second = quadratic(4, 6), quadratic(4, 7)
     total = WeightedEnergySum([(first, 1.0), (second, -0.25)])
     x = np.linspace(-1.0, 1.0, 4)
-    assert total.value(x) == pytest.approx(first.value(x) - 0.25 * second.value(x))
+    assert total.eval_value(x) == pytest.approx(first.eval_value(x) - 0.25 * second.eval_value(x))
 
 
 def test_affine_mapped_energy_defaults_to_zero_offset_and_checks_shapes():
     inner = quadratic(4, 3)
     mapped = AffineMappedEnergy(inner, sp.identity(4, format="csc"))
     z = np.linspace(-1.0, 1.0, 4)
-    assert mapped.value(z) == pytest.approx(inner.value(z))
+    assert mapped.eval_value(z) == pytest.approx(inner.eval_value(z))
     with pytest.raises(ValueError):
         AffineMappedEnergy(inner, sp.identity(3, format="csc"))
 
@@ -112,20 +112,20 @@ def test_affine_mapped_energy_defaults_to_zero_offset_and_checks_shapes():
 def test_composites_keep_their_children_alive():
     first, second = quadratic(4, 4), quadratic(4, 5)
     x = np.ones(4)
-    expected = first.value(x) + second.value(x)
+    expected = first.eval_value(x) + second.eval_value(x)
     total = WeightedEnergySum([(first, 1.0), (second, 1.0)])
     mapped = AffineMappedEnergy(total, sp.identity(4, format="csc"))
     del first, second, total
     gc.collect()
-    assert mapped.value(x) == pytest.approx(expected)
+    assert mapped.eval_value(x) == pytest.approx(expected)
 
 
 def test_checks_vector_sizes_and_types():
     energy = QuadraticEnergy(laplacian(3))
     with pytest.raises(ValueError):
-        energy.value(np.ones(4))
+        energy.eval_value(np.ones(4))
     with pytest.raises(TypeError):
-        energy.value([1.0, 2.0, 3.0])
+        energy.eval_value([1.0, 2.0, 3.0])
 
 
 def test_energy_base_is_abstract():

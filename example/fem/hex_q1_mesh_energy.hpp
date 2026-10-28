@@ -54,7 +54,7 @@ inline MeshEnergy make_hex_q1_mesh_energy(const Vec& X_nodes) {
             double E_element = 0;
             for (int q = 0; q < Q::num_points; ++q) {
                 const Eigen::Vector3d xi = Q::points().row(q).transpose();
-                const auto dX_dxi = X_field.dvalue_dxi(xi);
+                const auto dX_dxi = X_field.eval_dvalue_dxi(xi);
                 if (dX_dxi.rows() != 3 || dX_dxi.cols() != 3 || !dX_dxi.allFinite())
                     throw std::invalid_argument("hex_q1 requires a finite 3-by-3 coordinate derivative");
                 const double determinant = Eigen::Matrix3d(dX_dxi).determinant();

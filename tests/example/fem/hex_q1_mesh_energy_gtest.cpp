@@ -20,7 +20,7 @@ TEST(HexQ1Example, GradientAndHessianMatchFiniteDifferences) {
                 x[j] += 0.02 * std::sin(j + 0.3);
         Vec g;
         SpMat sparse_h = energy.hessian_pattern();
-        energy.evaluate(x, &g, &sparse_h);
+        energy.eval(x, &g, &sparse_h);
         const Eigen::MatrixXd H(sparse_h);
         ASSERT_EQ(g.size(), x.size());
         ASSERT_EQ(H.rows(), x.size());
@@ -34,8 +34,7 @@ TEST(HexQ1Example, GradientAndHessianMatchFiniteDifferences) {
                 Vec plus = x, minus = x, plus_g, minus_g;
                 plus[j] += h;
                 minus[j] -= h;
-                fd_g[j] =
-                    (energy.evaluate(plus, &plus_g, nullptr) - energy.evaluate(minus, &minus_g, nullptr)) / (2 * h);
+                fd_g[j] = (energy.eval(plus, &plus_g, nullptr) - energy.eval(minus, &minus_g, nullptr)) / (2 * h);
                 fd_h.col(j) = (plus_g - minus_g) / (2 * h);
             }
             EXPECT_LT((g - fd_g).norm() / (1 + g.norm()), 10 * h * h + 1e-9);
@@ -49,8 +48,8 @@ TEST(HexQ1Example, GradientAndHessianMatchFiniteDifferences) {
             }
             d.normalize();
             v.normalize();
-            const double mixed = (energy.value(x + h * d + h * v) - energy.value(x + h * d - h * v) -
-                                  energy.value(x - h * d + h * v) + energy.value(x - h * d - h * v)) /
+            const double mixed = (energy.eval_value(x + h * d + h * v) - energy.eval_value(x + h * d - h * v) -
+                                  energy.eval_value(x - h * d + h * v) + energy.eval_value(x - h * d - h * v)) /
                                  (4 * h * h);
             EXPECT_NEAR(d.dot(H * v), mixed, (10 * h * h + 1e-7) * (1 + H.norm()));
         }
@@ -66,9 +65,9 @@ TEST(HexQ1Example, ElementLambdaRejectsInvalidGeometry) {
         const Vec x = Vec::Zero(36);
         Vec g;
         SpMat H = energy.hessian_pattern();
-        EXPECT_THROW(energy.value(x), std::invalid_argument);
-        EXPECT_THROW(energy.evaluate(x, &g, nullptr), std::invalid_argument);
-        EXPECT_THROW(energy.evaluate(x, nullptr, &H), std::invalid_argument);
+        EXPECT_THROW(energy.eval_value(x), std::invalid_argument);
+        EXPECT_THROW(energy.eval(x, &g, nullptr), std::invalid_argument);
+        EXPECT_THROW(energy.eval(x, nullptr, &H), std::invalid_argument);
     }
     EXPECT_THROW(example::make_hex_q1_mesh_energy(Vec::Zero(35)), std::invalid_argument);
     for (double bad : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
@@ -91,21 +90,21 @@ TEST(HexQ1Example, ElementLambdaIntegratesTranslatedWarpedGeometryAndIndependent
     const Vec x = 0.1 * X_nodes;
     Vec g = Vec::Ones(1);
     SpMat H = energy.hessian_pattern();
-    const double value = energy.evaluate(x, &g, &H);
+    const double value = energy.eval(x, &g, &H);
     // det(dX/dxi) = cell_width * (1 - 0.08*z^2); integrate over both cells.
     const double volume = 3 * (1 - 0.08 / 3);
     EXPECT_NEAR(value,
-                volume * NeoHookean::value(
+                volume * NeoHookean::eval_W(
                              {1.1 * Eigen::Matrix3d::Identity(), Eigen::Matrix3d::Identity(), Eigen::Vector2d(2, 3)}),
                 1e-13);
     Vec g_only = Vec::Constant(2, 7);
     SpMat H_only = energy.hessian_pattern();
-    EXPECT_DOUBLE_EQ(energy.value(x), value);
-    EXPECT_DOUBLE_EQ(energy.evaluate(x, &g_only, nullptr), value);
-    EXPECT_DOUBLE_EQ(energy.evaluate(x, nullptr, &H_only), value);
+    EXPECT_DOUBLE_EQ(energy.eval_value(x), value);
+    EXPECT_DOUBLE_EQ(energy.eval(x, &g_only, nullptr), value);
+    EXPECT_DOUBLE_EQ(energy.eval(x, nullptr, &H_only), value);
     EXPECT_TRUE(g_only.isApprox(g, 1e-13));
     EXPECT_TRUE(Eigen::MatrixXd(H_only).isApprox(Eigen::MatrixXd(H), 1e-13));
-    EXPECT_DOUBLE_EQ(energy.evaluate(x, &g, &H), value);
+    EXPECT_DOUBLE_EQ(energy.eval(x, &g, &H), value);
     EXPECT_TRUE(g.isApprox(g_only, 1e-13));
     EXPECT_TRUE(Eigen::MatrixXd(H).isApprox(Eigen::MatrixXd(H_only), 1e-13));
 }
@@ -116,5 +115,5 @@ TEST(HexQ1Example, ElementLambdaRejectsGeometryInvertedAtAQuadraturePoint) {
     for (int v = 0; v < 12; ++v)
         X_nodes[3 * v + 2] *= 1 - 1.5 * X_nodes[3 * v];
     auto energy = example::make_hex_q1_mesh_energy(X_nodes);
-    EXPECT_THROW(energy.value(Vec::Zero(36)), std::invalid_argument);
+    EXPECT_THROW(energy.eval_value(Vec::Zero(36)), std::invalid_argument);
 }

@@ -18,9 +18,9 @@ int main() {
     }
     Vec gradient;
     SpMat hessian = energy.hessian_pattern();
-    const double E = energy.evaluate(x, &gradient, &hessian);
-    assert(energy.value(Vec::Zero(x.size())) == 0.0);
-    assert(std::abs(E - 18 * NeoHookean::value({1.1 * Eigen::Matrix3d::Identity(), Eigen::Matrix3d::Identity(),
-                                                Eigen::Vector2d(2, 3)})) < 1e-11);
+    const double E = energy.eval(x, &gradient, &hessian);
+    assert(energy.eval_value(Vec::Zero(x.size())) == 0.0);
+    assert(std::abs(E - 18 * NeoHookean::eval_W({1.1 * Eigen::Matrix3d::Identity(), Eigen::Matrix3d::Identity(),
+                                                 Eigen::Vector2d(2, 3)})) < 1e-11);
     std::cout << "E=" << E << ", |g|=" << gradient.norm() << ", H nnz=" << hessian.nonZeros() << '\n';
 }

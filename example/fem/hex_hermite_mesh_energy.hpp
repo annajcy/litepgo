@@ -50,7 +50,7 @@ inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X_nodes) {
     std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> transforms;
     for (int e = 0; e < geometry_map.num_elements(); ++e) {
         const auto X_local = geometry_map.gather(e, X_nodes);
-        transforms.push_back(hex_hermite_dof_transform(X_local));
+        transforms.push_back(eval_hex_hermite_dof_transform(X_local));
         X_fields.emplace_back(X_local);
     }
     const IdentityField3D Fp_field(Eigen::Matrix3d::Identity().reshaped());
@@ -78,7 +78,7 @@ inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X_nodes) {
             double E_element = 0;
             for (int q = 0; q < Q::num_points; ++q) {
                 const Eigen::Vector3d xi = Q::points().row(q).transpose();
-                const auto dX_dxi = X_field.dvalue_dxi(xi);
+                const auto dX_dxi = X_field.eval_dvalue_dxi(xi);
                 if (dX_dxi.rows() != 3 || dX_dxi.cols() != 3 || !dX_dxi.allFinite())
                     throw std::invalid_argument("hex_hermite requires a finite 3-by-3 coordinate derivative");
                 const double determinant = Eigen::Matrix3d(dX_dxi).determinant();

@@ -14,9 +14,9 @@ class HexHermiteBasis final {
     static constexpr int num_basis_functions = 64;
     // All rows use the same slot order; derivatives are with respect
     // to xi, eta, zeta. Extrapolates without clamping.
-    static Eigen::Matrix<double, num_basis_functions, 1> evaluate_N(const Eigen::Vector3d& xi);
-    static Eigen::Matrix<double, num_basis_functions, 3> evaluate_dN_dxi(const Eigen::Vector3d& xi);
-    static Eigen::Matrix<double, num_basis_functions, 6> evaluate_d2N_dxi2(const Eigen::Vector3d& xi);
+    static Eigen::Matrix<double, num_basis_functions, 1> eval_N(const Eigen::Vector3d& xi);
+    static Eigen::Matrix<double, num_basis_functions, 3> eval_dN_dxi(const Eigen::Vector3d& xi);
+    static Eigen::Matrix<double, num_basis_functions, 6> eval_d2N_dxi2(const Eigen::Vector3d& xi);
 
     // Reference corner of the basis function, repeated for each of its eight slots.
     // Invalid basis indices throw std::out_of_range.

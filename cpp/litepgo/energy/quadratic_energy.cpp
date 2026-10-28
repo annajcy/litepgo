@@ -55,7 +55,7 @@ QuadraticEnergy::QuadraticEnergy(SpMat A, Vec b) : QuadraticEnergy(checked_setup
 QuadraticEnergy::QuadraticEnergy(Setup setup)
     : FixedPatternEnergy(static_cast<int>(setup.A.rows()), setup.A), A_(std::move(setup.A)), b_(std::move(setup.b)) {}
 
-double QuadraticEnergy::evaluate_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const {
+double QuadraticEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const {
     const Vec Ax = A_ * x;
     if (gradient != nullptr) {
         *gradient = Ax + b_;

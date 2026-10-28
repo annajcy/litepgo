@@ -12,10 +12,10 @@ template <int ParamDim> bool LocalEnergyT<ParamDim>::has_hessian() const noexcep
     return false;
 }
 
-template <int ParamDim> Eigen::VectorXd LocalEnergyT<ParamDim>::gradient(const Coordinate&) const {
+template <int ParamDim> Eigen::VectorXd LocalEnergyT<ParamDim>::eval_gradient(const Coordinate&) const {
     throw std::logic_error("LocalEnergyT does not support gradient evaluation");
 }
-template <int ParamDim> Eigen::MatrixXd LocalEnergyT<ParamDim>::hessian(const Coordinate&) const {
+template <int ParamDim> Eigen::MatrixXd LocalEnergyT<ParamDim>::eval_hessian(const Coordinate&) const {
     throw std::logic_error("LocalEnergyT does not support Hessian evaluation");
 }
 
@@ -26,15 +26,15 @@ double LocalEnergyT<ParamDim>::accumulate(const Coordinate& xi, double weight, E
         throw std::invalid_argument("LocalEnergyT::accumulate requires a finite weight");
     if ((gradient && !has_gradient()) || (hessian && !has_hessian()))
         throw std::logic_error("LocalEnergyT does not support the requested derivatives");
-    const double result = weight * value(xi);
+    const double result = weight * eval_value(xi);
     if (gradient) {
-        const auto local = this->gradient(xi);
+        const auto local = this->eval_gradient(xi);
         if (local.size() != gradient->size())
             throw std::invalid_argument("LocalEnergyT::accumulate: invalid gradient size");
         *gradient += weight * local;
     }
     if (hessian) {
-        const auto local = this->hessian(xi);
+        const auto local = this->eval_hessian(xi);
         if (local.rows() != hessian->rows() || local.cols() != hessian->cols())
             throw std::invalid_argument("LocalEnergyT::accumulate: invalid Hessian size");
         *hessian += weight * local;

@@ -20,10 +20,10 @@ class CoefficientOnlyField final : public Field3D {
     int num_dofs() const override {
         return 2;
     }
-    Eigen::VectorXd value(const Eigen::Vector3d&) const override {
+    Eigen::VectorXd eval_value(const Eigen::Vector3d&) const override {
         return Eigen::Vector2d(2, 3);
     }
-    Eigen::MatrixXd dvalue_dcoeffs(const Eigen::Vector3d&) const override {
+    Eigen::MatrixXd eval_dvalue_dcoeffs(const Eigen::Vector3d&) const override {
         return Eigen::Matrix2d::Identity();
     }
 };
@@ -34,12 +34,12 @@ TEST(Field3D, UnsupportedSpatialDerivativesThrowThroughBaseReference) {
     const CoefficientOnlyField concrete;
     const Field3D& field = concrete;
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
-    EXPECT_EQ(field.value(xi), Eigen::Vector2d(2, 3));
-    EXPECT_TRUE(field.dvalue_dcoeffs(xi).isIdentity());
-    EXPECT_THROW(field.dvalue_dxi(xi), std::logic_error);
-    EXPECT_THROW(field.dgrad_xi_dcoeffs(xi), std::logic_error);
-    EXPECT_THROW(field.d2value_dxi2(xi), std::logic_error);
-    EXPECT_THROW(field.dhess_xi_dcoeffs(xi), std::logic_error);
+    EXPECT_EQ(field.eval_value(xi), Eigen::Vector2d(2, 3));
+    EXPECT_TRUE(field.eval_dvalue_dcoeffs(xi).isIdentity());
+    EXPECT_THROW(field.eval_dvalue_dxi(xi), std::logic_error);
+    EXPECT_THROW(field.eval_dgrad_xi_dcoeffs(xi), std::logic_error);
+    EXPECT_THROW(field.eval_d2value_dxi2(xi), std::logic_error);
+    EXPECT_THROW(field.eval_dhess_xi_dcoeffs(xi), std::logic_error);
 }
 
 TEST(Field3D, IdentityFieldDispatchesValuesAndDerivativesThroughBaseReference) {
@@ -48,12 +48,12 @@ TEST(Field3D, IdentityFieldDispatchesValuesAndDerivativesThroughBaseReference) {
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
     EXPECT_EQ(field.num_components(), 9);
     EXPECT_EQ(field.num_dofs(), 9);
-    EXPECT_EQ(field.value(xi), Eigen::Matrix3d::Identity().reshaped());
-    EXPECT_TRUE(field.dvalue_dcoeffs(xi).isIdentity());
-    EXPECT_EQ(field.dvalue_dxi(xi).rows(), 9);
-    EXPECT_TRUE(field.dvalue_dxi(xi).isZero());
-    EXPECT_EQ(field.dgrad_xi_dcoeffs(xi).rows(), 27);
-    EXPECT_EQ(field.dgrad_xi_dcoeffs(xi).cols(), 9);
-    EXPECT_TRUE(field.dgrad_xi_dcoeffs(xi).isZero());
+    EXPECT_EQ(field.eval_value(xi), Eigen::Matrix3d::Identity().reshaped());
+    EXPECT_TRUE(field.eval_dvalue_dcoeffs(xi).isIdentity());
+    EXPECT_EQ(field.eval_dvalue_dxi(xi).rows(), 9);
+    EXPECT_TRUE(field.eval_dvalue_dxi(xi).isZero());
+    EXPECT_EQ(field.eval_dgrad_xi_dcoeffs(xi).rows(), 27);
+    EXPECT_EQ(field.eval_dgrad_xi_dcoeffs(xi).cols(), 9);
+    EXPECT_TRUE(field.eval_dgrad_xi_dcoeffs(xi).isZero());
 }
 } // namespace

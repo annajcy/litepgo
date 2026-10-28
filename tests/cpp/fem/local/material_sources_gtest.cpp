@@ -33,7 +33,7 @@ const auto element_energy = [](const Field3D& X_field, const LocalEnergy3D& ener
     double result = 0;
     for (int q = 0; q < Q::num_points; ++q) {
         const Eigen::Vector3d xi = Q::points().row(q).transpose();
-        const auto derivative = X_field.dvalue_dxi(xi);
+        const auto derivative = X_field.eval_dvalue_dxi(xi);
         if (derivative.rows() != 3 || derivative.cols() != 3 || !derivative.allFinite())
             throw std::invalid_argument("Invalid coordinate derivative in test fixture");
         const double determinant = Eigen::Matrix3d(derivative).determinant();
@@ -133,14 +133,14 @@ TEST(MaterialSources, MixedRepresentationsPointInputsAndLocalFiniteDifferences) 
         const auto ue = map.gather(e, f.u);
         for (int q = 0; q < GaussLegendre3D<2>::num_points; ++q) {
             const Eigen::Vector3d ref_xi = GaussLegendre3D<2>::points().row(q).transpose();
-            const auto point = fields.evaluate(ref_xi);
-            EXPECT_TRUE(
-                point.F.isApprox(Eigen::Matrix3d::Identity() + InterpolatedField3D<HexQ1Basis>(ue).dvalue_dxi(ref_xi) *
-                                                                   X_field.dvalue_dxi(ref_xi).inverse()));
+            const auto point = fields.eval(ref_xi);
+            EXPECT_TRUE(point.F.isApprox(Eigen::Matrix3d::Identity() +
+                                         InterpolatedField3D<HexQ1Basis>(ue).eval_dvalue_dxi(ref_xi) *
+                                             X_field.eval_dvalue_dxi(ref_xi).inverse()));
             EXPECT_EQ(point.Fp, f.fp.segment<9>(9 * e).reshaped(3, 3));
             EXPECT_EQ(point.theta, ConstantDofMap(f.topology, 2).gather(0, f.theta));
-            EXPECT_TRUE(fields.Fp.dvalue_dcoeffs(ref_xi).isIdentity());
-            EXPECT_TRUE(fields.theta.dvalue_dcoeffs(ref_xi).isIdentity());
+            EXPECT_TRUE(fields.Fp.eval_dvalue_dcoeffs(ref_xi).isIdentity());
+            EXPECT_TRUE(fields.theta.eval_dvalue_dcoeffs(ref_xi).isIdentity());
         }
         EXPECT_DOUBLE_EQ(element_energy(X_field, bind_energy<MaterialLocalEnergyF3D<NeoHookean>>(fields)),
                          element_energy(X_field, bind_energy<MaterialLocalEnergyFp3D<NeoHookean>>(fields)));
@@ -200,11 +200,11 @@ TEST(MaterialSources, SameQuadratureAcceptsDifferentActiveDofCounts) {
     Eigen::Matrix<double, 9, 9> expected_direct_hessian = Eigen::Matrix<double, 9, 9>::Zero();
     for (int q = 0; q < GaussLegendre3D<2>::num_points; ++q) {
         const Eigen::Vector3d point_xi = GaussLegendre3D<2>::points().row(q).transpose();
-        const double weight = GaussLegendre3D<2>::weights()[q] * X_field.dvalue_dxi(point_xi).determinant();
-        const auto inputs = nodal.evaluate(point_xi);
-        const auto dF_du_local = nodal.F.dvalue_dcoeffs(point_xi);
-        const auto stress = NeoHookean::dW_dF(inputs);
-        const auto tangent = NeoHookean::d2W_dF2(inputs);
+        const double weight = GaussLegendre3D<2>::weights()[q] * X_field.eval_dvalue_dxi(point_xi).determinant();
+        const auto inputs = nodal.eval(point_xi);
+        const auto dF_du_local = nodal.F.eval_dvalue_dcoeffs(point_xi);
+        const auto stress = NeoHookean::eval_dW_dF(inputs);
+        const auto tangent = NeoHookean::eval_d2W_dF2(inputs);
         expected_gradient +=
             weight * dF_du_local.transpose() * Eigen::Map<const Eigen::Matrix<double, 9, 1>>(stress.data());
         expected_hessian += weight * dF_du_local.transpose() * tangent * dF_du_local;
@@ -289,10 +289,10 @@ TEST(MaterialSources, ElementAndSharedDofNumbersAccumulateIntoDifferentGlobalBlo
     f.fp.head<9>() = 1.1 * original;
     f.theta << 4, 5;
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
-    EXPECT_EQ(before.Fp.value(xi), original);
-    EXPECT_EQ(before.theta.value(xi), Eigen::Vector2d(2, 3));
-    EXPECT_NE(f.fields(0).Fp.value(xi), original);
-    EXPECT_EQ(f.fields(1).theta.value(xi), Eigen::Vector2d(4, 5));
+    EXPECT_EQ(before.Fp.eval_value(xi), original);
+    EXPECT_EQ(before.theta.eval_value(xi), Eigen::Vector2d(2, 3));
+    EXPECT_NE(f.fields(0).Fp.eval_value(xi), original);
+    EXPECT_EQ(f.fields(1).theta.eval_value(xi), Eigen::Vector2d(4, 5));
 }
 
 TEST(MaterialSources, SharedParameterHessianIncludesBothElements) {
@@ -308,7 +308,7 @@ TEST(MaterialSources, SharedParameterHessianIncludesBothElements) {
         H += local_hessian;
         for (int q = 0; q < GaussLegendre3D<2>::num_points; ++q)
             volume += GaussLegendre3D<2>::weights()[q] *
-                      X_field.dvalue_dxi(GaussLegendre3D<2>::points().row(q).transpose()).determinant();
+                      X_field.eval_dvalue_dxi(GaussLegendre3D<2>::points().row(q).transpose()).determinant();
         check_fd(
             X_field, ConstantDofMap(f.topology, 2).gather(0, f.theta),
             [&](const Eigen::Vector2d& theta) { return MaterialSources{fields.F, fields.Fp, IdentityField3D(theta)}; },

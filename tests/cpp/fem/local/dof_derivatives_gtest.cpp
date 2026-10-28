@@ -18,10 +18,10 @@ TEST(DofDerivatives, AffineChainRuleMatchesFiniteDifferences) {
     const auto gradient = [&](const Eigen::Vector3d& x) {
         const Eigen::Vector4d g = H * (dvalue_dcoeffs * x + offset);
         const Eigen::Matrix<double, 2, 2, Eigen::RowMajor> matrix = Eigen::Map<const Eigen::Matrix2d>(g.data());
-        return litepgo::gradient_wrt_dofs(dvalue_dcoeffs, matrix);
+        return litepgo::eval_gradient_wrt_dofs(dvalue_dcoeffs, matrix);
     };
     const auto g = gradient(a);
-    const auto hessian = litepgo::hessian_wrt_dofs(dvalue_dcoeffs, H);
+    const auto hessian = litepgo::eval_hessian_wrt_dofs(dvalue_dcoeffs, H);
     for (double h : {1e-3, 1e-4}) {
         for (int j = 0; j < 3; ++j) {
             auto plus = a, minus = a;
@@ -32,15 +32,15 @@ TEST(DofDerivatives, AffineChainRuleMatchesFiniteDifferences) {
         }
     }
     // Expressions and temporaries must yield an owning return value.
-    const auto copied = litepgo::hessian_wrt_dofs(2 * dvalue_dcoeffs, H + H);
+    const auto copied = litepgo::eval_hessian_wrt_dofs(2 * dvalue_dcoeffs, H + H);
     EXPECT_TRUE(copied.isApprox(8 * hessian, 1e-13));
 }
 } // namespace
 
 TEST(DofDerivatives, RejectsMismatchedDynamicSizes) {
     Eigen::MatrixXd dvalue_dcoeffs = Eigen::MatrixXd::Zero(4, 3);
-    EXPECT_THROW(litepgo::gradient_wrt_dofs(dvalue_dcoeffs, Eigen::Vector3d::Zero()), std::invalid_argument);
-    EXPECT_THROW(litepgo::hessian_wrt_dofs(dvalue_dcoeffs, Eigen::Matrix3d::Zero()), std::invalid_argument);
+    EXPECT_THROW(litepgo::eval_gradient_wrt_dofs(dvalue_dcoeffs, Eigen::Vector3d::Zero()), std::invalid_argument);
+    EXPECT_THROW(litepgo::eval_hessian_wrt_dofs(dvalue_dcoeffs, Eigen::Matrix3d::Zero()), std::invalid_argument);
 }
 
 TEST(DofDerivatives, WeightedContractionsAddToBuffersAndPackStridedGradientsByColumn) {
@@ -57,9 +57,9 @@ TEST(DofDerivatives, WeightedContractionsAddToBuffersAndPackStridedGradientsByCo
         litepgo::add_gradient_wrt_dofs(dvalue_dcoeffs, gradient, weight, g);
         litepgo::add_hessian_wrt_dofs(dvalue_dcoeffs, H, weight, h);
         EXPECT_TRUE(g.isApprox(
-            Eigen::Vector3d::Constant(2) + weight * litepgo::gradient_wrt_dofs(dvalue_dcoeffs, gradient), 1e-13));
-        EXPECT_TRUE(
-            h.isApprox(Eigen::Matrix3d::Constant(4) + weight * litepgo::hessian_wrt_dofs(dvalue_dcoeffs, H), 1e-13));
+            Eigen::Vector3d::Constant(2) + weight * litepgo::eval_gradient_wrt_dofs(dvalue_dcoeffs, gradient), 1e-13));
+        EXPECT_TRUE(h.isApprox(
+            Eigen::Matrix3d::Constant(4) + weight * litepgo::eval_hessian_wrt_dofs(dvalue_dcoeffs, H), 1e-13));
     }
 }
 

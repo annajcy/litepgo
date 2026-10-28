@@ -25,16 +25,16 @@ Eigen::Matrix<double, 16, Columns> vertex_order(const Eigen::Matrix<double, 16, 
 
 namespace litepgo {
 
-Eigen::Matrix<double, 16, 1> QuadHermiteBasis::evaluate_N(const Eigen::Vector2d& xi) {
-    return vertex_order(TensorProductBasis2D<CubicHermiteBasis>::evaluate_N(xi));
+Eigen::Matrix<double, 16, 1> QuadHermiteBasis::eval_N(const Eigen::Vector2d& xi) {
+    return vertex_order(TensorProductBasis2D<CubicHermiteBasis>::eval_N(xi));
 }
 
-Eigen::Matrix<double, 16, 2> QuadHermiteBasis::evaluate_dN_dxi(const Eigen::Vector2d& xi) {
-    return vertex_order(TensorProductBasis2D<CubicHermiteBasis>::evaluate_dN_dxi(xi));
+Eigen::Matrix<double, 16, 2> QuadHermiteBasis::eval_dN_dxi(const Eigen::Vector2d& xi) {
+    return vertex_order(TensorProductBasis2D<CubicHermiteBasis>::eval_dN_dxi(xi));
 }
 
-Eigen::Matrix<double, 16, 3> QuadHermiteBasis::evaluate_d2N_dxi2(const Eigen::Vector2d& xi) {
-    return vertex_order(TensorProductBasis2D<CubicHermiteBasis>::evaluate_d2N_dxi2(xi));
+Eigen::Matrix<double, 16, 3> QuadHermiteBasis::eval_d2N_dxi2(const Eigen::Vector2d& xi) {
+    return vertex_order(TensorProductBasis2D<CubicHermiteBasis>::eval_d2N_dxi2(xi));
 }
 
 Eigen::Vector2d QuadHermiteBasis::reference_node(int basis_index) {

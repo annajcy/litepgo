@@ -35,7 +35,7 @@ Eigen::Vector3d polynomial_gradient(const Eigen::Vector3d& p) {
 TEST(TensorProductBasis3D, InterpolatesCornersInTensorOrder) {
     const auto nodes = corners();
     for (int a = 0; a < litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::num_basis_functions; ++a) {
-        const auto N = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_N(nodes.col(a));
+        const auto N = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_N(nodes.col(a));
         for (int b = 0; b < litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::num_basis_functions; ++b) {
             EXPECT_DOUBLE_EQ(N[b], a == b ? 1.0 : 0.0);
         }
@@ -44,9 +44,9 @@ TEST(TensorProductBasis3D, InterpolatesCornersInTensorOrder) {
 
 TEST(TensorProductBasis3D, PartitionsUnityAndHasZeroGradientSum) {
     for (const auto& p : samples) {
-        const auto N = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_N(p);
-        const auto dN_dxi = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_dN_dxi(p);
-        const auto d2N_dxi2 = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_d2N_dxi2(p);
+        const auto N = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_N(p);
+        const auto dN_dxi = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_dN_dxi(p);
+        const auto d2N_dxi2 = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_d2N_dxi2(p);
         EXPECT_NEAR(N.sum(), 1.0, 1e-15);
         EXPECT_TRUE(dN_dxi.colwise().sum().isZero(1e-15));
         EXPECT_TRUE(d2N_dxi2.colwise().sum().isZero(1e-15));
@@ -59,9 +59,9 @@ TEST(TensorProductBasis3D, ReproducesAffineVectorFieldsAndJacobians) {
     const Eigen::Vector3d b(0.3, -1.7, 2.1);
     const Eigen::Matrix<double, 3, 8> coefficients = (A * corners()).colwise() + b;
     for (const auto& p : samples) {
-        const auto N = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_N(p);
-        const auto dN_dxi = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_dN_dxi(p);
-        const auto d2N_dxi2 = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_d2N_dxi2(p);
+        const auto N = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_N(p);
+        const auto dN_dxi = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_dN_dxi(p);
+        const auto d2N_dxi2 = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_d2N_dxi2(p);
         EXPECT_TRUE((coefficients * N).isApprox(A * p + b, 1e-14));
         EXPECT_TRUE((coefficients * dN_dxi).isApprox(A, 1e-14));
         EXPECT_TRUE((coefficients * d2N_dxi2).isZero(1e-14));
@@ -75,9 +75,9 @@ TEST(TensorProductBasis3D, ReproducesTrilinearPolynomialsAndGradients) {
         coefficients[a] = polynomial(nodes.col(a));
     }
     for (const auto& p : samples) {
-        const auto N = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_N(p);
-        const auto dN_dxi = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_dN_dxi(p);
-        const auto d2N_dxi2 = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_d2N_dxi2(p);
+        const auto N = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_N(p);
+        const auto dN_dxi = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_dN_dxi(p);
+        const auto d2N_dxi2 = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_d2N_dxi2(p);
         EXPECT_NEAR(coefficients.dot(N), polynomial(p), 2e-14);
         EXPECT_TRUE((dN_dxi.transpose() * coefficients).isApprox(polynomial_gradient(p), 1e-14));
         Eigen::Matrix<double, 6, 1> expected;
@@ -89,21 +89,21 @@ TEST(TensorProductBasis3D, ReproducesTrilinearPolynomialsAndGradients) {
 TEST(TensorProductBasis3D, GradientsMatchFiniteDifferencesIncludingCorners) {
     constexpr double h = 1e-6;
     for (const auto& p : samples) {
-        const auto dN_dxi = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_dN_dxi(p);
-        const auto d2N_dxi2 = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_d2N_dxi2(p);
+        const auto dN_dxi = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_dN_dxi(p);
+        const auto d2N_dxi2 = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_d2N_dxi2(p);
         for (int d = 0; d < 3; ++d) {
             Eigen::Vector3d plus = p;
             Eigen::Vector3d minus = p;
             plus[d] += h;
             minus[d] -= h;
             const Eigen::Matrix<double, 8, 1> derivative =
-                (litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_N(plus) -
-                 litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_N(minus)) /
+                (litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_N(plus) -
+                 litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_N(minus)) /
                 (2.0 * h);
             EXPECT_TRUE((derivative - dN_dxi.col(d)).isZero(3e-10));
             const Eigen::Matrix<double, 8, 3> second_fd =
-                (litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_dN_dxi(plus) -
-                 litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate_dN_dxi(minus)) /
+                (litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_dN_dxi(plus) -
+                 litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::eval_dN_dxi(minus)) /
                 (2 * h);
             constexpr int columns[3][3] = {{0, 1, 2}, {1, 3, 4}, {2, 4, 5}};
             for (int e = 0; e < 3; ++e)

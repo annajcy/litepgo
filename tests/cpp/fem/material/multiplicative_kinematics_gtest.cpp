@@ -15,10 +15,10 @@ TEST(MultiplicativeKinematics, IdentityAndOwnedSnapshot) {
     F.setZero();
     EXPECT_TRUE(k.elastic_gradient().isApprox(original));
     EXPECT_DOUBLE_EQ(k.plastic_volume_ratio(), 1.0);
-    EXPECT_DOUBLE_EQ(k.reference_energy(2.5), 2.5);
-    EXPECT_TRUE(k.dW_dF(original).isApprox(original));
+    EXPECT_DOUBLE_EQ(k.eval_W(2.5), 2.5);
+    EXPECT_TRUE(k.eval_dW_dF(original).isApprox(original));
     const Eigen::Matrix<double, 9, 9> H = Eigen::Matrix<double, 9, 9>::Random();
-    EXPECT_TRUE(k.d2W_dF2(H).isApprox(H));
+    EXPECT_TRUE(k.eval_d2W_dF2(H).isApprox(H));
 }
 
 TEST(MultiplicativeKinematics, PullbackMatchesFiniteDifferences) {
@@ -40,15 +40,15 @@ TEST(MultiplicativeKinematics, PullbackMatchesFiniteDifferences) {
         const MultiplicativeKinematics k(f, Fp);
         const Eigen::Matrix<double, 9, 1> p =
             H * Eigen::Map<const Eigen::Matrix<double, 9, 1>>(k.elastic_gradient().data());
-        return k.dW_dF(Eigen::Map<const Eigen::Matrix3d>(p.data()));
+        return k.eval_dW_dF(Eigen::Map<const Eigen::Matrix3d>(p.data()));
     };
     const MultiplicativeKinematics k(F, Fp);
     EXPECT_NEAR(k.plastic_volume_ratio(), Fp.determinant(), 1e-14);
     EXPECT_TRUE(k.elastic_gradient().isApprox(F * Fp.inverse()));
     const auto x = Eigen::Map<const Eigen::Matrix<double, 9, 1>>(k.elastic_gradient().data());
-    EXPECT_NEAR(k.reference_energy(0.5 * x.dot(H * x)), energy(F), 1e-12);
+    EXPECT_NEAR(k.eval_W(0.5 * x.dot(H * x)), energy(F), 1e-12);
     const Eigen::Matrix3d P = gradient(F);
-    const Eigen::Matrix<double, 9, 9> HF = k.d2W_dF2(H);
+    const Eigen::Matrix<double, 9, 9> HF = k.eval_d2W_dF2(H);
     for (double h : {1e-3, 1e-4, 1e-5}) {
         for (int j = 0; j < 9; ++j) {
             Eigen::Matrix3d plus = F, minus = F;
@@ -83,14 +83,14 @@ TEST(MultiplicativeKinematics, PlasticPullbackMatchesFiniteDifferences) {
             const MultiplicativeKinematics k(F, p);
             const Eigen::Map<const Eigen::Matrix<double, 9, 1>> x(k.elastic_gradient().data());
             const Eigen::Matrix<double, 9, 1> pe = H * x;
-            return k.dW_dFp(2.3 + 0.5 * x.dot(pe), Eigen::Map<const Eigen::Matrix3d>(pe.data()));
+            return k.eval_dW_dFp(2.3 + 0.5 * x.dot(pe), Eigen::Map<const Eigen::Matrix3d>(pe.data()));
         };
         const MultiplicativeKinematics k(F, Fp);
         const Eigen::Map<const Eigen::Matrix<double, 9, 1>> x(k.elastic_gradient().data());
         const Eigen::Matrix<double, 9, 1> pe = H * x;
         const Eigen::Matrix3d G = gradient(Fp);
         const Eigen::Matrix<double, 9, 9> Hp =
-            k.d2W_dFp2(2.3 + 0.5 * x.dot(pe), Eigen::Map<const Eigen::Matrix3d>(pe.data()), H);
+            k.eval_d2W_dFp2(2.3 + 0.5 * x.dot(pe), Eigen::Map<const Eigen::Matrix3d>(pe.data()), H);
         EXPECT_LT((Hp - Hp.transpose()).norm(), 1e-12 * (1 + Hp.norm()));
         for (double h : {1e-3, 3e-4, 1e-4}) {
             SCOPED_TRACE(h);

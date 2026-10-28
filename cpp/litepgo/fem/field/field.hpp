@@ -18,18 +18,18 @@ template <int ParamDim> class FieldT {
     virtual ~FieldT() = default;
     virtual int num_components() const = 0;
     virtual int num_dofs() const = 0;
-    virtual Eigen::VectorXd value(const Coordinate& xi) const = 0;
-    virtual Eigen::MatrixXd dvalue_dcoeffs(const Coordinate& xi) const = 0;
-    virtual SpatialDerivative dvalue_dxi(const Coordinate&) const {
+    virtual Eigen::VectorXd eval_value(const Coordinate& xi) const = 0;
+    virtual Eigen::MatrixXd eval_dvalue_dcoeffs(const Coordinate& xi) const = 0;
+    virtual SpatialDerivative eval_dvalue_dxi(const Coordinate&) const {
         throw std::logic_error("FieldT does not support reference-coordinate derivatives");
     }
-    virtual Eigen::MatrixXd dgrad_xi_dcoeffs(const Coordinate&) const {
+    virtual Eigen::MatrixXd eval_dgrad_xi_dcoeffs(const Coordinate&) const {
         throw std::logic_error("FieldT does not support mixed reference-coordinate and coefficient derivatives");
     }
-    virtual SpatialHessian d2value_dxi2(const Coordinate&) const {
+    virtual SpatialHessian eval_d2value_dxi2(const Coordinate&) const {
         throw std::logic_error("FieldT does not support second reference-coordinate derivatives");
     }
-    virtual Eigen::MatrixXd dhess_xi_dcoeffs(const Coordinate&) const {
+    virtual Eigen::MatrixXd eval_dhess_xi_dcoeffs(const Coordinate&) const {
         throw std::logic_error("FieldT does not support second reference-coordinate and coefficient derivatives");
     }
 };

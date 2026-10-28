@@ -30,9 +30,9 @@ class MisbehavingEnergy final : public litepgo::FixedPatternEnergy {
     MisbehavingEnergy() : FixedPatternEnergy(2, litepgo::testing::chain_pattern(2, {})) {}
 
   private:
-    double evaluate_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const override {
+    double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const override {
         if (reenter) {
-            value(x);
+            eval_value(x);
         }
         if (gradient != nullptr) {
             gradient->setZero();
@@ -54,10 +54,10 @@ TEST(Energy, ConveniencesAgreeWithEvaluate) {
     const Vec x = Vec::LinSpaced(5, -1.2, 0.9);
     Vec gradient;
     SpMat hessian = energy.hessian_pattern();
-    const double value = energy.evaluate(x, &gradient, &hessian, HessianKind::Projected);
-    EXPECT_EQ(value, energy.value(x));
-    EXPECT_EQ(gradient, energy.gradient(x));
-    EXPECT_EQ(Eigen::MatrixXd(hessian), Eigen::MatrixXd(energy.hessian(x, HessianKind::Projected)));
+    const double value = energy.eval(x, &gradient, &hessian, HessianKind::Projected);
+    EXPECT_EQ(value, energy.eval_value(x));
+    EXPECT_EQ(gradient, energy.eval_gradient(x));
+    EXPECT_EQ(Eigen::MatrixXd(hessian), Eigen::MatrixXd(energy.eval_hessian(x, HessianKind::Projected)));
 }
 
 TEST(Energy, ChainDerivativesMatchFiniteDifferences) {
@@ -68,19 +68,19 @@ TEST(Energy, ChainDerivativesMatchFiniteDifferences) {
 TEST(Energy, ProjectedHessianIsPositiveSemidefinite) {
     const DoubleWellChain energy(3);
     const Vec x = Vec::Constant(3, 0.1); // inside the double wells' concave region
-    const Eigen::MatrixXd exact = Eigen::MatrixXd(energy.hessian(x, HessianKind::Exact));
-    const Eigen::MatrixXd projected = Eigen::MatrixXd(energy.hessian(x, HessianKind::Projected));
+    const Eigen::MatrixXd exact = Eigen::MatrixXd(energy.eval_hessian(x, HessianKind::Exact));
+    const Eigen::MatrixXd projected = Eigen::MatrixXd(energy.eval_hessian(x, HessianKind::Projected));
     EXPECT_NE(exact, projected);
     EXPECT_GE(Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd>(projected).eigenvalues().minCoeff(), -1e-12);
 }
 
 TEST(Energy, ChecksArgumentsBeforeWriting) {
     const DoubleWellChain energy(4);
-    EXPECT_THROW(energy.value(Vec::Zero(3)), std::invalid_argument);
+    EXPECT_THROW(energy.eval_value(Vec::Zero(3)), std::invalid_argument);
 
     SpMat wrong = litepgo::testing::chain_pattern(4, {});
     Vec gradient = Vec::Constant(2, 7.0);
-    EXPECT_THROW(energy.evaluate(Vec::Zero(4), &gradient, &wrong), std::invalid_argument);
+    EXPECT_THROW(energy.eval(Vec::Zero(4), &gradient, &wrong), std::invalid_argument);
     EXPECT_EQ(gradient, Vec::Constant(2, 7.0)); // untouched
 
     EXPECT_THROW(energy.max_feasible_step(Vec::Zero(4), Vec::Zero(3)), std::invalid_argument);
@@ -89,7 +89,7 @@ TEST(Energy, ChecksArgumentsBeforeWriting) {
 TEST(Energy, ResizesTheGradient) {
     const DoubleWellChain energy(4);
     Vec gradient;
-    energy.evaluate(Vec::Zero(4), &gradient, nullptr);
+    energy.eval(Vec::Zero(4), &gradient, nullptr);
     EXPECT_EQ(gradient.size(), 4);
 }
 
@@ -109,9 +109,9 @@ TEST(Energy, RejectsAFeasibleStepOutsideTheUnitInterval) {
 TEST(Energy, RejectsOverlappingCalls) {
     MisbehavingEnergy energy;
     energy.reenter = true;
-    EXPECT_THROW(energy.value(Vec::Zero(2)), std::logic_error);
+    EXPECT_THROW(energy.eval_value(Vec::Zero(2)), std::logic_error);
     energy.reenter = false;
-    EXPECT_NO_THROW(energy.value(Vec::Zero(2)));
+    EXPECT_NO_THROW(energy.eval_value(Vec::Zero(2)));
 }
 
 TEST(Energy, RejectsNonFiniteValuesAsABrokenEnergy) {
@@ -119,14 +119,14 @@ TEST(Energy, RejectsNonFiniteValuesAsABrokenEnergy) {
     for (const double returned : {infinity, -infinity, std::nan("")}) {
         const auto energy = std::make_shared<MisbehavingEnergy>();
         energy->returned = returned;
-        EXPECT_THROW(energy->value(Vec::Zero(2)), std::logic_error);
+        EXPECT_THROW(energy->eval_value(Vec::Zero(2)), std::logic_error);
         // The error surfaces through composites too, and is not mistaken for infeasibility.
         const litepgo::WeightedEnergySum sum({{energy, -1.0}});
-        EXPECT_THROW(sum.value(Vec::Zero(2)), std::logic_error);
+        EXPECT_THROW(sum.eval_value(Vec::Zero(2)), std::logic_error);
         const litepgo::AffineMappedEnergy mapped(energy, SpMat(Eigen::MatrixXd::Identity(2, 2).sparseView()));
-        EXPECT_THROW(mapped.value(Vec::Zero(2)), std::logic_error);
+        EXPECT_THROW(mapped.eval_value(Vec::Zero(2)), std::logic_error);
         try {
-            sum.value(Vec::Zero(2));
+            sum.eval_value(Vec::Zero(2));
         } catch (const litepgo::InfeasibleState&) {
             ADD_FAILURE() << "a non-finite value must not be reported as InfeasibleState";
         } catch (const std::logic_error&) {

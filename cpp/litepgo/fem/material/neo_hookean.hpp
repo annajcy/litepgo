@@ -15,13 +15,13 @@ class NeoHookean final {
   public:
     static constexpr int num_parameters = 2;
 
-    static double value(const MaterialInputs& inputs);
-    static Eigen::Matrix3d dW_dF(const MaterialInputs& inputs);
-    static Eigen::Matrix<double, 9, 9> d2W_dF2(const MaterialInputs& inputs);
-    static Eigen::Matrix3d dW_dFp(const MaterialInputs& inputs);
-    static Eigen::Matrix<double, 9, 9> d2W_dFp2(const MaterialInputs& inputs);
-    static Eigen::Vector2d dW_dtheta(const MaterialInputs& inputs);
-    static Eigen::Matrix2d d2W_dtheta2(const MaterialInputs& inputs);
+    static double eval_W(const MaterialInputs& inputs);
+    static Eigen::Matrix3d eval_dW_dF(const MaterialInputs& inputs);
+    static Eigen::Matrix<double, 9, 9> eval_d2W_dF2(const MaterialInputs& inputs);
+    static Eigen::Matrix3d eval_dW_dFp(const MaterialInputs& inputs);
+    static Eigen::Matrix<double, 9, 9> eval_d2W_dFp2(const MaterialInputs& inputs);
+    static Eigen::Vector2d eval_dW_dtheta(const MaterialInputs& inputs);
+    static Eigen::Matrix2d eval_d2W_dtheta2(const MaterialInputs& inputs);
 };
 
 } // namespace litepgo

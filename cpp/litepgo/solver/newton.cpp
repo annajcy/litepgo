@@ -35,9 +35,9 @@ bool is_converged(const NewtonStep& step, const NewtonOptions& options) {
 }
 
 // Evaluates value, gradient, and Hessian at x in one assembly, and the free gradient.
-double evaluate_state(const Energy& energy, const DofReduction& fixed, const Vec& x, HessianKind kind, Vec& gradient,
-                      SpMat& hessian, Vec& gradient_free) {
-    const double value = energy.evaluate(x, &gradient, &hessian, kind);
+double eval_state(const Energy& energy, const DofReduction& fixed, const Vec& x, HessianKind kind, Vec& gradient,
+                  SpMat& hessian, Vec& gradient_free) {
+    const double value = energy.eval(x, &gradient, &hessian, kind);
     if (!gradient.allFinite()) {
         throw std::logic_error("newton_solve: the energy returned a non-finite gradient");
     }
@@ -110,7 +110,7 @@ std::optional<double> line_search(const Energy& energy, const Vec& x, const Vec&
         }
         ++step.line_search_evaluations;
         try {
-            if (accepts(step.energy, energy.value(trial))) {
+            if (accepts(step.energy, energy.eval_value(trial))) {
                 return alpha;
             }
         } catch (const InfeasibleState&) {
@@ -131,7 +131,7 @@ NewtonResult newton_solve(Energy& energy, const DofReduction& fixed, const Const
     result.x = x0;
     if (fixed.num_free() == 0) {
         result.status = NewtonStatus::Converged;
-        result.energy = energy.value(result.x);
+        result.energy = energy.eval_value(result.x);
         return result;
     }
 
@@ -167,7 +167,7 @@ NewtonResult newton_solve(Energy& energy, const DofReduction& fixed, const Const
             hessian = energy.hessian_pattern();
             system.rebuild(hessian);
         }
-        step.energy = evaluate_state(energy, fixed, x, options.hessian, gradient, hessian, gradient_free);
+        step.energy = eval_state(energy, fixed, x, options.hessian, gradient, hessian, gradient_free);
         step.gradient_norm = gradient_free.cwiseAbs().maxCoeff();
 
         if (is_converged(step, options)) {

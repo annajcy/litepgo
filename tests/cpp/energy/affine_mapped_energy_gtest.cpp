@@ -55,10 +55,10 @@ void expect_mapped(const AffineMappedEnergy& mapped, const Energy& inner, const 
                    const Vec& z, HessianKind kind) {
     const Vec x = T * z + offset;
     const Eigen::MatrixXd dense_T = Eigen::MatrixXd(T);
-    EXPECT_NEAR(mapped.value(z), inner.value(x), 1e-12);
-    EXPECT_LE((mapped.gradient(z) - dense_T.transpose() * inner.gradient(x)).cwiseAbs().maxCoeff(), 1e-12);
-    const Eigen::MatrixXd expected = dense_T.transpose() * Eigen::MatrixXd(inner.hessian(x, kind)) * dense_T;
-    EXPECT_LE((Eigen::MatrixXd(mapped.hessian(z, kind)) - expected).cwiseAbs().maxCoeff(), 1e-12);
+    EXPECT_NEAR(mapped.eval_value(z), inner.eval_value(x), 1e-12);
+    EXPECT_LE((mapped.eval_gradient(z) - dense_T.transpose() * inner.eval_gradient(x)).cwiseAbs().maxCoeff(), 1e-12);
+    const Eigen::MatrixXd expected = dense_T.transpose() * Eigen::MatrixXd(inner.eval_hessian(x, kind)) * dense_T;
+    EXPECT_LE((Eigen::MatrixXd(mapped.eval_hessian(z, kind)) - expected).cwiseAbs().maxCoeff(), 1e-12);
 }
 
 } // namespace
@@ -79,7 +79,7 @@ TEST(AffineMappedEnergy, DefaultsToAZeroOffset) {
     const auto chain = std::make_shared<DoubleWellChain>(5);
     const AffineMappedEnergy mapped(chain, periodic_map());
     const Vec z = Vec::LinSpaced(4, -0.5, 0.5);
-    EXPECT_EQ(mapped.value(z), chain->value(periodic_map() * z));
+    EXPECT_EQ(mapped.eval_value(z), chain->eval_value(periodic_map() * z));
     EXPECT_EQ(mapped.num_dofs(), 4);
     EXPECT_TRUE(mapped.has_fixed_pattern());
 }
@@ -94,7 +94,7 @@ TEST(AffineMappedEnergy, ForwardsTheFeasibleStep) {
 TEST(AffineMappedEnergy, InfeasibleInnerStateThrowsThrough) {
     const auto barrier = std::make_shared<HalfSpaceBarrier>(5, 4);
     const AffineMappedEnergy mapped(barrier, periodic_map());
-    EXPECT_THROW(mapped.value((Vec(4) << 2.0, 0.0, 0.0, 0.0).finished()), litepgo::InfeasibleState);
+    EXPECT_THROW(mapped.eval_value((Vec(4) << 2.0, 0.0, 0.0, 0.0).finished()), litepgo::InfeasibleState);
 }
 
 TEST(AffineMappedEnergy, RejectsInvalidInput) {
@@ -124,7 +124,7 @@ TEST(AffineMappedEnergy, DetectsAnInnerEnergyUpdatedElsewhere) {
     const Vec z = (Vec(4) << 1.0, 1.0, -2.0, 3.0).finished();
 
     ASSERT_TRUE(switching->update_pattern(periodic_map() * z));
-    EXPECT_THROW(mapped.hessian(z), std::logic_error);
+    EXPECT_THROW(mapped.eval_hessian(z), std::logic_error);
     EXPECT_TRUE(mapped.update_pattern(z));
-    EXPECT_NO_THROW(mapped.hessian(z));
+    EXPECT_NO_THROW(mapped.eval_hessian(z));
 }

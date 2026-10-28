@@ -4,17 +4,17 @@
 
 namespace litepgo {
 
-Eigen::Vector4d TetP1Basis::evaluate_N(const Eigen::Vector3d& xi) {
+Eigen::Vector4d TetP1Basis::eval_N(const Eigen::Vector3d& xi) {
     return {1 - xi.sum(), xi.x(), xi.y(), xi.z()};
 }
 
-Eigen::Matrix<double, 4, 3> TetP1Basis::evaluate_dN_dxi(const Eigen::Vector3d&) {
+Eigen::Matrix<double, 4, 3> TetP1Basis::eval_dN_dxi(const Eigen::Vector3d&) {
     Eigen::Matrix<double, 4, 3> result;
     result << -1, -1, -1, 1, 0, 0, 0, 1, 0, 0, 0, 1;
     return result;
 }
 
-Eigen::Matrix<double, 4, 6> TetP1Basis::evaluate_d2N_dxi2(const Eigen::Vector3d&) {
+Eigen::Matrix<double, 4, 6> TetP1Basis::eval_d2N_dxi2(const Eigen::Vector3d&) {
     return Eigen::Matrix<double, 4, 6>::Zero();
 }
 

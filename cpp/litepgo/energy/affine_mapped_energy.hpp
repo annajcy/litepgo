@@ -44,7 +44,7 @@ class AffineMappedEnergy final : public Energy {
     explicit AffineMappedEnergy(Setup setup);
 
     std::optional<SpMat> refresh_pattern(const ConstVecRef& z) override;
-    double evaluate_values(const ConstVecRef& z, Vec* gradient, SpMat* hessian, HessianKind kind) const override;
+    double eval_values(const ConstVecRef& z, Vec* gradient, SpMat* hessian, HessianKind kind) const override;
     double feasible_step(const ConstVecRef& z, const ConstVecRef& dz) const override;
 
     std::shared_ptr<Energy> energy_;

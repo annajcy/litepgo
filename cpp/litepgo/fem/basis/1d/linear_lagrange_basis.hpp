@@ -10,13 +10,13 @@ class LinearLagrangeBasis {
     static constexpr int num_basis_functions = 2;
 
     // Evaluates the polynomials without clamping the parameter to the interval.
-    static Eigen::Vector2d evaluate_N(double t) {
+    static Eigen::Vector2d eval_N(double t) {
         return {1.0 - t, t};
     }
-    static Eigen::Vector2d evaluate_dN_dxi(double) {
+    static Eigen::Vector2d eval_dN_dxi(double) {
         return {-1.0, 1.0};
     }
-    static Eigen::Vector2d evaluate_d2N_dxi2(double) {
+    static Eigen::Vector2d eval_d2N_dxi2(double) {
         return Eigen::Vector2d::Zero();
     }
 };

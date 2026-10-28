@@ -20,7 +20,7 @@ class QuadraticEnergy final : public FixedPatternEnergy {
     static Setup checked_setup(SpMat A, Vec b);
     explicit QuadraticEnergy(Setup setup);
 
-    double evaluate_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const override;
+    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const override;
 
     SpMat A_;
     Vec b_;

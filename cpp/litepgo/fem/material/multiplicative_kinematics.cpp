@@ -22,15 +22,16 @@ MultiplicativeKinematics::MultiplicativeKinematics(const Eigen::Matrix3d& F, con
     }
 }
 
-double MultiplicativeKinematics::reference_energy(double psi) const {
+double MultiplicativeKinematics::eval_W(double psi) const {
     return det_Fp_ * psi;
 }
 
-Eigen::Matrix3d MultiplicativeKinematics::dW_dF(const Eigen::Matrix3d& dpsi_dFe) const {
+Eigen::Matrix3d MultiplicativeKinematics::eval_dW_dF(const Eigen::Matrix3d& dpsi_dFe) const {
     return det_Fp_ * dpsi_dFe * inv_Fp_.transpose();
 }
 
-Eigen::Matrix<double, 9, 9> MultiplicativeKinematics::d2W_dF2(const Eigen::Matrix<double, 9, 9>& d2psi_dFe2) const {
+Eigen::Matrix<double, 9, 9>
+MultiplicativeKinematics::eval_d2W_dF2(const Eigen::Matrix<double, 9, 9>& d2psi_dFe2) const {
     // vec(delta_F * inv_Fp) = (inv_Fp^T tensor I) vec(delta_F).
     Eigen::Matrix<double, 9, 9> dFe_dF = Eigen::Matrix<double, 9, 9>::Zero();
     for (int i = 0; i < 3; ++i) {
@@ -41,13 +42,14 @@ Eigen::Matrix<double, 9, 9> MultiplicativeKinematics::d2W_dF2(const Eigen::Matri
     return det_Fp_ * dFe_dF.transpose() * d2psi_dFe2 * dFe_dF;
 }
 
-Eigen::Matrix3d MultiplicativeKinematics::dW_dFp(double psi, const Eigen::Matrix3d& dpsi_dFe) const {
+Eigen::Matrix3d MultiplicativeKinematics::eval_dW_dFp(double psi, const Eigen::Matrix3d& dpsi_dFe) const {
     const Eigen::Matrix3d R = psi * Eigen::Matrix3d::Identity() - Fe_.transpose() * dpsi_dFe;
     return det_Fp_ * R * inv_Fp_.transpose();
 }
 
-Eigen::Matrix<double, 9, 9> MultiplicativeKinematics::d2W_dFp2(double psi, const Eigen::Matrix3d& dpsi_dFe,
-                                                               const Eigen::Matrix<double, 9, 9>& d2psi_dFe2) const {
+Eigen::Matrix<double, 9, 9>
+MultiplicativeKinematics::eval_d2W_dFp2(double psi, const Eigen::Matrix3d& dpsi_dFe,
+                                        const Eigen::Matrix<double, 9, 9>& d2psi_dFe2) const {
 
     const Eigen::Matrix3d& inv_Fp = inv_Fp_;
     const Eigen::Matrix3d R = psi * Eigen::Matrix3d::Identity() - Fe_.transpose() * dpsi_dFe;

@@ -22,29 +22,29 @@ template <class Material> class MaterialLocalEnergy3D : public LocalEnergy3D {
     bool has_hessian() const noexcept override {
         return true;
     }
-    double value(const Eigen::Vector3d& xi) const override {
-        return Material::value(inputs(xi));
+    double eval_value(const Eigen::Vector3d& xi) const override {
+        return Material::eval_W(eval_inputs(xi));
     }
-    Eigen::VectorXd gradient(const Eigen::Vector3d& xi) const override {
-        const auto input = inputs(xi);
-        return gradient_wrt_dofs(active_derivative(xi), material_gradient(input));
+    Eigen::VectorXd eval_gradient(const Eigen::Vector3d& xi) const override {
+        const auto input = eval_inputs(xi);
+        return eval_gradient_wrt_dofs(eval_active_derivative(xi), eval_material_gradient(input));
     }
-    Eigen::MatrixXd hessian(const Eigen::Vector3d& xi) const override {
-        const auto input = inputs(xi);
-        return hessian_wrt_dofs(active_derivative(xi), material_hessian(input));
+    Eigen::MatrixXd eval_hessian(const Eigen::Vector3d& xi) const override {
+        const auto input = eval_inputs(xi);
+        return eval_hessian_wrt_dofs(eval_active_derivative(xi), eval_material_hessian(input));
     }
     double accumulate(const Eigen::Vector3d& xi, double weight, Eigen::VectorXd* gradient,
                       Eigen::MatrixXd* hessian) const override {
         if (!xi.allFinite() || !std::isfinite(weight))
             throw std::invalid_argument("MaterialLocalEnergy3D::accumulate requires finite parameters and weight");
-        const auto input = inputs(xi);
-        const double result = weight * Material::value(input);
+        const auto input = eval_inputs(xi);
+        const double result = weight * Material::eval_W(input);
         if (gradient || hessian) {
-            const auto derivative = active_derivative(xi);
+            const auto derivative = eval_active_derivative(xi);
             if (gradient)
-                add_gradient_wrt_dofs(derivative, material_gradient(input), weight, *gradient);
+                add_gradient_wrt_dofs(derivative, eval_material_gradient(input), weight, *gradient);
             if (hessian)
-                add_hessian_wrt_dofs(derivative, material_hessian(input), weight, *hessian);
+                add_hessian_wrt_dofs(derivative, eval_material_hessian(input), weight, *hessian);
         }
         return result;
     }
@@ -57,22 +57,22 @@ template <class Material> class MaterialLocalEnergy3D : public LocalEnergy3D {
     }
 
   private:
-    virtual Eigen::MatrixXd material_gradient(const MaterialInputs& input) const = 0;
-    virtual Eigen::MatrixXd material_hessian(const MaterialInputs& input) const = 0;
+    virtual Eigen::MatrixXd eval_material_gradient(const MaterialInputs& input) const = 0;
+    virtual Eigen::MatrixXd eval_material_hessian(const MaterialInputs& input) const = 0;
 
-    MaterialInputs inputs(const Eigen::Vector3d& xi) const {
+    MaterialInputs eval_inputs(const Eigen::Vector3d& xi) const {
         if (!xi.allFinite())
             throw std::invalid_argument("MaterialLocalEnergy3D requires finite parameters");
-        const auto F = F_.value(xi);
-        const auto Fp = Fp_.value(xi);
-        const auto theta = theta_.value(xi);
+        const auto F = F_.eval_value(xi);
+        const auto Fp = Fp_.eval_value(xi);
+        const auto theta = theta_.eval_value(xi);
         if (F.size() != 9 || Fp.size() != 9 || theta.size() == 0 || !F.allFinite() || !Fp.allFinite() ||
             !theta.allFinite())
             throw std::invalid_argument("MaterialLocalEnergy3D requires compatible finite material inputs");
         return {F.reshaped(3, 3), Fp.reshaped(3, 3), theta};
     }
-    Eigen::MatrixXd active_derivative(const Eigen::Vector3d& xi) const {
-        const auto derivative = active_field_.dvalue_dcoeffs(xi);
+    Eigen::MatrixXd eval_active_derivative(const Eigen::Vector3d& xi) const {
+        const auto derivative = active_field_.eval_dvalue_dcoeffs(xi);
         if (derivative.rows() != active_field_.num_components() || derivative.cols() != num_dofs() ||
             !derivative.allFinite())
             throw std::invalid_argument("MaterialLocalEnergy3D: invalid active coefficient derivative");
@@ -94,11 +94,11 @@ template <class Material> class MaterialLocalEnergyF3D final : public MaterialLo
     MaterialLocalEnergyF3D(const Field3D&, const Field3D&, const Field3D&&) = delete;
 
   private:
-    Eigen::MatrixXd material_gradient(const MaterialInputs& input) const override {
-        return Material::dW_dF(input);
+    Eigen::MatrixXd eval_material_gradient(const MaterialInputs& input) const override {
+        return Material::eval_dW_dF(input);
     }
-    Eigen::MatrixXd material_hessian(const MaterialInputs& input) const override {
-        return Material::d2W_dF2(input);
+    Eigen::MatrixXd eval_material_hessian(const MaterialInputs& input) const override {
+        return Material::eval_d2W_dF2(input);
     }
 };
 
@@ -112,11 +112,11 @@ template <class Material> class MaterialLocalEnergyFp3D final : public MaterialL
     MaterialLocalEnergyFp3D(const Field3D&, const Field3D&, const Field3D&&) = delete;
 
   private:
-    Eigen::MatrixXd material_gradient(const MaterialInputs& input) const override {
-        return Material::dW_dFp(input);
+    Eigen::MatrixXd eval_material_gradient(const MaterialInputs& input) const override {
+        return Material::eval_dW_dFp(input);
     }
-    Eigen::MatrixXd material_hessian(const MaterialInputs& input) const override {
-        return Material::d2W_dFp2(input);
+    Eigen::MatrixXd eval_material_hessian(const MaterialInputs& input) const override {
+        return Material::eval_d2W_dFp2(input);
     }
 };
 
@@ -130,11 +130,11 @@ template <class Material> class MaterialLocalEnergyTheta3D final : public Materi
     MaterialLocalEnergyTheta3D(const Field3D&, const Field3D&, const Field3D&&) = delete;
 
   private:
-    Eigen::MatrixXd material_gradient(const MaterialInputs& input) const override {
-        return Material::dW_dtheta(input);
+    Eigen::MatrixXd eval_material_gradient(const MaterialInputs& input) const override {
+        return Material::eval_dW_dtheta(input);
     }
-    Eigen::MatrixXd material_hessian(const MaterialInputs& input) const override {
-        return Material::d2W_dtheta2(input);
+    Eigen::MatrixXd eval_material_hessian(const MaterialInputs& input) const override {
+        return Material::eval_d2W_dtheta2(input);
     }
 };
 

@@ -100,15 +100,14 @@ std::optional<SpMat> AffineMappedEnergy::refresh_pattern(const ConstVecRef& z) {
     return std::move(plan.pattern);
 }
 
-double AffineMappedEnergy::evaluate_values(const ConstVecRef& z, Vec* gradient, SpMat* hessian,
-                                           HessianKind kind) const {
+double AffineMappedEnergy::eval_values(const ConstVecRef& z, Vec* gradient, SpMat* hessian, HessianKind kind) const {
     if (hessian != nullptr && !same_pattern(energy_->hessian_pattern(), hessian_full_)) {
         throw std::logic_error("AffineMappedEnergy: the inner energy's pattern changed after this energy's last "
                                "update_pattern(); call update_pattern() on the outermost energy");
     }
     x_full_ = map_ * z + offset_;
-    const double value = energy_->evaluate(x_full_, gradient != nullptr ? &gradient_full_ : nullptr,
-                                           hessian != nullptr ? &hessian_full_ : nullptr, kind);
+    const double value = energy_->eval(x_full_, gradient != nullptr ? &gradient_full_ : nullptr,
+                                       hessian != nullptr ? &hessian_full_ : nullptr, kind);
     if (gradient != nullptr) {
         *gradient = map_.transpose() * gradient_full_;
     }

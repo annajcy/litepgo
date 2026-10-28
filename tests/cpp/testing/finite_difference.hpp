@@ -16,7 +16,7 @@ inline Vec finite_difference_gradient(const Energy& energy, const Vec& x, double
         Vec backward = x;
         forward[i] += step;
         backward[i] -= step;
-        gradient[i] = (energy.value(forward) - energy.value(backward)) / (2.0 * step);
+        gradient[i] = (energy.eval_value(forward) - energy.eval_value(backward)) / (2.0 * step);
     }
     return gradient;
 }
@@ -28,7 +28,7 @@ inline Eigen::MatrixXd finite_difference_hessian(const Energy& energy, const Vec
         Vec backward = x;
         forward[j] += step;
         backward[j] -= step;
-        hessian.col(j) = (energy.gradient(forward) - energy.gradient(backward)) / (2.0 * step);
+        hessian.col(j) = (energy.eval_gradient(forward) - energy.eval_gradient(backward)) / (2.0 * step);
     }
     return hessian;
 }
@@ -36,12 +36,12 @@ inline Eigen::MatrixXd finite_difference_hessian(const Energy& energy, const Vec
 // Expects the gradient and exact Hessian at x to match central differences, to
 // a tolerance relative to the size of the derivatives.
 inline void expect_derivatives_match(const Energy& energy, const Vec& x, double tolerance = 1e-6) {
-    const Vec gradient = energy.gradient(x);
+    const Vec gradient = energy.eval_gradient(x);
     const Vec expected_gradient = finite_difference_gradient(energy, x);
     EXPECT_LE((gradient - expected_gradient).cwiseAbs().maxCoeff(),
               tolerance * (1.0 + expected_gradient.cwiseAbs().maxCoeff()));
 
-    const Eigen::MatrixXd hessian = Eigen::MatrixXd(energy.hessian(x, HessianKind::Exact));
+    const Eigen::MatrixXd hessian = Eigen::MatrixXd(energy.eval_hessian(x, HessianKind::Exact));
     const Eigen::MatrixXd expected_hessian = finite_difference_hessian(energy, x);
     EXPECT_LE((hessian - expected_hessian).cwiseAbs().maxCoeff(),
               tolerance * (1.0 + expected_hessian.cwiseAbs().maxCoeff()));

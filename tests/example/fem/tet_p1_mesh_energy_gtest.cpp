@@ -20,7 +20,7 @@ TEST(TetP1Example, GradientAndHessianMatchFiniteDifferences) {
                 x[j] += 0.02 * std::sin(j + 0.3);
         Vec g;
         SpMat sparse_h = energy.hessian_pattern();
-        const double value = energy.evaluate(x, &g, &sparse_h);
+        const double value = energy.eval(x, &g, &sparse_h);
         const Eigen::MatrixXd H(sparse_h);
         ASSERT_EQ(g.size(), x.size());
         ASSERT_EQ(H.rows(), x.size());
@@ -37,8 +37,8 @@ TEST(TetP1Example, GradientAndHessianMatchFiniteDifferences) {
                 Du.col(c) = x.segment<3>(3 * cell[static_cast<std::size_t>(c + 1)]) - x.segment<3>(3 * cell[0]);
             }
             expected += Dm.determinant() / 6 *
-                        NeoHookean::value({Eigen::Matrix3d::Identity() + Du * Dm.inverse(), Eigen::Matrix3d::Identity(),
-                                           Eigen::Vector2d(2, 3)});
+                        NeoHookean::eval_W({Eigen::Matrix3d::Identity() + Du * Dm.inverse(),
+                                            Eigen::Matrix3d::Identity(), Eigen::Vector2d(2, 3)});
         }
         EXPECT_NEAR(value, expected, 1e-13);
         for (double h : {1e-3, 3e-4, 1e-4}) {
@@ -49,8 +49,7 @@ TEST(TetP1Example, GradientAndHessianMatchFiniteDifferences) {
                 Vec plus = x, minus = x, plus_g, minus_g;
                 plus[j] += h;
                 minus[j] -= h;
-                fd_g[j] =
-                    (energy.evaluate(plus, &plus_g, nullptr) - energy.evaluate(minus, &minus_g, nullptr)) / (2 * h);
+                fd_g[j] = (energy.eval(plus, &plus_g, nullptr) - energy.eval(minus, &minus_g, nullptr)) / (2 * h);
                 fd_h.col(j) = (plus_g - minus_g) / (2 * h);
             }
             EXPECT_LT((g - fd_g).norm() / (1 + g.norm()), 10 * h * h + 1e-9);
@@ -63,8 +62,8 @@ TEST(TetP1Example, GradientAndHessianMatchFiniteDifferences) {
             }
             d.normalize();
             v.normalize();
-            const double mixed = (energy.value(x + h * d + h * v) - energy.value(x + h * d - h * v) -
-                                  energy.value(x - h * d + h * v) + energy.value(x - h * d - h * v)) /
+            const double mixed = (energy.eval_value(x + h * d + h * v) - energy.eval_value(x + h * d - h * v) -
+                                  energy.eval_value(x - h * d + h * v) + energy.eval_value(x - h * d - h * v)) /
                                  (4 * h * h);
             EXPECT_NEAR(d.dot(H * v), mixed, (10 * h * h + 1e-7) * (1 + H.norm()));
         }
@@ -80,9 +79,9 @@ TEST(TetP1Example, ElementLambdaRejectsInvalidGeometry) {
         const Vec x = Vec::Zero(15);
         Vec g;
         SpMat H = energy.hessian_pattern();
-        EXPECT_THROW(energy.value(x), std::invalid_argument);
-        EXPECT_THROW(energy.evaluate(x, &g, nullptr), std::invalid_argument);
-        EXPECT_THROW(energy.evaluate(x, nullptr, &H), std::invalid_argument);
+        EXPECT_THROW(energy.eval_value(x), std::invalid_argument);
+        EXPECT_THROW(energy.eval(x, &g, nullptr), std::invalid_argument);
+        EXPECT_THROW(energy.eval(x, nullptr, &H), std::invalid_argument);
     }
     EXPECT_THROW(example::make_tet_p1_mesh_energy(Vec::Zero(14)), std::invalid_argument);
     for (double bad : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),

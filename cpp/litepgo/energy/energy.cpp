@@ -46,19 +46,19 @@ bool Energy::update_pattern(const ConstVecRef& x) {
     return true;
 }
 
-double Energy::evaluate(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const {
+double Energy::eval(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const {
     BusyScope scope(busy_, "Energy");
-    check_size(x, "evaluate");
+    check_size(x, "eval");
     if (hessian != nullptr && !same_pattern(*hessian, pattern_)) {
-        throw std::invalid_argument("Energy::evaluate: the hessian does not have this energy's current sparsity "
+        throw std::invalid_argument("Energy::eval: the hessian does not have this energy's current sparsity "
                                     "pattern; copy hessian_pattern() again after update_pattern()");
     }
     if (gradient != nullptr) {
         gradient->resize(num_dofs_);
     }
-    const double value = evaluate_values(x, gradient, hessian, kind);
+    const double value = eval_values(x, gradient, hessian, kind);
     if (!std::isfinite(value)) {
-        throw std::logic_error("Energy::evaluate: the energy returned " + std::to_string(value) +
+        throw std::logic_error("Energy::eval: the energy returned " + std::to_string(value) +
                                "; values must be finite, with InfeasibleState thrown at infeasible states");
     }
     return value;
@@ -78,19 +78,19 @@ double Energy::max_feasible_step(const ConstVecRef& x, const ConstVecRef& dx) co
     return alpha;
 }
 
-double Energy::value(const ConstVecRef& x) const {
-    return evaluate(x, nullptr, nullptr);
+double Energy::eval_value(const ConstVecRef& x) const {
+    return eval(x, nullptr, nullptr);
 }
 
-Vec Energy::gradient(const ConstVecRef& x) const {
+Vec Energy::eval_gradient(const ConstVecRef& x) const {
     Vec gradient;
-    evaluate(x, &gradient, nullptr);
+    eval(x, &gradient, nullptr);
     return gradient;
 }
 
-SpMat Energy::hessian(const ConstVecRef& x, HessianKind kind) const {
+SpMat Energy::eval_hessian(const ConstVecRef& x, HessianKind kind) const {
     SpMat hessian = pattern_;
-    evaluate(x, nullptr, &hessian, kind);
+    eval(x, nullptr, &hessian, kind);
     return hessian;
 }
 

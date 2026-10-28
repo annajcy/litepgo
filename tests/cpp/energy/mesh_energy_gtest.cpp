@@ -39,24 +39,24 @@ auto passive_fields() {
 void check_fd(MeshEnergy& energy, const Vec& x) {
     Vec gradient;
     SpMat hessian = energy.hessian_pattern();
-    const double value = energy.evaluate(x, &gradient, &hessian);
-    EXPECT_DOUBLE_EQ(value, energy.value(x));
-    EXPECT_TRUE(gradient.isApprox(energy.gradient(x), 1e-13));
-    EXPECT_TRUE(Eigen::MatrixXd(hessian).isApprox(Eigen::MatrixXd(energy.hessian(x)), 1e-13));
+    const double value = energy.eval(x, &gradient, &hessian);
+    EXPECT_DOUBLE_EQ(value, energy.eval_value(x));
+    EXPECT_TRUE(gradient.isApprox(energy.eval_gradient(x), 1e-13));
+    EXPECT_TRUE(Eigen::MatrixXd(hessian).isApprox(Eigen::MatrixXd(energy.eval_hessian(x)), 1e-13));
     const double step = 1e-5;
     for (Eigen::Index j = 0; j < x.size(); ++j) {
         Vec plus = x, minus = x;
         plus[j] += step;
         minus[j] -= step;
-        EXPECT_NEAR(gradient[j], (energy.value(plus) - energy.value(minus)) / (2 * step), 1e-7);
-        const Vec fd = (energy.gradient(plus) - energy.gradient(minus)) / (2 * step);
+        EXPECT_NEAR(gradient[j], (energy.eval_value(plus) - energy.eval_value(minus)) / (2 * step), 1e-7);
+        const Vec fd = (energy.eval_gradient(plus) - energy.eval_gradient(minus)) / (2 * step);
         EXPECT_LT((fd - Eigen::MatrixXd(hessian).col(j)).norm(), 1e-6);
     }
     {
         tbb::global_control threads(tbb::global_control::max_allowed_parallelism, 1);
         Vec g;
         SpMat h = energy.hessian_pattern();
-        EXPECT_DOUBLE_EQ(energy.evaluate(x, &g, &h), value);
+        EXPECT_DOUBLE_EQ(energy.eval(x, &g, &h), value);
         EXPECT_EQ(g, gradient);
         EXPECT_EQ(Eigen::MatrixXd(h), Eigen::MatrixXd(hessian));
     }
@@ -64,7 +64,7 @@ void check_fd(MeshEnergy& energy, const Vec& x) {
         tbb::global_control threads(tbb::global_control::max_allowed_parallelism, 4);
         Vec g;
         SpMat h = energy.hessian_pattern();
-        EXPECT_DOUBLE_EQ(energy.evaluate(x, &g, &h), value);
+        EXPECT_DOUBLE_EQ(energy.eval(x, &g, &h), value);
         EXPECT_EQ(g, gradient);
         EXPECT_EQ(Eigen::MatrixXd(h), Eigen::MatrixXd(hessian));
     }
@@ -85,7 +85,7 @@ void check_material_path(const Map& map, const Vec& data, Fields fields, Bind bi
         double result = 0;
         for (int q = 0; q < Q::num_points; ++q) {
             const Eigen::Vector3d xi = Q::points().row(q).transpose();
-            const double weight = Q::weights()[q] * X_field.dvalue_dxi(xi).determinant();
+            const double weight = Q::weights()[q] * X_field.eval_dvalue_dxi(xi).determinant();
             result += local_energy.accumulate(xi, weight, g, h);
         }
         return result;
@@ -173,9 +173,9 @@ TEST(MeshEnergy, OwnsPlanUsesCurrentXAndSupportsTriangleAndTet) {
     check_fd(triangle, x);
     Vec counts(8);
     counts << 3, 3, 3, 3, 1, 1, 2, 2;
-    EXPECT_TRUE(triangle.gradient(x).isApprox(counts.cwiseProduct(x), 1e-14));
-    EXPECT_TRUE(Eigen::MatrixXd(triangle.hessian(x)).isApprox(Eigen::MatrixXd(counts.asDiagonal()), 1e-14));
-    EXPECT_NE(triangle.value(x), triangle.value(2 * x));
+    EXPECT_TRUE(triangle.eval_gradient(x).isApprox(counts.cwiseProduct(x), 1e-14));
+    EXPECT_TRUE(Eigen::MatrixXd(triangle.eval_hessian(x)).isApprox(Eigen::MatrixXd(counts.asDiagonal()), 1e-14));
+    EXPECT_NE(triangle.eval_value(x), triangle.eval_value(2 * x));
     EXPECT_DOUBLE_EQ(triangle.max_feasible_step(x, x), 1);
     MeshEnergy tet(VertexDofMap(TetTopology(4, {{3, 1, 2, 0}}), 1), quadratic);
     check_fd(tet, Vec::LinSpaced(4, 0.1, 0.4));
@@ -192,8 +192,8 @@ TEST(MeshEnergy, ProjectsEachLocalHessianBeforeScatter) {
                               *h = Eigen::MatrixXd::Constant(1, 1, k);
                           return 0.5 * k * x_local.squaredNorm();
                       });
-    EXPECT_EQ(energy.hessian(Vec::Ones(1)).coeff(0, 0), 1);
-    EXPECT_EQ(energy.hessian(Vec::Ones(1), HessianKind::Projected).coeff(0, 0), 3);
+    EXPECT_EQ(energy.eval_hessian(Vec::Ones(1)).coeff(0, 0), 1);
+    EXPECT_EQ(energy.eval_hessian(Vec::Ones(1), HessianKind::Projected).coeff(0, 0), 3);
 }
 
 TEST(MeshEnergy, FeasibleStepUsesMatchingLocalDofValuesAndDeltas) {
@@ -218,9 +218,9 @@ TEST(MeshEnergy, FeasibleStepUsesMatchingLocalDofValuesAndDeltas) {
     x << 1, 2, 3, 4;
     dx << -2, 1, -12, 0;
     EXPECT_DOUBLE_EQ(energy.max_feasible_step(x, dx), 0.225);
-    EXPECT_NO_THROW(energy.value(x + energy.max_feasible_step(x, dx) * dx));
+    EXPECT_NO_THROW(energy.eval_value(x + energy.max_feasible_step(x, dx) * dx));
     x[2] = -1;
-    EXPECT_THROW(energy.value(x), InfeasibleState);
+    EXPECT_THROW(energy.eval_value(x), InfeasibleState);
     EXPECT_THROW(energy.max_feasible_step(x, dx), InfeasibleState);
 }
 
@@ -231,9 +231,9 @@ TEST(MeshEnergy, RejectsMalformedOutputsAndHandlesIndependentRequests) {
             throw std::logic_error("unsupported");
         return 2.;
     });
-    EXPECT_EQ(value_only.value(Vec::Zero(2)), 2);
-    EXPECT_THROW(value_only.gradient(Vec::Zero(2)), std::logic_error);
-    EXPECT_THROW(value_only.hessian(Vec::Zero(2)), std::logic_error);
+    EXPECT_EQ(value_only.eval_value(Vec::Zero(2)), 2);
+    EXPECT_THROW(value_only.eval_gradient(Vec::Zero(2)), std::logic_error);
+    EXPECT_THROW(value_only.eval_hessian(Vec::Zero(2)), std::logic_error);
     MeshEnergy second_only(map, [](int, const Eigen::VectorXd&, Vec* g, Eigen::MatrixXd* h) {
         if (g)
             throw std::logic_error("unsupported");
@@ -241,7 +241,7 @@ TEST(MeshEnergy, RejectsMalformedOutputsAndHandlesIndependentRequests) {
             *h = Eigen::Matrix2d::Identity();
         return 0.;
     });
-    EXPECT_TRUE(Eigen::MatrixXd(second_only.hessian(Vec::Zero(2))).isIdentity());
+    EXPECT_TRUE(Eigen::MatrixXd(second_only.eval_hessian(Vec::Zero(2))).isIdentity());
     MeshEnergy bad(map, [](int, const Eigen::VectorXd&, Vec* g, Eigen::MatrixXd* h) {
         if (g)
             *g = Vec::Ones(1);
@@ -249,17 +249,17 @@ TEST(MeshEnergy, RejectsMalformedOutputsAndHandlesIndependentRequests) {
             *h = Eigen::MatrixXd::Ones(1, 2);
         return 0.;
     });
-    EXPECT_THROW(bad.gradient(Vec::Zero(2)), std::logic_error);
-    EXPECT_THROW(bad.hessian(Vec::Zero(2)), std::logic_error);
+    EXPECT_THROW(bad.eval_gradient(Vec::Zero(2)), std::logic_error);
+    EXPECT_THROW(bad.eval_hessian(Vec::Zero(2)), std::logic_error);
     MeshEnergy unwritten(map, [](int, const Eigen::VectorXd&, Vec*, Eigen::MatrixXd*) { return 0.; });
-    EXPECT_THROW(unwritten.gradient(Vec::Zero(2)), std::logic_error);
-    EXPECT_THROW(unwritten.hessian(Vec::Zero(2)), std::logic_error);
+    EXPECT_THROW(unwritten.eval_gradient(Vec::Zero(2)), std::logic_error);
+    EXPECT_THROW(unwritten.eval_hessian(Vec::Zero(2)), std::logic_error);
     MeshEnergy bad_step(
         map, [](int, const Eigen::VectorXd&, Vec*, Eigen::MatrixXd*) { return 0.; },
         [](int, const Eigen::VectorXd&, const Eigen::VectorXd&) { return std::numeric_limits<double>::quiet_NaN(); });
     EXPECT_THROW(bad_step.max_feasible_step(Vec::Zero(2), Vec::Ones(2)), std::logic_error);
-    EXPECT_THROW(bad.value(Vec::Zero(1)), std::invalid_argument);
-    EXPECT_THROW(bad.value(Vec::Constant(2, std::numeric_limits<double>::infinity())), std::invalid_argument);
+    EXPECT_THROW(bad.eval_value(Vec::Zero(1)), std::invalid_argument);
+    EXPECT_THROW(bad.eval_value(Vec::Constant(2, std::numeric_limits<double>::infinity())), std::invalid_argument);
     EXPECT_THROW(
         (MeshEnergy(VertexDofMap(two_hexes(), 0), [](int, const auto&, Vec*, Eigen::MatrixXd*) { return 0.; })),
         std::invalid_argument);
@@ -269,9 +269,9 @@ TEST(MeshEnergy, EmptyMeshProducesZeroOutputs) {
     MeshEnergy energy(VertexDofMap(HexTopology(2, {}), 3), [](int, const auto&, Vec*, Eigen::MatrixXd*) -> double {
         throw std::logic_error("must not run");
     });
-    EXPECT_EQ(energy.value(Vec::Zero(6)), 0);
-    EXPECT_TRUE(energy.gradient(Vec::Zero(6)).isZero());
-    EXPECT_EQ(energy.hessian(Vec::Zero(6)).nonZeros(), 0);
+    EXPECT_EQ(energy.eval_value(Vec::Zero(6)), 0);
+    EXPECT_TRUE(energy.eval_gradient(Vec::Zero(6)).isZero());
+    EXPECT_EQ(energy.eval_hessian(Vec::Zero(6)).nonZeros(), 0);
     EXPECT_DOUBLE_EQ(energy.max_feasible_step(Vec::Zero(6), Vec::Ones(6)), 1);
 }
 
@@ -287,7 +287,7 @@ TEST(MeshEnergy, RejectsWrongSparsePatternBeforeCallbacksOrOutputWrites) {
     hessian.insert(0, 0) = 9;
     hessian.makeCompressed();
     const SpMat before = hessian;
-    EXPECT_THROW(energy.evaluate(Vec::Zero(2), &gradient, &hessian), std::invalid_argument);
+    EXPECT_THROW(energy.eval(Vec::Zero(2), &gradient, &hessian), std::invalid_argument);
     EXPECT_EQ(calls, 0);
     EXPECT_EQ(gradient, Vec::Constant(1, 7));
     EXPECT_EQ(Eigen::MatrixXd(hessian), Eigen::MatrixXd(before));
@@ -301,8 +301,8 @@ TEST(MeshEnergy, RejectsProjectionOverflowBeforeScatter) {
         return 0.;
     });
     const Vec x = Vec::Zero(2);
-    EXPECT_TRUE(Eigen::MatrixXd(energy.hessian(x)).allFinite());
-    EXPECT_THROW(energy.hessian(x, HessianKind::Projected), std::logic_error);
+    EXPECT_TRUE(Eigen::MatrixXd(energy.eval_hessian(x)).allFinite());
+    EXPECT_THROW(energy.eval_hessian(x, HessianKind::Projected), std::logic_error);
 }
 
 struct SharedDofMap {
@@ -363,7 +363,7 @@ TEST(MeshEnergy, ParallelAssemblyMatchesSerialWithSharedRepeatedAndUnusedDofs) {
                              << "state=" << state << " threads=" << threads << " request=" << request);
                 Vec g;
                 SpMat h = energy.hessian_pattern();
-                EXPECT_EQ(energy.evaluate(x, request & 1 ? &g : nullptr, request & 2 ? &h : nullptr), expected_value);
+                EXPECT_EQ(energy.eval(x, request & 1 ? &g : nullptr, request & 2 ? &h : nullptr), expected_value);
                 if (request & 1)
                     EXPECT_EQ(g, expected_g);
                 if (request & 2)
@@ -386,13 +386,12 @@ TEST(MeshEnergy, ReusedBuffersRejectIncompleteWritesAndRecoverAfterExceptions) {
     Vec x = Eigen::Vector2d(0.2, 0.4), g;
     SpMat h = energy.hessian_pattern();
     for (int request : {1, 2, 3}) {
-        EXPECT_DOUBLE_EQ(energy.evaluate(x, request & 1 ? &g : nullptr, request & 2 ? &h : nullptr),
-                         3 * x.squaredNorm());
+        EXPECT_DOUBLE_EQ(energy.eval(x, request & 1 ? &g : nullptr, request & 2 ? &h : nullptr), 3 * x.squaredNorm());
         write = false;
-        EXPECT_THROW(energy.evaluate(x, request & 1 ? &g : nullptr, request & 2 ? &h : nullptr), std::logic_error);
+        EXPECT_THROW(energy.eval(x, request & 1 ? &g : nullptr, request & 2 ? &h : nullptr), std::logic_error);
         write = true;
         x.array() += 0.1;
-        EXPECT_DOUBLE_EQ(energy.evaluate(x, &g, &h), 3 * x.squaredNorm());
+        EXPECT_DOUBLE_EQ(energy.eval(x, &g, &h), 3 * x.squaredNorm());
         EXPECT_EQ(g, 6 * x);
         EXPECT_EQ(Eigen::MatrixXd(h), 6 * Eigen::Matrix2d::Identity());
     }

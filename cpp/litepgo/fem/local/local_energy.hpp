@@ -12,11 +12,11 @@ template <int ParamDim> class LocalEnergyT {
 
     virtual ~LocalEnergyT() = default;
     virtual int num_dofs() const = 0;
-    virtual double value(const Coordinate& xi) const = 0;
+    virtual double eval_value(const Coordinate& xi) const = 0;
     virtual bool has_gradient() const noexcept;
     virtual bool has_hessian() const noexcept;
-    virtual Eigen::VectorXd gradient(const Coordinate& xi) const;
-    virtual Eigen::MatrixXd hessian(const Coordinate& xi) const;
+    virtual Eigen::VectorXd eval_gradient(const Coordinate& xi) const;
+    virtual Eigen::MatrixXd eval_hessian(const Coordinate& xi) const;
 
     // The caller supplies the complete weight; no geometry or measure is applied here.
     // Adds requested derivatives to initialized, non-aliasing buffers without resizing them.

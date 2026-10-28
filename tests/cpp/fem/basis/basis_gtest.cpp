@@ -18,26 +18,26 @@ using namespace litepgo;
 
 struct ConstantBasis {
     static constexpr int num_basis_functions = 1;
-    static Eigen::Matrix<double, 1, 1> evaluate_N(double) {
+    static Eigen::Matrix<double, 1, 1> eval_N(double) {
         return Eigen::Matrix<double, 1, 1>(1.0);
     }
-    static Eigen::Matrix<double, 1, 1> evaluate_dN_dxi(double) {
+    static Eigen::Matrix<double, 1, 1> eval_dN_dxi(double) {
         return Eigen::Matrix<double, 1, 1>(0.0);
     }
-    static Eigen::Matrix<double, 1, 1> evaluate_d2N_dxi2(double) {
+    static Eigen::Matrix<double, 1, 1> eval_d2N_dxi2(double) {
         return Eigen::Matrix<double, 1, 1>(0.0);
     }
 };
 
 struct InstanceOnly1D : ConstantBasis {
-    Eigen::Matrix<double, 1, 1> evaluate_N(double) const;
+    Eigen::Matrix<double, 1, 1> eval_N(double) const;
 };
 struct InstanceOnly3D : TensorProductBasis3D<LinearLagrangeBasis> {
-    Eigen::Matrix<double, 8, 1> evaluate_N(const Eigen::Vector3d&) const;
+    Eigen::Matrix<double, 8, 1> eval_N(const Eigen::Vector3d&) const;
 };
 struct MissingBasis {};
 struct MissingEvaluate : ConstantBasis {
-    static Eigen::Matrix<double, 1, 1> evaluate_N(double) = delete;
+    static Eigen::Matrix<double, 1, 1> eval_N(double) = delete;
 };
 struct NonConstantCount : ConstantBasis {
     inline static int num_basis_functions = 1;
@@ -49,37 +49,37 @@ struct NegativeCount : ConstantBasis {
     static constexpr int num_basis_functions = -1;
 };
 struct WrongReturn : ConstantBasis {
-    static double evaluate_N(double);
+    static double eval_N(double);
 };
 struct WrongGradientSize : ConstantBasis {
-    static Eigen::Matrix<double, 2, 1> evaluate_dN_dxi(double);
+    static Eigen::Matrix<double, 2, 1> eval_dN_dxi(double);
 };
 struct WrongValueScalar : ConstantBasis {
-    static Eigen::Matrix<float, 1, 1> evaluate_N(double);
+    static Eigen::Matrix<float, 1, 1> eval_N(double);
 };
 struct Wrong1DGradientColumns : LinearLagrangeBasis {
-    static Eigen::Matrix<double, 2, 2> evaluate_dN_dxi(double);
+    static Eigen::Matrix<double, 2, 2> eval_dN_dxi(double);
 };
 struct WrongGradientColumns : TensorProductBasis3D<LinearLagrangeBasis> {
-    static Eigen::Matrix<double, 8, 2> evaluate_dN_dxi(const Eigen::Vector3d&);
+    static Eigen::Matrix<double, 8, 2> eval_dN_dxi(const Eigen::Vector3d&);
 };
 struct WrongGradientRows : TensorProductBasis3D<LinearLagrangeBasis> {
-    static Eigen::Matrix<double, 7, 3> evaluate_dN_dxi(const Eigen::Vector3d&);
+    static Eigen::Matrix<double, 7, 3> eval_dN_dxi(const Eigen::Vector3d&);
 };
 struct Wrong3DReturn : TensorProductBasis3D<LinearLagrangeBasis> {
-    static double evaluate_N(const Eigen::Vector3d&);
+    static double eval_N(const Eigen::Vector3d&);
 };
 struct MissingHessian : ConstantBasis {
-    static Eigen::Matrix<double, 1, 1> evaluate_d2N_dxi2(double) = delete;
+    static Eigen::Matrix<double, 1, 1> eval_d2N_dxi2(double) = delete;
 };
 struct WrongHessianScalar : ConstantBasis {
-    static Eigen::Matrix<float, 1, 1> evaluate_d2N_dxi2(double);
+    static Eigen::Matrix<float, 1, 1> eval_d2N_dxi2(double);
 };
 struct WrongHessianColumns : TensorProductBasis3D<LinearLagrangeBasis> {
-    static Eigen::Matrix<double, 8, 5> evaluate_d2N_dxi2(const Eigen::Vector3d&);
+    static Eigen::Matrix<double, 8, 5> eval_d2N_dxi2(const Eigen::Vector3d&);
 };
 struct WrongHessianRows : TensorProductBasis3D<LinearLagrangeBasis> {
-    static Eigen::Matrix<double, 7, 6> evaluate_d2N_dxi2(const Eigen::Vector3d&);
+    static Eigen::Matrix<double, 7, 6> eval_d2N_dxi2(const Eigen::Vector3d&);
 };
 
 template <class B>
@@ -135,38 +135,38 @@ static_assert(!CanFormTensorProduct2D<MissingHessian>);
 struct CountingBasis : LinearLagrangeBasis {
     CountingBasis() = delete;
     inline static std::array<int, 3> calls{};
-    static Eigen::Vector2d evaluate_N(double t) {
+    static Eigen::Vector2d eval_N(double t) {
         ++calls[0];
-        return LinearLagrangeBasis::evaluate_N(t);
+        return LinearLagrangeBasis::eval_N(t);
     }
-    static Eigen::Vector2d evaluate_dN_dxi(double t) {
+    static Eigen::Vector2d eval_dN_dxi(double t) {
         ++calls[1];
-        return LinearLagrangeBasis::evaluate_dN_dxi(t);
+        return LinearLagrangeBasis::eval_dN_dxi(t);
     }
-    static Eigen::Vector2d evaluate_d2N_dxi2(double t) {
+    static Eigen::Vector2d eval_d2N_dxi2(double t) {
         ++calls[2];
-        return LinearLagrangeBasis::evaluate_d2N_dxi2(t);
+        return LinearLagrangeBasis::eval_d2N_dxi2(t);
     }
 };
 
 template <class B, int Dim> void check_evaluation_counts() {
     const Eigen::Matrix<double, Dim, 1> xi = Eigen::Matrix<double, Dim, 1>::Constant(0.3);
-    auto check = [](const auto& evaluate, std::array<int, 3> expected) {
+    auto check = [](const auto& eval, std::array<int, 3> expected) {
         CountingBasis::calls = {};
-        EXPECT_TRUE(evaluate().allFinite());
+        EXPECT_TRUE(eval().allFinite());
         EXPECT_EQ(CountingBasis::calls, expected);
     };
-    check([&] { return B::evaluate_N(xi); }, {Dim, 0, 0});
-    check([&] { return B::evaluate_dN_dxi(xi); }, {Dim, Dim, 0});
-    check([&] { return B::evaluate_d2N_dxi2(xi); }, {Dim, Dim, Dim});
+    check([&] { return B::eval_N(xi); }, {Dim, 0, 0});
+    check([&] { return B::eval_dN_dxi(xi); }, {Dim, Dim, 0});
+    check([&] { return B::eval_d2N_dxi2(xi); }, {Dim, Dim, Dim});
 
     const InterpolatedFieldT<B, Dim> field(Eigen::MatrixXd::Ones(B::num_basis_functions, 3));
-    check([&] { return field.value(xi); }, {Dim, 0, 0});
-    check([&] { return field.dvalue_dcoeffs(xi); }, {Dim, 0, 0});
-    check([&] { return field.dvalue_dxi(xi); }, {Dim, Dim, 0});
-    check([&] { return field.dgrad_xi_dcoeffs(xi); }, {Dim, Dim, 0});
-    check([&] { return field.d2value_dxi2(xi); }, {Dim, Dim, Dim});
-    check([&] { return field.dhess_xi_dcoeffs(xi); }, {Dim, Dim, Dim});
+    check([&] { return field.eval_value(xi); }, {Dim, 0, 0});
+    check([&] { return field.eval_dvalue_dcoeffs(xi); }, {Dim, 0, 0});
+    check([&] { return field.eval_dvalue_dxi(xi); }, {Dim, Dim, 0});
+    check([&] { return field.eval_dgrad_xi_dcoeffs(xi); }, {Dim, Dim, 0});
+    check([&] { return field.eval_d2value_dxi2(xi); }, {Dim, Dim, Dim});
+    check([&] { return field.eval_dhess_xi_dcoeffs(xi); }, {Dim, Dim, Dim});
 }
 
 TEST(Basis2D, TensorProductsAndFieldsEvaluateOnlyRequestedQuantities) {

@@ -17,13 +17,13 @@ TEST(TensorProductBasis2D, InterpolatesInLastAxisFastestOrderAndReproducesBiline
     nodes << 0, 0, 0, 1, 1, 0, 1, 1;
     Eigen::Vector4d coefficients;
     for (int a = 0; a < 4; ++a) {
-        EXPECT_EQ(B::evaluate_N(nodes.row(a).transpose()), Eigen::Vector4d::Unit(a));
+        EXPECT_EQ(B::eval_N(nodes.row(a).transpose()), Eigen::Vector4d::Unit(a));
         coefficients[a] = 1 + 2 * nodes(a, 0) - 3 * nodes(a, 1) + 4 * nodes(a, 0) * nodes(a, 1);
     }
     for (const Eigen::Vector2d xi : {Eigen::Vector2d(0.2, 0.7), Eigen::Vector2d(-0.2, 1.3)}) {
-        const auto N = B::evaluate_N(xi);
-        const auto dN_dxi = B::evaluate_dN_dxi(xi);
-        const auto d2N_dxi2 = B::evaluate_d2N_dxi2(xi);
+        const auto N = B::eval_N(xi);
+        const auto dN_dxi = B::eval_dN_dxi(xi);
+        const auto d2N_dxi2 = B::eval_d2N_dxi2(xi);
         EXPECT_NEAR(N.sum(), 1, 1e-14);
         EXPECT_TRUE(dN_dxi.colwise().sum().isZero(1e-14));
         EXPECT_NEAR(coefficients.dot(N), 1 + 2 * xi.x() - 3 * xi.y() + 4 * xi.x() * xi.y(), 1e-14);
@@ -37,7 +37,7 @@ TEST(TensorProductBasis2D, InterpolatesInLastAxisFastestOrderAndReproducesBiline
             Eigen::Vector2d plus = xi, minus = xi;
             plus[d] += h;
             minus[d] -= h;
-            const Eigen::Matrix<double, 4, 2> fd = (B::evaluate_dN_dxi(plus) - B::evaluate_dN_dxi(minus)) / (2 * h);
+            const Eigen::Matrix<double, 4, 2> fd = (B::eval_dN_dxi(plus) - B::eval_dN_dxi(minus)) / (2 * h);
             for (int e = 0; e < 2; ++e)
                 EXPECT_TRUE((fd.col(e) - d2N_dxi2.col(d + e)).isZero(3e-10));
         }
@@ -49,12 +49,12 @@ TEST(TensorProductBasis2D, BilinearFieldsProvideZeroPureAndNonzeroMixedSecondDer
     const Field2D& field = concrete;
     const Eigen::Vector2d xi(0.2, 0.3);
     EXPECT_EQ(field.num_dofs(), 4);
-    EXPECT_EQ(field.dvalue_dxi(xi).cols(), 2);
-    EXPECT_TRUE(field.value(xi).allFinite());
-    EXPECT_TRUE(field.dgrad_xi_dcoeffs(xi).allFinite());
-    EXPECT_EQ(field.d2value_dxi2(xi), Eigen::RowVector3d(0, 3, 0));
+    EXPECT_EQ(field.eval_dvalue_dxi(xi).cols(), 2);
+    EXPECT_TRUE(field.eval_value(xi).allFinite());
+    EXPECT_TRUE(field.eval_dgrad_xi_dcoeffs(xi).allFinite());
+    EXPECT_EQ(field.eval_d2value_dxi2(xi), Eigen::RowVector3d(0, 3, 0));
     Eigen::Matrix<double, 3, 4> expected = Eigen::Matrix<double, 3, 4>::Zero();
     expected.row(1) << 1, -1, -1, 1;
-    EXPECT_EQ(field.dhess_xi_dcoeffs(xi), expected);
+    EXPECT_EQ(field.eval_dhess_xi_dcoeffs(xi), expected);
 }
 } // namespace

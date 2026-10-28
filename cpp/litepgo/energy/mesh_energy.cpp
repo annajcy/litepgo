@@ -26,7 +26,7 @@ MeshEnergy::MeshEnergy(Assembler assembler)
     : FixedPatternEnergy(static_cast<int>(assembler.hessian_pattern().rows()), assembler.hessian_pattern()),
       assembler_(std::move(assembler)) {}
 
-double MeshEnergy::evaluate_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const {
+double MeshEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const {
     if (!x.allFinite())
         throw std::invalid_argument("MeshEnergy requires finite DOFs");
     const auto count = static_cast<std::size_t>(assembler_.num_elements());
@@ -47,7 +47,7 @@ double MeshEnergy::evaluate_values(const ConstVecRef& x, Vec* gradient, SpMat* h
                 g->setConstant(n, nan);
             if (h)
                 h->setConstant(n, n, nan);
-            const double value = evaluate_local_(e, x, g, h);
+            const double value = eval_local_(e, x, g, h);
             if (!std::isfinite(value))
                 throw std::logic_error("MeshEnergy: non-finite local energy");
             if (g && (g->size() != n || !g->allFinite()))

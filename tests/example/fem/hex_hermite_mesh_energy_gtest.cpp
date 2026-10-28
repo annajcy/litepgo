@@ -31,10 +31,10 @@ TEST(HexHermiteExample, ReproducesAffineDisplacementAndVolumeWeightedEnergy) {
     const Eigen::Vector3d b(0.2, -0.1, 0.3);
     const Vec x = affine_dofs(X_nodes, A, b);
     auto energy = example::make_hex_hermite_mesh_energy(X_nodes);
-    EXPECT_DOUBLE_EQ(energy.value(Vec::Zero(x.size())), 0);
+    EXPECT_DOUBLE_EQ(energy.eval_value(Vec::Zero(x.size())), 0);
     EXPECT_NEAR(
-        energy.value(x),
-        18 * NeoHookean::value({Eigen::Matrix3d::Identity() + A, Eigen::Matrix3d::Identity(), Eigen::Vector2d(2, 3)}),
+        energy.eval_value(x),
+        18 * NeoHookean::eval_W({Eigen::Matrix3d::Identity() + A, Eigen::Matrix3d::Identity(), Eigen::Vector2d(2, 3)}),
         1e-11);
     const std::array<Eigen::Vector3d, 3> points{
         {Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(1, 1, 1), Eigen::Vector3d(0.2, 0.3, 0.4)}};
@@ -42,12 +42,12 @@ TEST(HexHermiteExample, ReproducesAffineDisplacementAndVolumeWeightedEnergy) {
         const auto X_local = geometry_map.gather(e, X_nodes);
         const InterpolatedField3D<HexQ1Basis> X_field(X_local);
         const auto coefficients = example::hex_hermite_reference_coefficients(
-            displacement_map.gather(e, x), hex_hermite_dof_transform(X_local).diagonal());
+            displacement_map.gather(e, x), eval_hex_hermite_dof_transform(X_local).diagonal());
         const InterpolatedField3D<HexHermiteBasis> displacement(coefficients);
         const auto F = DeformationGradientField3D(displacement, X_field);
         for (const auto& xi : points) {
-            EXPECT_TRUE(displacement.value(xi).isApprox(A * X_field.value(xi) + b, 1e-13));
-            EXPECT_TRUE(F.value(xi).reshaped(3, 3).isApprox(Eigen::Matrix3d::Identity() + A, 1e-13));
+            EXPECT_TRUE(displacement.eval_value(xi).isApprox(A * X_field.eval_value(xi) + b, 1e-13));
+            EXPECT_TRUE(F.eval_value(xi).reshaped(3, 3).isApprox(Eigen::Matrix3d::Identity() + A, 1e-13));
         }
     }
 }
@@ -81,10 +81,10 @@ TEST(HexHermiteExample, SharedFacesHaveContinuousValuesAndPhysicalGradientsInAll
         const std::array<Eigen::MatrixXd, 2> X_local{geometry_map.gather(0, X_nodes), geometry_map.gather(1, X_nodes)};
         const std::array<InterpolatedField3D<HexQ1Basis>, 2> X_fields{InterpolatedField3D<HexQ1Basis>(X_local[0]),
                                                                       InterpolatedField3D<HexQ1Basis>(X_local[1])};
-        const auto c0 = example::hex_hermite_reference_coefficients(displacement_map.gather(0, x),
-                                                                    hex_hermite_dof_transform(X_local[0]).diagonal());
-        const auto c1 = example::hex_hermite_reference_coefficients(displacement_map.gather(1, x),
-                                                                    hex_hermite_dof_transform(X_local[1]).diagonal());
+        const auto c0 = example::hex_hermite_reference_coefficients(
+            displacement_map.gather(0, x), eval_hex_hermite_dof_transform(X_local[0]).diagonal());
+        const auto c1 = example::hex_hermite_reference_coefficients(
+            displacement_map.gather(1, x), eval_hex_hermite_dof_transform(X_local[1]).diagonal());
         const InterpolatedField3D<HexHermiteBasis> u0(c0), u1(c1);
         const auto F0 = DeformationGradientField3D(u0, X_fields[0]);
         const auto F1 = DeformationGradientField3D(u1, X_fields[1]);
@@ -97,9 +97,9 @@ TEST(HexHermiteExample, SharedFacesHaveContinuousValuesAndPhysicalGradientsInAll
                 const Eigen::Vector3d p0_xi = xi;
                 xi[normal] = 0;
                 const Eigen::Vector3d p1_xi = xi;
-                EXPECT_TRUE(X_fields[0].value(p0_xi).isApprox(X_fields[1].value(p1_xi), 1e-14));
-                EXPECT_LT((u0.value(p0_xi) - u1.value(p1_xi)).norm(), 1e-13);
-                EXPECT_LT((F0.value(p0_xi).reshaped(3, 3) - F1.value(p1_xi).reshaped(3, 3)).norm(), 1e-13);
+                EXPECT_TRUE(X_fields[0].eval_value(p0_xi).isApprox(X_fields[1].eval_value(p1_xi), 1e-14));
+                EXPECT_LT((u0.eval_value(p0_xi) - u1.eval_value(p1_xi)).norm(), 1e-13);
+                EXPECT_LT((F0.eval_value(p0_xi).reshaped(3, 3) - F1.eval_value(p1_xi).reshaped(3, 3)).norm(), 1e-13);
             }
     }
 }
@@ -113,13 +113,13 @@ TEST(HexHermiteExample, PhysicalDofGradientAndHessianMatchFiniteDifferences) {
     ASSERT_EQ(x.size(), 288);
     Vec g;
     SpMat sparse_h = energy.hessian_pattern();
-    const double value = energy.evaluate(x, &g, &sparse_h);
+    const double value = energy.eval(x, &g, &sparse_h);
     const Eigen::MatrixXd H(sparse_h);
     ASSERT_EQ(g.size(), x.size());
     ASSERT_EQ(H.rows(), x.size());
     ASSERT_EQ(H.cols(), x.size());
     EXPECT_LT((H - H.transpose()).norm(), 1e-12 * (1 + H.norm()));
-    EXPECT_NEAR(energy.value(x), value, 1e-13);
+    EXPECT_NEAR(energy.eval_value(x), value, 1e-13);
 
     constexpr double h = 1e-4;
     Vec fd_g(x.size());
@@ -128,7 +128,7 @@ TEST(HexHermiteExample, PhysicalDofGradientAndHessianMatchFiniteDifferences) {
         Vec plus = x, minus = x, plus_g, minus_g;
         plus[j] += h;
         minus[j] -= h;
-        fd_g[j] = (energy.evaluate(plus, &plus_g, nullptr) - energy.evaluate(minus, &minus_g, nullptr)) / (2 * h);
+        fd_g[j] = (energy.eval(plus, &plus_g, nullptr) - energy.eval(minus, &minus_g, nullptr)) / (2 * h);
         fd_h.col(j) = (plus_g - minus_g) / (2 * h);
     }
     EXPECT_LT((g - fd_g).norm() / (1 + g.norm()), 2e-7);
@@ -143,13 +143,13 @@ TEST(HexHermiteExample, PhysicalDofGradientAndHessianMatchFiniteDifferences) {
     v.normalize();
     for (double step : {1e-3, 3e-4, 1e-4}) {
         SCOPED_TRACE(step);
-        const double mixed = (energy.value(x + step * d + step * v) - energy.value(x + step * d - step * v) -
-                              energy.value(x - step * d + step * v) + energy.value(x - step * d - step * v)) /
+        const double mixed = (energy.eval_value(x + step * d + step * v) - energy.eval_value(x + step * d - step * v) -
+                              energy.eval_value(x - step * d + step * v) + energy.eval_value(x - step * d - step * v)) /
                              (4 * step * step);
         EXPECT_NEAR(d.dot(H * v), mixed, (10 * step * step + 1e-7) * (1 + H.norm()));
     }
     SpMat h_only = energy.hessian_pattern();
-    EXPECT_NEAR(energy.evaluate(x, nullptr, &h_only), value, 1e-13);
+    EXPECT_NEAR(energy.eval(x, nullptr, &h_only), value, 1e-13);
     EXPECT_LT((Eigen::MatrixXd(h_only) - H).norm(), 1e-13 * (1 + H.norm()));
 }
 

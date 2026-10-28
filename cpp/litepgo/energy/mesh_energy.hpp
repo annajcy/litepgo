@@ -17,24 +17,24 @@ namespace litepgo {
 class MeshEnergy final : public FixedPatternEnergy {
   public:
     // Only for energies feasible along every finite segment: step defaults to 1.
-    // evaluate_local(e, x_local, gradient*, hessian*) returns integrated energy.
+    // eval_local(e, x_local, gradient*, hessian*) returns integrated energy.
     // Non-null outputs must be overwritten, in the map's local DOF order.
     // Unsupported derivative requests must throw; pointers are independently nullable.
     template <class DofMap, class Lambda>
-    MeshEnergy(const DofMap& map, Lambda evaluate_local)
-        : MeshEnergy(map, std::move(evaluate_local), [](int, const auto&, const auto&) { return 1.0; }) {}
+    MeshEnergy(const DofMap& map, Lambda eval_local)
+        : MeshEnergy(map, std::move(eval_local), [](int, const auto&, const auto&) { return 1.0; }) {}
 
     // step(e, x_local, dx_local) returns a safe inclusive bound in [0,1].
     // Trial values are x_local + alpha * dx_local (delta is unscaled).
     // It must reject infeasible starting states, e.g. by throwing InfeasibleState.
-    // Like evaluate_local, step may run concurrently on different elements.
+    // Like eval_local, step may run concurrently on different elements.
     template <class DofMap, class Lambda, class Step>
-    MeshEnergy(const DofMap& map, Lambda evaluate_local, Step step) : MeshEnergy(make_assembler(map)) {
+    MeshEnergy(const DofMap& map, Lambda eval_local, Step step) : MeshEnergy(make_assembler(map)) {
         auto owned_map = std::make_shared<const DofMap>(map);
-        evaluate_local_ = [owned_map, evaluate_local = std::move(evaluate_local)](
-                              int element, const ConstVecRef& x, Vec* gradient, Eigen::MatrixXd* hessian) {
+        eval_local_ = [owned_map, eval_local = std::move(eval_local)](int element, const ConstVecRef& x, Vec* gradient,
+                                                                      Eigen::MatrixXd* hessian) {
             const auto x_local = owned_map->gather(element, x);
-            return evaluate_local(element, x_local, gradient, hessian);
+            return eval_local(element, x_local, gradient, hessian);
         };
         local_step_ = [owned_map, step = std::move(step)](int element, const ConstVecRef& x, const ConstVecRef& dx) {
             const auto x_local = owned_map->gather(element, x);
@@ -52,11 +52,11 @@ class MeshEnergy final : public FixedPatternEnergy {
     }
 
     explicit MeshEnergy(Assembler assembler);
-    double evaluate_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const override;
+    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const override;
     double feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const override;
 
     Assembler assembler_;
-    std::function<double(int, const ConstVecRef&, Vec*, Eigen::MatrixXd*)> evaluate_local_;
+    std::function<double(int, const ConstVecRef&, Vec*, Eigen::MatrixXd*)> eval_local_;
     std::function<double(int, const ConstVecRef&, const ConstVecRef&)> local_step_;
     mutable std::vector<double> local_values_;
     mutable std::vector<Vec> local_gradients_;

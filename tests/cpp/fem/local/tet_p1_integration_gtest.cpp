@@ -29,7 +29,7 @@ const auto element_energy = [](const Field3D& X_field, const LocalEnergy3D& ener
     double result = 0;
     for (int q = 0; q < Q::num_points; ++q) {
         const Eigen::Vector3d xi = Q::points().row(q).transpose();
-        const auto derivative = X_field.dvalue_dxi(xi);
+        const auto derivative = X_field.eval_dvalue_dxi(xi);
         if (derivative.rows() != 3 || derivative.cols() != 3 || !derivative.allFinite())
             throw std::invalid_argument("Invalid coordinate derivative in test fixture");
         const double determinant = Eigen::Matrix3d(derivative).determinant();
@@ -76,12 +76,12 @@ auto fields(const Coefficients& f, const InterpolatedField3D<TetP1Basis>& X_fiel
 template <class Member, class BindEnergy> void check_fd(Member member, BindEnergy bind_energy) {
     const InterpolatedField3D<TetP1Basis> X_field(coordinates());
     const auto f = coefficients();
-    const auto evaluate = [&](const Coefficients& current, Eigen::VectorXd* g = nullptr, Eigen::MatrixXd* H = nullptr) {
+    const auto eval = [&](const Coefficients& current, Eigen::VectorXd* g = nullptr, Eigen::MatrixXd* H = nullptr) {
         return element_energy(X_field, bind_energy(fields(current, X_field)), g, H);
     };
     Eigen::VectorXd g;
     Eigen::MatrixXd H;
-    evaluate(f, &g, &H);
+    eval(f, &g, &H);
     ASSERT_EQ(g.size(), (f.*member).size());
     ASSERT_EQ(H.rows(), g.size());
     ASSERT_EQ(H.cols(), g.size());
@@ -96,7 +96,7 @@ template <class Member, class BindEnergy> void check_fd(Member member, BindEnerg
             (plus.*member)(j / components, j % components) += h;
             (minus.*member)(j / components, j % components) -= h;
             Eigen::VectorXd plus_g, minus_g;
-            fd_g[j] = (evaluate(plus, &plus_g) - evaluate(minus, &minus_g)) / (2 * h);
+            fd_g[j] = (eval(plus, &plus_g) - eval(minus, &minus_g)) / (2 * h);
             fd_h.col(j) = (plus_g - minus_g) / (2 * h);
         }
         EXPECT_LT((g - fd_g).norm() / (1 + g.norm()), 10 * h * h + 1e-9);
@@ -116,15 +116,15 @@ TEST(TetP1Integration, MatchesDirectGeometryAndDeformationGradient) {
     const std::array<Eigen::Vector3d, 3> samples{
         {Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(0.2, 0.3, 0.1), Eigen::Vector3d(0.25, 0.25, 0.25)}};
     for (const auto& xi : samples) {
-        EXPECT_TRUE(X_field.value(xi).isApprox(X_nodes.row(0).transpose() + Dm * xi, 1e-14));
-        EXPECT_TRUE(X_field.dvalue_dxi(xi).isApprox(Dm, 1e-14));
-        EXPECT_TRUE(X_field.dvalue_dxi(xi).inverse().isApprox(Dm.inverse(), 1e-14));
-        EXPECT_NEAR(X_field.dvalue_dxi(xi).determinant(), Dm.determinant(), 1e-14);
-        EXPECT_TRUE(local_fields.F.value(xi).reshaped(3, 3).isApprox(F, 1e-14));
-        EXPECT_TRUE(local_fields.Fp.value(xi).reshaped(3, 3).isApprox(Fp, 1e-14));
+        EXPECT_TRUE(X_field.eval_value(xi).isApprox(X_nodes.row(0).transpose() + Dm * xi, 1e-14));
+        EXPECT_TRUE(X_field.eval_dvalue_dxi(xi).isApprox(Dm, 1e-14));
+        EXPECT_TRUE(X_field.eval_dvalue_dxi(xi).inverse().isApprox(Dm.inverse(), 1e-14));
+        EXPECT_NEAR(X_field.eval_dvalue_dxi(xi).determinant(), Dm.determinant(), 1e-14);
+        EXPECT_TRUE(local_fields.F.eval_value(xi).reshaped(3, 3).isApprox(F, 1e-14));
+        EXPECT_TRUE(local_fields.Fp.eval_value(xi).reshaped(3, 3).isApprox(Fp, 1e-14));
     }
     // F and Fp are constant, and NeoHookean is linear in the P1 parameter field.
-    const double expected = Dm.determinant() / 6 * NeoHookean::value({F, Fp, f.theta.colwise().mean().transpose()});
+    const double expected = Dm.determinant() / 6 * NeoHookean::eval_W({F, Fp, f.theta.colwise().mean().transpose()});
     Eigen::VectorXd g;
     Eigen::MatrixXd H;
     EXPECT_NEAR(element_energy(X_field, bind_energy<MaterialLocalEnergyF3D<NeoHookean>>(local_fields), &g, &H),

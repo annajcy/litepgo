@@ -27,16 +27,16 @@ Eigen::Matrix<double, 64, Columns> vertex_order(const Eigen::Matrix<double, 64, 
 
 namespace litepgo {
 
-Eigen::Matrix<double, 64, 1> HexHermiteBasis::evaluate_N(const Eigen::Vector3d& xi) {
-    return vertex_order(TensorProductBasis3D<CubicHermiteBasis>::evaluate_N(xi));
+Eigen::Matrix<double, 64, 1> HexHermiteBasis::eval_N(const Eigen::Vector3d& xi) {
+    return vertex_order(TensorProductBasis3D<CubicHermiteBasis>::eval_N(xi));
 }
 
-Eigen::Matrix<double, 64, 3> HexHermiteBasis::evaluate_dN_dxi(const Eigen::Vector3d& xi) {
-    return vertex_order(TensorProductBasis3D<CubicHermiteBasis>::evaluate_dN_dxi(xi));
+Eigen::Matrix<double, 64, 3> HexHermiteBasis::eval_dN_dxi(const Eigen::Vector3d& xi) {
+    return vertex_order(TensorProductBasis3D<CubicHermiteBasis>::eval_dN_dxi(xi));
 }
 
-Eigen::Matrix<double, 64, 6> HexHermiteBasis::evaluate_d2N_dxi2(const Eigen::Vector3d& xi) {
-    return vertex_order(TensorProductBasis3D<CubicHermiteBasis>::evaluate_d2N_dxi2(xi));
+Eigen::Matrix<double, 64, 6> HexHermiteBasis::eval_d2N_dxi2(const Eigen::Vector3d& xi) {
+    return vertex_order(TensorProductBasis3D<CubicHermiteBasis>::eval_d2N_dxi2(xi));
 }
 
 Eigen::Vector3d HexHermiteBasis::reference_node(int basis_index) {

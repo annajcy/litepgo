@@ -30,9 +30,9 @@ TEST(QuadHermiteBasis, InterpolatesCornerValuesAndDerivativeSlots) {
     for (int v = 0; v < 4; ++v) {
         for (int slot = 0; slot < 4; ++slot)
             EXPECT_EQ(QuadHermiteBasis::reference_node(4 * v + slot), corners.row(v).transpose());
-        const auto N = QuadHermiteBasis::evaluate_N(corners.row(v).transpose());
-        const auto dN_dxi = QuadHermiteBasis::evaluate_dN_dxi(corners.row(v).transpose());
-        const auto d2N_dxi2 = QuadHermiteBasis::evaluate_d2N_dxi2(corners.row(v).transpose());
+        const auto N = QuadHermiteBasis::eval_N(corners.row(v).transpose());
+        const auto dN_dxi = QuadHermiteBasis::eval_dN_dxi(corners.row(v).transpose());
+        const auto d2N_dxi2 = QuadHermiteBasis::eval_d2N_dxi2(corners.row(v).transpose());
         EXPECT_EQ(N, (Eigen::Matrix<double, 16, 1>::Unit(4 * v)));
         EXPECT_EQ(dN_dxi.col(0), (Eigen::Matrix<double, 16, 1>::Unit(4 * v + 1)));
         EXPECT_EQ(dN_dxi.col(1), (Eigen::Matrix<double, 16, 1>::Unit(4 * v + 2)));
@@ -57,9 +57,9 @@ TEST(QuadHermiteBasis, ReproducesEveryBicubicMonomialAndItsFirstAndSecondDerivat
                         monomial(i, j, QuadHermiteBasis::reference_node(4 * v), derivative.x(), derivative.y());
                 }
             for (const auto& xi : samples) {
-                const auto N = QuadHermiteBasis::evaluate_N(xi);
-                const auto dN_dxi = QuadHermiteBasis::evaluate_dN_dxi(xi);
-                const auto d2N_dxi2 = QuadHermiteBasis::evaluate_d2N_dxi2(xi);
+                const auto N = QuadHermiteBasis::eval_N(xi);
+                const auto dN_dxi = QuadHermiteBasis::eval_dN_dxi(xi);
+                const auto d2N_dxi2 = QuadHermiteBasis::eval_d2N_dxi2(xi);
                 EXPECT_NEAR(coefficients.dot(N), monomial(i, j, xi), 1e-13);
                 EXPECT_NEAR(coefficients.dot(dN_dxi.col(0)), monomial(i, j, xi, 1, 0), 1e-13);
                 EXPECT_NEAR(coefficients.dot(dN_dxi.col(1)), monomial(i, j, xi, 0, 1), 1e-13);
@@ -75,16 +75,16 @@ TEST(QuadHermiteBasis, ReproducesEveryBicubicMonomialAndItsFirstAndSecondDerivat
 TEST(QuadHermiteBasis, FirstAndSecondDerivativesMatchFiniteDifferences) {
     constexpr double h = 1e-6;
     for (const auto& xi : samples) {
-        const auto dN_dxi = QuadHermiteBasis::evaluate_dN_dxi(xi);
-        const auto d2N_dxi2 = QuadHermiteBasis::evaluate_d2N_dxi2(xi);
+        const auto dN_dxi = QuadHermiteBasis::eval_dN_dxi(xi);
+        const auto d2N_dxi2 = QuadHermiteBasis::eval_d2N_dxi2(xi);
         for (int d = 0; d < 2; ++d) {
             Eigen::Vector2d plus = xi, minus = xi;
             plus[d] += h;
             minus[d] -= h;
-            const auto a_N = QuadHermiteBasis::evaluate_N(plus);
-            const auto a_dN_dxi = QuadHermiteBasis::evaluate_dN_dxi(plus);
-            const auto b_N = QuadHermiteBasis::evaluate_N(minus);
-            const auto b_dN_dxi = QuadHermiteBasis::evaluate_dN_dxi(minus);
+            const auto a_N = QuadHermiteBasis::eval_N(plus);
+            const auto a_dN_dxi = QuadHermiteBasis::eval_dN_dxi(plus);
+            const auto b_N = QuadHermiteBasis::eval_N(minus);
+            const auto b_dN_dxi = QuadHermiteBasis::eval_dN_dxi(minus);
             EXPECT_TRUE(((a_N - b_N) / (2 * h) - dN_dxi.col(d)).isZero(2e-9));
             for (int e = 0; e < 2; ++e)
                 EXPECT_TRUE(((a_dN_dxi.col(e) - b_dN_dxi.col(e)) / (2 * h) - d2N_dxi2.col(d + e)).isZero(4e-9));

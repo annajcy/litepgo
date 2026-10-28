@@ -24,16 +24,16 @@ constexpr std::array<int, 8> hex_to_tensor{0, 4, 6, 2, 1, 5, 7, 3};
 
 namespace litepgo {
 
-Eigen::Matrix<double, 8, 1> HexQ1Basis::evaluate_N(const Eigen::Vector3d& xi) {
-    return TensorProductBasis3D<LinearLagrangeBasis>::evaluate_N(xi)(hex_to_tensor);
+Eigen::Matrix<double, 8, 1> HexQ1Basis::eval_N(const Eigen::Vector3d& xi) {
+    return TensorProductBasis3D<LinearLagrangeBasis>::eval_N(xi)(hex_to_tensor);
 }
 
-Eigen::Matrix<double, 8, 3> HexQ1Basis::evaluate_dN_dxi(const Eigen::Vector3d& xi) {
-    return TensorProductBasis3D<LinearLagrangeBasis>::evaluate_dN_dxi(xi)(hex_to_tensor, Eigen::placeholders::all);
+Eigen::Matrix<double, 8, 3> HexQ1Basis::eval_dN_dxi(const Eigen::Vector3d& xi) {
+    return TensorProductBasis3D<LinearLagrangeBasis>::eval_dN_dxi(xi)(hex_to_tensor, Eigen::placeholders::all);
 }
 
-Eigen::Matrix<double, 8, 6> HexQ1Basis::evaluate_d2N_dxi2(const Eigen::Vector3d& xi) {
-    return TensorProductBasis3D<LinearLagrangeBasis>::evaluate_d2N_dxi2(xi)(hex_to_tensor, Eigen::placeholders::all);
+Eigen::Matrix<double, 8, 6> HexQ1Basis::eval_d2N_dxi2(const Eigen::Vector3d& xi) {
+    return TensorProductBasis3D<LinearLagrangeBasis>::eval_d2N_dxi2(xi)(hex_to_tensor, Eigen::placeholders::all);
 }
 
 Eigen::Vector3d HexQ1Basis::reference_node(int basis_index) {

@@ -11,15 +11,15 @@ class CubicHermiteBasis {
     static constexpr int num_basis_functions = 4;
 
     // Evaluates the polynomials without clamping the parameter to the interval.
-    static Eigen::Vector4d evaluate_N(double t) {
+    static Eigen::Vector4d eval_N(double t) {
         const double t2 = t * t, t3 = t2 * t;
         return {2 * t3 - 3 * t2 + 1, t3 - 2 * t2 + t, -2 * t3 + 3 * t2, t3 - t2};
     }
-    static Eigen::Vector4d evaluate_dN_dxi(double t) {
+    static Eigen::Vector4d eval_dN_dxi(double t) {
         const double t2 = t * t;
         return {6 * t2 - 6 * t, 3 * t2 - 4 * t + 1, -6 * t2 + 6 * t, 3 * t2 - 2 * t};
     }
-    static Eigen::Vector4d evaluate_d2N_dxi2(double t) {
+    static Eigen::Vector4d eval_d2N_dxi2(double t) {
         return {12 * t - 6, 6 * t - 4, -12 * t + 6, 6 * t - 2};
     }
 };
