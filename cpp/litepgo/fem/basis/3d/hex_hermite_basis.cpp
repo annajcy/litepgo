@@ -4,25 +4,39 @@
 #include <array>
 #include <stdexcept>
 
-namespace litepgo {
+namespace {
 
-HexHermiteBasis::Sample HexHermiteBasis::evaluate(const Eigen::Vector3d& xi) {
-    const auto tensor = TensorProductBasis3D<CubicHermiteBasis>::evaluate(xi);
+template <int Columns>
+Eigen::Matrix<double, 64, Columns> vertex_order(const Eigen::Matrix<double, 64, Columns>& tensor) {
     // Derivative DOF slots add 16, 4, or 1 to the tensor index (i*4+j)*4+k.
     constexpr std::array<int, 8> offsets{0, 16, 4, 1, 20, 17, 5, 21};
-    Sample result;
+    Eigen::Matrix<double, 64, Columns> result;
     for (int vertex = 0; vertex < 8; ++vertex) {
-        const auto corner = HexQ1Basis::reference_node(vertex);
+        const auto corner = litepgo::HexQ1Basis::reference_node(vertex);
         const int base =
             32 * static_cast<int>(corner.x()) + 8 * static_cast<int>(corner.y()) + 2 * static_cast<int>(corner.z());
         for (int slot = 0; slot < 8; ++slot) {
             const int index = base + offsets[static_cast<std::size_t>(slot)];
-            result.N[8 * vertex + slot] = tensor.N[index];
-            result.dN_dxi.row(8 * vertex + slot) = tensor.dN_dxi.row(index);
-            result.d2N_dxi2.row(8 * vertex + slot) = tensor.d2N_dxi2.row(index);
+            result.row(8 * vertex + slot) = tensor.row(index);
         }
     }
     return result;
+}
+
+} // namespace
+
+namespace litepgo {
+
+Eigen::Matrix<double, 64, 1> HexHermiteBasis::evaluate_N(const Eigen::Vector3d& xi) {
+    return vertex_order(TensorProductBasis3D<CubicHermiteBasis>::evaluate_N(xi));
+}
+
+Eigen::Matrix<double, 64, 3> HexHermiteBasis::evaluate_dN_dxi(const Eigen::Vector3d& xi) {
+    return vertex_order(TensorProductBasis3D<CubicHermiteBasis>::evaluate_dN_dxi(xi));
+}
+
+Eigen::Matrix<double, 64, 6> HexHermiteBasis::evaluate_d2N_dxi2(const Eigen::Vector3d& xi) {
+    return vertex_order(TensorProductBasis3D<CubicHermiteBasis>::evaluate_d2N_dxi2(xi));
 }
 
 Eigen::Vector3d HexHermiteBasis::reference_node(int basis_index) {

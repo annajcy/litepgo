@@ -11,11 +11,11 @@ namespace litepgo {
 class HexQ1Basis final {
   public:
     static constexpr int num_basis_functions = 8;
-    using Sample = BasisSample<num_basis_functions, 3>;
-
-    // All sample rows follow Hex corner order; derivatives use parameter coordinates.
+    // All rows follow Hex corner order; derivatives use parameter coordinates.
     // Outside [0,1]^3, extrapolates without clamping.
-    static Sample evaluate(const Eigen::Vector3d& xi);
+    static Eigen::Matrix<double, num_basis_functions, 1> evaluate_N(const Eigen::Vector3d& xi);
+    static Eigen::Matrix<double, num_basis_functions, 3> evaluate_dN_dxi(const Eigen::Vector3d& xi);
+    static Eigen::Matrix<double, num_basis_functions, 6> evaluate_d2N_dxi2(const Eigen::Vector3d& xi);
 
     // Reference interpolation node for the given basis function.
     // Invalid basis indices throw std::out_of_range.

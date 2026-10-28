@@ -78,7 +78,15 @@ const auto u = field.value(xi);
 const auto du_dcoeffs = field.dvalue_dcoeffs(xi);
 ```
 
-`B::evaluate(xi)` returns a `BasisSample<n,D>` containing `N` (`n`-by-1), `dN_dxi` (`n`-by-`D`), and `d2N_dxi2` (`n`-by-`D*(D+1)/2`), where `D` is the parameter dimension. `InterpolatedFieldT` uses these arrays to compute each requested quantity:
+Basis values and derivatives are evaluated independently, where `n` is the number of basis functions and `D` is the parameter dimension:
+
+```cpp
+const auto N = B::evaluate_N(xi);               // n-by-1
+const auto dN_dxi = B::evaluate_dN_dxi(xi);      // n-by-D
+const auto d2N_dxi2 = B::evaluate_d2N_dxi2(xi);  // n-by-D*(D+1)/2
+```
+
+`InterpolatedFieldT` calls only the basis function needed for each requested quantity:
 
 $$
 y(\xi)=\mathrm{coeffs}^T N(\xi),\qquad
@@ -98,7 +106,7 @@ Large coefficient derivative matrices are constructed only when requested. Each 
 
 `IdentityField3D` is spatially constant. It returns zero reference derivatives, an identity coefficient derivative, and a zero mixed reference/coefficient derivative. Being constant in space does not make its coefficients inactive.
 
-Every basis provides values and first and second spatial derivatives through the common `BasisSample<NumBasisFunctions,ParamDim>` template in `fem/basis/basis_sample.hpp`. The `Basis<B,D>` concept requires all three arrays, including for custom bases. Packed Hessian columns are `(11)` in 1D, `(11,12,22)` in 2D, and `(11,12,13,22,23,33)` in 3D. Mixed derivatives are stored once without doubling. Linear 1D and Tet P1 bases have zero second derivatives; bilinear and trilinear bases have zero pure second derivatives but generally nonzero mixed derivatives. Interpolated fields always support second spatial derivatives and their coefficient derivatives; non-interpolated fields retain their optional spatial-derivative protocol.
+Every basis provides static `evaluate_N`, `evaluate_dN_dxi`, and `evaluate_d2N_dxi2` functions returning concrete fixed-size double matrices. The `Basis<B,D>` concept requires all three functions, including for custom bases. There is no combined sample object. Tensor products evaluate only the 1D values and derivative orders needed to form the requested array. Packed Hessian columns are `(11)` in 1D, `(11,12,22)` in 2D, and `(11,12,13,22,23,33)` in 3D. Mixed derivatives are stored once without doubling. Linear 1D and Tet P1 bases have zero second derivatives; bilinear and trilinear bases have zero pure second derivatives but generally nonzero mixed derivatives. Interpolated fields always support second spatial derivatives and their coefficient derivatives; non-interpolated fields retain their optional spatial-derivative protocol.
 
 ## Two-dimensional parameter domains
 
@@ -278,7 +286,7 @@ Use explicit `2D` / `3D` names for dimension-specific types. The dimensionless n
 | `field.jacobian(point)` / `dF_dx_local` | `field.dvalue_dcoeffs(xi)` |
 | `MaterialLocalEnergy3D<Material>(F, Fp, theta, active)` or `make_material_local_energy<Material, Active>` | `MaterialLocalEnergyF3D`, `MaterialLocalEnergyFp3D`, or `MaterialLocalEnergyTheta3D`, with named `Field3D` inputs |
 | Volume integration helper | Quadrature loop inside the element lambda, passing `w_q * det(dX_dxi)` to `local_energy.accumulate` |
-| `Basis::Sample::values`, `gradients` | `N`, `dN_dxi` |
+| `B::evaluate(xi)` and `Basis::Sample` | `B::evaluate_N(xi)`, `B::evaluate_dN_dxi(xi)`, `B::evaluate_d2N_dxi2(xi)` |
 | `RestPointData::position`, `jacobian`, `inverse_jacobian`, `jacobian_determinant` | Field3D values, coordinate Jacobians, their inverses, and their determinants |
 | Material `gradient_F`, `hessian_F` and corresponding `Fp`/`theta` names | `dW_dF`, `d2W_dF2` and corresponding names |
 
@@ -299,4 +307,4 @@ ctest --preset debug --output-on-failure
 
 Hex Q1 uses two boxes with widths 1 and 2 sharing nodal displacement DOFs and integrates with `GaussLegendre3D<2>`. Tet P1 uses two tetrahedra with volumes 1/6 and 1/3 and `TetCentroidQuadrature`. Hex Hermite uses two boxes of sizes (1,2,3) and (2,2,3), sharing all physical derivative DOFs at their common face, and `GaussLegendre3D<4>`.
 
-Tests cover row/column packing, coefficient and physical finite differences, warped coordinate mappings, different displacement/coordinate bases, direct and derived deformation inputs, all active material inputs, shared/element/global DOF assembly, sample ownership, coefficient-transform validation, unsupported capabilities, and pointwise evaluation counts. Basis samples are plain data aggregates; each evaluator fills all three arrays. Examples evaluate energy and derivatives only; feasible solver step bounds remain unimplemented.
+Tests cover row/column packing, coefficient and physical finite differences, warped coordinate mappings, different displacement/coordinate bases, direct and derived deformation inputs, all active material inputs, shared/element/global DOF assembly, coefficient ownership, coefficient-transform validation, unsupported capabilities, and pointwise evaluation counts. Basis and interpolated-field tests also verify that unrequested quantities are not evaluated. Examples evaluate energy and derivatives only; feasible solver step bounds remain unimplemented.

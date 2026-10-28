@@ -11,10 +11,10 @@ namespace litepgo {
 class QuadHermiteBasis final {
   public:
     static constexpr int num_basis_functions = 16;
-    using Sample = BasisSample<num_basis_functions, 2>;
-
     // Extrapolates without clamping. All arrays use the same vertex/slot row order.
-    static Sample evaluate(const Eigen::Vector2d& xi);
+    static Eigen::Matrix<double, num_basis_functions, 1> evaluate_N(const Eigen::Vector2d& xi);
+    static Eigen::Matrix<double, num_basis_functions, 2> evaluate_dN_dxi(const Eigen::Vector2d& xi);
+    static Eigen::Matrix<double, num_basis_functions, 3> evaluate_d2N_dxi2(const Eigen::Vector2d& xi);
 
     // The corner owning a basis function, repeated for each of its four slots.
     static Eigen::Vector2d reference_node(int basis_index);

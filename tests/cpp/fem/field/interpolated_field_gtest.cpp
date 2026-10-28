@@ -30,16 +30,23 @@ Eigen::Matrix<double, 8, 3> corners() {
 template <int InvalidPart> struct InvalidBasis {
     InvalidBasis() = delete;
     static constexpr int num_basis_functions = 8;
-    using Sample = HexQ1Basis::Sample;
-    static Sample evaluate(const Eigen::Vector3d& xi) {
-        auto basis_sample = HexQ1Basis::evaluate(xi);
+    static auto evaluate_N(const Eigen::Vector3d& xi) {
+        auto result = HexQ1Basis::evaluate_N(xi);
         if constexpr (InvalidPart == 0)
-            basis_sample.N.setConstant(std::numeric_limits<double>::quiet_NaN());
-        else if constexpr (InvalidPart == 1)
-            basis_sample.dN_dxi.setConstant(std::numeric_limits<double>::infinity());
-        else
-            basis_sample.d2N_dxi2.setConstant(std::numeric_limits<double>::infinity());
-        return basis_sample;
+            result.setConstant(std::numeric_limits<double>::quiet_NaN());
+        return result;
+    }
+    static auto evaluate_dN_dxi(const Eigen::Vector3d& xi) {
+        auto result = HexQ1Basis::evaluate_dN_dxi(xi);
+        if constexpr (InvalidPart == 1)
+            result.setConstant(std::numeric_limits<double>::infinity());
+        return result;
+    }
+    static auto evaluate_d2N_dxi2(const Eigen::Vector3d& xi) {
+        auto result = HexQ1Basis::evaluate_d2N_dxi2(xi);
+        if constexpr (InvalidPart == 2)
+            result.setConstant(std::numeric_limits<double>::infinity());
+        return result;
     }
 };
 

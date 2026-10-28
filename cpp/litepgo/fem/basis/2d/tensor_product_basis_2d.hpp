@@ -12,18 +12,27 @@ template <Basis1D B> class TensorProductBasis2D {
     static constexpr int n = B::num_basis_functions;
     static constexpr int num_basis_functions = n * n;
 
-    using Sample = BasisSample<num_basis_functions, 2>;
+    static Eigen::Matrix<double, num_basis_functions, 1> evaluate_N(const Eigen::Vector2d& xi) {
+        return Eigen::kroneckerProduct(B::evaluate_N(xi.x()), B::evaluate_N(xi.y()));
+    }
 
-    static Sample evaluate(const Eigen::Vector2d& xi) {
-        const auto x = B::evaluate(xi.x());
-        const auto y = B::evaluate(xi.y());
-        Sample result;
-        result.N = Eigen::kroneckerProduct(x.N, y.N);
-        result.dN_dxi.col(0) = Eigen::kroneckerProduct(x.dN_dxi, y.N);
-        result.dN_dxi.col(1) = Eigen::kroneckerProduct(x.N, y.dN_dxi);
-        result.d2N_dxi2.col(0) = Eigen::kroneckerProduct(x.d2N_dxi2, y.N);
-        result.d2N_dxi2.col(1) = Eigen::kroneckerProduct(x.dN_dxi, y.dN_dxi);
-        result.d2N_dxi2.col(2) = Eigen::kroneckerProduct(x.N, y.d2N_dxi2);
+    static Eigen::Matrix<double, num_basis_functions, 2> evaluate_dN_dxi(const Eigen::Vector2d& xi) {
+        const auto x = B::evaluate_N(xi.x()), y = B::evaluate_N(xi.y());
+        const auto dx = B::evaluate_dN_dxi(xi.x()), dy = B::evaluate_dN_dxi(xi.y());
+        Eigen::Matrix<double, num_basis_functions, 2> result;
+        result.col(0) = Eigen::kroneckerProduct(dx, y);
+        result.col(1) = Eigen::kroneckerProduct(x, dy);
+        return result;
+    }
+
+    static Eigen::Matrix<double, num_basis_functions, 3> evaluate_d2N_dxi2(const Eigen::Vector2d& xi) {
+        const auto x = B::evaluate_N(xi.x()), y = B::evaluate_N(xi.y());
+        const auto dx = B::evaluate_dN_dxi(xi.x()), dy = B::evaluate_dN_dxi(xi.y());
+        const auto d2x = B::evaluate_d2N_dxi2(xi.x()), d2y = B::evaluate_d2N_dxi2(xi.y());
+        Eigen::Matrix<double, num_basis_functions, 3> result;
+        result.col(0) = Eigen::kroneckerProduct(d2x, y);
+        result.col(1) = Eigen::kroneckerProduct(dx, dy);
+        result.col(2) = Eigen::kroneckerProduct(x, d2y);
         return result;
     }
 };

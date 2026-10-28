@@ -292,11 +292,14 @@ TEST(MaterialLocalEnergy3D, RejectsInvalidFAndFpSizesBeforeReshaping) {
 namespace {
 struct InvalidParameterGradients {
     static constexpr int num_basis_functions = 8;
-    using Sample = litepgo::HexQ1Basis::Sample;
-    static Sample evaluate(const Eigen::Vector3d& xi) {
-        auto basis_sample = litepgo::HexQ1Basis::evaluate(xi);
-        basis_sample.dN_dxi.setConstant(std::numeric_limits<double>::quiet_NaN());
-        return basis_sample;
+    static Eigen::Matrix<double, 8, 1> evaluate_N(const Eigen::Vector3d& xi) {
+        return HexQ1Basis::evaluate_N(xi);
+    }
+    static Eigen::Matrix<double, 8, 3> evaluate_dN_dxi(const Eigen::Vector3d&) {
+        return Eigen::Matrix<double, 8, 3>::Constant(std::numeric_limits<double>::quiet_NaN());
+    }
+    static Eigen::Matrix<double, 8, 6> evaluate_d2N_dxi2(const Eigen::Vector3d& xi) {
+        return HexQ1Basis::evaluate_d2N_dxi2(xi);
     }
 };
 TEST(MaterialLocalEnergy3D, InactiveInterpolatedParametersDoNotRequireSpatialDerivatives) {

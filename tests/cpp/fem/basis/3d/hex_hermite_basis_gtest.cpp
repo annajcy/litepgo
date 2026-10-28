@@ -47,12 +47,13 @@ double monomial(const Eigen::Vector3i& powers, const Eigen::Vector3d& xi, const 
 TEST(HexHermiteBasis, InterpolatesCornerValuesAndFirstDerivativesInVertexOrder) {
     const auto nodes = corners();
     for (int vertex = 0; vertex < 8; ++vertex) {
-        const auto basis_sample = HexHermiteBasis::evaluate(nodes.row(vertex).transpose());
+        const auto N = HexHermiteBasis::evaluate_N(nodes.row(vertex).transpose());
+        const auto dN_dxi = HexHermiteBasis::evaluate_dN_dxi(nodes.row(vertex).transpose());
         for (int slot = 0; slot < 8; ++slot)
             EXPECT_EQ(HexHermiteBasis::reference_node(8 * vertex + slot), nodes.row(vertex).transpose());
-        EXPECT_EQ(basis_sample.N, (Eigen::Matrix<double, 64, 1>::Unit(8 * vertex)));
+        EXPECT_EQ(N, (Eigen::Matrix<double, 64, 1>::Unit(8 * vertex)));
         for (int d = 0; d < 3; ++d)
-            EXPECT_EQ(basis_sample.dN_dxi.col(d), (Eigen::Matrix<double, 64, 1>::Unit(8 * vertex + d + 1)));
+            EXPECT_EQ(dN_dxi.col(d), (Eigen::Matrix<double, 64, 1>::Unit(8 * vertex + d + 1)));
     }
     EXPECT_THROW(HexHermiteBasis::reference_node(-1), std::out_of_range);
     EXPECT_THROW(HexHermiteBasis::reference_node(64), std::out_of_range);
@@ -71,13 +72,15 @@ TEST(HexHermiteBasis, ReproducesAllTricubicMonomialsAndGradients) {
                         coefficients[8 * vertex + slot] = monomial(powers, nodes.row(vertex).transpose(),
                                                                    derivatives[static_cast<std::size_t>(slot)]);
                 for (const auto& xi : samples) {
-                    const auto basis_sample = HexHermiteBasis::evaluate(xi);
-                    EXPECT_NEAR(coefficients.dot(basis_sample.N), monomial(powers, xi, Eigen::Vector3i::Zero()), 1e-13);
+                    const auto N = HexHermiteBasis::evaluate_N(xi);
+                    const auto dN_dxi = HexHermiteBasis::evaluate_dN_dxi(xi);
+                    const auto d2N_dxi2 = HexHermiteBasis::evaluate_d2N_dxi2(xi);
+                    EXPECT_NEAR(coefficients.dot(N), monomial(powers, xi, Eigen::Vector3i::Zero()), 1e-13);
                     for (int d = 0; d < 3; ++d)
-                        EXPECT_NEAR(coefficients.dot(basis_sample.dN_dxi.col(d)),
-                                    monomial(powers, xi, Eigen::Vector3i::Unit(d)), 1e-13);
+                        EXPECT_NEAR(coefficients.dot(dN_dxi.col(d)), monomial(powers, xi, Eigen::Vector3i::Unit(d)),
+                                    1e-13);
                     for (int s = 0; s < 6; ++s)
-                        EXPECT_NEAR(coefficients.dot(basis_sample.d2N_dxi2.col(s)),
+                        EXPECT_NEAR(coefficients.dot(d2N_dxi2.col(s)),
                                     monomial(powers, xi, second_derivatives[static_cast<std::size_t>(s)]), 3e-13);
                 }
             }
@@ -106,19 +109,20 @@ TEST(HexHermiteBasis, ReproducesAffineVectorFieldsWith192Dofs) {
 TEST(HexHermiteBasis, GradientsMatchFiniteDifferences) {
     constexpr double h = 1e-6;
     for (const auto& xi : samples) {
-        const auto basis_sample = HexHermiteBasis::evaluate(xi);
+        const auto dN_dxi = HexHermiteBasis::evaluate_dN_dxi(xi);
+        const auto d2N_dxi2 = HexHermiteBasis::evaluate_d2N_dxi2(xi);
         for (int d = 0; d < 3; ++d) {
             Eigen::Vector3d plus = xi, minus = xi;
             plus[d] += h;
             minus[d] -= h;
             const Eigen::Matrix<double, 64, 1> fd =
-                (HexHermiteBasis::evaluate(plus).N - HexHermiteBasis::evaluate(minus).N) / (2 * h);
-            EXPECT_TRUE((fd - basis_sample.dN_dxi.col(d)).isZero(2e-9));
+                (HexHermiteBasis::evaluate_N(plus) - HexHermiteBasis::evaluate_N(minus)) / (2 * h);
+            EXPECT_TRUE((fd - dN_dxi.col(d)).isZero(2e-9));
             const Eigen::Matrix<double, 64, 3> second_fd =
-                (HexHermiteBasis::evaluate(plus).dN_dxi - HexHermiteBasis::evaluate(minus).dN_dxi) / (2 * h);
+                (HexHermiteBasis::evaluate_dN_dxi(plus) - HexHermiteBasis::evaluate_dN_dxi(minus)) / (2 * h);
             constexpr int columns[3][3] = {{0, 1, 2}, {1, 3, 4}, {2, 4, 5}};
             for (int e = 0; e < 3; ++e)
-                EXPECT_TRUE((second_fd.col(e) - basis_sample.d2N_dxi2.col(columns[d][e])).isZero(5e-9));
+                EXPECT_TRUE((second_fd.col(e) - d2N_dxi2.col(columns[d][e])).isZero(5e-9));
         }
     }
 }

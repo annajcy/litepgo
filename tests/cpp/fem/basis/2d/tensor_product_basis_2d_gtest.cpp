@@ -17,27 +17,29 @@ TEST(TensorProductBasis2D, InterpolatesInLastAxisFastestOrderAndReproducesBiline
     nodes << 0, 0, 0, 1, 1, 0, 1, 1;
     Eigen::Vector4d coefficients;
     for (int a = 0; a < 4; ++a) {
-        EXPECT_EQ(B::evaluate(nodes.row(a).transpose()).N, Eigen::Vector4d::Unit(a));
+        EXPECT_EQ(B::evaluate_N(nodes.row(a).transpose()), Eigen::Vector4d::Unit(a));
         coefficients[a] = 1 + 2 * nodes(a, 0) - 3 * nodes(a, 1) + 4 * nodes(a, 0) * nodes(a, 1);
     }
     for (const Eigen::Vector2d xi : {Eigen::Vector2d(0.2, 0.7), Eigen::Vector2d(-0.2, 1.3)}) {
-        const auto sample = B::evaluate(xi);
-        EXPECT_NEAR(sample.N.sum(), 1, 1e-14);
-        EXPECT_TRUE(sample.dN_dxi.colwise().sum().isZero(1e-14));
-        EXPECT_NEAR(coefficients.dot(sample.N), 1 + 2 * xi.x() - 3 * xi.y() + 4 * xi.x() * xi.y(), 1e-14);
-        EXPECT_NEAR(coefficients.dot(sample.dN_dxi.col(0)), 2 + 4 * xi.y(), 1e-14);
-        EXPECT_NEAR(coefficients.dot(sample.dN_dxi.col(1)), -3 + 4 * xi.x(), 1e-14);
-        EXPECT_DOUBLE_EQ(coefficients.dot(sample.d2N_dxi2.col(0)), 0);
-        EXPECT_DOUBLE_EQ(coefficients.dot(sample.d2N_dxi2.col(1)), 4);
-        EXPECT_DOUBLE_EQ(coefficients.dot(sample.d2N_dxi2.col(2)), 0);
+        const auto N = B::evaluate_N(xi);
+        const auto dN_dxi = B::evaluate_dN_dxi(xi);
+        const auto d2N_dxi2 = B::evaluate_d2N_dxi2(xi);
+        EXPECT_NEAR(N.sum(), 1, 1e-14);
+        EXPECT_TRUE(dN_dxi.colwise().sum().isZero(1e-14));
+        EXPECT_NEAR(coefficients.dot(N), 1 + 2 * xi.x() - 3 * xi.y() + 4 * xi.x() * xi.y(), 1e-14);
+        EXPECT_NEAR(coefficients.dot(dN_dxi.col(0)), 2 + 4 * xi.y(), 1e-14);
+        EXPECT_NEAR(coefficients.dot(dN_dxi.col(1)), -3 + 4 * xi.x(), 1e-14);
+        EXPECT_DOUBLE_EQ(coefficients.dot(d2N_dxi2.col(0)), 0);
+        EXPECT_DOUBLE_EQ(coefficients.dot(d2N_dxi2.col(1)), 4);
+        EXPECT_DOUBLE_EQ(coefficients.dot(d2N_dxi2.col(2)), 0);
         constexpr double h = 1e-6;
         for (int d = 0; d < 2; ++d) {
             Eigen::Vector2d plus = xi, minus = xi;
             plus[d] += h;
             minus[d] -= h;
-            const Eigen::Matrix<double, 4, 2> fd = (B::evaluate(plus).dN_dxi - B::evaluate(minus).dN_dxi) / (2 * h);
+            const Eigen::Matrix<double, 4, 2> fd = (B::evaluate_dN_dxi(plus) - B::evaluate_dN_dxi(minus)) / (2 * h);
             for (int e = 0; e < 2; ++e)
-                EXPECT_TRUE((fd.col(e) - sample.d2N_dxi2.col(d + e)).isZero(3e-10));
+                EXPECT_TRUE((fd.col(e) - d2N_dxi2.col(d + e)).isZero(3e-10));
         }
     }
 }

@@ -4,12 +4,18 @@
 
 namespace litepgo {
 
-TetP1Basis::Sample TetP1Basis::evaluate(const Eigen::Vector3d& xi) {
-    Sample result;
-    result.N << 1 - xi.sum(), xi.x(), xi.y(), xi.z();
-    result.dN_dxi << -1, -1, -1, 1, 0, 0, 0, 1, 0, 0, 0, 1;
-    result.d2N_dxi2.setZero();
+Eigen::Vector4d TetP1Basis::evaluate_N(const Eigen::Vector3d& xi) {
+    return {1 - xi.sum(), xi.x(), xi.y(), xi.z()};
+}
+
+Eigen::Matrix<double, 4, 3> TetP1Basis::evaluate_dN_dxi(const Eigen::Vector3d&) {
+    Eigen::Matrix<double, 4, 3> result;
+    result << -1, -1, -1, 1, 0, 0, 0, 1, 0, 0, 0, 1;
     return result;
+}
+
+Eigen::Matrix<double, 4, 6> TetP1Basis::evaluate_d2N_dxi2(const Eigen::Vector3d&) {
+    return Eigen::Matrix<double, 4, 6>::Zero();
 }
 
 Eigen::Vector3d TetP1Basis::reference_node(int basis_index) {

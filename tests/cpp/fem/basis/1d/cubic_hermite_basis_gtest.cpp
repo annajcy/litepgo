@@ -12,9 +12,10 @@ static_assert(CubicHermiteBasis::num_basis_functions == 4);
 
 TEST(CubicHermiteBasis, InterpolatesEndpointValuesAndDerivatives) {
     for (int endpoint : {0, 1}) {
-        const auto basis_sample = CubicHermiteBasis::evaluate(endpoint);
-        EXPECT_EQ(basis_sample.N, Eigen::Vector4d::Unit(2 * endpoint));
-        EXPECT_EQ(basis_sample.dN_dxi, Eigen::Vector4d::Unit(2 * endpoint + 1));
+        const auto N = CubicHermiteBasis::evaluate_N(endpoint);
+        const auto dN_dxi = CubicHermiteBasis::evaluate_dN_dxi(endpoint);
+        EXPECT_EQ(N, Eigen::Vector4d::Unit(2 * endpoint));
+        EXPECT_EQ(dN_dxi, Eigen::Vector4d::Unit(2 * endpoint + 1));
     }
 }
 
@@ -24,12 +25,13 @@ TEST(CubicHermiteBasis, ReproducesAllCubicMonomialsAndDerivatives) {
         const Eigen::Vector4d coefficients(degree == 0 ? 1 : 0, degree == 1 ? 1 : 0, 1, degree);
         for (double t : {-0.5, 0.0, 0.13, 0.5, 0.61, 1.0, 1.5}) {
             SCOPED_TRACE(t);
-            const auto basis_sample = CubicHermiteBasis::evaluate(t);
-            EXPECT_NEAR(coefficients.dot(basis_sample.N), std::pow(t, degree), 1e-14);
-            EXPECT_NEAR(coefficients.dot(basis_sample.dN_dxi), degree == 0 ? 0 : degree * std::pow(t, degree - 1),
+            const auto N = CubicHermiteBasis::evaluate_N(t);
+            const auto dN_dxi = CubicHermiteBasis::evaluate_dN_dxi(t);
+            const auto d2N_dxi2 = CubicHermiteBasis::evaluate_d2N_dxi2(t);
+            EXPECT_NEAR(coefficients.dot(N), std::pow(t, degree), 1e-14);
+            EXPECT_NEAR(coefficients.dot(dN_dxi), degree == 0 ? 0 : degree * std::pow(t, degree - 1), 1e-14);
+            EXPECT_NEAR(coefficients.dot(d2N_dxi2), degree < 2 ? 0 : degree * (degree - 1) * std::pow(t, degree - 2),
                         1e-14);
-            EXPECT_NEAR(coefficients.dot(basis_sample.d2N_dxi2),
-                        degree < 2 ? 0 : degree * (degree - 1) * std::pow(t, degree - 2), 1e-14);
         }
     }
 }
@@ -38,10 +40,10 @@ TEST(CubicHermiteBasis, GradientsMatchFiniteDifferences) {
     constexpr double h = 1e-6;
     for (double t : {-0.5, 0.0, 0.13, 0.5, 0.61, 1.0, 1.5}) {
         const Eigen::Vector4d fd =
-            (CubicHermiteBasis::evaluate(t + h).N - CubicHermiteBasis::evaluate(t - h).N) / (2 * h);
-        EXPECT_TRUE((fd - CubicHermiteBasis::evaluate(t).dN_dxi).isZero(2e-9));
+            (CubicHermiteBasis::evaluate_N(t + h) - CubicHermiteBasis::evaluate_N(t - h)) / (2 * h);
+        EXPECT_TRUE((fd - CubicHermiteBasis::evaluate_dN_dxi(t)).isZero(2e-9));
         const Eigen::Vector4d second_fd =
-            (CubicHermiteBasis::evaluate(t + h).dN_dxi - CubicHermiteBasis::evaluate(t - h).dN_dxi) / (2 * h);
-        EXPECT_TRUE((second_fd - CubicHermiteBasis::evaluate(t).d2N_dxi2).isZero(3e-9));
+            (CubicHermiteBasis::evaluate_dN_dxi(t + h) - CubicHermiteBasis::evaluate_dN_dxi(t - h)) / (2 * h);
+        EXPECT_TRUE((second_fd - CubicHermiteBasis::evaluate_d2N_dxi2(t)).isZero(3e-9));
     }
 }

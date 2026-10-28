@@ -79,17 +79,25 @@ TEST(InterpolatedField2D, ValuesAndAllDerivativesUseRowOrderedCoefficientsAndCol
 }
 
 template <int InvalidPart> struct InvalidBasis {
+    InvalidBasis() = delete;
     static constexpr int num_basis_functions = 16;
-    using Sample = QuadHermiteBasis::Sample;
-    static Sample evaluate(const Eigen::Vector2d& xi) {
-        auto sample = QuadHermiteBasis::evaluate(xi);
+    static auto evaluate_N(const Eigen::Vector2d& xi) {
+        auto result = QuadHermiteBasis::evaluate_N(xi);
         if constexpr (InvalidPart == 0)
-            sample.N.setConstant(std::numeric_limits<double>::quiet_NaN());
+            result.setConstant(std::numeric_limits<double>::quiet_NaN());
+        return result;
+    }
+    static auto evaluate_dN_dxi(const Eigen::Vector2d& xi) {
+        auto result = QuadHermiteBasis::evaluate_dN_dxi(xi);
         if constexpr (InvalidPart == 1)
-            sample.dN_dxi.setConstant(std::numeric_limits<double>::infinity());
+            result.setConstant(std::numeric_limits<double>::infinity());
+        return result;
+    }
+    static auto evaluate_d2N_dxi2(const Eigen::Vector2d& xi) {
+        auto result = QuadHermiteBasis::evaluate_d2N_dxi2(xi);
         if constexpr (InvalidPart == 2)
-            sample.d2N_dxi2.setConstant(std::numeric_limits<double>::infinity());
-        return sample;
+            result.setConstant(std::numeric_limits<double>::infinity());
+        return result;
     }
 };
 

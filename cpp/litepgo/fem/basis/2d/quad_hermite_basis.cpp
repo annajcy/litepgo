@@ -3,24 +3,38 @@
 #include <array>
 #include <stdexcept>
 
-namespace litepgo {
+namespace {
 
-QuadHermiteBasis::Sample QuadHermiteBasis::evaluate(const Eigen::Vector2d& xi) {
-    const auto tensor = TensorProductBasis2D<CubicHermiteBasis>::evaluate(xi);
+template <int Columns>
+Eigen::Matrix<double, 16, Columns> vertex_order(const Eigen::Matrix<double, 16, Columns>& tensor) {
     constexpr std::array<int, 4> offsets{0, 4, 1, 5};
-    Sample result;
+    Eigen::Matrix<double, 16, Columns> result;
     for (int vertex = 0; vertex < 4; ++vertex) {
-        const auto corner = reference_node(4 * vertex);
+        const auto corner = litepgo::QuadHermiteBasis::reference_node(4 * vertex);
         const int base = 8 * static_cast<int>(corner.x()) + 2 * static_cast<int>(corner.y());
         for (int slot = 0; slot < 4; ++slot) {
             const int row = 4 * vertex + slot;
             const int index = base + offsets[static_cast<std::size_t>(slot)];
-            result.N[row] = tensor.N[index];
-            result.dN_dxi.row(row) = tensor.dN_dxi.row(index);
-            result.d2N_dxi2.row(row) = tensor.d2N_dxi2.row(index);
+            result.row(row) = tensor.row(index);
         }
     }
     return result;
+}
+
+} // namespace
+
+namespace litepgo {
+
+Eigen::Matrix<double, 16, 1> QuadHermiteBasis::evaluate_N(const Eigen::Vector2d& xi) {
+    return vertex_order(TensorProductBasis2D<CubicHermiteBasis>::evaluate_N(xi));
+}
+
+Eigen::Matrix<double, 16, 2> QuadHermiteBasis::evaluate_dN_dxi(const Eigen::Vector2d& xi) {
+    return vertex_order(TensorProductBasis2D<CubicHermiteBasis>::evaluate_dN_dxi(xi));
+}
+
+Eigen::Matrix<double, 16, 3> QuadHermiteBasis::evaluate_d2N_dxi2(const Eigen::Vector2d& xi) {
+    return vertex_order(TensorProductBasis2D<CubicHermiteBasis>::evaluate_d2N_dxi2(xi));
 }
 
 Eigen::Vector2d QuadHermiteBasis::reference_node(int basis_index) {

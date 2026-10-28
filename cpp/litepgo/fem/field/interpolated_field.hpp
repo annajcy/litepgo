@@ -35,41 +35,47 @@ class InterpolatedFieldT final : public FieldT<ParamDim> {
     }
 
     Eigen::VectorXd value(const Coordinate& xi) const override {
-        const auto N = checked_basis_sample(xi).N;
+        check_coordinate(xi);
+        const auto N = B::evaluate_N(xi);
         Eigen::VectorXd result = coeffs_.transpose() * N;
         if (!N.allFinite() || !result.allFinite())
             throw std::invalid_argument("InterpolatedFieldT::value: non-finite data");
         return result;
     }
     SpatialDerivative dvalue_dxi(const Coordinate& xi) const override {
-        const auto dN_dxi = checked_basis_sample(xi).dN_dxi;
+        check_coordinate(xi);
+        const auto dN_dxi = B::evaluate_dN_dxi(xi);
         SpatialDerivative result = coeffs_.transpose() * dN_dxi;
         if (!dN_dxi.allFinite() || !result.allFinite())
             throw std::invalid_argument("InterpolatedFieldT::dvalue_dxi: non-finite data");
         return result;
     }
     Eigen::MatrixXd dvalue_dcoeffs(const Coordinate& xi) const override {
-        const auto N = checked_basis_sample(xi).N;
+        check_coordinate(xi);
+        const auto N = B::evaluate_N(xi);
         if (!N.allFinite())
             throw std::invalid_argument("InterpolatedFieldT::dvalue_dcoeffs: non-finite basis values");
         return Eigen::kroneckerProduct(N.transpose(), Eigen::MatrixXd::Identity(num_components(), num_components()));
     }
     Eigen::MatrixXd dgrad_xi_dcoeffs(const Coordinate& xi) const override {
-        const auto dN_dxi = checked_basis_sample(xi).dN_dxi;
+        check_coordinate(xi);
+        const auto dN_dxi = B::evaluate_dN_dxi(xi);
         if (!dN_dxi.allFinite())
             throw std::invalid_argument("InterpolatedFieldT::dgrad_xi_dcoeffs: non-finite basis gradients");
         return Eigen::kroneckerProduct(dN_dxi.transpose(),
                                        Eigen::MatrixXd::Identity(num_components(), num_components()));
     }
     SpatialHessian d2value_dxi2(const Coordinate& xi) const override {
-        const auto d2N_dxi2 = checked_basis_sample(xi).d2N_dxi2;
+        check_coordinate(xi);
+        const auto d2N_dxi2 = B::evaluate_d2N_dxi2(xi);
         SpatialHessian result = coeffs_.transpose() * d2N_dxi2;
         if (!d2N_dxi2.allFinite() || !result.allFinite())
             throw std::invalid_argument("InterpolatedFieldT::d2value_dxi2: non-finite data");
         return result;
     }
     Eigen::MatrixXd dhess_xi_dcoeffs(const Coordinate& xi) const override {
-        const auto d2N_dxi2 = checked_basis_sample(xi).d2N_dxi2;
+        check_coordinate(xi);
+        const auto d2N_dxi2 = B::evaluate_d2N_dxi2(xi);
         if (!d2N_dxi2.allFinite())
             throw std::invalid_argument("InterpolatedFieldT::dhess_xi_dcoeffs: non-finite basis Hessians");
         return Eigen::kroneckerProduct(d2N_dxi2.transpose(),
@@ -77,10 +83,9 @@ class InterpolatedFieldT final : public FieldT<ParamDim> {
     }
 
   private:
-    static typename B::Sample checked_basis_sample(const Coordinate& xi) {
+    static void check_coordinate(const Coordinate& xi) {
         if (!xi.allFinite())
             throw std::invalid_argument("InterpolatedFieldT requires finite parameters");
-        return B::evaluate(xi);
     }
     Eigen::MatrixXd coeffs_;
 };
