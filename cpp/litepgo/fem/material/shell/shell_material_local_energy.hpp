@@ -4,32 +4,12 @@
 #include "litepgo/fem/local/local_energy.hpp"
 #include "litepgo/fem/material/shell/shell_material_inputs.hpp"
 
-#include <Eigen/LU>
 #include <array>
 #include <cmath>
 #include <stdexcept>
 #include <utility>
 
 namespace litepgo {
-
-// Build once per fixed reference face, using the same stencil and curvature rule as the current pose.
-struct TriangleMidEdgeRestData {
-    TriangleMidEdgeRestData(Eigen::MatrixXd X, std::array<int, 3> opposite_rows)
-        : X_local(std::move(X)), opposite(opposite_rows) {
-        const auto reference = eval_triangle_mid_edge_kinematics(X_local, opposite);
-        a_bar = reference.a;
-        b_bar = reference.b;
-        sqrt_det_a_bar = std::sqrt(a_bar.determinant());
-        if (!std::isfinite(sqrt_det_a_bar) || sqrt_det_a_bar <= 0)
-            throw std::domain_error("TriangleMidEdgeRestData: unrepresentable reference area");
-    }
-
-    Eigen::MatrixXd X_local;
-    std::array<int, 3> opposite;
-    Eigen::Matrix2d a_bar;
-    Eigen::Matrix2d b_bar;
-    double sqrt_det_a_bar;
-};
 
 // Density per reference area; only row-packed stencil displacements are active.
 // Owns snapshots of all inputs. Thickness and material parameters are constant on the face.

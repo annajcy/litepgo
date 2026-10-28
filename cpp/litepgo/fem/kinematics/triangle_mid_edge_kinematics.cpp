@@ -1,12 +1,24 @@
 #include "litepgo/fem/kinematics/triangle_mid_edge_kinematics.hpp"
 
 #include <Eigen/Geometry>
+#include <Eigen/LU>
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <utility>
 
 namespace litepgo {
+
+TriangleMidEdgeRestData::TriangleMidEdgeRestData(Eigen::MatrixXd X, std::array<int, 3> opposite_rows)
+    : X_local(std::move(X)), opposite(opposite_rows) {
+    const auto reference = eval_triangle_mid_edge_kinematics(X_local, opposite);
+    a_bar = reference.a;
+    b_bar = reference.b;
+    sqrt_det_a_bar = std::sqrt(a_bar.determinant());
+    if (!std::isfinite(sqrt_det_a_bar) || sqrt_det_a_bar <= 0)
+        throw std::domain_error("TriangleMidEdgeRestData: unrepresentable reference area");
+}
+
 namespace {
 
 constexpr double geometry_tolerance = 1e-12;

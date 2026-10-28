@@ -20,6 +20,21 @@ Eigen::MatrixXd curved_stencil() {
     return x;
 }
 
+TEST(TriangleMidEdgeKinematics, RestDataOwnsGeometryAndComputesReferenceForms) {
+    Eigen::MatrixXd X = curved_stencil();
+    const std::array<int, 3> opposite{3, 4, 5};
+    const auto expected = eval_triangle_mid_edge_kinematics(X, opposite);
+    const TriangleMidEdgeRestData rest(X, opposite);
+    EXPECT_EQ(rest.X_local, X);
+    EXPECT_EQ(rest.opposite, opposite);
+    EXPECT_EQ(rest.a_bar, expected.a);
+    EXPECT_EQ(rest.b_bar, expected.b);
+    EXPECT_DOUBLE_EQ(rest.sqrt_det_a_bar, std::sqrt(expected.a.determinant()));
+    X.setZero();
+    EXPECT_FALSE(rest.X_local.isZero());
+    EXPECT_THROW((TriangleMidEdgeRestData(X, opposite)), std::domain_error);
+}
+
 Eigen::Matrix<double, 6, 1> pack(const TriangleMidEdgeKinematics& k) {
     Eigen::Matrix<double, 6, 1> result;
     result << k.a(0, 0), k.a(0, 1), k.a(1, 1), k.b(0, 0), k.b(0, 1), k.b(1, 1);

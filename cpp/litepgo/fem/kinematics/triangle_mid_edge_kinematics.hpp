@@ -5,6 +5,17 @@
 
 namespace litepgo {
 
+// Build once per fixed reference face, using the same stencil and curvature rule as the current pose.
+struct TriangleMidEdgeRestData {
+    TriangleMidEdgeRestData(Eigen::MatrixXd X, std::array<int, 3> opposite_rows);
+
+    Eigen::MatrixXd X_local;
+    std::array<int, 3> opposite;
+    Eigen::Matrix2d a_bar;
+    Eigen::Matrix2d b_bar;
+    double sqrt_det_a_bar;
+};
+
 struct TriangleMidEdgeKinematics {
     Eigen::Matrix2d a;
     Eigen::Matrix2d b;

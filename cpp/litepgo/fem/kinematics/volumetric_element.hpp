@@ -6,9 +6,9 @@
 
 #include <Eigen/LU>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <stdexcept>
-#include <vector>
 
 namespace litepgo {
 
@@ -19,7 +19,6 @@ template <Quadrature3D Q> class VolumetricElement3D final {
     explicit VolumetricElement3D(const Field3D& X_field) {
         if (X_field.num_components() != 3 || !Q::points().allFinite() || !Q::weights().allFinite())
             throw std::invalid_argument("VolumetricElement3D: invalid reference components or quadrature");
-        points_.reserve(Q::num_points);
         for (int q = 0; q < Q::num_points; ++q) {
             const Eigen::Vector3d xi = Q::points().row(q).transpose();
             const auto derivative = X_field.eval_dvalue_dxi(xi);
@@ -30,7 +29,7 @@ template <Quadrature3D Q> class VolumetricElement3D final {
             const double w_dV = Q::weights()[q] * det_J_X;
             if (!std::isfinite(det_J_X) || det_J_X <= 0 || !std::isfinite(w_dV))
                 throw std::invalid_argument("VolumetricElement3D: invalid reference determinant or volume weight");
-            points_.push_back({xi, w_dV});
+            points_[static_cast<std::size_t>(q)] = {xi, w_dV};
         }
     }
 
@@ -84,7 +83,7 @@ template <Quadrature3D Q> class VolumetricElement3D final {
         Eigen::Vector3d xi;
         double w_dV;
     };
-    std::vector<Point> points_;
+    std::array<Point, Q::num_points> points_;
 };
 
 } // namespace litepgo
