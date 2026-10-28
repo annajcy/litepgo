@@ -53,7 +53,7 @@ TEST(HexHermiteDofTransform, RejectsInvalidNodeDimensionsAndNonFiniteCoordinates
 
 TEST(HexHermiteDofTransform, ReproducesPhysicalPolynomialWithMixedDerivatives) {
     const auto X_nodes = box_nodes({2, 3, 5}, {0.2, -0.3, 0.4});
-    const InterpolatedField<HexQ1Basis> X_field(X_nodes);
+    const InterpolatedField3D<HexQ1Basis> X_field(X_nodes);
     const auto S = hex_hermite_dof_transform(X_nodes);
     const Eigen::Vector3d factors(0.7, -1.3, 2.1);
     Eigen::MatrixXd x_local(8, 24);
@@ -66,7 +66,7 @@ TEST(HexHermiteDofTransform, ReproducesPhysicalPolynomialWithMixedDerivatives) {
             x_local.row(v).segment<3>(3 * slot) = (factors * derivatives[static_cast<std::size_t>(slot)]).transpose();
     }
     const Eigen::VectorXd c = S * x_local.reshaped<Eigen::RowMajor>();
-    const InterpolatedField<HexHermiteBasis> displacement(c.reshaped<Eigen::RowMajor>(64, 3));
+    const InterpolatedField3D<HexHermiteBasis> displacement(c.reshaped<Eigen::RowMajor>(64, 3));
     for (const Eigen::Vector3d xi :
          {Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(1, 1, 1), Eigen::Vector3d(0.2, 0.3, 0.4)}) {
         const auto& X = X_field.value(xi);

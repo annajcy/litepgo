@@ -23,17 +23,17 @@ using namespace litepgo::test;
 HexTopology two_hexes() {
     return HexTopology(12, {{1, 3, 9, 4, 7, 6, 0, 10}, {3, 8, 5, 9, 6, 2, 11, 0}});
 }
-InterpolatedField<HexQ1Basis> make_X_field() {
+InterpolatedField3D<HexQ1Basis> make_X_field() {
     Eigen::Matrix<double, 8, 3> nodes;
     for (int i = 0; i < 8; ++i)
         nodes.row(i) = HexQ1Basis::reference_node(i).transpose();
-    return InterpolatedField<HexQ1Basis>(nodes);
+    return InterpolatedField3D<HexQ1Basis>(nodes);
 }
 auto passive_fields() {
     Eigen::Matrix3d F;
     F << 1.1, 0.04, 0.02, -0.03, 0.95, 0.01, 0.02, 0.03, 1.05;
-    return MaterialSources{IdentityField(F.reshaped()), IdentityField(Eigen::Matrix3d::Identity().reshaped()),
-                           IdentityField(Eigen::Vector2d(2, 3))};
+    return MaterialSources{IdentityField3D(F.reshaped()), IdentityField3D(Eigen::Matrix3d::Identity().reshaped()),
+                           IdentityField3D(Eigen::Vector2d(2, 3))};
 }
 
 void check_fd(MeshEnergy& energy, const Vec& x) {
@@ -106,18 +106,19 @@ TEST(MeshEnergy, HexNodeDisplacementAndPlasticDisplacement) {
             EXPECT_EQ(x_local.rows(), 8);
             EXPECT_EQ(x_local.cols(), 3);
             auto fields = passive_fields();
-            return MaterialSources{OwnedDeformationField(InterpolatedField<HexQ1Basis>(x_local), make_X_field()),
+            return MaterialSources{OwnedDeformationField(InterpolatedField3D<HexQ1Basis>(x_local), make_X_field()),
                                    fields.Fp, fields.theta};
         },
-        [](const auto& fields) { return bind_energy<MaterialLocalEnergyF<NeoHookean>>(fields); });
+        [](const auto& fields) { return bind_energy<MaterialLocalEnergyF3D<NeoHookean>>(fields); });
     check_material_path(
         map, data,
         [](const auto& x_local) {
             auto fields = passive_fields();
-            return MaterialSources{
-                fields.F, OwnedDeformationField(InterpolatedField<HexQ1Basis>(x_local), make_X_field()), fields.theta};
+            return MaterialSources{fields.F,
+                                   OwnedDeformationField(InterpolatedField3D<HexQ1Basis>(x_local), make_X_field()),
+                                   fields.theta};
         },
-        [](const auto& fields) { return bind_energy<MaterialLocalEnergyFp<NeoHookean>>(fields); });
+        [](const auto& fields) { return bind_energy<MaterialLocalEnergyFp3D<NeoHookean>>(fields); });
 }
 
 TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
@@ -133,9 +134,9 @@ TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
         ElementDofMap(topology, 9), plastic,
         [](const Eigen::VectorXd& x_local) {
             auto fields = passive_fields();
-            return MaterialSources{fields.F, IdentityField(x_local), fields.theta};
+            return MaterialSources{fields.F, IdentityField3D(x_local), fields.theta};
         },
-        [](const auto& fields) { return bind_energy<MaterialLocalEnergyFp<NeoHookean>>(fields); });
+        [](const auto& fields) { return bind_energy<MaterialLocalEnergyFp3D<NeoHookean>>(fields); });
     Vec nodal = Vec::Zero(24);
     for (int i = 0; i < 12; ++i) {
         nodal[2 * i] = 2 + 0.01 * i;
@@ -145,17 +146,17 @@ TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
         VertexDofMap(topology, 2), nodal,
         [](const auto& x_local) {
             auto fields = passive_fields();
-            return MaterialSources{fields.F, fields.Fp, InterpolatedField<litepgo::HexQ1Basis>(x_local)};
+            return MaterialSources{fields.F, fields.Fp, InterpolatedField3D<litepgo::HexQ1Basis>(x_local)};
         },
-        [](const auto& fields) { return bind_energy<MaterialLocalEnergyTheta<NeoHookean>>(fields); });
+        [](const auto& fields) { return bind_energy<MaterialLocalEnergyTheta3D<NeoHookean>>(fields); });
     Vec shared(Eigen::Vector2d(2, 3));
     check_material_path(
         ConstantDofMap(topology, 2), shared,
         [](const Eigen::VectorXd& x_local) {
             auto fields = passive_fields();
-            return MaterialSources{fields.F, fields.Fp, IdentityField(x_local)};
+            return MaterialSources{fields.F, fields.Fp, IdentityField3D(x_local)};
         },
-        [](const auto& fields) { return bind_energy<MaterialLocalEnergyTheta<NeoHookean>>(fields); });
+        [](const auto& fields) { return bind_energy<MaterialLocalEnergyTheta3D<NeoHookean>>(fields); });
 }
 
 TEST(MeshEnergy, OwnsPlanUsesCurrentXAndSupportsTriangleAndTet) {

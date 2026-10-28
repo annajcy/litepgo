@@ -1,5 +1,5 @@
-#include "litepgo/fem/basis/basis.hpp"
 #include "litepgo/fem/basis/1d/cubic_hermite_basis.hpp"
+#include "litepgo/fem/basis/basis.hpp"
 
 #include <gtest/gtest.h>
 
@@ -8,6 +8,7 @@
 using litepgo::CubicHermiteBasis;
 
 static_assert(litepgo::Basis1D<CubicHermiteBasis>);
+static_assert(litepgo::SecondOrderBasis<CubicHermiteBasis, 1>);
 static_assert(CubicHermiteBasis::num_basis_functions == 4);
 
 TEST(CubicHermiteBasis, InterpolatesEndpointValuesAndDerivatives) {
@@ -28,6 +29,8 @@ TEST(CubicHermiteBasis, ReproducesAllCubicMonomialsAndDerivatives) {
             EXPECT_NEAR(coefficients.dot(basis_sample.N), std::pow(t, degree), 1e-14);
             EXPECT_NEAR(coefficients.dot(basis_sample.dN_dxi), degree == 0 ? 0 : degree * std::pow(t, degree - 1),
                         1e-14);
+            EXPECT_NEAR(coefficients.dot(basis_sample.d2N_dxi2),
+                        degree < 2 ? 0 : degree * (degree - 1) * std::pow(t, degree - 2), 1e-14);
         }
     }
 }
@@ -38,5 +41,8 @@ TEST(CubicHermiteBasis, GradientsMatchFiniteDifferences) {
         const Eigen::Vector4d fd =
             (CubicHermiteBasis::evaluate(t + h).N - CubicHermiteBasis::evaluate(t - h).N) / (2 * h);
         EXPECT_TRUE((fd - CubicHermiteBasis::evaluate(t).dN_dxi).isZero(2e-9));
+        const Eigen::Vector4d second_fd =
+            (CubicHermiteBasis::evaluate(t + h).dN_dxi - CubicHermiteBasis::evaluate(t - h).dN_dxi) / (2 * h);
+        EXPECT_TRUE((second_fd - CubicHermiteBasis::evaluate(t).d2N_dxi2).isZero(3e-9));
     }
 }

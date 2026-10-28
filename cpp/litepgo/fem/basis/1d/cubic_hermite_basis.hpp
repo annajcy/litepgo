@@ -13,13 +13,15 @@ class CubicHermiteBasis {
     struct Sample {
         Eigen::Vector4d N;
         Eigen::Vector4d dN_dxi;
+        Eigen::Vector4d d2N_dxi2;
     };
 
     // Evaluates the polynomials without clamping the parameter to the interval.
     static Sample evaluate(double t) {
         const double t2 = t * t, t3 = t2 * t;
         return {{2 * t3 - 3 * t2 + 1, t3 - 2 * t2 + t, -2 * t3 + 3 * t2, t3 - t2},
-                {6 * t2 - 6 * t, 3 * t2 - 4 * t + 1, -6 * t2 + 6 * t, 3 * t2 - 2 * t}};
+                {6 * t2 - 6 * t, 3 * t2 - 4 * t + 1, -6 * t2 + 6 * t, 3 * t2 - 2 * t},
+                {12 * t - 6, 6 * t - 4, -12 * t + 6, 6 * t - 2}};
     }
 };
 

@@ -46,15 +46,15 @@ inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X_nodes) {
     // Each vertex stores [u, u_X, u_Y, u_Z, u_XY, u_XZ, u_YZ, u_XYZ], each a 3-vector.
     // Global index: 24*vertex + 3*slot + component; shared vertices use the same indices.
     const VertexDofMap geometry_map(topology, 3), displacement_map(topology, 24);
-    std::vector<InterpolatedField<HexQ1Basis>> X_fields;
+    std::vector<InterpolatedField3D<HexQ1Basis>> X_fields;
     std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> transforms;
     for (int e = 0; e < geometry_map.num_elements(); ++e) {
         const auto X_local = geometry_map.gather(e, X_nodes);
         transforms.push_back(hex_hermite_dof_transform(X_local));
         X_fields.emplace_back(X_local);
     }
-    const IdentityField Fp_field(Eigen::Matrix3d::Identity().reshaped());
-    const IdentityField theta_field(Eigen::Vector2d(2, 3));
+    const IdentityField3D Fp_field(Eigen::Matrix3d::Identity().reshaped());
+    const IdentityField3D theta_field(Eigen::Vector2d(2, 3));
     return MeshEnergy(
         displacement_map,
         [X_fields, transforms, Fp_field, theta_field](int e, const Eigen::MatrixXd& x_local, Vec* dE_dx_local,
@@ -65,9 +65,9 @@ inline MeshEnergy make_hex_hermite_mesh_energy(const Vec& X_nodes) {
             const auto& dof_scales = S.diagonal();
             const auto& u_physical_local = x_local;
             const auto u_local = hex_hermite_reference_coefficients(u_physical_local, dof_scales);
-            const auto u_field = InterpolatedField<HexHermiteBasis>(u_local);
-            const auto deformation = DeformationGradientField(u_field, X_field);
-            const MaterialLocalEnergyF<NeoHookean> local_energy(deformation, Fp_field, theta_field);
+            const auto u_field = InterpolatedField3D<HexHermiteBasis>(u_local);
+            const auto deformation = DeformationGradientField3D(u_field, X_field);
+            const MaterialLocalEnergyF3D<NeoHookean> local_energy(deformation, Fp_field, theta_field);
             Vec dE_du_local;
             Eigen::MatrixXd d2E_du_local2;
             if (dE_dx_local)

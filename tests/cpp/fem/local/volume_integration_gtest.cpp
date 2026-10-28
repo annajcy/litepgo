@@ -18,7 +18,7 @@ namespace {
 using namespace litepgo;
 using namespace litepgo::test;
 
-const auto element_energy = [](const Field& X_field, const LocalEnergy& energy, Eigen::VectorXd* g = nullptr,
+const auto element_energy = [](const Field3D& X_field, const LocalEnergy3D& energy, Eigen::VectorXd* g = nullptr,
                                Eigen::MatrixXd* H = nullptr) {
     if (g)
         g->setZero(energy.num_dofs());
@@ -72,14 +72,14 @@ NodalCoefficients fields(int seed = 0) {
     return f;
 }
 
-auto evaluate_fields(const NodalCoefficients& coefficients, const InterpolatedField<HexQ1Basis>& X_field) {
-    return MaterialSources{OwnedDeformationField(InterpolatedField<litepgo::HexQ1Basis>(coefficients.u), X_field),
-                           OwnedDeformationField(InterpolatedField<litepgo::HexQ1Basis>(coefficients.up), X_field),
-                           InterpolatedField<litepgo::HexQ1Basis>(coefficients.theta)};
+auto evaluate_fields(const NodalCoefficients& coefficients, const InterpolatedField3D<HexQ1Basis>& X_field) {
+    return MaterialSources{OwnedDeformationField(InterpolatedField3D<litepgo::HexQ1Basis>(coefficients.u), X_field),
+                           OwnedDeformationField(InterpolatedField3D<litepgo::HexQ1Basis>(coefficients.up), X_field),
+                           InterpolatedField3D<litepgo::HexQ1Basis>(coefficients.theta)};
 }
 
 template <class Member, class BindEnergy>
-void check_fd(const InterpolatedField<HexQ1Basis>& X_field, const NodalCoefficients& f, Member member,
+void check_fd(const InterpolatedField3D<HexQ1Basis>& X_field, const NodalCoefficients& f, Member member,
               BindEnergy bind_energy) {
     const auto integrate_at = [&](const auto& coefficients, Eigen::VectorXd* g = nullptr,
                                   Eigen::MatrixXd* h = nullptr) {
@@ -127,30 +127,31 @@ void check_fd(const InterpolatedField<HexQ1Basis>& X_field, const NodalCoefficie
 }
 
 TEST(VolumeIntegration, HexQ1LocalDofFiniteDifferencesForAllThreeFields) {
-    const InterpolatedField<HexQ1Basis> X_field(coordinates());
+    const InterpolatedField3D<HexQ1Basis> X_field(coordinates());
     for (int seed = 0; seed < 3; ++seed) {
         SCOPED_TRACE(seed);
         const auto f = fields(seed);
         EXPECT_DOUBLE_EQ(
-            element_energy(X_field, bind_energy<MaterialLocalEnergyF<NeoHookean>>(evaluate_fields(f, X_field))),
-            element_energy(X_field, bind_energy<MaterialLocalEnergyFp<NeoHookean>>(evaluate_fields(f, X_field))));
+            element_energy(X_field, bind_energy<MaterialLocalEnergyF3D<NeoHookean>>(evaluate_fields(f, X_field))),
+            element_energy(X_field, bind_energy<MaterialLocalEnergyFp3D<NeoHookean>>(evaluate_fields(f, X_field))));
         EXPECT_DOUBLE_EQ(
-            element_energy(X_field, bind_energy<MaterialLocalEnergyF<NeoHookean>>(evaluate_fields(f, X_field))),
-            element_energy(X_field, bind_energy<MaterialLocalEnergyTheta<NeoHookean>>(evaluate_fields(f, X_field))));
-        check_fd(X_field, f, &NodalCoefficients::u,
-                 [&](const auto& local_fields) { return bind_energy<MaterialLocalEnergyF<NeoHookean>>(local_fields); });
+            element_energy(X_field, bind_energy<MaterialLocalEnergyF3D<NeoHookean>>(evaluate_fields(f, X_field))),
+            element_energy(X_field, bind_energy<MaterialLocalEnergyTheta3D<NeoHookean>>(evaluate_fields(f, X_field))));
+        check_fd(X_field, f, &NodalCoefficients::u, [&](const auto& local_fields) {
+            return bind_energy<MaterialLocalEnergyF3D<NeoHookean>>(local_fields);
+        });
         check_fd(X_field, f, &NodalCoefficients::up, [&](const auto& local_fields) {
-            return bind_energy<MaterialLocalEnergyFp<NeoHookean>>(local_fields);
+            return bind_energy<MaterialLocalEnergyFp3D<NeoHookean>>(local_fields);
         });
         check_fd(X_field, f, &NodalCoefficients::theta, [&](const auto& local_fields) {
-            return bind_energy<MaterialLocalEnergyTheta<NeoHookean>>(local_fields);
+            return bind_energy<MaterialLocalEnergyTheta3D<NeoHookean>>(local_fields);
         });
     }
 }
 
 TEST(VolumeIntegration, AffineFieldsHaveExpectedVolumeWeightedEnergyAndTranslationNullModes) {
     const auto X_nodes = coordinates(false);
-    const InterpolatedField<HexQ1Basis> X_field(X_nodes);
+    const InterpolatedField3D<HexQ1Basis> X_field(X_nodes);
     Eigen::Matrix3d A, P;
     A << 0.1, 0.02, -0.03, 0.04, -0.05, 0.02, 0.01, 0.03, 0.08;
     P << 0.2, 0.03, 0, 0.01, 0.1, 0.02, 0, 0.01, -0.05;
@@ -167,11 +168,11 @@ TEST(VolumeIntegration, AffineFieldsHaveExpectedVolumeWeightedEnergyAndTranslati
     const double expected =
         dX_dxi.determinant() *
         NeoHookean::value({Eigen::Matrix3d::Identity() + A, Eigen::Matrix3d::Identity() + P, Eigen::Vector2d(2, 3)});
-    EXPECT_NEAR(element_energy(X_field, bind_energy<MaterialLocalEnergyF<NeoHookean>>(evaluate_fields(f, X_field))),
+    EXPECT_NEAR(element_energy(X_field, bind_energy<MaterialLocalEnergyF3D<NeoHookean>>(evaluate_fields(f, X_field))),
                 expected, 1e-12);
     Eigen::MatrixXd H, Hp;
-    element_energy(X_field, bind_energy<MaterialLocalEnergyF<NeoHookean>>(local_fields), nullptr, &H);
-    element_energy(X_field, bind_energy<MaterialLocalEnergyFp<NeoHookean>>(local_fields), nullptr, &Hp);
+    element_energy(X_field, bind_energy<MaterialLocalEnergyF3D<NeoHookean>>(local_fields), nullptr, &H);
+    element_energy(X_field, bind_energy<MaterialLocalEnergyFp3D<NeoHookean>>(local_fields), nullptr, &Hp);
     for (int c = 0; c < 3; ++c) {
         Eigen::Matrix<double, 24, 1> translation = Eigen::Matrix<double, 24, 1>::Zero();
         for (int i = 0; i < 8; ++i)
@@ -182,26 +183,26 @@ TEST(VolumeIntegration, AffineFieldsHaveExpectedVolumeWeightedEnergyAndTranslati
         shifted.u.col(c).array() += 0.7;
         shifted.up.col(c).array() -= 0.4;
         EXPECT_NEAR(
-            element_energy(X_field, bind_energy<MaterialLocalEnergyF<NeoHookean>>(evaluate_fields(shifted, X_field))),
+            element_energy(X_field, bind_energy<MaterialLocalEnergyF3D<NeoHookean>>(evaluate_fields(shifted, X_field))),
             expected, 1e-12);
     }
 }
 
 TEST(VolumeIntegration, NonzeroParameterHessian) {
-    const InterpolatedField<HexQ1Basis> X_field(coordinates());
+    const InterpolatedField3D<HexQ1Basis> X_field(coordinates());
     const auto coefficients = fields();
     const auto local_fields = evaluate_fields(coefficients, X_field);
-    const auto energy = bind_energy<MaterialLocalEnergyTheta<QuadraticParameterMaterial<2>>>(local_fields);
+    const auto energy = bind_energy<MaterialLocalEnergyTheta3D<QuadraticParameterMaterial<2>>>(local_fields);
     Eigen::MatrixXd H;
     element_energy(X_field, energy, nullptr, &H);
     EXPECT_GT(H.norm(), 0.1);
     check_fd(X_field, coefficients, &NodalCoefficients::theta, [&](const auto& local_fields) {
-        return bind_energy<MaterialLocalEnergyTheta<QuadraticParameterMaterial<2>>>(local_fields);
+        return bind_energy<MaterialLocalEnergyTheta3D<QuadraticParameterMaterial<2>>>(local_fields);
     });
 }
 
 TEST(VolumeIntegration, PropagatesInvalidFieldsAndInfeasibleStates) {
-    const InterpolatedField<HexQ1Basis> X_field(coordinates(false));
+    const InterpolatedField3D<HexQ1Basis> X_field(coordinates(false));
     const auto check = [&](auto bind_energy) {
         Eigen::VectorXd g;
         Eigen::MatrixXd h;
@@ -236,9 +237,9 @@ TEST(VolumeIntegration, PropagatesInvalidFieldsAndInfeasibleStates) {
                          InfeasibleState);
         }
     };
-    check([&](const auto& local_fields) { return bind_energy<MaterialLocalEnergyF<NeoHookean>>(local_fields); });
-    check([&](const auto& local_fields) { return bind_energy<MaterialLocalEnergyFp<NeoHookean>>(local_fields); });
-    check([&](const auto& local_fields) { return bind_energy<MaterialLocalEnergyTheta<NeoHookean>>(local_fields); });
+    check([&](const auto& local_fields) { return bind_energy<MaterialLocalEnergyF3D<NeoHookean>>(local_fields); });
+    check([&](const auto& local_fields) { return bind_energy<MaterialLocalEnergyFp3D<NeoHookean>>(local_fields); });
+    check([&](const auto& local_fields) { return bind_energy<MaterialLocalEnergyTheta3D<NeoHookean>>(local_fields); });
 }
 
 } // namespace

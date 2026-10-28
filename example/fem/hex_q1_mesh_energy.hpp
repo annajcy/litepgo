@@ -30,11 +30,11 @@ inline MeshEnergy make_hex_q1_mesh_energy(const Vec& X_nodes) {
     const HexTopology topology(12, {{0, 1, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 2, 5, 10, 11, 6}});
     // Three physical displacement components per vertex: global index 3*vertex + component.
     const VertexDofMap map(topology, 3);
-    std::vector<InterpolatedField<HexQ1Basis>> X_fields;
+    std::vector<InterpolatedField3D<HexQ1Basis>> X_fields;
     for (int e = 0; e < map.num_elements(); ++e)
         X_fields.emplace_back(map.gather(e, X_nodes));
-    const IdentityField Fp_field(Eigen::Matrix3d::Identity().reshaped());
-    const IdentityField theta_field(Eigen::Vector2d(2, 3));
+    const IdentityField3D Fp_field(Eigen::Matrix3d::Identity().reshaped());
+    const IdentityField3D theta_field(Eigen::Vector2d(2, 3));
 
     return MeshEnergy(
         map,
@@ -43,9 +43,9 @@ inline MeshEnergy make_hex_q1_mesh_energy(const Vec& X_nodes) {
             // Geometry and gathered displacement both belong to element e.
             const auto& X_field = X_fields[static_cast<std::size_t>(e)];
             const auto& u_local = x_local;
-            const auto u_field = InterpolatedField<HexQ1Basis>(u_local);
-            const auto deformation = DeformationGradientField(u_field, X_field);
-            const MaterialLocalEnergyF<NeoHookean> local_energy(deformation, Fp_field, theta_field);
+            const auto u_field = InterpolatedField3D<HexQ1Basis>(u_local);
+            const auto deformation = DeformationGradientField3D(u_field, X_field);
+            const MaterialLocalEnergyF3D<NeoHookean> local_energy(deformation, Fp_field, theta_field);
             if (dE_dx_local)
                 dE_dx_local->setZero(local_energy.num_dofs());
             if (d2E_dx_local2)

@@ -40,11 +40,11 @@ TEST(HexHermiteExample, ReproducesAffineDisplacementAndVolumeWeightedEnergy) {
         {Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(1, 1, 1), Eigen::Vector3d(0.2, 0.3, 0.4)}};
     for (int e = 0; e < 2; ++e) {
         const auto X_local = geometry_map.gather(e, X_nodes);
-        const InterpolatedField<HexQ1Basis> X_field(X_local);
+        const InterpolatedField3D<HexQ1Basis> X_field(X_local);
         const auto coefficients = example::hex_hermite_reference_coefficients(
             displacement_map.gather(e, x), hex_hermite_dof_transform(X_local).diagonal());
-        const InterpolatedField<HexHermiteBasis> displacement(coefficients);
-        const auto F = DeformationGradientField(displacement, X_field);
+        const InterpolatedField3D<HexHermiteBasis> displacement(coefficients);
+        const auto F = DeformationGradientField3D(displacement, X_field);
         for (const auto& xi : points) {
             EXPECT_TRUE(displacement.value(xi).isApprox(A * X_field.value(xi) + b, 1e-13));
             EXPECT_TRUE(F.value(xi).reshaped(3, 3).isApprox(Eigen::Matrix3d::Identity() + A, 1e-13));
@@ -79,15 +79,15 @@ TEST(HexHermiteExample, SharedFacesHaveContinuousValuesAndPhysicalGradientsInAll
         const HexTopology topology(12, cells);
         const VertexDofMap geometry_map(topology, 3), displacement_map(topology, 24);
         const std::array<Eigen::MatrixXd, 2> X_local{geometry_map.gather(0, X_nodes), geometry_map.gather(1, X_nodes)};
-        const std::array<InterpolatedField<HexQ1Basis>, 2> X_fields{InterpolatedField<HexQ1Basis>(X_local[0]),
-                                                                    InterpolatedField<HexQ1Basis>(X_local[1])};
+        const std::array<InterpolatedField3D<HexQ1Basis>, 2> X_fields{InterpolatedField3D<HexQ1Basis>(X_local[0]),
+                                                                      InterpolatedField3D<HexQ1Basis>(X_local[1])};
         const auto c0 = example::hex_hermite_reference_coefficients(displacement_map.gather(0, x),
                                                                     hex_hermite_dof_transform(X_local[0]).diagonal());
         const auto c1 = example::hex_hermite_reference_coefficients(displacement_map.gather(1, x),
                                                                     hex_hermite_dof_transform(X_local[1]).diagonal());
-        const InterpolatedField<HexHermiteBasis> u0(c0), u1(c1);
-        const auto F0 = DeformationGradientField(u0, X_fields[0]);
-        const auto F1 = DeformationGradientField(u1, X_fields[1]);
+        const InterpolatedField3D<HexHermiteBasis> u0(c0), u1(c1);
+        const auto F0 = DeformationGradientField3D(u0, X_fields[0]);
+        const auto F1 = DeformationGradientField3D(u1, X_fields[1]);
         for (double s : {0.0, 0.23, 0.67, 1.0})
             for (double t : {0.0, 0.31, 0.8, 1.0}) {
                 Eigen::Vector3d xi = Eigen::Vector3d::Zero();

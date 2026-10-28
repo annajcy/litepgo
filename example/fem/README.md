@@ -1,10 +1,10 @@
 # FEM with MeshEnergy
 
-Quadrature supplies reference coordinates `xi` and weights. A `Field` computes values and derivatives at `xi` through virtual functions. `DeformationGradientField` composes displacement and coordinate fields at one `xi`, returning column-flattened `F`. Materials consume numerical `F`, `Fp`, and `theta`. Local energies bind one active coefficient block and supply density and coefficient derivatives. The element lambda applies geometric weights and sums quadrature contributions; `MeshEnergy` gathers and assembles the element results.
+Quadrature supplies reference coordinates `xi` and weights. A `Field3D` computes values and derivatives at `xi` through virtual functions. `DeformationGradientField3D` composes displacement and coordinate fields at one `xi`, returning column-flattened `F`. Materials consume numerical `F`, `Fp`, and `theta`. Local energies bind one active coefficient block and supply density and coefficient derivatives. The element lambda applies geometric weights and sums quadrature contributions; `MeshEnergy` gathers and assembles the element results.
 
 ```mermaid
 flowchart TD
-    Q["Quadrature: xi, weight"] --> D["DeformationGradientField.value / dvalue_dcoeffs"]
+    Q["Quadrature: xi, weight"] --> D["DeformationGradientField3D.value / dvalue_dcoeffs"]
     U["u_field"] --> D
     X["X_field"] --> D
     D --> L["Local energy: material inputs and coefficient derivatives"]
@@ -20,15 +20,17 @@ flowchart TD
 
 | Module | Responsibility |
 | --- | --- |
-| `fem/basis/` | Scalar basis values `N` and reference derivatives `dN_dxi`, grouped into `1d/` and `3d/` |
-| `fem/quadrature/` | Reference points and weights, grouped into `1d/` and `3d/` |
-| `fem/field/` | `Field`, `InterpolatedField`, `IdentityField`, `DeformationGradientField`, and the Hex Hermite coefficient transform |
+| `fem/basis/` | Scalar basis values `N`, reference derivatives `dN_dxi`, and optional `d2N_dxi2`, grouped into `1d/`, `2d/`, and `3d/` |
+| `fem/quadrature/` | Reference points and weights, grouped into `1d/`, `2d/`, and `3d/` |
+| `fem/field/` | `Field2D/3D`, `InterpolatedField2D/3D`, `IdentityField2D/3D`, `DeformationGradientField3D`, and the Hex Hermite coefficient transform |
 | `fem/material/` | Numerical constitutive inputs, density, and material derivatives |
 | `fem/local/` | Pointwise local energies, active-input binding, and derivative contractions |
 
-The 1D basis building blocks are `LinearLagrangeBasis` and `CubicHermiteBasis`. Tensor-product types retain the `3D` suffix, mirrored as `_3d` in their filenames.
+The 1D basis building blocks are `LinearLagrangeBasis` and `CubicHermiteBasis`. Tensor-product types use `2D` or `3D` suffixes, mirrored as `_2d` or `_3d` in their filenames.
 
-`IdentityField` and `InterpolatedField` own coefficient snapshots. `DeformationGradientField` borrows two `const Field&` inputs: displacement `u` and fixed coordinates `X`. Those input objects must outlive the composed field and any local energy borrowing it; temporary inputs are rejected at compile time. All three inherit `Field` and return owning vectors and matrices directly, without a field-sample interface.
+`FieldT<ParamDim>`, `IdentityFieldT<ParamDim>`, and `LocalEnergyT<ParamDim>` support parameter dimensions 2 and 3. Use `Field2D` / `Field3D`, `IdentityField2D` / `IdentityField3D`, and `LocalEnergy2D` / `LocalEnergy3D` for dimension-specific interfaces. `InterpolatedField2D<B>` / `InterpolatedField3D<B>` select the parameter dimension of `InterpolatedFieldT<B, ParamDim>`. Component counts remain independent of parameter dimension. Dimensionless compatibility names have been removed, and the generic templates require an explicit parameter dimension. Update existing clients to the explicit `2D` / `3D` names and rebuild them.
+
+`IdentityField3D` and `InterpolatedField3D` own coefficient snapshots. `DeformationGradientField3D` borrows two `const Field3D&` inputs: displacement `u` and fixed coordinates `X`. Those input objects must outlive the composed field and any local energy borrowing it; temporary inputs are rejected at compile time. All three inherit `Field3D` and return owning vectors and matrices directly, without a field-sample interface.
 
 The composition uses the same reference coordinate for both inputs. The caller must bind fields belonging to the same element and reference-coordinate convention. Different bases are allowed; the existing extrapolation rules outside their reference elements remain unchanged. No mesh IDs or shared evaluation-cache framework are introduced.
 
@@ -39,7 +41,7 @@ The composition uses the same reference coordinate for both inputs. The caller m
 | `x`, `x_local` | Global optimizer unknowns, and the matrix/vector returned by `map.gather(e, x)` |
 | `coeffs` | Generic coefficients stored by a basic field |
 | `X_local`, `u_local`, `theta_local` | Coefficients directly consumed by the coordinate, displacement, or parameter field |
-| `X_field`, `u_field`, `theta_field` | Field objects |
+| `X_field`, `u_field`, `theta_field` | Field3D objects |
 | `X`, `u`, `theta` | Values at one reference coordinate |
 | `X_nodes` | Rest nodal positions, either an explicitly declared vertex-by-3 matrix or packed vector |
 | `u_physical_local` | Physical Hermite DOFs before conversion to reference interpolation coefficients |
@@ -59,7 +61,7 @@ Derivative matrices place scalar output components in rows and scalar input coef
 vec(F)[i+3*d] = F(i,d)
 ```
 
-`IdentityField` owns an `Eigen::VectorXd` and returns the same component vector. Flatten matrix coefficients by column before construction, for example `IdentityField(Fp.reshaped())`. The material input layer checks that `F` and `Fp` each contain nine components and restores their 3-by-3 shape. `X_nodes(v,c)` and packed `X_nodes[3*v+c]` address the same vertex/component ordering.
+`IdentityField3D` owns an `Eigen::VectorXd` and returns the same component vector. Flatten matrix coefficients by column before construction, for example `IdentityField3D(Fp.reshaped())`. The material input layer checks that `F` and `Fp` each contain nine components and restores their 3-by-3 shape. `X_nodes(v,c)` and packed `X_nodes[3*v+c]` address the same vertex/component ordering.
 
 ## Basic fields
 
@@ -69,14 +71,14 @@ vec(F)[i+3*d] = F(i,d)
 #include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 
-const auto X_field = litepgo::InterpolatedField<litepgo::HexQ1Basis>(X_local);
-const auto u_field = litepgo::InterpolatedField<litepgo::HexHermiteBasis>(u_local);
-const litepgo::Field& field = u_field;
+const auto X_field = litepgo::InterpolatedField3D<litepgo::HexQ1Basis>(X_local);
+const auto u_field = litepgo::InterpolatedField3D<litepgo::HexHermiteBasis>(u_local);
+const litepgo::Field3D& field = u_field;
 const auto u = field.value(xi);
 const auto du_dcoeffs = field.dvalue_dcoeffs(xi);
 ```
 
-`B::evaluate(xi)` returns a `basis_sample` containing `N` (`n`-by-1) and `dN_dxi` (`n`-by-3). `InterpolatedField` uses these arrays to compute each requested quantity:
+`B::evaluate(xi)` returns a `basis_sample` containing `N` (`n`-by-1) and `dN_dxi` (`n`-by-`D`), where `D` is the parameter dimension. `InterpolatedFieldT` uses these arrays to compute each requested quantity:
 
 $$
 y(\xi)=\mathrm{coeffs}^T N(\xi),\qquad
@@ -86,23 +88,50 @@ $$
 | API | Result | Shape for a vector output |
 | --- | --- | --- |
 | `field.value(xi)` | Value only | `m` |
-| `field.dvalue_dxi(xi)` | Reference-coordinate derivative only | `m`-by-3 |
+| `field.dvalue_dxi(xi)` | Reference-coordinate derivative only | `m`-by-`D` |
 | `field.dvalue_dcoeffs(xi)` | Derivative of value with respect to flattened coefficients | `m`-by-`n*m` |
-| `field.dgrad_xi_dcoeffs(xi)` | Derivative of column-major `vec(dvalue_dxi)` with respect to coefficients | `3*m`-by-`n*m` |
+| `field.dgrad_xi_dcoeffs(xi)` | Derivative of column-major `vec(dvalue_dxi)` with respect to coefficients | `D*m`-by-`n*m` |
+| `field.d2value_dxi2(xi)` | Packed second reference-coordinate derivatives | `m`-by-`D*(D+1)/2` |
+| `field.dhess_xi_dcoeffs(xi)` | Coefficient derivative of column-major `vec(d2value_dxi2)` | `m*D*(D+1)/2`-by-`n*m` |
 
-Large coefficient derivative matrices are constructed only when requested. Each method validates its own data dependencies independently. Non-finite coordinates, incompatible or non-finite coefficients, invalid basis data, and unrepresentable results are rejected. `Field` requires values and coefficient derivatives; its default spatial-derivative methods throw `std::logic_error` when unsupported.
+Large coefficient derivative matrices are constructed only when requested. Each method validates its own data dependencies independently. Non-finite coordinates, incompatible or non-finite coefficients, invalid basis data, and unrepresentable results are rejected. `Field3D` requires values and coefficient derivatives; its default spatial-derivative methods throw `std::logic_error` when unsupported.
 
-`IdentityField` is spatially constant. It returns zero reference derivatives, an identity coefficient derivative, and a zero mixed reference/coefficient derivative. Being constant in space does not make its coefficients inactive.
+`IdentityField3D` is spatially constant. It returns zero reference derivatives, an identity coefficient derivative, and a zero mixed reference/coefficient derivative. Being constant in space does not make its coefficients inactive.
 
-Material input fields inherit `Field`. Only the selected active field needs usable coefficient derivatives and a positive DOF count; inactive fields may report zero DOFs and throw from unsupported derivatives. The active map must be affine in its coefficients. Custom affine parameter fields may have a coefficient count different from their number of output components.
+Second spatial derivatives are optional. `SecondOrderBasis<B,D>` checks for `Sample::d2N_dxi2` with upper-triangle columns `(11,12,22)` in 2D or `(11,12,13,22,23,33)` in 3D. Mixed derivatives are stored once without doubling. `InterpolatedFieldT` provides the second-derivative methods only when the basis has this capability; otherwise the methods throw `std::logic_error`. Constant fields return zeros. Existing 3D bases retain their first-order interfaces.
+
+## Two-dimensional parameter domains
+
+```cpp
+#include "litepgo/fem/basis/2d/quad_hermite_basis.hpp"
+#include "litepgo/fem/field/interpolated_field.hpp"
+#include "litepgo/fem/quadrature/2d/gauss_legendre_2d.hpp"
+
+// coeffs is 16-by-3: four vector slots at each of four corners.
+const litepgo::InterpolatedField2D<litepgo::QuadHermiteBasis> u_field(coeffs);
+const litepgo::Field2D& field = u_field;
+const Eigen::Vector2d xi(0.2, 0.3);
+const auto u = field.value(xi);             // 3 components
+const auto du = field.dvalue_dxi(xi);       // 3-by-2
+const auto d2u = field.d2value_dxi2(xi);     // 3-by-3: (11,12,22)
+using Q = litepgo::GaussLegendre2D<4>;       // 16 points on [0,1]^2
+```
+
+`QuadHermiteBasis` uses corners `(0,0), (1,0), (1,1), (0,1)`. Index `4*vertex+slot` stores `[u, u_xi, u_eta, u_xi_eta]`, with the same row order for basis values and derivatives. `QuadTopology` is `MeshTopology<4>`. `VertexDofMap(topology,12)` gathers a three-component Hermite field as a 4-by-12 matrix, which reshapes by row into 16-by-3 coefficients.
+
+For C1 continuity on aligned rectangular parameter charts, share derivatives with respect to the same chart coordinates. A cell with chart spans `(hs,ht)` converts the four vector slots to reference coefficients using scales `[1,hs,ht,hs*ht]`. A curved reference geometry also needs compatible smooth coordinate interpolation. General chart transitions require their own derivative transformations.
+
+The element callback chooses the geometric measure. For a three-component surface coordinate field, its 3-by-2 derivative supplies reference area `norm(X_xi.cross(X_eta))`; pass this times the quadrature weight to `LocalEnergy2D::accumulate`. `MeshEnergy` and the DOF assembler already accept these elements. The deformation field `DeformationGradientField3D` and the material energies `MaterialLocalEnergyF3D`, `MaterialLocalEnergyFp3D`, and `MaterialLocalEnergyTheta3D` are 3D solid APIs. Koiter kinematics and energy are not part of this 2D foundation.
+
+Material input fields inherit `Field3D`. Only the selected active field needs usable coefficient derivatives and a positive DOF count; inactive fields may report zero DOFs and throw from unsupported derivatives. The active map must be affine in its coefficients. Custom affine parameter fields may have a coefficient count different from their number of output components.
 
 ## Deformation and coordinate derivatives
 
 ```cpp
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 
-const litepgo::DeformationGradientField F_field(u_field, X_field);
-const litepgo::Field& field = F_field;
+const litepgo::DeformationGradientField3D F_field(u_field, X_field);
+const litepgo::Field3D& field = F_field;
 const Eigen::Matrix3d F = field.value(xi).reshaped(3, 3);
 const auto derivative = field.dvalue_dcoeffs(xi);
 ```
@@ -116,7 +145,7 @@ $$
 =\left(\frac{\partial X}{\partial\xi}\right)^{-1}.
 $$
 
-`Field` assigns no geometric meaning to its values or derivatives. `DeformationGradientField` requests `X_field.dvalue_dxi(xi)`, checks three components, a finite 3-by-3 derivative and a finite positive determinant, then computes and validates the inverse. The element lambda requests the same derivative and validates its shape, finiteness and positive finite determinant for volume weights; the weighting step does not need an inverse. Neither query needs `X_field.value(xi)`. `coordinate_field()` exposes the coordinate field borrowed by the deformation field.
+`Field3D` assigns no geometric meaning to its values or derivatives. `DeformationGradientField3D` requests `X_field.dvalue_dxi(xi)`, checks three components, a finite 3-by-3 derivative and a finite positive determinant, then computes and validates the inverse. The element lambda requests the same derivative and validates its shape, finiteness and positive finite determinant for volume weights; the weighting step does not need an inverse. Neither query needs `X_field.value(xi)`. `coordinate_field()` exposes the coordinate field borrowed by the deformation field.
 
 $$
 F=I+u_{,\xi}X_{,\xi}^{-1},\qquad
@@ -156,9 +185,9 @@ const auto evaluate_element =
     [X_fields, Fp_field, theta_field](int e, const Eigen::MatrixXd& x_local,
                                     Eigen::VectorXd* g, Eigen::MatrixXd* H) {
         const auto& X_field = X_fields[static_cast<std::size_t>(e)];
-        const litepgo::InterpolatedField<litepgo::HexQ1Basis> u_field(x_local);
-        const litepgo::DeformationGradientField deformation(u_field, X_field);
-        const litepgo::MaterialLocalEnergyF<litepgo::NeoHookean> local_energy(
+        const litepgo::InterpolatedField3D<litepgo::HexQ1Basis> u_field(x_local);
+        const litepgo::DeformationGradientField3D deformation(u_field, X_field);
+        const litepgo::MaterialLocalEnergyF3D<litepgo::NeoHookean> local_energy(
             deformation, Fp_field, theta_field);
         if (g)
             g->setZero(local_energy.num_dofs());
@@ -183,15 +212,15 @@ const auto evaluate_element =
 
 `GaussLegendre3D<PointsPerAxis>` uses `PointsPerAxis^3` integration points on `[0,1]^3`; `<2>` therefore uses eight points.
 
-`MaterialLocalEnergyF<Material>`, `MaterialLocalEnergyFp<Material>`, and `MaterialLocalEnergyTheta<Material>` select the active input by their class name. Each constructor accepts `(F_field, Fp_field, theta_field)` as three `const Field&` inputs. The abstract `MaterialLocalEnergy<Material>` base shares input validation, density evaluation and coefficient pullbacks; each concrete class chooses its active field and calls the matching material gradient and Hessian. There is no runtime activity enum. A material only needs to implement `value` and the derivative pair used by the selected class.
+`MaterialLocalEnergyF3D<Material>`, `MaterialLocalEnergyFp3D<Material>`, and `MaterialLocalEnergyTheta3D<Material>` select the active input by their class name. Each constructor accepts `(F_field, Fp_field, theta_field)` as three `const Field3D&` inputs. The abstract `MaterialLocalEnergy3D<Material>` base shares input validation, density evaluation and coefficient pullbacks; each concrete class chooses its active field and calls the matching material gradient and Hessian. There is no runtime activity enum. A material only needs to implement `value` and the derivative pair used by the selected class.
 
-All three input fields must outlive the energy, and temporary input fields are rejected. A copied energy borrows the same fields, so subsequent field updates are visible. A composed `F` field activates displacement coefficients; direct `F` or `Fp` coefficients can use a nine-component `IdentityField`. Non-positive active DOF counts are rejected at construction.
+All three input fields must outlive the energy, and temporary input fields are rejected. A copied energy borrows the same fields, so subsequent field updates are visible. A composed `F` field activates displacement coefficients; direct `F` or `Fp` coefficients can use a nine-component `IdentityField3D`. Non-positive active DOF counts are rejected at construction.
 
-`LocalEnergy::value(xi)`, `gradient(xi)`, and `hessian(xi)` return pointwise density `W` and coefficient derivatives. `accumulate(xi, weight, ...)` receives a complete weight from its caller and adds weighted values and requested derivatives to initialized buffers. It performs no geometry evaluation. The material implementation samples each input once and computes the active coefficient derivative once per accumulation, sharing it between gradient and Hessian. Inactive derivatives and unrequested material derivatives are not evaluated.
+`LocalEnergy3D::value(xi)`, `gradient(xi)`, and `hessian(xi)` return pointwise density `W` and coefficient derivatives. `accumulate(xi, weight, ...)` receives a complete weight from its caller and adds weighted values and requested derivatives to initialized buffers. It performs no geometry evaluation. The material implementation samples each input once and computes the active coefficient derivative once per accumulation, sharing it between gradient and Hessian. Inactive derivatives and unrequested material derivatives are not evaluated.
 
 The element lambda owns the geometric weighting step: at each quadrature point it validates `X_field.dvalue_dxi(xi)`, computes `weight = w_q * det(dX_dxi)`, and passes that weight to the accumulator exactly once. Computing this weight requires neither coordinate position values nor an inverse. Geometry, material fields, and quadrature must refer to the same element and parameter domain; in particular, use the same coordinates as any composed deformation field. Geometry is fixed when taking coefficient derivatives.
 
-The element lambda initializes each requested output to zero, traverses `q`, and sums the weighted contributions in one pass. Gradient and Hessian pointers are independently nullable; each evaluation overwrites the requested outputs. `accumulate` adds to those buffers without resizing them, so callers must initialize their dimensions and keep them separate from energy data. The examples use fixed quadrature rules with finite points and weights, validate geometry at every evaluated point, and reject non-finite volume weights. Field and local-energy evaluation retain coefficient, derivative-shape, and finite-map checks. The Hex Hermite callback integrates in reference coefficients before applying its physical-DOF transform.
+The element lambda initializes each requested output to zero, traverses `q`, and sums the weighted contributions in one pass. Gradient and Hessian pointers are independently nullable; each evaluation overwrites the requested outputs. `accumulate` adds to those buffers without resizing them, so callers must initialize their dimensions and keep them separate from energy data. The examples use fixed quadrature rules with finite points and weights, validate geometry at every evaluated point, and reject non-finite volume weights. Field3D and local-energy evaluation retain coefficient, derivative-shape, and finite-map checks. The Hex Hermite callback integrates in reference coefficients before applying its physical-DOF transform.
 
 For an affine active map `D`, pointwise pullbacks are
 
@@ -211,7 +240,7 @@ Names distinguish pointwise `dW_du_local`, `d2W_du_local2` from integrated `dE_d
 const auto S = litepgo::hex_hermite_dof_transform(X_nodes); // Once per fixed rest element.
 const Eigen::VectorXd u_local_flat = S * u_physical_local.reshaped<Eigen::RowMajor>();
 const Eigen::MatrixXd u_local = u_local_flat.reshaped<Eigen::RowMajor>(64, 3);
-const auto u_field = litepgo::InterpolatedField<litepgo::HexHermiteBasis>(u_local);
+const auto u_field = litepgo::InterpolatedField3D<litepgo::HexHermiteBasis>(u_local);
 ```
 
 `S` is an owning 192-by-192 Eigen diagonal matrix storing only 192 scalars. Its eight slot factors are `1, hx, hy, hz, hx*hy, hx*hz, hy*hz, hx*hy*hz`, repeated over three components at each vertex. For example, `u_xi = hx*u_X`. This coefficient conversion precedes field construction; `dxi_dX` subsequently converts spatial gradients during deformation evaluation.
@@ -234,26 +263,26 @@ Here `xi_v` is the reference corner of vertex `v` on `[0,1]^3`. The transform ch
 
 ## C++ migration
 
-These are source-breaking changes; old headers and compatibility aliases are not retained.
+Use explicit `2D` / `3D` names for dimension-specific types. The dimensionless names and implicit 3D default have been removed; the older header and API migration is listed below.
 
 | Previous API/header | Replacement |
 | --- | --- |
 | `fem/geometry/interpolation.hpp` or `fem/interpolation/interpolation.hpp` | `fem/field/interpolated_field.hpp` |
-| `Interpolation`, `InterpolatedValueField` | `InterpolatedField` |
+| `Interpolation`, `InterpolatedValueField` | `InterpolatedField2D` / `InterpolatedField3D` |
 | `fem/geometry/rest.hpp` or `fem/interpolation/rest_point.hpp` | `fem/field/field.hpp` |
 | `rest_point(X_field, xi)`, `RestPointData` | `X_field.value(xi)` and `X_field.dvalue_dxi(xi)`; geometric consumers validate and invert the derivative as needed |
 | `fem/interpolation/hex_hermite_dof_transform.hpp` | `fem/field/hex_hermite_dof_transform.hpp` |
-| `DeformationGradient` and its sample interface | `DeformationGradientField(u_field, X_field)` with named, longer-lived inputs |
+| `DeformationGradient` and its sample interface | `DeformationGradientField3D(u_field, X_field)` with named, longer-lived inputs |
 | `field.value(point)` | `field.value(xi)`; composed deformation fields return nine components |
 | `dvalue_dx_local(xi)`, `dgrad_xi_dx_local(xi)` | `dvalue_dcoeffs(xi)`, `dgrad_xi_dcoeffs(xi)` |
 | `field.jacobian(point)` / `dF_dx_local` | `field.dvalue_dcoeffs(xi)` |
-| `MaterialLocalEnergy<Material>(F, Fp, theta, active)` or `make_material_local_energy<Material, Active>` | `MaterialLocalEnergyF/Fp/Theta<Material>(F, Fp, theta)` with named `Field` inputs |
+| `MaterialLocalEnergy3D<Material>(F, Fp, theta, active)` or `make_material_local_energy<Material, Active>` | `MaterialLocalEnergyF3D`, `MaterialLocalEnergyFp3D`, or `MaterialLocalEnergyTheta3D`, with named `Field3D` inputs |
 | Volume integration helper | Quadrature loop inside the element lambda, passing `w_q * det(dX_dxi)` to `local_energy.accumulate` |
 | `Basis::Sample::values`, `gradients` | `N`, `dN_dxi` |
-| `RestPointData::position`, `jacobian`, `inverse_jacobian`, `jacobian_determinant` | Field values, coordinate Jacobians, their inverses, and their determinants |
+| `RestPointData::position`, `jacobian`, `inverse_jacobian`, `jacobian_determinant` | Field3D values, coordinate Jacobians, their inverses, and their determinants |
 | Material `gradient_F`, `hessian_F` and corresponding `Fp`/`theta` names | `dW_dF`, `d2W_dF2` and corresponding names |
 
-Custom material inputs inherit `Field` and implement the value and affine coefficient protocol above. Local energies borrow their three input fields; composed deformation fields in turn borrow displacement and coordinate fields. All referenced objects must remain alive during evaluation. Scope remains one active affine coefficient block with fixed rest geometry; coordinate optimization, mixed active-block Hessians, second spatial basis derivatives, and `dF_dxi` are not implemented.
+Custom solid-material inputs inherit `Field3D` and implement the value and affine coefficient protocol above. Material local energies borrow their three input fields; composed deformation fields in turn borrow displacement and coordinate fields. All referenced objects must remain alive during evaluation. Scope remains one active affine coefficient block with fixed rest geometry; coordinate optimization, mixed active-block Hessians, and `dF_dxi` are not implemented.
 
 ## Examples and validation
 

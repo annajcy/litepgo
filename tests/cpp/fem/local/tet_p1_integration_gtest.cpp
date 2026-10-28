@@ -19,7 +19,7 @@ namespace {
 using namespace litepgo;
 using namespace litepgo::test;
 
-const auto element_energy = [](const Field& X_field, const LocalEnergy& energy, Eigen::VectorXd* g = nullptr,
+const auto element_energy = [](const Field3D& X_field, const LocalEnergy3D& energy, Eigen::VectorXd* g = nullptr,
                                Eigen::MatrixXd* H = nullptr) {
     if (g)
         g->setZero(energy.num_dofs());
@@ -67,14 +67,14 @@ Coefficients coefficients() {
     return f;
 }
 
-auto fields(const Coefficients& f, const InterpolatedField<TetP1Basis>& X_field) {
-    return MaterialSources{OwnedDeformationField(InterpolatedField<TetP1Basis>(f.u), X_field),
-                           OwnedDeformationField(InterpolatedField<TetP1Basis>(f.up), X_field),
-                           InterpolatedField<TetP1Basis>(f.theta)};
+auto fields(const Coefficients& f, const InterpolatedField3D<TetP1Basis>& X_field) {
+    return MaterialSources{OwnedDeformationField(InterpolatedField3D<TetP1Basis>(f.u), X_field),
+                           OwnedDeformationField(InterpolatedField3D<TetP1Basis>(f.up), X_field),
+                           InterpolatedField3D<TetP1Basis>(f.theta)};
 }
 
 template <class Member, class BindEnergy> void check_fd(Member member, BindEnergy bind_energy) {
-    const InterpolatedField<TetP1Basis> X_field(coordinates());
+    const InterpolatedField3D<TetP1Basis> X_field(coordinates());
     const auto f = coefficients();
     const auto evaluate = [&](const Coefficients& current, Eigen::VectorXd* g = nullptr, Eigen::MatrixXd* H = nullptr) {
         return element_energy(X_field, bind_energy(fields(current, X_field)), g, H);
@@ -108,7 +108,7 @@ template <class Member, class BindEnergy> void check_fd(Member member, BindEnerg
 TEST(TetP1Integration, MatchesDirectGeometryAndDeformationGradient) {
     const auto X_nodes = coordinates();
     const Eigen::Matrix3d Dm = edge_matrix(X_nodes);
-    const InterpolatedField<TetP1Basis> X_field(X_nodes);
+    const InterpolatedField3D<TetP1Basis> X_field(X_nodes);
     const auto f = coefficients();
     const auto local_fields = fields(f, X_field);
     const Eigen::Matrix3d F = Eigen::Matrix3d::Identity() + edge_matrix(f.u) * Dm.inverse();
@@ -127,10 +127,11 @@ TEST(TetP1Integration, MatchesDirectGeometryAndDeformationGradient) {
     const double expected = Dm.determinant() / 6 * NeoHookean::value({F, Fp, f.theta.colwise().mean().transpose()});
     Eigen::VectorXd g;
     Eigen::MatrixXd H;
-    EXPECT_NEAR(element_energy(X_field, bind_energy<MaterialLocalEnergyF<NeoHookean>>(local_fields), &g, &H), expected,
+    EXPECT_NEAR(element_energy(X_field, bind_energy<MaterialLocalEnergyF3D<NeoHookean>>(local_fields), &g, &H),
+                expected, 1e-13);
+    EXPECT_NEAR(element_energy(X_field, bind_energy<MaterialLocalEnergyFp3D<NeoHookean>>(local_fields)), expected,
                 1e-13);
-    EXPECT_NEAR(element_energy(X_field, bind_energy<MaterialLocalEnergyFp<NeoHookean>>(local_fields)), expected, 1e-13);
-    EXPECT_NEAR(element_energy(X_field, bind_energy<MaterialLocalEnergyTheta<NeoHookean>>(local_fields)), expected,
+    EXPECT_NEAR(element_energy(X_field, bind_energy<MaterialLocalEnergyTheta3D<NeoHookean>>(local_fields)), expected,
                 1e-13);
     for (int c = 0; c < 3; ++c) {
         Eigen::VectorXd translation = Eigen::VectorXd::Zero(12);
@@ -144,16 +145,16 @@ TEST(TetP1Integration, MatchesDirectGeometryAndDeformationGradient) {
 TEST(TetP1Integration, LocalDofFiniteDifferencesForAllThreeFields) {
     {
         SCOPED_TRACE("F");
-        check_fd(&Coefficients::u, [](const auto& f) { return bind_energy<MaterialLocalEnergyF<NeoHookean>>(f); });
+        check_fd(&Coefficients::u, [](const auto& f) { return bind_energy<MaterialLocalEnergyF3D<NeoHookean>>(f); });
     }
     {
         SCOPED_TRACE("Fp");
-        check_fd(&Coefficients::up, [](const auto& f) { return bind_energy<MaterialLocalEnergyFp<NeoHookean>>(f); });
+        check_fd(&Coefficients::up, [](const auto& f) { return bind_energy<MaterialLocalEnergyFp3D<NeoHookean>>(f); });
     }
     {
         SCOPED_TRACE("theta");
         check_fd(&Coefficients::theta,
-                 [](const auto& f) { return bind_energy<MaterialLocalEnergyTheta<NeoHookean>>(f); });
+                 [](const auto& f) { return bind_energy<MaterialLocalEnergyTheta3D<NeoHookean>>(f); });
     }
 }
 
@@ -164,9 +165,9 @@ TEST(TetP1Integration, RejectsDegenerateAndNegativelyOrientedRestGeometry) {
             X_nodes.row(3) = X_nodes.row(0);
         else
             X_nodes.row(1).swap(X_nodes.row(2));
-        const InterpolatedField<TetP1Basis> X_field(X_nodes);
+        const InterpolatedField3D<TetP1Basis> X_field(X_nodes);
         EXPECT_THROW(
-            element_energy(X_field, bind_energy<MaterialLocalEnergyF<NeoHookean>>(fields(coefficients(), X_field))),
+            element_energy(X_field, bind_energy<MaterialLocalEnergyF3D<NeoHookean>>(fields(coefficients(), X_field))),
             std::invalid_argument);
     }
 }

@@ -10,9 +10,9 @@ using namespace litepgo;
 template <class T>
 constexpr bool has_legacy_geometry_api = requires(const T& field, const Eigen::Vector3d& xi) { field.dX_dxi(xi); } ||
                                          requires(const T& field, const Eigen::Vector3d& xi) { field.dxi_dX(xi); };
-static_assert(!has_legacy_geometry_api<Field>);
+static_assert(!has_legacy_geometry_api<Field3D>);
 
-class CoefficientOnlyField final : public Field {
+class CoefficientOnlyField final : public Field3D {
   public:
     int num_components() const override {
         return 2;
@@ -28,21 +28,23 @@ class CoefficientOnlyField final : public Field {
     }
 };
 
-TEST(Field, UnsupportedSpatialDerivativesThrowThroughBaseReference) {
-    static_assert(std::is_abstract_v<Field>);
-    static_assert(std::has_virtual_destructor_v<Field>);
+TEST(Field3D, UnsupportedSpatialDerivativesThrowThroughBaseReference) {
+    static_assert(std::is_abstract_v<Field3D>);
+    static_assert(std::has_virtual_destructor_v<Field3D>);
     const CoefficientOnlyField concrete;
-    const Field& field = concrete;
+    const Field3D& field = concrete;
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
     EXPECT_EQ(field.value(xi), Eigen::Vector2d(2, 3));
     EXPECT_TRUE(field.dvalue_dcoeffs(xi).isIdentity());
     EXPECT_THROW(field.dvalue_dxi(xi), std::logic_error);
     EXPECT_THROW(field.dgrad_xi_dcoeffs(xi), std::logic_error);
+    EXPECT_THROW(field.d2value_dxi2(xi), std::logic_error);
+    EXPECT_THROW(field.dhess_xi_dcoeffs(xi), std::logic_error);
 }
 
-TEST(Field, IdentityFieldDispatchesValuesAndDerivativesThroughBaseReference) {
-    const IdentityField concrete(Eigen::Matrix3d::Identity().reshaped());
-    const Field& field = concrete;
+TEST(Field3D, IdentityFieldDispatchesValuesAndDerivativesThroughBaseReference) {
+    const IdentityField3D concrete(Eigen::Matrix3d::Identity().reshaped());
+    const Field3D& field = concrete;
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
     EXPECT_EQ(field.num_components(), 9);
     EXPECT_EQ(field.num_dofs(), 9);

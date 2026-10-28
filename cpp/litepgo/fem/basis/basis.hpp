@@ -29,6 +29,17 @@ template <class B>
 concept Basis1D = Basis<B, 1>;
 
 template <class B>
+concept Basis2D = Basis<B, 2>;
+
+template <class B>
 concept Basis3D = Basis<B, 3>;
+
+// Optional packed second derivatives, in upper-triangle row order.
+template <class B, int Dim>
+concept SecondOrderBasis = Basis<B, Dim> && requires(const typename B::Sample& basis_sample) {
+    {
+        (basis_sample.d2N_dxi2)
+    } -> std::same_as<const Eigen::Matrix<double, B::num_basis_functions, Dim * (Dim + 1) / 2>&>;
+};
 
 } // namespace litepgo

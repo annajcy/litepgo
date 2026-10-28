@@ -10,6 +10,7 @@ add_library(litepgo STATIC
     fem/material/neo_hookean.cpp
     fem/local/dof_derivatives.cpp
     fem/local/local_energy.cpp
+    fem/basis/2d/quad_hermite_basis.cpp
     fem/basis/3d/hex_q1_basis.cpp
     fem/basis/3d/hex_hermite_basis.cpp
     fem/basis/3d/tet_p1_basis.cpp

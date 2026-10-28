@@ -22,6 +22,9 @@ template <class Q>
 concept Quadrature1D = Quadrature<Q, 1>;
 
 template <class Q>
+concept Quadrature2D = Quadrature<Q, 2>;
+
+template <class Q>
 concept Quadrature3D = Quadrature<Q, 3>;
 
 } // namespace litepgo

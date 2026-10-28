@@ -64,6 +64,7 @@ class MeshTopology final {
 };
 
 using TriangleTopology = MeshTopology<3>;
+using QuadTopology = MeshTopology<4>;
 using TetTopology = MeshTopology<4>;
 using HexTopology = MeshTopology<8>;
 

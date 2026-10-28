@@ -7,7 +7,7 @@
 namespace {
 using namespace litepgo;
 
-struct ValueOnly : LocalEnergy {
+struct ValueOnly : LocalEnergy3D {
     Eigen::Vector3d coefficients{0.2, -0.4, 0.6};
     int num_dofs() const override {
         return 3;
@@ -41,7 +41,7 @@ struct FullEnergy : FirstOnly {
     }
 };
 
-TEST(LocalEnergy, DerivativeCapabilitiesAreIndependent) {
+TEST(LocalEnergy3D, DerivativeCapabilitiesAreIndependent) {
     ValueOnly value;
     FirstOnly first;
     SecondOnly second;
@@ -59,7 +59,7 @@ TEST(LocalEnergy, DerivativeCapabilitiesAreIndependent) {
     EXPECT_THROW(value.hessian(point), std::logic_error);
 }
 
-TEST(LocalEnergy, DefaultAccumulationAddsWeightedValuesAndChecksRequests) {
+TEST(LocalEnergy3D, DefaultAccumulationAddsWeightedValuesAndChecksRequests) {
     const FullEnergy full;
     const Eigen::Vector3d point(0.2, 0.3, 0.4);
     Eigen::VectorXd g = Eigen::Vector3d::Constant(3);

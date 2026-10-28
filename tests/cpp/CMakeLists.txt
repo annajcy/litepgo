@@ -17,6 +17,8 @@ add_executable(litepgo_tests
     energy/weighted_energy_sum_gtest.cpp
     fem/basis/basis_gtest.cpp
     fem/basis/1d/cubic_hermite_basis_gtest.cpp
+    fem/basis/2d/tensor_product_basis_2d_gtest.cpp
+    fem/basis/2d/quad_hermite_basis_gtest.cpp
     dof/element_dof_map_gtest.cpp
     dof/constant_dof_map_gtest.cpp
     fem/field/field_gtest.cpp
@@ -28,6 +30,7 @@ add_executable(litepgo_tests
     fem/basis/3d/hex_hermite_basis_gtest.cpp
     fem/basis/3d/tet_p1_basis_gtest.cpp
     fem/field/interpolated_field_gtest.cpp
+    fem/field/interpolated_field_2d_gtest.cpp
     fem/field/hex_hermite_dof_transform_gtest.cpp
     fem/basis/1d/linear_lagrange_basis_gtest.cpp
     fem/local/local_energy_gtest.cpp
@@ -37,11 +40,13 @@ add_executable(litepgo_tests
     fem/material/neo_hookean_gtest.cpp
     fem/local/material_local_energy_gtest.cpp
     fem/quadrature/quadrature_gtest.cpp
+    fem/quadrature/2d/tensor_product_quadrature_2d_gtest.cpp
     fem/quadrature/3d/tet_centroid_quadrature_gtest.cpp
     fem/basis/3d/tensor_product_basis_3d_gtest.cpp
     fem/quadrature/3d/tensor_product_quadrature_3d_gtest.cpp
     dof/vertex_dof_map_gtest.cpp
     fem/local/volume_integration_gtest.cpp
+    fem/local/surface_integration_gtest.cpp
     fem/local/tet_p1_integration_gtest.cpp
     dof/dof_reduction_gtest.cpp
     linalg/reduced_matrix_gtest.cpp
