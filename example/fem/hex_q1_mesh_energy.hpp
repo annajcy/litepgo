@@ -29,35 +29,36 @@ inline MeshEnergy make_hex_q1_mesh_energy(const Vec& X_nodes) {
     const HexTopology topology(12, {{0, 1, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 2, 5, 10, 11, 6}});
     // Three displacement components per vertex; shared vertices reuse the same DOFs.
     const VertexDofMap map(topology, 3);
-    std::vector<InterpolatedField3D<HexQ1Basis>> reference_fields;
-    std::vector<VolumetricElement3D<GaussLegendre3D<2>>> elements;
-    for (int e = 0; e < map.num_elements(); ++e) {
-        const InterpolatedField3D<HexQ1Basis> X_field(map.gather(e, X_nodes));
-        elements.emplace_back(X_field);
-        reference_fields.push_back(X_field);
-    }
-    const auto reference_data = std::make_shared<const decltype(reference_fields)>(std::move(reference_fields));
-    const auto element_data = std::make_shared<const decltype(elements)>(std::move(elements));
+    struct ReferenceData {
+        InterpolatedField3D<HexQ1Basis> X;
+        VolumetricElement3D<GaussLegendre3D<2>> integration;
+        explicit ReferenceData(Eigen::MatrixXd X_local) : X(std::move(X_local)), integration(X) {}
+    };
+    std::vector<ReferenceData> reference;
+    reference.reserve(map.num_elements());
+    for (int e = 0; e < map.num_elements(); ++e)
+        reference.emplace_back(map.gather(e, X_nodes));
+    const auto reference_data = std::make_shared<const decltype(reference)>(std::move(reference));
     const IdentityField3D Fp_field(Eigen::Matrix3d::Identity().reshaped());
     const IdentityField3D theta_field(Eigen::Vector2d(2, 3));
     return MeshEnergy(
         map,
-        [element_data, reference_data, Fp_field, theta_field](int e, const Eigen::MatrixXd& u_local, Vec* gradient,
-                                                              Eigen::MatrixXd* hessian) {
-            const auto& element = (*element_data)[static_cast<std::size_t>(e)];
+        [reference_data, Fp_field, theta_field](int e, const Eigen::MatrixXd& u_local, Vec* gradient,
+                                                Eigen::MatrixXd* hessian) {
+            const auto& r = (*reference_data)[static_cast<std::size_t>(e)];
             const InterpolatedField3D<HexQ1Basis> displacement(u_local);
-            const DeformationGradientField3D deformation(displacement, (*reference_data)[static_cast<std::size_t>(e)]);
+            const DeformationGradientField3D deformation(displacement, r.X);
             const VolumetricMaterialLocalEnergyF3D<NeoHookean> local_energy(deformation, Fp_field, theta_field);
-            return element.eval(local_energy, gradient, hessian);
+            return r.integration.eval(local_energy, gradient, hessian);
         },
-        [element_data, reference_data, Fp_field, theta_field](int e, const Eigen::MatrixXd& u_local,
-                                                              const Eigen::MatrixXd& du_local) {
-            const auto& element = (*element_data)[static_cast<std::size_t>(e)];
+        [reference_data, Fp_field, theta_field](int e, const Eigen::MatrixXd& u_local,
+                                                const Eigen::MatrixXd& du_local) {
+            const auto& r = (*reference_data)[static_cast<std::size_t>(e)];
             const InterpolatedField3D<HexQ1Basis> displacement(u_local);
-            const DeformationGradientField3D deformation(displacement, (*reference_data)[static_cast<std::size_t>(e)]);
+            const DeformationGradientField3D deformation(displacement, r.X);
             const VolumetricMaterialLocalEnergyF3D<NeoHookean> local_energy(deformation, Fp_field, theta_field);
             const Vec delta_coeffs = du_local.reshaped<Eigen::RowMajor>();
-            return element.max_feasible_step(local_energy, delta_coeffs);
+            return r.integration.max_feasible_step(local_energy, delta_coeffs);
         });
 }
 

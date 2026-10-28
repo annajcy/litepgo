@@ -23,9 +23,9 @@ flowchart TD
 | `fem/basis/` | Scalar basis values `N`, reference derivatives `dN_dxi`, and `d2N_dxi2`, grouped into `1d/`, `2d/`, and `3d/` |
 | `fem/quadrature/` | Reference points and weights, grouped into `1d/`, `2d/`, and `3d/` |
 | `fem/field/` | `Field2D/3D`, `InterpolatedField2D/3D`, `IdentityField2D/3D`, and deformation-gradient fields |
-| `fem/kinematics/` | Triangle mid-edge forms, reference geometry caching, quadrature integration of supplied local energies, determinant bounds, and the Hex Hermite coefficient transform |
+| `fem/kinematics/` | Triangle mid-edge forms and reference data, reference geometry caching, quadrature integration of supplied local energies, determinant bounds, and the Hex Hermite coefficient transform |
 | `fem/material/volumetric/` | Volumetric inputs, multiplicative kinematics, Neo-Hookean material, and the `VolumetricMaterialLocalEnergy3D` family |
-| `fem/material/shell/` | Shell inputs, Koiter StVK material, `ShellMaterialLocalEnergy2D`, and fixed triangle mid-edge reference data |
+| `fem/material/shell/` | Shell inputs, Koiter StVK material, `ShellMaterialLocalEnergy2D` |
 | `fem/local/` | Shared `LocalEnergy2D/3D` interfaces and derivative contractions |
 
 The 1D basis building blocks are `LinearLagrangeBasis` and `CubicHermiteBasis`. Tensor-product types use `2D` or `3D` suffixes, mirrored as `_2d` or `_3d` in their filenames.
@@ -211,7 +211,8 @@ argument is the quadrature rule; it has no basis or material dependency.
 Construction takes a `const Field3D& X_field` and snapshots each quadrature point's
 `xi` and `w_dV = w_q * det(dX_dxi)`. It queries the
 reference Jacobian exactly once per point and rejects malformed quadrature or
-reference geometry. Changing rest geometry requires rebuilding the element.
+reference geometry. The fixed-size cache uses `std::array<Point, Q::num_points>`.
+Changing rest geometry requires rebuilding the element.
 
 The deformation field borrows `u_field` and `X_field` and evaluates the reference
 Jacobian through the existing Field API. Its inverse is not cached by the element.
@@ -250,6 +251,8 @@ evaluation and step callbacks. Each callback binds the current displacement,
 deformation field, and material local energy. MeshEnergy still handles
 gathering, projection, and global assembly. Element const methods use call-local
 scratch and may run concurrently when the supplied local energy supports it.
+
+Each volumetric example groups its coordinate field, integration data, and (for Hermite) DOF transform in a local `ReferenceData` struct. Evaluation and step callbacks share one immutable vector.
 
 `GaussLegendre3D<PointsPerAxis>` uses `PointsPerAxis^3` integration points on `[0,1]^3`; `<2>` therefore uses eight points.
 
@@ -492,7 +495,7 @@ ctest --preset debug --output-on-failure
 
 Hex Q1 uses two boxes with widths 1 and 2 sharing nodal displacement DOFs and integrates with `GaussLegendre3D<2>`. Tet P1 uses two tetrahedra with volumes 1/6 and 1/3 and `TetCentroidQuadrature`. Hex Hermite uses two boxes of sizes (1,2,3) and (2,2,3), sharing all physical derivative DOFs at their common face, and `GaussLegendre3D<4>`.
 
-The shell StVK example is implemented in `shell_stvk_mesh_energy.hpp` and `shell_stvk_mesh_energy.cpp`. It uses six vertices and four triangles `{0,1,2}`, `{2,1,3}`, `{0,2,4}`, `{1,0,5}`, with reference areas `1,2,1/2,2`. Setup builds edge-neighbor stencils, a three-DOF-per-vertex `StencilDofMap`, and fixed `TriangleMidEdgeRestData`. Each face callback integrates `ShellMaterialLocalEnergy2D<KoiterStVK>` with `TriangleCentroidQuadrature`. Thickness is `0.1`; `Y=100` and `nu=0.3` are converted to plane-stress Lamé parameters.
+The shell StVK example is implemented in `shell_stvk_mesh_energy.hpp` and `shell_stvk_mesh_energy.cpp`. It uses six vertices and four triangles `{0,1,2}`, `{2,1,3}`, `{0,2,4}`, `{1,0,5}`, with reference areas `1,2,1/2,2`. Setup builds edge-neighbor stencils, a three-DOF-per-vertex `StencilDofMap`, and fixed `TriangleMidEdgeRestData`. This reference-data type is declared in `fem/kinematics/triangle_mid_edge_kinematics.hpp` and has no material dependency. Evaluation and step callbacks share one immutable reference-data vector. Each face callback integrates `ShellMaterialLocalEnergy2D<KoiterStVK>` with `TriangleCentroidQuadrature`. Thickness is `0.1`; `Y=100` and `nu=0.3` are converted to plane-stress Lamé parameters.
 
 All four executables follow the same flow: construct fixed reference coordinates, set a uniform stretch, assemble energy/gradient/Hessian, verify the zero and analytical energies, and print one line containing `E`, `|g|`, and `H nnz`. For the shell, `u=0.1*X` gives `a=1.21*a_bar` and `b=b_bar=0`; density is constant across the patch, whose total reference area is `5.5`. Its callback validates the starting material state and delegates feasible-step bounds to the kinematics helper.
 

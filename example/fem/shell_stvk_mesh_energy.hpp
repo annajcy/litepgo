@@ -7,7 +7,9 @@
 #include "litepgo/fem/quadrature/2d/triangle_centroid_quadrature.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 
+#include <memory>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace litepgo::example {
@@ -32,13 +34,15 @@ inline MeshEnergy make_shell_stvk_mesh_energy(const Vec& X_nodes) {
     for (int f = 0; f < map.num_elements(); ++f)
         rest.emplace_back(map.gather(f, X_nodes), stencils.opposite[static_cast<std::size_t>(f)]);
 
+    const auto reference_data = std::make_shared<const decltype(rest)>(std::move(rest));
+
     const double thickness = 0.1, Y = 100, nu = 0.3;
     // Plane-stress Lame parameters for a shell.
     const Eigen::Vector2d theta(Y * nu / (1 - nu * nu), Y / (2 * (1 + nu)));
     return MeshEnergy(
         map,
-        [rest, thickness, theta](int f, const Eigen::MatrixXd& u_local, Vec* g, Eigen::MatrixXd* H) {
-            const auto& r = rest[static_cast<std::size_t>(f)];
+        [reference_data, thickness, theta](int f, const Eigen::MatrixXd& u_local, Vec* g, Eigen::MatrixXd* H) {
+            const auto& r = (*reference_data)[static_cast<std::size_t>(f)];
             const ShellMaterialLocalEnergy2D<KoiterStVK> local_energy(r, u_local, thickness, theta);
             if (g)
                 g->setZero(local_energy.num_dofs());
@@ -53,8 +57,8 @@ inline MeshEnergy make_shell_stvk_mesh_energy(const Vec& X_nodes) {
             }
             return E_face;
         },
-        [rest, thickness, theta](int f, const Eigen::MatrixXd& u_local, const Eigen::MatrixXd& du_local) {
-            const auto& r = rest[static_cast<std::size_t>(f)];
+        [reference_data, thickness, theta](int f, const Eigen::MatrixXd& u_local, const Eigen::MatrixXd& du_local) {
+            const auto& r = (*reference_data)[static_cast<std::size_t>(f)];
             // Validate the complete starting material state as well as the geometry.
             const ShellMaterialLocalEnergy2D<KoiterStVK> local_energy(r, u_local, thickness, theta);
             local_energy.eval_value(Eigen::Vector2d::Constant(1.0 / 3));
