@@ -1,5 +1,6 @@
 add_library(litepgo STATIC
     dof/assembler.cpp
+    mesh/triangle_mid_edge_stencils.cpp
     energy/mesh_energy.cpp
     energy/affine_mapped_energy.cpp
     energy/dynamic_pattern_energy.cpp

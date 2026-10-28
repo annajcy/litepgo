@@ -263,6 +263,26 @@ $$
 
 Names distinguish pointwise `dW_du_local`, `d2W_du_local2` from integrated `dE_du_local`, `d2E_du_local2`. `dW_dtheta` and `dW_dtheta_local` have different denominators. The generic `MeshEnergy` boundary returns `dE_dx_local` and `d2E_dx_local2` for exactly the gathered unknowns.
 
+## Triangle mid-edge stencil DOFs
+
+`StencilDofMap` accepts ordered, variable-length vertex lists and a DOF width per vertex. It owns those lists, rejects repeated or invalid vertex IDs, and gathers a matrix with one row per stencil vertex. Scalar indices follow `width*global_vertex+slot`; flatten the local matrix by row for gradients and Hessians. Empty stencils and unused global vertices are supported.
+
+```cpp
+#include "litepgo/dof/stencil_dof_map.hpp"
+#include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
+
+const auto stencils = litepgo::make_triangle_mid_edge_stencils(topology);
+const litepgo::StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
+const auto X_local = map.gather(f, X_nodes_packed); // fixed reference positions
+const auto u_local = map.gather(f, u);             // current displacements
+const Eigen::MatrixXd positions = X_local + u_local;
+const litepgo::InterpolatedField2D<litepgo::TriangleP1Basis> u_field(u_local.topRows(3));
+```
+
+For each triangle `f`, `stencils.vertices[f]` starts with its three vertices in connectivity order. Edge `k` joins local face vertices `(k+1)%3` and `(k+2)%3`. Opposite vertices across edges `0,1,2` are appended in that order, with shared opposite vertices included only once. A face therefore has 3 to 6 stencil vertices. `stencils.opposite[f][k]` is the neighbor's opposite vertex row in the gathered matrix; `-1` denotes a boundary edge and is never a global DOF. The builder rejects duplicate faces, inconsistent shared-edge directions, and edges with more than two incident faces. It does not choose a boundary curvature rule or validate geometry.
+
+Use `MeshEnergy(map, eval_face, step_face)` directly. Its callback receives the full stencil matrix, including neighbors, and returns only the central face's integrated energy. For `n` stencil vertices, requested outputs must overwrite all `3*n` gradient entries and the full `3*n`-by-`3*n` Hessian, including zero entries. `MeshEnergy` includes all stencil couplings in its fixed sparse pattern. Capture reference stencil positions and opposite-row metadata by value or through owned shared data. A shell callback must provide its own geometric feasibility step. Curvature reconstruction and Koiter energy remain separate from this DOF map.
+
 ## Hex Hermite physical DOFs
 
 `eval_hex_hermite_dof_transform` accepts an `8`-by-`3` matrix `X_nodes` containing one reference element's physical vertex coordinates, ordered as the corners of `HexHermiteBasis`. The example separately constructs a Q1 coordinate field for deformation evaluation. Displacement uses 64 reference coefficients per component. Each vertex supplies the physical slots `u, u_X, u_Y, u_Z, u_XY, u_XZ, u_YZ, u_XYZ`, each a three-vector. The gathered `u_physical_local` has shape 8-by-24; the field's `u_local` has shape 64-by-3.

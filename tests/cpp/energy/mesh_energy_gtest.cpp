@@ -1,6 +1,7 @@
 #include "../fem/local/test_material_sources.hpp"
 #include "litepgo/dof/constant_dof_map.hpp"
 #include "litepgo/dof/element_dof_map.hpp"
+#include "litepgo/dof/stencil_dof_map.hpp"
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/energy/mesh_energy.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
@@ -9,6 +10,7 @@
 #include "litepgo/fem/local/material_local_energy.hpp"
 #include "litepgo/fem/material/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
+#include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include <Eigen/LU>
 #include <atomic>
 #include <cmath>
@@ -179,6 +181,58 @@ TEST(MeshEnergy, OwnsPlanUsesCurrentXAndSupportsTriangleAndTet) {
     EXPECT_DOUBLE_EQ(triangle.max_feasible_step(x, x), 1);
     MeshEnergy tet(VertexDofMap(TetTopology(4, {{3, 1, 2, 0}}), 1), quadratic);
     check_fd(tet, Vec::LinSpaced(4, 0.1, 0.4));
+}
+
+TEST(MeshEnergy, StencilMapsAssembleNeighborCouplingsAndVariableLocalSizes) {
+    const TriangleTopology topology(10, {{4, 1, 5}, {5, 1, 3}, {4, 5, 0}, {1, 4, 2}, {6, 7, 8}});
+    const auto stencils = make_triangle_mid_edge_stencils(topology);
+    auto energy = [&] {
+        const StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
+        return MeshEnergy(map, [](int e, const Eigen::MatrixXd& local, Vec* g, Eigen::MatrixXd* h) {
+            const Vec q = local.reshaped<Eigen::RowMajor>();
+            if (g)
+                *g = Vec::Constant(q.size(), (e + 1) * q.sum()) + q.array().cube().matrix();
+            if (h) {
+                h->setConstant(q.size(), q.size(), e + 1);
+                h->diagonal().array() += 3 * q.array().square();
+            }
+            return 0.5 * (e + 1) * q.sum() * q.sum() + 0.25 * q.array().pow(4).sum();
+        });
+    }();
+    const Vec x = Vec::LinSpaced(energy.num_dofs(), 0.1, 0.9);
+    check_fd(energy, x);
+
+    Vec expected_g = Vec::Zero(x.size());
+    Eigen::MatrixXd expected_h = Eigen::MatrixXd::Zero(x.size(), x.size());
+    double expected_value = 0;
+    for (int e = 0; e < topology.num_cells(); ++e) {
+        const auto& vertices = stencils.vertices[static_cast<std::size_t>(e)];
+        double sum = 0, fourth_powers = 0;
+        for (int v : vertices)
+            for (int c = 0; c < 3; ++c) {
+                sum += x[3 * v + c];
+                fourth_powers += std::pow(x[3 * v + c], 4);
+            }
+        expected_value += 0.5 * (e + 1) * sum * sum + 0.25 * fourth_powers;
+        for (int v : vertices)
+            for (int c = 0; c < 3; ++c) {
+                const int i = 3 * v + c;
+                expected_g[i] += (e + 1) * sum + std::pow(x[i], 3);
+                expected_h(i, i) += 3 * x[i] * x[i];
+                for (int w : vertices)
+                    for (int d = 0; d < 3; ++d)
+                        expected_h(i, 3 * w + d) += e + 1;
+            }
+    }
+    EXPECT_NEAR(energy.eval_value(x), expected_value, 1e-12);
+    EXPECT_TRUE(energy.eval_gradient(x).isApprox(expected_g, 1e-13));
+    const Eigen::MatrixXd actual_h = energy.eval_hessian(x);
+    EXPECT_TRUE(actual_h.isApprox(expected_h, 1e-13));
+    // Vertices 3 and 0 share no triangle, but both support the central face's stencil.
+    EXPECT_DOUBLE_EQ(actual_h(3 * 3, 3 * 0 + 1), 1);
+    EXPECT_TRUE(actual_h.bottomRows(3).isZero());
+    EXPECT_TRUE(energy.eval_gradient(x).tail(3).isZero());
+    EXPECT_DOUBLE_EQ(energy.max_feasible_step(x, x), 1);
 }
 
 TEST(MeshEnergy, ProjectsEachLocalHessianBeforeScatter) {

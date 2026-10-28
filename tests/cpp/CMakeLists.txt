@@ -47,6 +47,7 @@ add_executable(litepgo_tests
     fem/basis/3d/tensor_product_basis_3d_gtest.cpp
     fem/quadrature/3d/tensor_product_quadrature_3d_gtest.cpp
     dof/vertex_dof_map_gtest.cpp
+    dof/stencil_dof_map_gtest.cpp
     fem/local/volume_integration_gtest.cpp
     fem/local/surface_integration_gtest.cpp
     fem/local/tet_p1_integration_gtest.cpp
@@ -55,6 +56,7 @@ add_executable(litepgo_tests
     linalg/sparse_pattern_gtest.cpp
     linalg/sparse_solver/sparse_solver_gtest.cpp
     mesh/mesh_topology_gtest.cpp
+    mesh/triangle_mid_edge_stencils_gtest.cpp
     solver/newton_gtest.cpp)
 target_link_libraries(litepgo_tests PRIVATE litepgo::litepgo litepgo::warnings GTest::gtest_main)
 
