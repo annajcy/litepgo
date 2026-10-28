@@ -139,6 +139,21 @@ using Q = litepgo::GaussLegendre2D<4>;       // 16 points on [0,1]^2
 
 For C1 continuity on aligned rectangular parameter charts, share derivatives with respect to the same chart coordinates. A cell with chart spans `(hs,ht)` converts the four vector slots to reference coefficients using scales `[1,hs,ht,hs*ht]`. A curved reference geometry also needs compatible smooth coordinate interpolation. General chart transitions require their own derivative transformations.
 
+Triangles use a nodal P1 basis on `xi >= 0, eta >= 0, xi+eta <= 1`, with reference vertices `(0,0), (1,0), (0,1)`:
+
+```cpp
+#include "litepgo/fem/basis/2d/triangle_p1_basis.hpp"
+#include "litepgo/fem/quadrature/2d/triangle_centroid_quadrature.hpp"
+
+// triangle_displacements is 3-by-3: one displacement vector per vertex.
+const litepgo::InterpolatedField2D<litepgo::TriangleP1Basis> u_field(triangle_displacements);
+using Q = litepgo::TriangleCentroidQuadrature;
+```
+
+`TriangleP1Basis` provides `N = (1-xi-eta, xi, eta)`, constant first derivatives, and zero second derivatives in columns `(11,12,22)`. It also supports scalar nodal fields with 3-by-1 coefficients. Reference positions and displacements can use separate fields with the same basis, keeping reference positions fixed while displacement coefficients change. Mid-edge curvature reconstruction requires a neighboring-face stencil and is separate from this basis.
+
+`TriangleCentroidQuadrature` samples `(1/3,1/3)` with weight `1/2`, including the reference triangle's area, and integrates polynomials through degree 1 exactly. Multiply that weight by `norm(X_xi.cross(X_eta))` for the physical reference-area weight; the result is the triangle's area, without another factor of `1/2`. The square rules `GaussLegendre2D` use a different reference domain.
+
 The element callback chooses the geometric measure. For a three-component surface coordinate field, its 3-by-2 derivative supplies reference area `norm(X_xi.cross(X_eta))`; pass this times the quadrature weight to `LocalEnergy2D::accumulate`. `MeshEnergy` and the DOF assembler already accept these elements. The deformation field `DeformationGradientField3D` and the material energies `MaterialLocalEnergyF3D`, `MaterialLocalEnergyFp3D`, and `MaterialLocalEnergyTheta3D` are 3D solid APIs. Koiter kinematics and energy are not part of this 2D foundation.
 
 Material input fields inherit `Field3D`. Only the selected active field needs usable coefficient derivatives and a positive DOF count; inactive fields may report zero DOFs and throw from unsupported derivatives. The active map must be affine in its coefficients. Custom affine parameter fields may have a coefficient count different from their number of output components.

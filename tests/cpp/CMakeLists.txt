@@ -19,6 +19,7 @@ add_executable(litepgo_tests
     fem/basis/1d/cubic_hermite_basis_gtest.cpp
     fem/basis/2d/tensor_product_basis_2d_gtest.cpp
     fem/basis/2d/quad_hermite_basis_gtest.cpp
+    fem/basis/2d/triangle_p1_basis_gtest.cpp
     dof/element_dof_map_gtest.cpp
     dof/constant_dof_map_gtest.cpp
     fem/field/field_gtest.cpp
@@ -41,6 +42,7 @@ add_executable(litepgo_tests
     fem/local/material_local_energy_gtest.cpp
     fem/quadrature/quadrature_gtest.cpp
     fem/quadrature/2d/tensor_product_quadrature_2d_gtest.cpp
+    fem/quadrature/2d/triangle_centroid_quadrature_gtest.cpp
     fem/quadrature/3d/tet_centroid_quadrature_gtest.cpp
     fem/basis/3d/tensor_product_basis_3d_gtest.cpp
     fem/quadrature/3d/tensor_product_quadrature_3d_gtest.cpp

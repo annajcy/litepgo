@@ -1,5 +1,6 @@
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/fem/basis/2d/quad_hermite_basis.hpp"
+#include "litepgo/fem/basis/2d/triangle_p1_basis.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
 
 #include <gtest/gtest.h>
@@ -19,14 +20,16 @@ static_assert(std::is_same_v<Field2D::Coordinate, Eigen::Vector2d>);
 static_assert(std::is_same_v<decltype(std::declval<const F&>().eval_dvalue_dxi(Eigen::Vector2d::Zero())),
                              Eigen::Matrix<double, Eigen::Dynamic, 2>>);
 
-template <int Components, int Storage> void check_derivatives() {
+template <class B, int Components, int Storage> void check_derivatives() {
+    using Interpolant = InterpolatedField2D<B>;
+    constexpr int n = B::num_basis_functions;
     SCOPED_TRACE(Components);
     SCOPED_TRACE(Storage);
-    Eigen::Matrix<double, 16, Components, Storage> coefficients;
-    for (int a = 0; a < 16; ++a)
+    Eigen::Matrix<double, n, Components, Storage> coefficients;
+    for (int a = 0; a < n; ++a)
         for (int c = 0; c < Components; ++c)
             coefficients(a, c) = std::sin(0.37 * (a * Components + c + 1));
-    const F concrete(coefficients);
+    const Interpolant concrete(coefficients);
     const Field2D& field = concrete;
     const Eigen::Vector2d xi(0.23, 0.61);
     const Eigen::VectorXd flattened = coefficients.template reshaped<Eigen::RowMajor>();
@@ -34,7 +37,7 @@ template <int Components, int Storage> void check_derivatives() {
     const auto G = field.eval_dgrad_xi_dcoeffs(xi);
     const auto H = field.eval_dhess_xi_dcoeffs(xi);
     EXPECT_EQ(field.num_components(), Components);
-    EXPECT_EQ(field.num_dofs(), 16 * Components);
+    EXPECT_EQ(field.num_dofs(), n * Components);
     EXPECT_EQ(G.rows(), 2 * Components);
     EXPECT_EQ(H.rows(), 3 * Components);
     EXPECT_EQ(H.cols(), field.num_dofs());
@@ -47,7 +50,7 @@ template <int Components, int Storage> void check_derivatives() {
         auto plus = coefficients, minus = coefficients;
         plus(j / Components, j % Components) += coefficient_step;
         minus(j / Components, j % Components) -= coefficient_step;
-        const F a(plus), b(minus);
+        const Interpolant a(plus), b(minus);
         const Eigen::VectorXd value_fd = (a.eval_value(xi) - b.eval_value(xi)) / (2 * coefficient_step);
         const Eigen::MatrixXd grad_fd = (a.eval_dvalue_dxi(xi) - b.eval_dvalue_dxi(xi)) / (2 * coefficient_step);
         const Eigen::MatrixXd hess_fd = (a.eval_d2value_dxi2(xi) - b.eval_d2value_dxi2(xi)) / (2 * coefficient_step);
@@ -73,11 +76,17 @@ template <int Components, int Storage> void check_derivatives() {
 }
 
 TEST(InterpolatedField2D, ValuesAndAllDerivativesUseRowOrderedCoefficientsAndColumnOrderedOutputs) {
-    check_derivatives<1, Eigen::ColMajor>();
-    check_derivatives<2, Eigen::ColMajor>();
-    check_derivatives<2, Eigen::RowMajor>();
-    check_derivatives<3, Eigen::ColMajor>();
-    check_derivatives<3, Eigen::RowMajor>();
+    check_derivatives<QuadHermiteBasis, 1, Eigen::ColMajor>();
+    check_derivatives<QuadHermiteBasis, 2, Eigen::ColMajor>();
+    check_derivatives<QuadHermiteBasis, 2, Eigen::RowMajor>();
+    check_derivatives<QuadHermiteBasis, 3, Eigen::ColMajor>();
+    check_derivatives<QuadHermiteBasis, 3, Eigen::RowMajor>();
+}
+
+TEST(InterpolatedField2D, TriangleP1SupportsScalarAndThreeComponentFieldsWithAllDerivatives) {
+    check_derivatives<TriangleP1Basis, 1, Eigen::ColMajor>();
+    check_derivatives<TriangleP1Basis, 3, Eigen::ColMajor>();
+    check_derivatives<TriangleP1Basis, 3, Eigen::RowMajor>();
 }
 
 template <int InvalidPart> struct InvalidBasis {
