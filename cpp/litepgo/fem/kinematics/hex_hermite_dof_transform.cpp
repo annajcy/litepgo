@@ -1,4 +1,4 @@
-#include "litepgo/fem/field/hex_hermite_dof_transform.hpp"
+#include "litepgo/fem/kinematics/hex_hermite_dof_transform.hpp"
 
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
 

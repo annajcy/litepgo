@@ -22,7 +22,8 @@ flowchart TD
 | --- | --- |
 | `fem/basis/` | Scalar basis values `N`, reference derivatives `dN_dxi`, and `d2N_dxi2`, grouped into `1d/`, `2d/`, and `3d/` |
 | `fem/quadrature/` | Reference points and weights, grouped into `1d/`, `2d/`, and `3d/` |
-| `fem/field/` | `Field2D/3D`, `InterpolatedField2D/3D`, `IdentityField2D/3D`, `DeformationGradientField3D`, and the Hex Hermite coefficient transform |
+| `fem/field/` | `Field2D/3D`, `InterpolatedField2D/3D`, `IdentityField2D/3D`, and `DeformationGradientField3D` |
+| `fem/kinematics/` | Triangle mid-edge fundamental forms and the Hex Hermite coefficient transform |
 | `fem/material/` | Numerical constitutive inputs, density, and material derivatives |
 | `fem/local/` | Pointwise local energies, active-input binding, and derivative contractions |
 
@@ -283,12 +284,44 @@ For each triangle `f`, `stencils.vertices[f]` starts with its three vertices in 
 
 Use `MeshEnergy(map, eval_face, step_face)` directly. Its callback receives the full stencil matrix, including neighbors, and returns only the central face's integrated energy. For `n` stencil vertices, requested outputs must overwrite all `3*n` gradient entries and the full `3*n`-by-`3*n` Hessian, including zero entries. `MeshEnergy` includes all stencil couplings in its fixed sparse pattern. Capture reference stencil positions and opposite-row metadata by value or through owned shared data. A shell callback must provide its own geometric feasibility step. Curvature reconstruction and Koiter energy remain separate from this DOF map.
 
+## Triangle mid-edge kinematics
+
+The numerical function `eval_triangle_mid_edge_kinematics` accepts a gathered position stencil and its opposite-row metadata. It returns two 2-by-2 matrices, `a` and `b`, without a field object or quadrature coordinate:
+
+```cpp
+#include "litepgo/fem/kinematics/triangle_mid_edge_kinematics.hpp"
+
+const Eigen::MatrixXd x_local = X_local + u_local;
+Eigen::MatrixXd dab_dx;
+std::array<Eigen::MatrixXd, 6> d2ab_dx2;
+const auto current = litepgo::eval_triangle_mid_edge_kinematics(
+    x_local, stencils.opposite[f], &dab_dx, &d2ab_dx2);
+const auto reference = litepgo::eval_triangle_mid_edge_kinematics(X_local, stencils.opposite[f]);
+const Eigen::Matrix2d a_bar = reference.a;
+const Eigen::Matrix2d b_bar = reference.b;
+```
+
+Both derivative outputs are independently optional and overwritten. They differentiate `(a11,a12,a22,b11,b12,b22)`, with mixed entries stored once without scaling, with respect to row-packed positions. `dab_dx` has shape 6-by-`3*n`; the six Hessians each have shape `3*n`-by-`3*n`. Since reference positions are fixed, these are also the derivatives with respect to `u_local`. Derivatives use Eigen automatic differentiation; finite differences are used only in tests.
+
+The first form is `a = J.transpose()*J`, where `J = [x1-x0, x2-x0]`. The second form uses area-weighted mid-edge normals, following the [mid-edge-average discretization](https://github.com/evouga/libshell/blob/master/src/SecondFundamentalForm/MidedgeAverageFormulation.cpp), with the sign chosen to agree with `b_ab = n.dot(x_,ab)` (the opposite of LibShell's sign). For central unnormalized normal `N`, neighbor normal `N_k`, and opposite row `p_k`,
+
+$$
+N=(x_1-x_0)\times(x_2-x_0),\qquad
+N_k=(x_{k+2}-x_{p_k})\times(x_{k+1}-x_{p_k}),
+$$
+$$
+c_k=-\frac{[(x_{k+1}-x_k)+(x_{k+2}-x_k)]\cdot N_k}{\|N+N_k\|},\qquad
+b=\begin{bmatrix}c_0+c_1&c_0\\c_0&c_0+c_2\end{bmatrix},
+$$
+
+where central vertex indices are modulo 3. Boundary edges use `c_k = 0`, equivalent to a one-sided face-normal extrapolation; clamped boundary directors are not implemented. Degenerate central or neighboring triangles, or cancelling averaged normals, throw `InfeasibleState`. Layout errors and non-finite inputs throw `std::invalid_argument`. Geometry singularity checks use a relative tolerance of `1e-12`. This function performs no area integration or material evaluation.
+
 ## Hex Hermite physical DOFs
 
 `eval_hex_hermite_dof_transform` accepts an `8`-by-`3` matrix `X_nodes` containing one reference element's physical vertex coordinates, ordered as the corners of `HexHermiteBasis`. The example separately constructs a Q1 coordinate field for deformation evaluation. Displacement uses 64 reference coefficients per component. Each vertex supplies the physical slots `u, u_X, u_Y, u_Z, u_XY, u_XZ, u_YZ, u_XYZ`, each a three-vector. The gathered `u_physical_local` has shape 8-by-24; the field's `u_local` has shape 64-by-3.
 
 ```cpp
-#include "litepgo/fem/field/hex_hermite_dof_transform.hpp"
+#include "litepgo/fem/kinematics/hex_hermite_dof_transform.hpp"
 
 const auto S = litepgo::eval_hex_hermite_dof_transform(X_nodes); // Once per fixed rest element.
 const Eigen::VectorXd u_local_flat = S * u_physical_local.reshaped<Eigen::RowMajor>();
@@ -324,7 +357,7 @@ Use explicit `2D` / `3D` names for dimension-specific types. The dimensionless n
 | `Interpolation`, `InterpolatedValueField` | `InterpolatedField2D` / `InterpolatedField3D` |
 | `fem/geometry/rest.hpp` or `fem/interpolation/rest_point.hpp` | `fem/field/field.hpp` |
 | `rest_point(X_field, xi)`, `RestPointData` | `X_field.eval_value(xi)` and `X_field.eval_dvalue_dxi(xi)`; geometric consumers validate and invert the derivative as needed |
-| `fem/interpolation/hex_hermite_dof_transform.hpp` | `fem/field/hex_hermite_dof_transform.hpp` |
+| `fem/interpolation/hex_hermite_dof_transform.hpp` or `fem/field/hex_hermite_dof_transform.hpp` | `fem/kinematics/hex_hermite_dof_transform.hpp` |
 | `DeformationGradient` and its sample interface | `DeformationGradientField3D(u_field, X_field)` with named, longer-lived inputs |
 | `field.value(point)` | `field.eval_value(xi)`; composed deformation fields return nine components |
 | `dvalue_dx_local(xi)`, `dgrad_xi_dx_local(xi)` | `eval_dvalue_dcoeffs(xi)`, `eval_dgrad_xi_dcoeffs(xi)` |

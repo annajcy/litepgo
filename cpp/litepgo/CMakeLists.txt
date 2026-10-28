@@ -11,12 +11,13 @@ add_library(litepgo STATIC
     fem/material/neo_hookean.cpp
     fem/local/dof_derivatives.cpp
     fem/local/local_energy.cpp
+    fem/kinematics/triangle_mid_edge_kinematics.cpp
+    fem/kinematics/hex_hermite_dof_transform.cpp
     fem/basis/2d/quad_hermite_basis.cpp
     fem/basis/2d/triangle_p1_basis.cpp
     fem/basis/3d/hex_q1_basis.cpp
     fem/basis/3d/hex_hermite_basis.cpp
     fem/basis/3d/tet_p1_basis.cpp
-    fem/field/hex_hermite_dof_transform.cpp
     dof/dof_reduction.cpp
     linalg/sparse_solver/eigen_ldlt.cpp
     linalg/sparse_solver/eigen_sparse_lu.cpp
