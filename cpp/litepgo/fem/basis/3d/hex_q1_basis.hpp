@@ -11,9 +11,9 @@ namespace litepgo {
 class HexQ1Basis final {
   public:
     static constexpr int num_basis_functions = 8;
-    using Sample = TensorProductBasis3D<LinearLagrangeBasis>::Sample;
+    using Sample = BasisSample<num_basis_functions, 3>;
 
-    // N and dN_dxi rows follow Hex corner order; derivatives use parameter coordinates.
+    // All sample rows follow Hex corner order; derivatives use parameter coordinates.
     // Outside [0,1]^3, extrapolates without clamping.
     static Sample evaluate(const Eigen::Vector3d& xi);
 

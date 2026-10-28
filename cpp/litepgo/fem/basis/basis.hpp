@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Eigen/Core>
+#include "litepgo/fem/basis/basis_sample.hpp"
 
 #include <concepts>
 #include <type_traits>
@@ -9,7 +9,7 @@ namespace litepgo {
 
 // Dim is the parameter-domain dimension, not the number of basis functions or
 // field components. In 1D the parameter is a scalar; otherwise it is a vector.
-// Sample stores N[a] = N_a(xi) and dN_dxi(a,d) = dN_a/dxi_d.
+// Samples provide values and first and packed second reference derivatives.
 template <class B, int Dim>
 concept Basis = (Dim > 0) &&
                 requires {
@@ -23,6 +23,9 @@ concept Basis = (Dim > 0) &&
                     {
                         (basis_sample.dN_dxi)
                     } -> std::same_as<const Eigen::Matrix<double, B::num_basis_functions, Dim>&>;
+                    {
+                        (basis_sample.d2N_dxi2)
+                    } -> std::same_as<const Eigen::Matrix<double, B::num_basis_functions, Dim * (Dim + 1) / 2>&>;
                 };
 
 template <class B>
@@ -33,13 +36,5 @@ concept Basis2D = Basis<B, 2>;
 
 template <class B>
 concept Basis3D = Basis<B, 3>;
-
-// Optional packed second derivatives, in upper-triangle row order.
-template <class B, int Dim>
-concept SecondOrderBasis = Basis<B, Dim> && requires(const typename B::Sample& basis_sample) {
-    {
-        (basis_sample.d2N_dxi2)
-    } -> std::same_as<const Eigen::Matrix<double, B::num_basis_functions, Dim * (Dim + 1) / 2>&>;
-};
 
 } // namespace litepgo

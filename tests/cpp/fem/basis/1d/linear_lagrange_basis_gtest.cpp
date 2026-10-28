@@ -21,6 +21,7 @@ TEST(LinearLagrangeBasis, ReproducesLinearFunctionsAndDerivatives) {
         const auto basis_sample = LinearLagrangeBasis::evaluate(t);
         EXPECT_NEAR(basis_sample.N[0] + basis_sample.N[1], 1.0, 1e-15);
         EXPECT_DOUBLE_EQ(basis_sample.dN_dxi[0] + basis_sample.dN_dxi[1], 0.0);
+        EXPECT_TRUE(basis_sample.d2N_dxi2.isZero());
 
         // f(t) = 2 + 3t, with endpoint values 2 and 5.
         EXPECT_NEAR(2.0 * basis_sample.N[0] + 5.0 * basis_sample.N[1], 2.0 + 3.0 * t, 2e-15);
@@ -31,6 +32,7 @@ TEST(LinearLagrangeBasis, ReproducesLinearFunctionsAndDerivatives) {
         const auto minus = LinearLagrangeBasis::evaluate(t - h);
         for (int a = 0; a < LinearLagrangeBasis::num_basis_functions; ++a) {
             EXPECT_NEAR((plus.N[a] - minus.N[a]) / (2.0 * h), basis_sample.dN_dxi[a], 2e-10);
+            EXPECT_DOUBLE_EQ((plus.dN_dxi[a] - minus.dN_dxi[a]) / (2.0 * h), basis_sample.d2N_dxi2[a]);
         }
     }
 }

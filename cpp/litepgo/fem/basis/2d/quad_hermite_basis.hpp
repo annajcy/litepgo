@@ -11,7 +11,7 @@ namespace litepgo {
 class QuadHermiteBasis final {
   public:
     static constexpr int num_basis_functions = 16;
-    using Sample = TensorProductBasis2D<CubicHermiteBasis>::Sample;
+    using Sample = BasisSample<num_basis_functions, 2>;
 
     // Extrapolates without clamping. All arrays use the same vertex/slot row order.
     static Sample evaluate(const Eigen::Vector2d& xi);

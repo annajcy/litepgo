@@ -14,11 +14,7 @@ template <Basis1D B> class TensorProductBasis3D {
     static constexpr int n = B::num_basis_functions;
     static constexpr int num_basis_functions = n * n * n;
 
-    struct Sample {
-        Eigen::Matrix<double, num_basis_functions, 1> N;
-        // Row a contains dN_a/dxi, dN_a/deta, dN_a/dzeta.
-        Eigen::Matrix<double, num_basis_functions, 3> dN_dxi;
-    };
+    using Sample = BasisSample<num_basis_functions, 3>;
 
     static Sample evaluate(const Eigen::Vector3d& xi) {
         const auto x = B::evaluate(xi.x());
@@ -30,6 +26,12 @@ template <Basis1D B> class TensorProductBasis3D {
         result.dN_dxi.col(0) = tensor_product(x.dN_dxi, y.N, z.N);
         result.dN_dxi.col(1) = tensor_product(x.N, y.dN_dxi, z.N);
         result.dN_dxi.col(2) = tensor_product(x.N, y.N, z.dN_dxi);
+        result.d2N_dxi2.col(0) = tensor_product(x.d2N_dxi2, y.N, z.N);
+        result.d2N_dxi2.col(1) = tensor_product(x.dN_dxi, y.dN_dxi, z.N);
+        result.d2N_dxi2.col(2) = tensor_product(x.dN_dxi, y.N, z.dN_dxi);
+        result.d2N_dxi2.col(3) = tensor_product(x.N, y.d2N_dxi2, z.N);
+        result.d2N_dxi2.col(4) = tensor_product(x.N, y.dN_dxi, z.dN_dxi);
+        result.d2N_dxi2.col(5) = tensor_product(x.N, y.N, z.d2N_dxi2);
         return result;
     }
 

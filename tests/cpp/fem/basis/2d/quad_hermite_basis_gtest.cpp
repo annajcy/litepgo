@@ -8,7 +8,6 @@
 namespace {
 using namespace litepgo;
 static_assert(Basis2D<QuadHermiteBasis>);
-static_assert(SecondOrderBasis<QuadHermiteBasis, 2>);
 static_assert(QuadHermiteBasis::num_basis_functions == 16);
 
 double monomial(int i, int j, const Eigen::Vector2d& xi, int dx = 0, int dy = 0) {

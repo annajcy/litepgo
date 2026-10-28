@@ -27,12 +27,18 @@ const std::array<Eigen::Vector3i, 8> derivatives{
     {Eigen::Vector3i(0, 0, 0), Eigen::Vector3i(1, 0, 0), Eigen::Vector3i(0, 1, 0), Eigen::Vector3i(0, 0, 1),
      Eigen::Vector3i(1, 1, 0), Eigen::Vector3i(1, 0, 1), Eigen::Vector3i(0, 1, 1), Eigen::Vector3i(1, 1, 1)}};
 
+const std::array<Eigen::Vector3i, 6> second_derivatives{Eigen::Vector3i(2, 0, 0), Eigen::Vector3i(1, 1, 0),
+                                                        Eigen::Vector3i(1, 0, 1), Eigen::Vector3i(0, 2, 0),
+                                                        Eigen::Vector3i(0, 1, 1), Eigen::Vector3i(0, 0, 2)};
+
 double monomial(const Eigen::Vector3i& powers, const Eigen::Vector3d& xi, const Eigen::Vector3i& derivative) {
     double result = 1;
     for (int d = 0; d < 3; ++d) {
         if (powers[d] < derivative[d])
             return 0;
-        result *= (derivative[d] ? powers[d] : 1) * std::pow(xi[d], powers[d] - derivative[d]);
+        for (int order = 0; order < derivative[d]; ++order)
+            result *= powers[d] - order;
+        result *= std::pow(xi[d], powers[d] - derivative[d]);
     }
     return result;
 }
@@ -70,6 +76,9 @@ TEST(HexHermiteBasis, ReproducesAllTricubicMonomialsAndGradients) {
                     for (int d = 0; d < 3; ++d)
                         EXPECT_NEAR(coefficients.dot(basis_sample.dN_dxi.col(d)),
                                     monomial(powers, xi, Eigen::Vector3i::Unit(d)), 1e-13);
+                    for (int s = 0; s < 6; ++s)
+                        EXPECT_NEAR(coefficients.dot(basis_sample.d2N_dxi2.col(s)),
+                                    monomial(powers, xi, second_derivatives[static_cast<std::size_t>(s)]), 3e-13);
                 }
             }
 }
@@ -90,6 +99,7 @@ TEST(HexHermiteBasis, ReproducesAffineVectorFieldsWith192Dofs) {
     for (const auto& xi : samples) {
         EXPECT_TRUE(interpolation.value(xi).isApprox(A * xi + b, 1e-13));
         EXPECT_TRUE(interpolation.dvalue_dxi(xi).isApprox(A, 1e-13));
+        EXPECT_TRUE(interpolation.d2value_dxi2(xi).isZero(1e-13));
     }
 }
 
@@ -104,6 +114,11 @@ TEST(HexHermiteBasis, GradientsMatchFiniteDifferences) {
             const Eigen::Matrix<double, 64, 1> fd =
                 (HexHermiteBasis::evaluate(plus).N - HexHermiteBasis::evaluate(minus).N) / (2 * h);
             EXPECT_TRUE((fd - basis_sample.dN_dxi.col(d)).isZero(2e-9));
+            const Eigen::Matrix<double, 64, 3> second_fd =
+                (HexHermiteBasis::evaluate(plus).dN_dxi - HexHermiteBasis::evaluate(minus).dN_dxi) / (2 * h);
+            constexpr int columns[3][3] = {{0, 1, 2}, {1, 3, 4}, {2, 4, 5}};
+            for (int e = 0; e < 3; ++e)
+                EXPECT_TRUE((second_fd.col(e) - basis_sample.d2N_dxi2.col(columns[d][e])).isZero(5e-9));
         }
     }
 }

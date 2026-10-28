@@ -1,5 +1,5 @@
-#include "litepgo/fem/basis/basis.hpp"
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
+#include "litepgo/fem/basis/basis.hpp"
 
 #include <gtest/gtest.h>
 
@@ -36,6 +36,7 @@ TEST(TetP1Basis, ReproducesAffineFunctionsAndPartitionsUnity) {
         const auto basis_sample = TetP1Basis::evaluate(xi);
         EXPECT_NEAR(basis_sample.N.sum(), 1, 1e-15);
         EXPECT_TRUE(basis_sample.dN_dxi.colwise().sum().isZero());
+        EXPECT_TRUE(basis_sample.d2N_dxi2.isZero());
         EXPECT_NEAR(coefficients.dot(basis_sample.N), 0.4 + slope.dot(xi), 1e-15);
         EXPECT_TRUE((basis_sample.dN_dxi.transpose() * coefficients).isApprox(slope, 1e-14));
     }
@@ -51,6 +52,7 @@ TEST(TetP1Basis, GradientsMatchFiniteDifferences) {
             minus[d] -= h;
             const Eigen::Vector4d fd = (TetP1Basis::evaluate(plus).N - TetP1Basis::evaluate(minus).N) / (2 * h);
             EXPECT_TRUE((fd - basis_sample.dN_dxi.col(d)).isZero(3e-10));
+            EXPECT_TRUE((TetP1Basis::evaluate(plus).dN_dxi - TetP1Basis::evaluate(minus).dN_dxi).isZero());
         }
     }
 }

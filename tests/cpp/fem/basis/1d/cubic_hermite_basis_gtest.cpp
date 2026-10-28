@@ -8,7 +8,6 @@
 using litepgo::CubicHermiteBasis;
 
 static_assert(litepgo::Basis1D<CubicHermiteBasis>);
-static_assert(litepgo::SecondOrderBasis<CubicHermiteBasis, 1>);
 static_assert(CubicHermiteBasis::num_basis_functions == 4);
 
 TEST(CubicHermiteBasis, InterpolatesEndpointValuesAndDerivatives) {

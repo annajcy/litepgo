@@ -47,6 +47,7 @@ TEST(TensorProductBasis3D, PartitionsUnityAndHasZeroGradientSum) {
         const auto basis_sample = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate(p);
         EXPECT_NEAR(basis_sample.N.sum(), 1.0, 1e-15);
         EXPECT_TRUE(basis_sample.dN_dxi.colwise().sum().isZero(1e-15));
+        EXPECT_TRUE(basis_sample.d2N_dxi2.colwise().sum().isZero(1e-15));
     }
 }
 
@@ -59,6 +60,7 @@ TEST(TensorProductBasis3D, ReproducesAffineVectorFieldsAndJacobians) {
         const auto basis_sample = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate(p);
         EXPECT_TRUE((coefficients * basis_sample.N).isApprox(A * p + b, 1e-14));
         EXPECT_TRUE((coefficients * basis_sample.dN_dxi).isApprox(A, 1e-14));
+        EXPECT_TRUE((coefficients * basis_sample.d2N_dxi2).isZero(1e-14));
     }
 }
 
@@ -72,6 +74,9 @@ TEST(TensorProductBasis3D, ReproducesTrilinearPolynomialsAndGradients) {
         const auto basis_sample = litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate(p);
         EXPECT_NEAR(coefficients.dot(basis_sample.N), polynomial(p), 2e-14);
         EXPECT_TRUE((basis_sample.dN_dxi.transpose() * coefficients).isApprox(polynomial_gradient(p), 1e-14));
+        Eigen::Matrix<double, 6, 1> expected;
+        expected << 0, 6 + 9 * p.z(), -7 + 9 * p.y(), 0, 8 + 9 * p.x(), 0;
+        EXPECT_TRUE((basis_sample.d2N_dxi2.transpose() * coefficients).isApprox(expected, 1e-14));
     }
 }
 
@@ -89,6 +94,13 @@ TEST(TensorProductBasis3D, GradientsMatchFiniteDifferencesIncludingCorners) {
                  litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate(minus).N) /
                 (2.0 * h);
             EXPECT_TRUE((derivative - basis_sample.dN_dxi.col(d)).isZero(3e-10));
+            const Eigen::Matrix<double, 8, 3> second_fd =
+                (litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate(plus).dN_dxi -
+                 litepgo::TensorProductBasis3D<litepgo::LinearLagrangeBasis>::evaluate(minus).dN_dxi) /
+                (2 * h);
+            constexpr int columns[3][3] = {{0, 1, 2}, {1, 3, 4}, {2, 4, 5}};
+            for (int e = 0; e < 3; ++e)
+                EXPECT_TRUE((second_fd.col(e) - basis_sample.d2N_dxi2.col(columns[d][e])).isZero(3e-10));
         }
     }
 }

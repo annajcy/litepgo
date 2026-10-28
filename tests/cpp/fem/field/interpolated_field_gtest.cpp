@@ -1,4 +1,5 @@
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
+#include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
 
 #include <Eigen/LU>
@@ -26,16 +27,18 @@ Eigen::Matrix<double, 8, 3> corners() {
 }
 
 // Static evaluation must not require constructing a basis object.
-template <bool InvalidValues> struct InvalidBasis {
+template <int InvalidPart> struct InvalidBasis {
     InvalidBasis() = delete;
     static constexpr int num_basis_functions = 8;
     using Sample = HexQ1Basis::Sample;
     static Sample evaluate(const Eigen::Vector3d& xi) {
         auto basis_sample = HexQ1Basis::evaluate(xi);
-        if constexpr (InvalidValues)
+        if constexpr (InvalidPart == 0)
             basis_sample.N.setConstant(std::numeric_limits<double>::quiet_NaN());
-        else
+        else if constexpr (InvalidPart == 1)
             basis_sample.dN_dxi.setConstant(std::numeric_limits<double>::infinity());
+        else
+            basis_sample.d2N_dxi2.setConstant(std::numeric_limits<double>::infinity());
         return basis_sample;
     }
 };
@@ -54,8 +57,14 @@ template <int Components, int Storage> void check_coefficient_derivatives() {
     EXPECT_EQ(field.num_components(), Components);
     EXPECT_EQ(field.num_dofs(), 8 * Components);
     const auto gradient = field.dvalue_dxi(xi);
+    const auto hessian = field.d2value_dxi2(xi);
+    EXPECT_EQ(hessian.rows(), Components);
+    EXPECT_EQ(hessian.cols(), 6);
+    EXPECT_EQ(field.dhess_xi_dcoeffs(xi).rows(), 6 * Components);
+    EXPECT_EQ(field.dhess_xi_dcoeffs(xi).cols(), field.num_dofs());
     EXPECT_TRUE((field.dvalue_dcoeffs(xi) * flattened).isApprox(field.value(xi), 1e-14));
     EXPECT_TRUE((field.dgrad_xi_dcoeffs(xi) * flattened).isApprox(gradient.reshaped(), 1e-14));
+    EXPECT_TRUE((field.dhess_xi_dcoeffs(xi) * flattened).isApprox(hessian.reshaped(), 1e-14));
     constexpr double h = 1e-4;
     for (int j = 0; j < field.num_dofs(); ++j) {
         auto plus = coefficients, minus = coefficients;
@@ -64,8 +73,10 @@ template <int Components, int Storage> void check_coefficient_derivatives() {
         const InterpolatedField3D<HexQ1Basis> a(plus), b(minus);
         const Eigen::VectorXd value_fd = (a.value(xi) - b.value(xi)) / (2 * h);
         const Eigen::MatrixXd gradient_fd = (a.dvalue_dxi(xi) - b.dvalue_dxi(xi)) / (2 * h);
+        const Eigen::MatrixXd hessian_fd = (a.d2value_dxi2(xi) - b.d2value_dxi2(xi)) / (2 * h);
         EXPECT_TRUE(value_fd.isApprox(field.dvalue_dcoeffs(xi).col(j), 1e-9));
         EXPECT_TRUE(gradient_fd.reshaped().isApprox(field.dgrad_xi_dcoeffs(xi).col(j), 1e-9));
+        EXPECT_TRUE(hessian_fd.reshaped().isApprox(field.dhess_xi_dcoeffs(xi).col(j), 1e-9));
     }
 }
 } // namespace
@@ -113,6 +124,10 @@ TEST(InterpolatedField3D, ParameterGradientMatchesFiniteDifferences) {
         plus[d] += h;
         minus[d] -= h;
         EXPECT_TRUE(((field.value(plus) - field.value(minus)) / (2 * h)).isApprox(field.dvalue_dxi(xi).col(d), 3e-9));
+        const Eigen::Matrix3d second_fd = (field.dvalue_dxi(plus) - field.dvalue_dxi(minus)) / (2 * h);
+        constexpr int columns[3][3] = {{0, 1, 2}, {1, 3, 4}, {2, 4, 5}};
+        for (int e = 0; e < 3; ++e)
+            EXPECT_LT((second_fd.col(e) - field.d2value_dxi2(xi).col(columns[d][e])).norm(), 2e-9);
     }
 }
 
@@ -129,16 +144,25 @@ TEST(InterpolatedField3D, CoefficientsAreCopiedAndTranslationHasZeroGradient) {
 
 TEST(InterpolatedField3D, ValueAndGradientValidateIndependently) {
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
-    const InterpolatedField3D<InvalidBasis<true>> bad_values(corners());
+    const InterpolatedField3D<InvalidBasis<0>> bad_values(corners());
     EXPECT_THROW(bad_values.value(xi), std::invalid_argument);
     EXPECT_THROW(bad_values.dvalue_dcoeffs(xi), std::invalid_argument);
     EXPECT_TRUE(bad_values.dvalue_dxi(xi).isIdentity(1e-14));
     EXPECT_TRUE(bad_values.dgrad_xi_dcoeffs(xi).allFinite());
-    const InterpolatedField3D<InvalidBasis<false>> bad_gradients(corners());
+    EXPECT_TRUE(bad_values.d2value_dxi2(xi).allFinite());
+    EXPECT_TRUE(bad_values.dhess_xi_dcoeffs(xi).allFinite());
+    const InterpolatedField3D<InvalidBasis<1>> bad_gradients(corners());
     EXPECT_THROW(bad_gradients.dvalue_dxi(xi), std::invalid_argument);
     EXPECT_THROW(bad_gradients.dgrad_xi_dcoeffs(xi), std::invalid_argument);
     EXPECT_TRUE(bad_gradients.value(xi).isApprox(xi, 1e-14));
     EXPECT_TRUE(bad_gradients.dvalue_dcoeffs(xi).allFinite());
+    EXPECT_TRUE(bad_gradients.d2value_dxi2(xi).allFinite());
+    EXPECT_TRUE(bad_gradients.dhess_xi_dcoeffs(xi).allFinite());
+    const InterpolatedField3D<InvalidBasis<2>> bad_hessians(corners());
+    EXPECT_THROW(bad_hessians.d2value_dxi2(xi), std::invalid_argument);
+    EXPECT_THROW(bad_hessians.dhess_xi_dcoeffs(xi), std::invalid_argument);
+    EXPECT_TRUE(bad_hessians.value(xi).allFinite());
+    EXPECT_TRUE(bad_hessians.dvalue_dxi(xi).allFinite());
 }
 
 TEST(InterpolatedField3D, RejectsIncompatibleCoefficientsAndNonFiniteInputsOrResults) {
@@ -156,10 +180,26 @@ TEST(InterpolatedField3D, RejectsIncompatibleCoefficientsAndNonFiniteInputsOrRes
         EXPECT_THROW(field.dvalue_dxi(xi), std::invalid_argument);
         EXPECT_THROW(field.dvalue_dcoeffs(xi), std::invalid_argument);
         EXPECT_THROW(field.dgrad_xi_dcoeffs(xi), std::invalid_argument);
+        EXPECT_THROW(field.d2value_dxi2(xi), std::invalid_argument);
+        EXPECT_THROW(field.dhess_xi_dcoeffs(xi), std::invalid_argument);
     }
     const InterpolatedField3D<HexQ1Basis> enormous(Eigen::MatrixXd::Constant(8, 3, std::numeric_limits<double>::max()));
     EXPECT_THROW(enormous.value(Eigen::Vector3d::Constant(2)), std::invalid_argument);
     EXPECT_THROW(enormous.dvalue_dxi(Eigen::Vector3d::Constant(2)), std::invalid_argument);
+    EXPECT_THROW(enormous.d2value_dxi2(Eigen::Vector3d::Constant(2)), std::invalid_argument);
     EXPECT_TRUE(enormous.dvalue_dcoeffs(Eigen::Vector3d::Constant(2)).allFinite());
     EXPECT_TRUE(enormous.dgrad_xi_dcoeffs(Eigen::Vector3d::Constant(2)).allFinite());
+    EXPECT_TRUE(enormous.dhess_xi_dcoeffs(Eigen::Vector3d::Constant(2)).allFinite());
+}
+
+TEST(InterpolatedField3D, LinearTetFieldsReturnZeroSecondSpatialAndCoefficientDerivatives) {
+    const InterpolatedField3D<TetP1Basis> concrete(Eigen::Matrix<double, 4, 3>::Random());
+    const Field3D& field = concrete;
+    const Eigen::Vector3d xi(0.2, 0.3, 0.1);
+    EXPECT_EQ(field.d2value_dxi2(xi).rows(), 3);
+    EXPECT_EQ(field.d2value_dxi2(xi).cols(), 6);
+    EXPECT_TRUE(field.d2value_dxi2(xi).isZero());
+    EXPECT_EQ(field.dhess_xi_dcoeffs(xi).rows(), 18);
+    EXPECT_EQ(field.dhess_xi_dcoeffs(xi).cols(), 12);
+    EXPECT_TRUE(field.dhess_xi_dcoeffs(xi).isZero());
 }

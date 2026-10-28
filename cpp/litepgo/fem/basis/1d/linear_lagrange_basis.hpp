@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Eigen/Core>
+#include "litepgo/fem/basis/basis_sample.hpp"
 
 namespace litepgo {
 
@@ -9,14 +9,11 @@ class LinearLagrangeBasis {
   public:
     static constexpr int num_basis_functions = 2;
 
-    struct Sample {
-        Eigen::Matrix<double, num_basis_functions, 1> N;
-        Eigen::Matrix<double, num_basis_functions, 1> dN_dxi;
-    };
+    using Sample = BasisSample<num_basis_functions, 1>;
 
     // Evaluates the polynomials without clamping the parameter to the interval.
     static Sample evaluate(double t) {
-        return {{1.0 - t, t}, {-1.0, 1.0}};
+        return {{1.0 - t, t}, {-1.0, 1.0}, {0.0, 0.0}};
     }
 };
 

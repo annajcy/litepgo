@@ -29,6 +29,7 @@ HexQ1Basis::Sample HexQ1Basis::evaluate(const Eigen::Vector3d& xi) {
     Sample result;
     result.N = tensor.N(hex_to_tensor);
     result.dN_dxi = tensor.dN_dxi(hex_to_tensor, Eigen::placeholders::all);
+    result.d2N_dxi2 = tensor.d2N_dxi2(hex_to_tensor, Eigen::placeholders::all);
     return result;
 }
 

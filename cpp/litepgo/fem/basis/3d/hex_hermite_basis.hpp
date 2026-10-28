@@ -12,9 +12,9 @@ namespace litepgo {
 class HexHermiteBasis final {
   public:
     static constexpr int num_basis_functions = 64;
-    using Sample = TensorProductBasis3D<CubicHermiteBasis>::Sample;
+    using Sample = BasisSample<num_basis_functions, 3>;
 
-    // N and dN_dxi rows use the same slot order; derivatives are with respect
+    // All sample rows use the same slot order; derivatives are with respect
     // to xi, eta, zeta. Extrapolates without clamping.
     static Sample evaluate(const Eigen::Vector3d& xi);
 

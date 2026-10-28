@@ -20,7 +20,7 @@ flowchart TD
 
 | Module | Responsibility |
 | --- | --- |
-| `fem/basis/` | Scalar basis values `N`, reference derivatives `dN_dxi`, and optional `d2N_dxi2`, grouped into `1d/`, `2d/`, and `3d/` |
+| `fem/basis/` | Scalar basis values `N`, reference derivatives `dN_dxi`, and `d2N_dxi2`, grouped into `1d/`, `2d/`, and `3d/` |
 | `fem/quadrature/` | Reference points and weights, grouped into `1d/`, `2d/`, and `3d/` |
 | `fem/field/` | `Field2D/3D`, `InterpolatedField2D/3D`, `IdentityField2D/3D`, `DeformationGradientField3D`, and the Hex Hermite coefficient transform |
 | `fem/material/` | Numerical constitutive inputs, density, and material derivatives |
@@ -78,7 +78,7 @@ const auto u = field.value(xi);
 const auto du_dcoeffs = field.dvalue_dcoeffs(xi);
 ```
 
-`B::evaluate(xi)` returns a `basis_sample` containing `N` (`n`-by-1) and `dN_dxi` (`n`-by-`D`), where `D` is the parameter dimension. `InterpolatedFieldT` uses these arrays to compute each requested quantity:
+`B::evaluate(xi)` returns a `BasisSample<n,D>` containing `N` (`n`-by-1), `dN_dxi` (`n`-by-`D`), and `d2N_dxi2` (`n`-by-`D*(D+1)/2`), where `D` is the parameter dimension. `InterpolatedFieldT` uses these arrays to compute each requested quantity:
 
 $$
 y(\xi)=\mathrm{coeffs}^T N(\xi),\qquad
@@ -98,7 +98,7 @@ Large coefficient derivative matrices are constructed only when requested. Each 
 
 `IdentityField3D` is spatially constant. It returns zero reference derivatives, an identity coefficient derivative, and a zero mixed reference/coefficient derivative. Being constant in space does not make its coefficients inactive.
 
-Second spatial derivatives are optional. `SecondOrderBasis<B,D>` checks for `Sample::d2N_dxi2` with upper-triangle columns `(11,12,22)` in 2D or `(11,12,13,22,23,33)` in 3D. Mixed derivatives are stored once without doubling. `InterpolatedFieldT` provides the second-derivative methods only when the basis has this capability; otherwise the methods throw `std::logic_error`. Constant fields return zeros. Existing 3D bases retain their first-order interfaces.
+Every basis provides values and first and second spatial derivatives through the common `BasisSample<NumBasisFunctions,ParamDim>` template in `fem/basis/basis_sample.hpp`. The `Basis<B,D>` concept requires all three arrays, including for custom bases. Packed Hessian columns are `(11)` in 1D, `(11,12,22)` in 2D, and `(11,12,13,22,23,33)` in 3D. Mixed derivatives are stored once without doubling. Linear 1D and Tet P1 bases have zero second derivatives; bilinear and trilinear bases have zero pure second derivatives but generally nonzero mixed derivatives. Interpolated fields always support second spatial derivatives and their coefficient derivatives; non-interpolated fields retain their optional spatial-derivative protocol.
 
 ## Two-dimensional parameter domains
 
@@ -299,4 +299,4 @@ ctest --preset debug --output-on-failure
 
 Hex Q1 uses two boxes with widths 1 and 2 sharing nodal displacement DOFs and integrates with `GaussLegendre3D<2>`. Tet P1 uses two tetrahedra with volumes 1/6 and 1/3 and `TetCentroidQuadrature`. Hex Hermite uses two boxes of sizes (1,2,3) and (2,2,3), sharing all physical derivative DOFs at their common face, and `GaussLegendre3D<4>`.
 
-Tests cover row/column packing, coefficient and physical finite differences, warped coordinate mappings, different displacement/coordinate bases, direct and derived deformation inputs, all active material inputs, shared/element/global DOF assembly, sample ownership, coefficient-transform validation, unsupported capabilities, and pointwise evaluation counts. Samples cannot be default-constructed or manually combined. Examples evaluate energy and derivatives only; feasible solver step bounds remain unimplemented.
+Tests cover row/column packing, coefficient and physical finite differences, warped coordinate mappings, different displacement/coordinate bases, direct and derived deformation inputs, all active material inputs, shared/element/global DOF assembly, sample ownership, coefficient-transform validation, unsupported capabilities, and pointwise evaluation counts. Basis samples are plain data aggregates; each evaluator fills all three arrays. Examples evaluate energy and derivatives only; feasible solver step bounds remain unimplemented.

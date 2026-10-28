@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Eigen/Core>
+#include "litepgo/fem/basis/basis_sample.hpp"
 
 namespace litepgo {
 
@@ -9,12 +9,9 @@ namespace litepgo {
 class TetP1Basis final {
   public:
     static constexpr int num_basis_functions = 4;
-    struct Sample {
-        Eigen::Vector4d N;
-        Eigen::Matrix<double, 4, 3> dN_dxi;
-    };
+    using Sample = BasisSample<num_basis_functions, 3>;
 
-    // Gradients are with respect to parameter coordinates; extrapolates without clamping.
+    // Reference gradients are constant and second derivatives are zero. Extrapolates without clamping.
     static Sample evaluate(const Eigen::Vector3d& xi);
 
     // Invalid basis indices throw std::out_of_range.

@@ -51,6 +51,7 @@ TEST(HexQ1Basis, PartitionsUnityAndHasZeroGradientSum) {
         const auto basis_sample = HexQ1Basis::evaluate(p);
         EXPECT_NEAR(basis_sample.N.sum(), 1.0, 1e-15);
         EXPECT_TRUE(basis_sample.dN_dxi.colwise().sum().isZero(1e-15));
+        EXPECT_TRUE(basis_sample.d2N_dxi2.colwise().sum().isZero(1e-15));
     }
 }
 
@@ -72,6 +73,8 @@ TEST(HexQ1Basis, ReproducesAffineGeometryAndVectorFields) {
         EXPECT_TRUE((Xe * basis_sample.dN_dxi).isApprox(dX_dxi, 1e-14));
         EXPECT_TRUE((Ue * basis_sample.N).isApprox(A * X + b, 1e-14));
         EXPECT_TRUE((Ue * basis_sample.dN_dxi).isApprox(A * dX_dxi, 1e-14));
+        EXPECT_TRUE((Xe * basis_sample.d2N_dxi2).isZero(1e-14));
+        EXPECT_TRUE((Ue * basis_sample.d2N_dxi2).isZero(1e-14));
     }
 }
 
@@ -87,6 +90,11 @@ TEST(HexQ1Basis, GradientsMatchFiniteDifferences) {
             const Eigen::Matrix<double, 8, 1> derivative =
                 (HexQ1Basis::evaluate(plus).N - HexQ1Basis::evaluate(minus).N) / (2.0 * h);
             EXPECT_TRUE((derivative - basis_sample.dN_dxi.col(d)).isZero(3e-10));
+            const Eigen::Matrix<double, 8, 3> second_fd =
+                (HexQ1Basis::evaluate(plus).dN_dxi - HexQ1Basis::evaluate(minus).dN_dxi) / (2 * h);
+            constexpr int columns[3][3] = {{0, 1, 2}, {1, 3, 4}, {2, 4, 5}};
+            for (int e = 0; e < 3; ++e)
+                EXPECT_TRUE((second_fd.col(e) - basis_sample.d2N_dxi2.col(columns[d][e])).isZero(3e-10));
         }
     }
 }

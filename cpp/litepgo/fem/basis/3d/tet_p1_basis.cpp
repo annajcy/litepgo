@@ -8,6 +8,7 @@ TetP1Basis::Sample TetP1Basis::evaluate(const Eigen::Vector3d& xi) {
     Sample result;
     result.N << 1 - xi.sum(), xi.x(), xi.y(), xi.z();
     result.dN_dxi << -1, -1, -1, 1, 0, 0, 0, 1, 0, 0, 0, 1;
+    result.d2N_dxi2.setZero();
     return result;
 }
 
