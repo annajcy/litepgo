@@ -317,6 +317,8 @@ $$
 
 where central vertex indices are modulo 3. Boundary edges use `c_k = 0`, equivalent to a one-sided face-normal extrapolation; clamped boundary directors are not implemented. Degenerate central or neighboring triangles, or cancelling averaged normals, throw `InfeasibleState`. Layout errors and non-finite inputs throw `std::invalid_argument`. Geometry singularity checks use a relative tolerance of `1e-12`. This function performs no area integration or material evaluation.
 
+`eval_triangle_mid_edge_feasible_step(x, dx, opposite)` returns a conservative inclusive step bound. For `0 <= alpha <= 1`, each face normal is `N(alpha)=N0+alpha*N1+alpha^2*N2`, so its change is bounded by `alpha*(norm(N1)+norm(N2))`. Together with edge-length-product bounds, this preserves half of the initial relative area and averaged-normal feasibility margins over the whole segment. It can return zero for an unrepresentable direction. The caller validates material feasibility separately; the shell example delegates its geometric step calculation to this function.
+
 ## Koiter shell material and local energy
 
 `KoiterStVK` consumes numerical `ShellMaterialInputs{a, b, a_bar, b_bar, thickness, theta}`. With `theta = [lambda_ps, mu]`, it returns density per reference area,
@@ -411,7 +413,13 @@ Use explicit `2D` / `3D` names for dimension-specific types. The dimensionless n
 | `field.value(point)` | `field.eval_value(xi)`; composed deformation fields return nine components |
 | `dvalue_dx_local(xi)`, `dgrad_xi_dx_local(xi)` | `eval_dvalue_dcoeffs(xi)`, `eval_dgrad_xi_dcoeffs(xi)` |
 | `field.jacobian(point)` / `dF_dx_local` | `field.eval_dvalue_dcoeffs(xi)` |
-| `VolumetricMaterialLocalEnergy3D<Material>(F, Fp, theta, active)` or `make_material_local_energy<Material, Active>` | `VolumetricMaterialLocalEnergyF3D`, `VolumetricMaterialLocalEnergyFp3D`, or `VolumetricMaterialLocalEnergyTheta3D`, with named `Field3D` inputs |
+| `fem/local/material_local_energy.hpp` | `fem/material/volumetric/volumetric_material_local_energy.hpp` |
+| `fem/material/{material_inputs,multiplicative_kinematics,neo_hookean}.*` | Same filenames under `fem/material/volumetric/` |
+| `fem/material/{shell_material_inputs,koiter_stvk}.*` | Same filenames under `fem/material/shell/` |
+| `fem/local/volumetric_material_local_energy.hpp` or `fem/local/volumetric/volumetric_material_local_energy.hpp` | `fem/material/volumetric/volumetric_material_local_energy.hpp` |
+| `fem/local/shell_material_local_energy.hpp` or `fem/local/shell/shell_material_local_energy.hpp` | `fem/material/shell/shell_material_local_energy.hpp` |
+| `MaterialLocalEnergy3D` and `MaterialLocalEnergyF3D/Fp3D/Theta3D` | `VolumetricMaterialLocalEnergy3D` and `VolumetricMaterialLocalEnergyF3D/Fp3D/Theta3D` |
+| `MaterialLocalEnergy3D<Material>(F, Fp, theta, active)` or `make_material_local_energy<Material, Active>` | `VolumetricMaterialLocalEnergyF3D`, `VolumetricMaterialLocalEnergyFp3D`, or `VolumetricMaterialLocalEnergyTheta3D`, with named `Field3D` inputs |
 | Volume integration helper | Quadrature loop inside the element lambda, passing `w_q * det(dX_dxi)` to `local_energy.accumulate` |
 | `B::evaluate(xi)` and `Basis::Sample` | `B::eval_N(xi)`, `B::eval_dN_dxi(xi)`, `B::eval_d2N_dxi2(xi)` |
 | `RestPointData::position`, `jacobian`, `inverse_jacobian`, `jacobian_determinant` | Field3D values, coordinate Jacobians, their inverses, and their determinants |
@@ -425,13 +433,18 @@ Build and run each example from the repository root:
 
 ```sh
 cmake --preset debug
-cmake --build --preset debug --target hex_q1_mesh_energy tet_p1_mesh_energy hex_hermite_mesh_energy litepgo_tests
+cmake --build --preset debug --target hex_q1_mesh_energy tet_p1_mesh_energy hex_hermite_mesh_energy shell_stvk_mesh_energy litepgo_tests
 ./build/debug/example/fem/hex_q1_mesh_energy
 ./build/debug/example/fem/tet_p1_mesh_energy
 ./build/debug/example/fem/hex_hermite_mesh_energy
+./build/debug/example/fem/shell_stvk_mesh_energy
 ctest --preset debug --output-on-failure
 ```
 
 Hex Q1 uses two boxes with widths 1 and 2 sharing nodal displacement DOFs and integrates with `GaussLegendre3D<2>`. Tet P1 uses two tetrahedra with volumes 1/6 and 1/3 and `TetCentroidQuadrature`. Hex Hermite uses two boxes of sizes (1,2,3) and (2,2,3), sharing all physical derivative DOFs at their common face, and `GaussLegendre3D<4>`.
 
-Tests cover row/column packing, coefficient and physical finite differences, warped coordinate mappings, different displacement/coordinate bases, direct and derived deformation inputs, all active material inputs, shared/element/global DOF assembly, coefficient ownership, coefficient-transform validation, unsupported capabilities, and pointwise evaluation counts. Basis and interpolated-field tests also verify that unrequested quantities are not evaluated. Examples evaluate energy and derivatives only; feasible solver step bounds remain unimplemented.
+The shell StVK example is implemented in `shell_stvk_mesh_energy.hpp` and `shell_stvk_mesh_energy.cpp`. It uses six vertices and four triangles `{0,1,2}`, `{2,1,3}`, `{0,2,4}`, `{1,0,5}`, with reference areas `1,2,1/2,2`. Setup builds edge-neighbor stencils, a three-DOF-per-vertex `StencilDofMap`, and fixed `TriangleMidEdgeRestData`. Each face callback integrates `ShellMaterialLocalEnergy2D<KoiterStVK>` with `TriangleCentroidQuadrature`. Thickness is `0.1`; `Y=100` and `nu=0.3` are converted to plane-stress Lamé parameters.
+
+All four executables follow the same flow: construct fixed reference coordinates, set a uniform stretch, assemble energy/gradient/Hessian, verify the zero and analytical energies, and print one line containing `E`, `|g|`, and `H nnz`. For the shell, `u=0.1*X` gives `a=1.21*a_bar` and `b=b_bar=0`; density is constant across the patch, whose total reference area is `5.5`. Its callback validates the starting material state and delegates feasible-step bounds to the kinematics helper.
+
+Tests cover row/column packing, coefficient and physical finite differences, warped coordinate mappings, different displacement/coordinate bases, direct and derived deformation inputs, all active material inputs, shared/element/global DOF assembly, coefficient ownership, coefficient-transform validation, unsupported capabilities, and pointwise evaluation counts. Basis and interpolated-field tests also verify that unrequested quantities are not evaluated. Bent shell fixtures, constrained Newton relaxation, and feasible-segment checks stay in the shell tests. The three solid example factories still require feasible solver step bounds before use with a solver.

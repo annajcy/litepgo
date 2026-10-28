@@ -2,6 +2,7 @@
 #include "litepgo/energy/energy.hpp"
 
 #include <Eigen/Geometry>
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <utility>
@@ -159,6 +160,44 @@ TriangleMidEdgeKinematics eval_triangle_mid_edge_kinematics(const Eigen::Ref<con
     if (d2ab_dx2)
         *d2ab_dx2 = std::move(H);
     return result;
+}
+
+double eval_triangle_mid_edge_feasible_step(const Eigen::Ref<const Eigen::MatrixXd>& x,
+                                            const Eigen::Ref<const Eigen::MatrixXd>& dx,
+                                            const std::array<int, 3>& opposite) {
+    if (dx.rows() != x.rows() || dx.cols() != 3 || !dx.allFinite())
+        throw std::invalid_argument("Triangle mid-edge feasible step: invalid position direction");
+    eval_triangle_mid_edge_kinematics(x, opposite);
+    double alpha = 1;
+    const auto bound = [&](double margin, double rate) {
+        if (!(margin > 0) || !std::isfinite(margin))
+            throw InfeasibleState("Triangle mid-edge feasible step: invalid starting geometry");
+        if (!std::isfinite(rate))
+            alpha = 0;
+        else if (rate > 0)
+            alpha = std::min(alpha, 0.5 * margin / rate);
+    };
+    const auto normal = [&](int i, int j, int k) {
+        const Eigen::Vector3d e1 = x.row(j) - x.row(i), e2 = x.row(k) - x.row(i);
+        const Eigen::Vector3d de1 = dx.row(j) - dx.row(i), de2 = dx.row(k) - dx.row(i);
+        const std::array<Eigen::Vector3d, 3> N{e1.cross(e2), de1.cross(e2) + e1.cross(de2), de1.cross(de2)};
+        // N(t)=N0+t*N1+t^2*N2; for 0<=t<=1 its change is bounded by t*(|N1|+|N2|).
+        const double scale_rate = e1.norm() * de2.norm() + e2.norm() * de1.norm() + de1.norm() * de2.norm();
+        bound(N[0].norm() - geometry_tolerance * e1.norm() * e2.norm(),
+              N[1].norm() + N[2].norm() + geometry_tolerance * scale_rate);
+        return N;
+    };
+    const auto N = normal(0, 1, 2);
+    for (int k = 0; k < 3; ++k) {
+        const int p = opposite[static_cast<std::size_t>(k)];
+        if (p < 0)
+            continue;
+        const auto Nk = normal(p, (k + 2) % 3, (k + 1) % 3);
+        const double rate = (N[1] + Nk[1]).norm() + (N[2] + Nk[2]).norm() +
+                            geometry_tolerance * (N[1].norm() + N[2].norm() + Nk[1].norm() + Nk[2].norm());
+        bound((N[0] + Nk[0]).norm() - geometry_tolerance * (N[0].norm() + Nk[0].norm()), rate);
+    }
+    return alpha;
 }
 
 } // namespace litepgo

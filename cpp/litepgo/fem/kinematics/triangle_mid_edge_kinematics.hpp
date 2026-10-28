@@ -24,4 +24,12 @@ TriangleMidEdgeKinematics eval_triangle_mid_edge_kinematics(const Eigen::Ref<con
                                                             Eigen::MatrixXd* dab_dx = nullptr,
                                                             std::array<Eigen::MatrixXd, 6>* d2ab_dx2 = nullptr);
 
+// Conservative inclusive bound in [0,1] preserving face areas and averaged normals
+// along x+t*dx for every t in [0,alpha]. Uses half of each initial geometric margin.
+// Validates x as above and requires a matching finite dx; may return zero when
+// direction coefficients are unrepresentable. Material feasibility belongs to the caller.
+double eval_triangle_mid_edge_feasible_step(const Eigen::Ref<const Eigen::MatrixXd>& x,
+                                            const Eigen::Ref<const Eigen::MatrixXd>& dx,
+                                            const std::array<int, 3>& opposite);
+
 } // namespace litepgo
