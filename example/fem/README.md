@@ -25,6 +25,7 @@ flowchart TD
 | `fem/field/` | `Field2D/3D`, `InterpolatedField2D/3D`, `IdentityField2D/3D`, and `DeformationGradientField3D` |
 | `fem/kinematics/` | Triangle mid-edge fundamental forms and the Hex Hermite coefficient transform |
 | `fem/material/volumetric/` | Volumetric inputs, multiplicative kinematics, Neo-Hookean material, and the `VolumetricMaterialLocalEnergy3D` family |
+| `fem/material/shell/` | Shell inputs, Koiter StVK material, `ShellMaterialLocalEnergy2D`, and fixed triangle mid-edge reference data |
 | `fem/local/` | Shared `LocalEnergy2D/3D` interfaces and derivative contractions |
 
 The 1D basis building blocks are `LinearLagrangeBasis` and `CubicHermiteBasis`. Tensor-product types use `2D` or `3D` suffixes, mirrored as `_2d` or `_3d` in their filenames.
@@ -155,7 +156,7 @@ using Q = litepgo::TriangleCentroidQuadrature;
 
 `TriangleCentroidQuadrature` samples `(1/3,1/3)` with weight `1/2`, including the reference triangle's area, and integrates polynomials through degree 1 exactly. Multiply that weight by `norm(X_xi.cross(X_eta))` for the physical reference-area weight; the result is the triangle's area, without another factor of `1/2`. The square rules `GaussLegendre2D` use a different reference domain.
 
-The element callback chooses the geometric measure. For a three-component surface coordinate field, its 3-by-2 derivative supplies reference area `norm(X_xi.cross(X_eta))`; pass this times the quadrature weight to `LocalEnergy2D::accumulate`. `MeshEnergy` and the DOF assembler already accept these elements. The deformation field `DeformationGradientField3D` and the material energies `VolumetricMaterialLocalEnergyF3D`, `VolumetricMaterialLocalEnergyFp3D`, and `VolumetricMaterialLocalEnergyTheta3D` are 3D solid APIs. Koiter kinematics and energy are not part of this 2D foundation.
+The element callback chooses the geometric measure. For a three-component surface coordinate field, its 3-by-2 derivative supplies reference area `norm(X_xi.cross(X_eta))`; pass this times the quadrature weight to `LocalEnergy2D::accumulate`. `MeshEnergy` and the DOF assembler already accept these elements. The deformation field `DeformationGradientField3D` and the material energies `VolumetricMaterialLocalEnergyF3D`, `VolumetricMaterialLocalEnergyFp3D`, and `VolumetricMaterialLocalEnergyTheta3D` are 3D solid APIs. Triangle mid-edge Koiter shells use `ShellMaterialLocalEnergy2D<KoiterStVK>` as described below.
 
 Material input fields inherit `Field3D`. Only the selected active field needs usable coefficient derivatives and a positive DOF count; inactive fields may report zero DOFs and throw from unsupported derivatives. The active map must be affine in its coefficients. Custom affine parameter fields may have a coefficient count different from their number of output components.
 
@@ -315,6 +316,54 @@ b=\begin{bmatrix}c_0+c_1&c_0\\c_0&c_0+c_2\end{bmatrix},
 $$
 
 where central vertex indices are modulo 3. Boundary edges use `c_k = 0`, equivalent to a one-sided face-normal extrapolation; clamped boundary directors are not implemented. Degenerate central or neighboring triangles, or cancelling averaged normals, throw `InfeasibleState`. Layout errors and non-finite inputs throw `std::invalid_argument`. Geometry singularity checks use a relative tolerance of `1e-12`. This function performs no area integration or material evaluation.
+
+## Koiter shell material and local energy
+
+`KoiterStVK` consumes numerical `ShellMaterialInputs{a, b, a_bar, b_bar, thickness, theta}`. With `theta = [lambda_ps, mu]`, it returns density per reference area,
+
+$$
+\epsilon=\frac{a-\bar a}{2},\qquad\kappa=b-\bar b,\qquad
+W=t\,\psi(\epsilon)+\frac{t^3}{12}\psi(\kappa),
+$$
+$$
+\psi(S)=\frac{\lambda_{ps}}2[\operatorname{tr}(\bar a^{-1}S)]^2
++\mu\operatorname{tr}(\bar a^{-1}S\bar a^{-1}S).
+$$
+
+These are the [Koiter StVK membrane and bending factors](https://github.com/evouga/libshell/blob/master/src/MaterialModel/StVKMaterial.cpp). `lambda_ps` is the plane-stress coefficient, not the 3D Lamé coefficient. For Young's modulus `Y` and Poisson ratio `nu`, use `lambda_ps = Y*nu/(1-nu*nu)` and `mu = Y/(2*(1+nu))`. The material requires positive thickness, `mu > 0`, and `lambda_ps+mu > 0`; stable negative `lambda_ps` is supported. Forms must be finite and symmetric, and both metrics must be positive definite.
+
+`eval_dW_dab` and `eval_d2W_dab2` differentiate the six independent entries `(a11,a12,a22,b11,b12,b22)`. Changing a mixed entry changes both symmetric matrix positions. The material Hessian is 6-by-6; area integration belongs to the caller.
+
+Build fixed reference data once for each face:
+
+```cpp
+#include "litepgo/fem/material/shell/shell_material_local_energy.hpp"
+#include "litepgo/fem/material/shell/koiter_stvk.hpp"
+#include "litepgo/fem/quadrature/2d/triangle_centroid_quadrature.hpp"
+
+std::vector<litepgo::TriangleMidEdgeRestData> rest;
+for (int f = 0; f < map.num_elements(); ++f)
+    rest.emplace_back(map.gather(f, X_nodes_packed), stencils.opposite[f]);
+```
+
+Each record owns `X_local`, `opposite`, `a_bar`, `b_bar`, and `sqrt_det_a_bar`. In the `MeshEnergy` callback, `u_local` is the full stencil matrix gathered by `StencilDofMap`:
+
+```cpp
+const litepgo::ShellMaterialLocalEnergy2D<litepgo::KoiterStVK> local_energy(
+    rest[f], u_local, thickness, Eigen::Vector2d(lambda_ps, mu));
+if (g)
+    g->setZero(local_energy.num_dofs());
+if (H)
+    H->setZero(local_energy.num_dofs(), local_energy.num_dofs());
+using Q = litepgo::TriangleCentroidQuadrature;
+const Eigen::Vector2d xi = Q::points().row(0).transpose();
+const double weight = Q::weights()[0] * rest[f].sqrt_det_a_bar;
+return local_energy.accumulate(xi, weight, g, H);
+```
+
+The local energy owns snapshots, activates all `3*n` row-packed displacement DOFs, and holds reference data, thickness, and material parameters fixed. Its exact Hessian includes both `J.transpose()*d2W_dab2*J` and the six geometric Hessian contractions weighted by `dW_dab`. Gradient and Hessian outputs remain independently nullable; `accumulate` adds into correctly sized, initialized buffers. Pointwise density and derivatives are constant over this face, so the centroid rule integrates them exactly. Only the central face's contribution is returned; neighboring vertices supply its curvature support.
+
+The current shell path optimizes displacement only and uses per-face constant parameters. It retains the mid-edge boundary normal extrapolation above. A solver still needs a geometric feasible-step callback; the local density implementation does not supply one.
 
 ## Hex Hermite physical DOFs
 

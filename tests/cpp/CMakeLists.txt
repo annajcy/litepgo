@@ -40,6 +40,8 @@ add_executable(litepgo_tests
     fem/material/volumetric/multiplicative_kinematics_gtest.cpp
     fem/kinematics/triangle_mid_edge_kinematics_gtest.cpp
     fem/material/volumetric/neo_hookean_gtest.cpp
+    fem/material/shell/koiter_stvk_gtest.cpp
+    fem/material/shell/shell_material_local_energy_gtest.cpp
     fem/material/volumetric/volumetric_material_local_energy_gtest.cpp
     fem/quadrature/quadrature_gtest.cpp
     fem/quadrature/2d/tensor_product_quadrature_2d_gtest.cpp
