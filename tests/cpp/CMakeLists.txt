@@ -37,6 +37,7 @@ add_executable(litepgo_tests
     fem/basis/1d/linear_lagrange_basis_gtest.cpp
     fem/local/local_energy_gtest.cpp
     fem/local/dof_derivatives_gtest.cpp
+    fem/kinematics/volumetric_element_gtest.cpp
     fem/material/volumetric/volumetric_material_inputs_gtest.cpp
     fem/material/volumetric/multiplicative_kinematics_gtest.cpp
     fem/kinematics/triangle_mid_edge_kinematics_gtest.cpp
