@@ -174,7 +174,14 @@ def test_energy_rejects_bad_fields():
         Energy(rest_map, X, [np.eye(3)] * n, constant_fields(NEO_HOOKEAN_THETA, n))
 
 
-# example/fem/*.py mirror the C++ examples line by line; both must write identical files.
+# example/fem/*.py mirror the C++ examples line by line. They solve with AutoSparseSolver, whose
+# threaded factorizations (PARDISO, Accelerate) need not repeat bit for bit, so the mirrors agree
+# to rounding: exact counts and connectivity, values to their printed digits, positions to 1e-10.
+
+
+def parse_equilibrium(stdout):
+    values = dict(item.split("=") for item in stdout.strip().split(", "))
+    return {key: int(value) if key in ("converged", "iterations") else float(value) for key, value in values.items()}
 
 
 @pytest.mark.parametrize(
@@ -195,10 +202,21 @@ def test_python_examples_match_cpp(tmp_path, name, suffix):
     cpp_out, py_out = tmp_path / f"cpp{suffix}", tmp_path / f"py{suffix}"
     cpp = subprocess.run([executable, asset, cpp_out], check=True, capture_output=True, text=True)
     py = subprocess.run([sys.executable, script, asset, py_out], check=True, capture_output=True, text=True)
-    assert py.stdout == cpp.stdout
-    assert py_out.read_bytes() == cpp_out.read_bytes()
-    if suffix == ".veg":  # volume examples also write the boundary surface
-        assert py_out.with_suffix(".obj").read_bytes() == cpp_out.with_suffix(".obj").read_bytes()
+    cpp_results, py_results = parse_equilibrium(cpp.stdout), parse_equilibrium(py.stdout)
+    assert py_results.keys() == cpp_results.keys()
+    for key, value in cpp_results.items():
+        if key in ("converged", "iterations"):
+            assert py_results[key] == value, key
+        elif key == "free residual":  # rounding noise below the 1e-8 tolerance
+            assert value < 1e-8 and py_results[key] < 1e-8
+        else:
+            assert py_results[key] == pytest.approx(value, rel=1e-5), key
+    outputs = [(mesh.read_veg, suffix)] if suffix == ".veg" else []
+    outputs.append((mesh.read_obj, ".obj"))  # volume examples also write the boundary surface
+    for read, extension in outputs:
+        cpp_mesh, py_mesh = read(cpp_out.with_suffix(extension)), read(py_out.with_suffix(extension))
+        np.testing.assert_array_equal(py_mesh.cells, cpp_mesh.cells)
+        np.testing.assert_allclose(py_mesh.positions, cpp_mesh.positions, rtol=0, atol=1e-10)
 
 
 # example/fem/plastic_twist: the plastic displacement u_p twists the bar by 90 degrees and Fp is

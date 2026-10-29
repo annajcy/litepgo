@@ -70,7 +70,7 @@ def main():
     initial = np.zeros(elastic.num_dofs)
     options = solver.NewtonOptions()
     options.gradient_tolerance = 1e-8
-    sparse_solver = linalg.EigenLDLT()
+    sparse_solver = linalg.AutoSparseSolver()
     result = solver.newton_solve(potential, unconstrained, initial, options, sparse_solver)
     converged = result.status == solver.NewtonStatus.Converged
     corner_gap = np.linalg.norm(result.x.reshape(-1, 3)[corners] - targets, axis=1).max()

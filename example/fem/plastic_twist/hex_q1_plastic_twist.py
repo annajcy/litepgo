@@ -74,7 +74,7 @@ def main():
         options = solver.NewtonOptions()
         options.gradient_tolerance = 1e-8
         options.max_iterations = 200
-        sparse_solver = linalg.EigenLDLT()
+        sparse_solver = linalg.AutoSparseSolver()
         result = solver.newton_solve(elastic, fixed, initial, options, sparse_solver)
         converged = converged and result.status == solver.NewtonStatus.Converged
         # The top face's twist about the axis, from its vertices' summed in-plane rotation.
