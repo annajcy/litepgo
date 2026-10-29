@@ -7,8 +7,12 @@ import scipy.sparse as sp
 import litepgo.linalg.sparse_solver as la
 
 HAS_ACCELERATE = hasattr(la, "AccelerateLLT")
-ALL_SOLVERS = [la.EigenLDLT, la.EigenSparseLU] + ([la.AccelerateLLT, la.AccelerateLDLT] if HAS_ACCELERATE else [])
-INDEFINITE_SOLVERS = [la.EigenSparseLU] + ([la.AccelerateLDLT] if HAS_ACCELERATE else [])
+HAS_MKL = hasattr(la, "PardisoLLT")
+ALL_SOLVERS = ([la.EigenLDLT, la.EigenSparseLU] + ([la.AccelerateLLT, la.AccelerateLDLT] if HAS_ACCELERATE else []) +
+               ([la.PardisoLLT, la.PardisoLDLT] if HAS_MKL else []))
+INDEFINITE_SOLVERS = ([la.EigenSparseLU] + ([la.AccelerateLDLT] if HAS_ACCELERATE else []) +
+                      ([la.PardisoLDLT] if HAS_MKL else []))
+CHOLESKY_SOLVERS = ([la.AccelerateLLT] if HAS_ACCELERATE else []) + ([la.PardisoLLT] if HAS_MKL else [])
 
 
 def laplacian(n, scale=1.0):
@@ -38,9 +42,9 @@ def test_solves_saddle_point(solver_type):
     np.testing.assert_allclose(solver.solve(rhs), np.linalg.solve(A.toarray(), rhs), rtol=1e-10, atol=1e-12)
 
 
-@pytest.mark.skipif(not HAS_ACCELERATE, reason="needs Apple Accelerate")
-def test_accelerate_llt_fails_on_indefinite():
-    solver = la.AccelerateLLT()
+@pytest.mark.parametrize("solver_type", CHOLESKY_SOLVERS)
+def test_cholesky_fails_on_indefinite(solver_type):
+    solver = solver_type()
     assert not solver.compute(saddle_point(10))
     with pytest.raises(RuntimeError):
         solver.solve(np.ones(11))
@@ -158,6 +162,9 @@ def test_auto_aliases_are_the_platform_classes():
     if HAS_ACCELERATE:
         assert la.AutoSparseSolver is la.AccelerateLLT
         assert la.AutoIndefiniteSparseSolver is la.AccelerateLDLT
+    elif HAS_MKL:
+        assert la.AutoSparseSolver is la.PardisoLLT
+        assert la.AutoIndefiniteSparseSolver is la.PardisoLDLT
     else:
         assert la.AutoSparseSolver is la.EigenLDLT
         assert la.AutoIndefiniteSparseSolver is la.EigenSparseLU
@@ -167,6 +174,12 @@ def test_auto_aliases_are_the_platform_classes():
 def test_accelerate_absent_elsewhere():
     with pytest.raises(ImportError):
         from litepgo.linalg.sparse_solver import AccelerateLLT  # noqa: F401
+
+
+@pytest.mark.skipif(sys.platform.startswith("linux"), reason="oneMKL is built on Linux")
+def test_pardiso_absent_elsewhere():
+    with pytest.raises(ImportError):
+        from litepgo.linalg.sparse_solver import PardisoLLT  # noqa: F401
 
 
 def test_parent_module_preserves_solver_exports():

@@ -4,6 +4,7 @@ include(FetchContent)
 include(cmake/third-party/eigen.cmake)
 include(cmake/third-party/tbb.cmake)
 include(cmake/third-party/accelerate.cmake)
+include(cmake/third-party/mkl.cmake)
 
 if(LITEPGO_BUILD_TESTS)
     FetchContent_Declare(

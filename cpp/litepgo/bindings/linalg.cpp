@@ -9,6 +9,10 @@
 #include "litepgo/linalg/sparse_solver/accelerate_ldlt.hpp"
 #include "litepgo/linalg/sparse_solver/accelerate_llt.hpp"
 #endif
+#if defined(LITEPGO_HAS_MKL)
+#include "litepgo/linalg/sparse_solver/pardiso_ldlt.hpp"
+#include "litepgo/linalg/sparse_solver/pardiso_llt.hpp"
+#endif
 
 #include <nanobind/eigen/dense.h>
 #include <nanobind/stl/vector.h>
@@ -47,6 +51,10 @@ void bind(nb::module_& m) {
 #if defined(LITEPGO_HAS_ACCELERATE)
     nb::class_<AccelerateLLT, SparseSolver>(m, "AccelerateLLT").def(nb::init<>());
     nb::class_<AccelerateLDLT, SparseSolver>(m, "AccelerateLDLT").def(nb::init<>());
+#endif
+#if defined(LITEPGO_HAS_MKL)
+    nb::class_<PardisoLLT, SparseSolver>(m, "PardisoLLT").def(nb::init<>());
+    nb::class_<PardisoLDLT, SparseSolver>(m, "PardisoLDLT").def(nb::init<>());
 #endif
 
     // The C++ aliases: the same class objects under a second name.

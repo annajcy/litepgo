@@ -29,6 +29,10 @@ inline BuildInfo build_info() {
     info.sparse_backends.push_back("AccelerateLLT");
     info.sparse_backends.push_back("AccelerateLDLT");
 #endif
+#if defined(LITEPGO_HAS_MKL)
+    info.sparse_backends.push_back("PardisoLLT");
+    info.sparse_backends.push_back("PardisoLDLT");
+#endif
     return info;
 }
 
