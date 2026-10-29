@@ -178,6 +178,7 @@ void bind(nb::module_& m) {
         .def_ro("b_bar", &TriangleMidEdgeRestData::b_bar)
         .def_ro("sqrt_det_a_bar", &TriangleMidEdgeRestData::sqrt_det_a_bar);
 
+    bind_local(m);
     bind_energies(m);
 }
 

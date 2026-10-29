@@ -77,6 +77,22 @@ NeoHookean = _native.NeoHookean
 KoiterStVK = _native.KoiterStVK
 
 TriangleMidEdgeRestData = _native.TriangleMidEdgeRestData
+TriangleMidEdgeKinematics = _native.TriangleMidEdgeKinematics
+eval_triangle_mid_edge_kinematics = _native.eval_triangle_mid_edge_kinematics
+eval_triangle_mid_edge_feasible_step = _native.eval_triangle_mid_edge_feasible_step
+eval_positive_det_feasible_step = _native.eval_positive_det_feasible_step
+eval_gradient_wrt_dofs = _native.eval_gradient_wrt_dofs
+eval_hessian_wrt_dofs = _native.eval_hessian_wrt_dofs
+
+LocalEnergy2D = _native.LocalEnergy2D
+LocalEnergy3D = _native.LocalEnergy3D
+VolumetricMaterialLocalEnergy3D = _templates["VolumetricMaterialLocalEnergy3D"]
+VolumetricMaterialLocalEnergyF3D = _templates["VolumetricMaterialLocalEnergyF3D"]
+VolumetricMaterialLocalEnergyFp3D = _templates["VolumetricMaterialLocalEnergyFp3D"]
+VolumetricMaterialLocalEnergyTheta3D = _templates["VolumetricMaterialLocalEnergyTheta3D"]
+ShellMaterialLocalEnergy2D = _templates["ShellMaterialLocalEnergy2D"]
+VolumetricElement3D = _templates["VolumetricElement3D"]
+
 VolumetricFemEnergy = _templates["VolumetricFemEnergy"]
 ShellFemEnergy = _templates["ShellFemEnergy"]
 
@@ -101,6 +117,20 @@ __all__ = [
     "NeoHookean",
     "KoiterStVK",
     "TriangleMidEdgeRestData",
+    "TriangleMidEdgeKinematics",
+    "eval_triangle_mid_edge_kinematics",
+    "eval_triangle_mid_edge_feasible_step",
+    "eval_positive_det_feasible_step",
+    "eval_gradient_wrt_dofs",
+    "eval_hessian_wrt_dofs",
+    "LocalEnergy2D",
+    "LocalEnergy3D",
+    "VolumetricMaterialLocalEnergy3D",
+    "VolumetricMaterialLocalEnergyF3D",
+    "VolumetricMaterialLocalEnergyFp3D",
+    "VolumetricMaterialLocalEnergyTheta3D",
+    "ShellMaterialLocalEnergy2D",
+    "VolumetricElement3D",
     "VolumetricFemEnergy",
     "ShellFemEnergy",
 ]

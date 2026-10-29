@@ -122,11 +122,18 @@ Energy = fem.VolumetricFemEnergy[fem.NeoHookean, fem.HexHermiteBasis, fem.GaussL
 elastic = Energy(dof.VertexDofMap(data.topology, 24), X, Fp, theta)
 ```
 
+The building blocks are bound too: `LocalEnergy2D/3D`,
+`VolumetricMaterialLocalEnergy{F,Fp,Theta}3D[M]` (which borrow their fields and keep
+them alive), `ShellMaterialLocalEnergy2D[M]`, `VolumetricElement3D[Q]`, and the
+kinematics and chain-rule functions. Where C++ fills optional output pointers or adds
+into caller buffers (`eval`, `accumulate`, `eval_triangle_mid_edge_kinematics`), Python
+takes `gradient=`/`hessian=` flags and returns `(value, gradient or None, hessian or None)`.
+Matrix and vector arguments must be NumPy arrays.
+
 The energies' field template arguments are erased (`fem::SharedField3D`): each
 list may hold any `Field3D`, chosen per element, and the energy shares ownership
 of them. Material, basis and quadrature arguments are compiled in;
 `cpp/litepgo/bindings/fem_energy.cpp` lists the available instantiations, and
 indexing any other combination raises `TypeError` naming them. Add one line there
 to bind another. Fields and energies cannot be subclassed in Python: they are
-evaluated per quadrature point inside parallel C++ loops. Matrix and vector
-arguments must be NumPy arrays.
+evaluated per quadrature point inside parallel C++ loops.

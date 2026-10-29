@@ -18,7 +18,9 @@ void bind(nanobind::module_& m);
 
 namespace litepgo::fem::binding {
 void bind(nanobind::module_& m);
-// The energy template instantiations, compiled separately (fem_energy.cpp).
+// Local energies, elements and kinematics (fem_local.cpp), and the energy template
+// instantiations (fem_energy.cpp), compiled separately.
+void bind_local(nanobind::module_& m);
 void bind_energies(nanobind::module_& m);
 } // namespace litepgo::fem::binding
 

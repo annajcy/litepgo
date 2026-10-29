@@ -1,4 +1,4 @@
-nanobind_add_module(_core NB_STATIC module.cpp mesh.cpp dof.cpp linalg.cpp energy.cpp fem.cpp fem_energy.cpp solver.cpp)
+nanobind_add_module(_core NB_STATIC module.cpp mesh.cpp dof.cpp linalg.cpp energy.cpp fem.cpp fem_local.cpp fem_energy.cpp solver.cpp)
 target_link_libraries(_core PRIVATE litepgo::io litepgo::litepgo litepgo::warnings)
 
 # The build tree holds an importable package: _core is built into it, and

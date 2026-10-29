@@ -168,3 +168,90 @@ def test_energy_rejects_bad_fields():
         Energy(rest_map, X, constant_fields(np.eye(2), n), constant_fields(NEO_HOOKEAN_THETA, n))
     with pytest.raises(TypeError):
         Energy(rest_map, X, [np.eye(3)] * n, constant_fields(NEO_HOOKEAN_THETA, n))
+
+
+# Building blocks: one element assembled by hand must agree with the mesh energies.
+
+
+def single_hex(scale=1.5):
+    nodes = scale * np.array([fem.HexQ1Basis.reference_node(v) for v in range(8)])
+    return mesh.HexMesh(nodes, np.arange(8, dtype=np.int32)[None])
+
+
+def hex_local_energy(Local, data, u):
+    X_field = fem.InterpolatedField3D[fem.HexQ1Basis](data.positions)
+    u_field = fem.InterpolatedField3D[fem.HexQ1Basis](u.reshape(8, 3))
+    F = fem.DeformationGradientField3D(u_field, X_field)
+    Fp = fem.IdentityField3D(np.eye(3).ravel())
+    theta = fem.IdentityField3D(NEO_HOOKEAN_THETA.copy())
+    return X_field, Local[fem.NeoHookean](F, Fp, theta)
+
+
+def test_element_matches_mesh_energy():
+    data = single_hex()
+    u = 0.05 * np.sin(np.arange(24.0))
+    X_field, local = hex_local_energy(fem.VolumetricMaterialLocalEnergyF3D, data, u)
+    assert isinstance(local, fem.LocalEnergy3D) and isinstance(local, fem.VolumetricMaterialLocalEnergy3D)
+    element = fem.VolumetricElement3D[fem.GaussLegendre3D[2]](X_field)
+    value, gradient, hessian = element.eval(local, gradient=True, hessian=True)
+    assert element.eval(local)[1:] == (None, None)
+    whole = volumetric_energy(data, fem.HexQ1Basis, fem.GaussLegendre3D[2], 3)
+    assert value == pytest.approx(whole.eval_value(u), rel=1e-14)
+    np.testing.assert_allclose(gradient, whole.eval_gradient(u), rtol=1e-12, atol=1e-14)
+    np.testing.assert_allclose(hessian, whole.eval_hessian(u).toarray(), rtol=1e-12, atol=1e-13)
+    collapse = -2 * data.positions.ravel()
+    assert 0 < element.max_feasible_step(local, collapse) < 0.5
+    assert element.max_feasible_step(local, np.zeros(24)) == 1.0
+
+
+def test_theta_local_energy_differentiates_parameters():
+    data = single_hex()
+    A = np.array([[1.1, 0.1, 0.0], [0.0, 0.9, 0.2], [0.05, 0.0, 1.2]])
+    u = (data.positions @ (A - np.eye(3)).T).ravel()  # constant F = A
+    X_field, local = hex_local_energy(fem.VolumetricMaterialLocalEnergyTheta3D, data, u)
+    _, gradient, _ = fem.VolumetricElement3D[fem.GaussLegendre3D[2]](X_field).eval(local, gradient=True)
+    expected = 1.5**3 * fem.NeoHookean.eval_dW_dtheta(A, np.eye(3), NEO_HOOKEAN_THETA)
+    np.testing.assert_allclose(gradient, expected, rtol=1e-12)
+
+
+def test_shell_local_energy_matches_shell_energy():
+    X = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0.0]])
+    topology = mesh.TriangleTopology(3, np.array([[0, 1, 2]], dtype=np.int32))
+    stencils = mesh.make_triangle_mid_edge_stencils(topology)
+    stencil_map = dof.StencilDofMap(3, stencils.vertices, 3)
+    rest = fem.TriangleMidEdgeRestData(X, stencils.opposite[0])
+    theta = np.array([1.0, 2.0])
+    whole = fem.ShellFemEnergy[fem.KoiterStVK](stencil_map, [rest], [0.1], [theta])
+    u = 0.1 * np.cos(np.arange(9.0))
+    local = fem.ShellMaterialLocalEnergy2D[fem.KoiterStVK](rest, u.reshape(3, 3), 0.1, theta)
+    area = 0.5 * rest.sqrt_det_a_bar
+    value, gradient, _ = local.accumulate(np.full(2, 1 / 3), area, gradient=True)
+    assert value == pytest.approx(whole.eval_value(u), rel=1e-14)
+    np.testing.assert_allclose(gradient, whole.eval_gradient(u), rtol=1e-12, atol=1e-14)
+
+
+def test_triangle_mid_edge_kinematics():
+    x = np.array([[0, 0, 0], [2, 0, 0.1], [0, 1, 0.2]])
+    opposite = np.array([-1, -1, -1], dtype=np.int32)
+    kinematics, dab_dx, d2ab_dx2 = fem.eval_triangle_mid_edge_kinematics(x, opposite, gradient=True, hessian=True)
+    J = np.column_stack([x[1] - x[0], x[2] - x[0]])
+    np.testing.assert_allclose(kinematics.a, J.T @ J, atol=1e-14)
+    assert dab_dx.shape == (6, 9) and len(d2ab_dx2) == 6
+    h = 1e-6
+    for k in range(9):
+        step = np.zeros(9)
+        step[k] = h
+        plus = fem.eval_triangle_mid_edge_kinematics(x + step.reshape(3, 3), opposite)[0].a
+        minus = fem.eval_triangle_mid_edge_kinematics(x - step.reshape(3, 3), opposite)[0].a
+        fd = (plus - minus) / (2 * h)
+        np.testing.assert_allclose(dab_dx[:3, k], [fd[0, 0], fd[0, 1], fd[1, 1]], atol=1e-8)
+    assert fem.eval_triangle_mid_edge_feasible_step(x, -x, opposite) < 1
+
+
+def test_kinematic_helpers():
+    assert fem.eval_positive_det_feasible_step(np.eye(3), -2 * np.eye(3)) < 0.5
+    assert fem.eval_positive_det_feasible_step(np.eye(3), np.eye(3)) == 1.0
+    rng = np.random.default_rng(1)
+    D, g, H = rng.standard_normal((9, 5)), rng.standard_normal((3, 3)), rng.standard_normal((9, 9))
+    np.testing.assert_allclose(fem.eval_gradient_wrt_dofs(D, g), D.T @ g.ravel(order="F"))
+    np.testing.assert_allclose(fem.eval_hessian_wrt_dofs(D, H), D.T @ H @ D, atol=1e-12)
