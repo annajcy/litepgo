@@ -26,6 +26,7 @@ add_executable(litepgo_tests
     dof/constant_dof_map_gtest.cpp
     fem/field/field_gtest.cpp
     fem/field/identity_field_gtest.cpp
+    fem/field/shared_field_gtest.cpp
     fem/field/deformation_gradient_field_gtest.cpp
     fem/material/volumetric/material_sources_gtest.cpp
     fem/quadrature/1d/gauss_legendre_1d_gtest.cpp
