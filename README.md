@@ -136,4 +136,9 @@ of them. Material, basis and quadrature arguments are compiled in;
 `cpp/litepgo/bindings/fem_energy.cpp` lists the available instantiations, and
 indexing any other combination raises `TypeError` naming them. Add one line there
 to bind another. Fields and energies cannot be subclassed in Python: they are
-evaluated per quadrature point inside parallel C++ loops.
+evaluated per quadrature point inside parallel C++ loops. `example/fem/*.py` mirror
+the four C++ FEM examples line by line, and `tests/python/test_fem.py` checks that
+each pair writes byte-identical files. `solver.newton_solve(energy, fixed, x0, options,
+solver=None)` likewise follows the C++ signature (`fixed` is a `dof.DofReduction`;
+the solver defaults to `AutoSparseSolver()`), and `solver.NewtonOptions()` starts from
+the C++ defaults, with a NaN tolerance that must be set before solving.

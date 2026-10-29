@@ -1,12 +1,16 @@
 import gc
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from litepgo import dof, energy, fem, mesh
+from litepgo import _core, dof, energy, fem, mesh
 
 ASSETS = Path(__file__).resolve().parents[2] / "assets"
+# The extension lives in build/<preset>/python/litepgo; the examples in build/<preset>/example/fem.
+EXAMPLES = Path(_core.__file__).parents[2] / "example" / "fem"
 
 NEO_HOOKEAN_THETA = np.array([2.0, 3.0])
 
@@ -168,6 +172,33 @@ def test_energy_rejects_bad_fields():
         Energy(rest_map, X, constant_fields(np.eye(2), n), constant_fields(NEO_HOOKEAN_THETA, n))
     with pytest.raises(TypeError):
         Energy(rest_map, X, [np.eye(3)] * n, constant_fields(NEO_HOOKEAN_THETA, n))
+
+
+# example/fem/*.py mirror the C++ examples line by line; both must write identical files.
+
+
+@pytest.mark.parametrize(
+    "name,suffix",
+    [
+        ("tet_p1_mesh_energy", ".veg"),
+        ("hex_q1_mesh_energy", ".veg"),
+        ("hex_hermite_mesh_energy", ".veg"),
+        ("shell_stvk_mesh_energy", ".obj"),
+    ],
+)
+def test_python_examples_match_cpp(tmp_path, name, suffix):
+    executable = EXAMPLES / name
+    if not executable.exists():
+        pytest.skip(f"{executable} is not built")
+    script = Path(__file__).resolve().parents[2] / "example" / "fem" / f"{name}.py"
+    asset = ASSETS / {"tet_p1": "box-tet.veg", "shell_stvk": "shell.obj"}.get(name.rsplit("_mesh", 1)[0], "box-hex.veg")
+    cpp_out, py_out = tmp_path / f"cpp{suffix}", tmp_path / f"py{suffix}"
+    cpp = subprocess.run([executable, asset, cpp_out], check=True, capture_output=True, text=True)
+    py = subprocess.run([sys.executable, script, asset, py_out], check=True, capture_output=True, text=True)
+    assert py.stdout == cpp.stdout
+    assert py_out.read_bytes() == cpp_out.read_bytes()
+    if suffix == ".veg":  # volume examples also write the boundary surface
+        assert py_out.with_suffix(".obj").read_bytes() == cpp_out.with_suffix(".obj").read_bytes()
 
 
 # Building blocks: one element assembled by hand must agree with the mesh energies.

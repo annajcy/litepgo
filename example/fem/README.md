@@ -550,6 +550,18 @@ build/debug/example/fem/tet_p1_mesh_energy assets/box-tet.veg /tmp/deformed.veg
 build/debug/example/fem/shell_stvk_mesh_energy assets/shell.obj /tmp/deformed.obj
 ```
 
+Each example also has a Python mirror beside it (`<name>.py`) that uses the same
+classes, constructor arguments and template arguments through `litepgo`, line for
+line. It takes the same optional arguments (see `--help`) and writes to `output/python/`
+by default:
+
+```sh
+uv run --no-sync python example/fem/tet_p1_mesh_energy.py assets/box-tet.veg /tmp/deformed.veg
+```
+
+`tests/python/test_fem.py` runs each pair and requires identical printed results
+and byte-identical output files.
+
 The volume examples also write the deformed boundary as a triangle OBJ beside the
 VEG output (same name, `.obj` extension) through `extract_surface` (`litepgo/mesh/extract_surface.hpp`), for viewers
 that do not read VEG. Hex Hermite still requires axis-aligned affine cells; its
