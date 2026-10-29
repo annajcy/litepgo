@@ -96,6 +96,4 @@ FEM performs its own geometric validity checks. Writes replace the named file;
 invalid mesh data is rejected before opening it, and stream errors are reported.
 
 Run `tests/python/test_io.py` for precision, real-asset roundtrip, sparse MSH tags,
-and invalid-input checks. `scripts/check_mesh_io_reference.py` additionally compares
-against an installed `pypgo`: OBJ/VEG in both directions, and MSH output through
-libpgo's tet reader. Run it with both packages importable in the same Python process.
+and invalid-input checks.
