@@ -1,6 +1,6 @@
 # FEM with MeshEnergy
 
-Each example is a standalone `.cpp` with setup and evaluation directly in `main()`. There are no example headers. Regression fixtures live in the test `.cpp` files.
+Each example is a standalone `.cpp` with setup and a Newton static-equilibrium solve directly in `main()`. There are no example headers. Regression fixtures live in the test `.cpp` files.
 
 Tet P1, Hex Q1, and Hex Hermite use `VolumetricFemEnergy<Material, UBasis, Quadrature, XField, FpField, ThetaField>` from `litepgo/fem/volumetric_fem_energy.hpp`. Construct it with `(displacement_map, rest_position_fields, Fp_fields, theta_fields)`. The caller constructs all three field arrays in element order. `BasisDofTransform<UBasis>` specifies the physical DOF layout and converts gathered displacement to `InterpolatedField3D<UBasis>` coefficients: Tet P1 and Hex Q1 use three DOFs per vertex with identity conversion; Hex Hermite uses 24 physical DOFs per vertex. Reference fields may use a different basis but must use the same reference coordinates. The unknown is displacement. The energy owns snapshots of reference geometry and concrete `Field3D` inputs in `std::vector<XField>`, `std::vector<FpField>` and `std::vector<ThetaField>` stored by value (borrowed dependencies must outlive the energy). Each vector must contain one field per element in map order. Fields may differ between elements and vary over reference coordinates; rebuild the energy to change these inputs. Evaluation, derivatives, and feasible steps require no user callbacks. Hermite transforms are cached per element, applied to both displacement and direction, and pull gradients and Hessians back before projection and assembly. The Hermite transform accepts any `Field3D` representing a positive axis-aligned affine box throughout the reference domain. It checks corner values only; this does not certify the interior geometry of an arbitrary field. Unsupported bases require an explicit transform specialization; there is no identity fallback.
 
@@ -509,9 +509,26 @@ Hex Q1 uses two boxes with widths 1 and 2 sharing nodal displacement DOFs and in
 
 The shell StVK example is implemented entirely in `main()` in `shell_stvk_mesh_energy.cpp`. It uses six vertices and four triangles `{0,1,2}`, `{2,1,3}`, `{0,2,4}`, `{1,0,5}`, with reference areas `1,2,1/2,2`. Setup builds edge-neighbor stencils, a three-DOF-per-vertex `StencilDofMap`, and fixed `TriangleMidEdgeRestData`. This reference-data type is declared in `fem/kinematics/triangle_mid_edge_kinematics.hpp` and has no material dependency. `ShellFemEnergy<KoiterStVK>` owns the per-face reference data, thicknesses, and parameters. Each face callback integrates the constant density from `ShellMaterialLocalEnergy2D<KoiterStVK>` at the centroid with the reference face area. Thickness is `0.1`; `Y=100` and `nu=0.3` are converted to plane-stress Lamé parameters.
 
-All four executables construct fixed reference coordinates, apply a uniform stretch,
-assemble energy/gradient/Hessian, and print the energy, gradient norm, and Hessian
-nonzero count. Regression fixtures and analytical checks live in the test files.
+All four executables minimize total potential `Pi(u) = E_elastic(u) - f.dot(u)` from
+zero displacement. A `QuadraticEnergy` with a zero matrix and linear coefficient
+`-f` represents the constant nodal load; `WeightedEnergySum` combines it with the
+elastic energy. `DofReduction` imposes zero displacement on fixed DOFs.
+`newton_solve` uses `EigenLDLT`, projected element Hessians, feasible-step bounds,
+line search, and a free-gradient infinity-norm tolerance of `1e-8`.
+
+| Example | Fixed DOFs | Nodal load |
+| --- | --- | --- |
+| Tet P1 | All displacement components at vertices 0, 1, 2 (the shared face) | Vertex 3: `f_z = 0.02` |
+| Hex Q1 | All displacement components on `X=0` | Total `f_z = -0.02`, split equally over the four vertices on `X=3` |
+| Hex Hermite | All 24 physical displacement/derivative DOFs per vertex on `X=0` | Same end force, applied only to displacement slots |
+| Shell StVK | All displacement components at central-face vertices 0, 1, 2 | Vertex 3: `f_z = -0.001` |
+
+The loads are nodal forces, not distributed tractions. Each executable prints
+convergence, iteration count, total potential, elastic energy, the free-DOF residual,
+and one loaded vertex's displacement. Reactions at fixed DOFs need not vanish.
+A nonconverged solve or a residual above tolerance returns a nonzero exit code.
+CTest runs all four executables as equilibrium regressions; the existing unit tests
+retain the analytical stretch and derivative checks.
 
 Tests cover row/column packing, coefficient and physical finite differences, warped coordinate mappings, different displacement/coordinate bases, direct and derived deformation inputs, all active material inputs, shared/element/global DOF assembly, coefficient ownership, coefficient-transform validation, unsupported capabilities, and pointwise evaluation counts. Basis and interpolated-field tests also verify that unrequested quantities are not evaluated. Feasible-segment tests cover polynomial degree reduction, interior and repeated determinant roots, material parameter bounds, and physical Hermite directions. Constrained Newton relaxation is exercised by both tet and shell tests.
 

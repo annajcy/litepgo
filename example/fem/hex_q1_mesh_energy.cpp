@@ -1,7 +1,11 @@
+#include "litepgo/energy/quadratic_energy.hpp"
+#include "litepgo/energy/weighted_energy_sum.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
+#include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
+#include "litepgo/solver/newton.hpp"
 
 #include <iostream>
 #include <memory>
@@ -31,9 +35,30 @@ int main() {
         std::vector<IdentityField3D>(topology.num_cells(), Fp_field),
         std::vector<IdentityField3D>(topology.num_cells(), theta_field));
 
-    const Vec u = 0.1 * rest_positions;
-    Vec gradient;
-    SpMat hessian = elastic->hessian_pattern();
-    const double value = elastic->eval(u, &gradient, &hessian);
-    std::cout << "E=" << value << ", |g|=" << gradient.norm() << ", H nnz=" << hessian.nonZeros() << '\n';
+    // Clamp X=0; distribute a total downward force of 0.02 over X=3.
+    std::vector<int> fixed_dofs;
+    Vec force = Vec::Zero(elastic->num_dofs());
+    for (int v = 0; v < topology.num_vertices(); ++v) {
+        if (rest_nodes(v, 0) == 0)
+            for (int c = 0; c < 3; ++c)
+                fixed_dofs.push_back(3 * v + c);
+        if (rest_nodes(v, 0) == 3)
+            force[3 * v + 2] = -0.02 / 4;
+    }
+
+    // Static equilibrium minimizes total potential: Pi(u) = E_elastic(u) - force.dot(u).
+    SpMat zero(elastic->num_dofs(), elastic->num_dofs());
+    auto load = std::make_shared<QuadraticEnergy>(zero, -force);
+    WeightedEnergySum potential({{elastic, 1}, {load, 1}});
+    const DofReduction fixed(elastic->num_dofs(), std::move(fixed_dofs));
+    const Vec initial = Vec::Zero(elastic->num_dofs());
+    NewtonOptions options;
+    options.gradient_tolerance = 1e-8;
+    EigenLDLT solver;
+    const auto result = newton_solve(potential, fixed, initial, options, solver);
+    const bool converged = result.status == NewtonStatus::Converged;
+    std::cout << "converged=" << converged << ", iterations=" << result.iterations << ", potential=" << result.energy
+              << ", elastic=" << elastic->eval_value(result.x) << ", free residual=" << result.gradient_norm
+              << ", tip displacement=" << result.x.segment<3>(3 * 8).transpose() << '\n';
+    return converged ? 0 : 1;
 }

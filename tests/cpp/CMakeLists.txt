@@ -68,3 +68,9 @@ add_executable(litepgo_tests
 target_link_libraries(litepgo_tests PRIVATE litepgo::litepgo litepgo::warnings GTest::gtest_main)
 
 gtest_discover_tests(litepgo_tests DISCOVERY_MODE PRE_TEST)
+
+# Run the standalone examples as loaded static-equilibrium regression tests.
+foreach(example tet_p1_mesh_energy hex_q1_mesh_energy hex_hermite_mesh_energy shell_stvk_mesh_energy)
+    add_dependencies(litepgo_tests ${example})
+    add_test(NAME FemEquilibrium.${example} COMMAND $<TARGET_FILE:${example}>)
+endforeach()
