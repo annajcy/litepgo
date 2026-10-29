@@ -99,6 +99,8 @@ std::optional<SpMat> WeightedEnergySum::refresh_pattern(const ConstVecRef& x) {
     bool changed = false;
     for (size_t i = 0; i < terms_.size(); ++i) {
         const Energy& energy = *terms_[i].energy;
+        if (energy.has_fixed_pattern())
+            continue;
         terms_[i].energy->update_pattern(x);
         // Compare patterns rather than trust the return value: the term may have
         // been updated elsewhere, in which case its own update reports no change.
@@ -123,7 +125,8 @@ std::optional<SpMat> WeightedEnergySum::refresh_pattern(const ConstVecRef& x) {
 double WeightedEnergySum::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const {
     if (hessian != nullptr) {
         for (size_t i = 0; i < terms_.size(); ++i) {
-            if (!same_pattern(terms_[i].energy->hessian_pattern(), scratch_[i].hessian)) {
+            if (!terms_[i].energy->has_fixed_pattern() &&
+                !same_pattern(terms_[i].energy->hessian_pattern(), scratch_[i].hessian)) {
                 throw std::logic_error("WeightedEnergySum: the pattern of term " + std::to_string(i) +
                                        " changed after this sum's last update_pattern(); call update_pattern() on "
                                        "the outermost energy");

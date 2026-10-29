@@ -348,7 +348,7 @@ TEST(MeshEnergy, RejectsWrongSparsePatternBeforeCallbacksOrOutputWrites) {
     EXPECT_EQ(Eigen::MatrixXd(hessian), Eigen::MatrixXd(before));
 }
 
-TEST(MeshEnergy, RejectsProjectionOverflowBeforeScatter) {
+TEST(MeshEnergy, RejectsProjectionOverflowAtAssemblyBoundary) {
     const ConstantDofMap map(TriangleTopology(3, {{0, 1, 2}}), 2);
     MeshEnergy energy(map, [](int, const auto&, Vec*, Eigen::MatrixXd* h) {
         if (h)

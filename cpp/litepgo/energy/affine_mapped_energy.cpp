@@ -101,7 +101,8 @@ std::optional<SpMat> AffineMappedEnergy::refresh_pattern(const ConstVecRef& z) {
 }
 
 double AffineMappedEnergy::eval_values(const ConstVecRef& z, Vec* gradient, SpMat* hessian, HessianKind kind) const {
-    if (hessian != nullptr && !same_pattern(energy_->hessian_pattern(), hessian_full_)) {
+    if (hessian != nullptr && !energy_->has_fixed_pattern() &&
+        !same_pattern(energy_->hessian_pattern(), hessian_full_)) {
         throw std::logic_error("AffineMappedEnergy: the inner energy's pattern changed after this energy's last "
                                "update_pattern(); call update_pattern() on the outermost energy");
     }

@@ -58,8 +58,6 @@ double MeshEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessi
                     throw std::logic_error("MeshEnergy: invalid local Hessian");
                 if (kind == HessianKind::Projected) {
                     project_hessian(*h);
-                    if (!h->allFinite())
-                        throw std::domain_error("MeshEnergy: non-finite projected Hessian");
                 }
             }
             local_values_[index] = value;
