@@ -137,3 +137,39 @@ def test_msh_rejects_mixed_volume_cells(tmp_path):
     path.write_text('$MeshFormat\n2.2 0 8\n$EndMeshFormat\n$Nodes\n8\n1 0 0 0\n2 1 0 0\n3 1 1 0\n4 0 1 0\n5 0 0 1\n6 1 0 1\n7 1 1 1\n8 0 1 1\n$EndNodes\n$Elements\n2\n1 4 0 1 2 4 5\n2 5 0 1 2 3 4 5 6 7 8\n$EndElements\n')
     with pytest.raises(RuntimeError, match='homogeneous'):
         io.read_msh(path)
+
+def _enclosed_volume(surface):
+    p, f = surface.positions, surface.cells
+    return np.einsum('ij,ij->i', p[f[:, 0]], np.cross(p[f[:, 1]], p[f[:, 2]])).sum() / 6
+
+@pytest.mark.parametrize('name', ['box-tet.veg', 'box-hex.veg'])
+def test_extract_surface_is_closed_and_outward(name):
+    mesh = io.read_veg(ASSETS / name)
+    surface = io.extract_surface(mesh)
+    edges = {}
+    for a, b, c in surface.cells:
+        for edge in ((a, b), (b, c), (c, a)):
+            edges[edge] = edges.get(edge, 0) + 1
+    assert all(count == 1 and edges.get((b, a)) == 1 for (a, b), count in edges.items())
+    extent = mesh.positions.max(axis=0) - mesh.positions.min(axis=0)
+    assert _enclosed_volume(surface) == pytest.approx(np.prod(extent), rel=1e-12)
+    # Interior vertices are dropped; kept ones are copied unchanged in original order.
+    on_surface = [np.flatnonzero((mesh.positions == p).all(axis=1))[0] for p in surface.positions]
+    assert len(surface.positions) < len(mesh.positions)
+    assert np.all(np.diff(on_surface) > 0)
+
+def test_extract_surface_single_cells():
+    tet = io.TetMesh(np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], [5, 5, 5.]]), np.array([[0, 1, 2, 3]], dtype=np.int32))
+    surface = io.extract_surface(tet)
+    assert surface.cells.shape == (4, 3) and len(surface.positions) == 4
+    assert _enclosed_volume(surface) == pytest.approx(1 / 6)
+    corners = np.array([[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1.]])
+    surface = io.extract_surface(io.HexMesh(2 * corners, np.arange(8, dtype=np.int32)[None]))
+    assert surface.cells.shape == (12, 3)
+    assert _enclosed_volume(surface) == pytest.approx(8)
+
+def test_extract_surface_rejects_overshared_face():
+    positions = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, -1], [1, 1, 1.]])
+    cells = np.array([[0, 1, 2, 3], [0, 2, 1, 4], [0, 1, 2, 5]], dtype=np.int32)
+    with pytest.raises(ValueError, match='more than two'):
+        io.extract_surface(io.TetMesh(positions, cells))

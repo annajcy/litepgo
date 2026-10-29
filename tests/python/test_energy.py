@@ -4,7 +4,14 @@ import numpy as np
 import pytest
 import scipy.sparse as sp
 
-from litepgo.energy import AffineMappedEnergy, Energy, HessianKind, QuadraticEnergy, WeightedEnergySum
+from litepgo.energy import (
+    AffineMappedEnergy,
+    Energy,
+    HessianKind,
+    QuadraticEnergy,
+    VertexPullingEnergy,
+    WeightedEnergySum,
+)
 
 
 def laplacian(n):
@@ -131,3 +138,22 @@ def test_energy_base_is_abstract():
     with pytest.raises(TypeError):
         Energy()
     assert issubclass(WeightedEnergySum, Energy) and issubclass(AffineMappedEnergy, Energy)
+
+
+def test_vertex_pulling_energy_matches_numpy():
+    dofs = np.array([[0, 1, 2], [6, 4, 5]], dtype=np.int32)
+    targets = np.array([[1.0, -2.0, 0.5], [3.0, 0.0, -1.0]])
+    energy = VertexPullingEnergy(7, dofs, targets, 2.0)
+    x = np.linspace(-1.0, 2.0, 7)
+    gap = x[dofs] - targets
+    assert energy.eval_value(x) == pytest.approx(gap.ravel() @ gap.ravel())
+    expected_gradient = np.zeros(7)
+    expected_gradient[dofs.ravel()] = 2.0 * gap.ravel()
+    np.testing.assert_allclose(energy.eval_gradient(x), expected_gradient)
+    expected_hessian = np.zeros((7, 7))
+    expected_hessian[dofs.ravel(), dofs.ravel()] = 2.0
+    np.testing.assert_array_equal(energy.eval_projected_hessian(x).toarray(), expected_hessian)
+    with pytest.raises(ValueError, match="distinct"):
+        VertexPullingEnergy(7, np.array([[0, 1, 2], [2, 4, 5]], dtype=np.int32), targets, 2.0)
+    with pytest.raises(ValueError):
+        VertexPullingEnergy(7, dofs, targets[:1], 2.0)

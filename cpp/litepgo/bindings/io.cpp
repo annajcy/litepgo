@@ -1,6 +1,7 @@
 #include "litepgo/bindings/bindings.hpp"
 #include "litepgo/io/obj.hpp"
 #include "litepgo/io/veg.hpp"
+#include "litepgo/mesh/extract_surface.hpp"
 #ifdef LITEPGO_HAS_GMSH
 #include "litepgo/io/msh.hpp"
 #endif
@@ -70,5 +71,8 @@ void bind_io(nb::module_& m) {
     m.def("write_obj", &io::write_obj, "path"_a, "mesh"_a);
     m.def("read_veg", &io::read_veg, "path"_a);
     m.def("write_veg", &io::write_veg, "path"_a, "mesh"_a);
+    m.def(
+        "extract_surface", [](const VolumeMesh& mesh) { return extract_surface(mesh); }, "mesh"_a,
+        "Outward-wound boundary triangles of a tet or hex mesh, keeping only boundary vertices.");
 }
 } // namespace litepgo::bindings

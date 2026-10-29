@@ -1,11 +1,13 @@
 add_library(litepgo STATIC
     dof/assembler.cpp
+    mesh/extract_surface.cpp
     mesh/triangle_mid_edge_stencils.cpp
     energy/mesh_energy.cpp
     energy/affine_mapped_energy.cpp
     energy/dynamic_pattern_energy.cpp
     energy/energy.cpp
     energy/quadratic_energy.cpp
+    energy/vertex_pulling_energy.cpp
     energy/weighted_energy_sum.cpp
     fem/material/volumetric/multiplicative_kinematics.cpp
     fem/material/volumetric/neo_hookean.cpp

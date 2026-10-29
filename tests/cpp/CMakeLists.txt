@@ -15,6 +15,7 @@ add_executable(litepgo_tests
     energy/energy_gtest.cpp
     energy/fixed_pattern_energy_gtest.cpp
     energy/quadratic_energy_gtest.cpp
+    energy/vertex_pulling_energy_gtest.cpp
     energy/weighted_energy_sum_gtest.cpp
     fem/basis/basis_gtest.cpp
     fem/basis/1d/cubic_hermite_basis_gtest.cpp
@@ -62,6 +63,7 @@ add_executable(litepgo_tests
     linalg/reduced_matrix_gtest.cpp
     linalg/sparse_pattern_gtest.cpp
     linalg/sparse_solver/sparse_solver_gtest.cpp
+    mesh/extract_surface_gtest.cpp
     mesh/mesh_topology_gtest.cpp
     mesh/triangle_mid_edge_stencils_gtest.cpp
     solver/newton_gtest.cpp)

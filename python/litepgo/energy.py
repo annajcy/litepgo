@@ -14,7 +14,8 @@ from litepgo._core import energy as _native
 HessianKind = _native.HessianKind
 Energy = _native.Energy
 QuadraticEnergy = _native.QuadraticEnergy
+VertexPullingEnergy = _native.VertexPullingEnergy
 WeightedEnergySum = _native.WeightedEnergySum
 AffineMappedEnergy = _native.AffineMappedEnergy
 
-__all__ = ["HessianKind", "Energy", "QuadraticEnergy", "WeightedEnergySum", "AffineMappedEnergy"]
+__all__ = ["HessianKind", "Energy", "QuadraticEnergy", "VertexPullingEnergy", "WeightedEnergySum", "AffineMappedEnergy"]

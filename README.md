@@ -46,6 +46,10 @@ git ls-files '*.h' '*.hpp' '*.cpp' | xargs uv run --no-sync clang-format -i
 
 `litepgo::io` (CMake target) provides `litepgo::io::read_obj/write_obj`
 and `read_veg/write_veg`. Include `litepgo/io/obj.hpp` or `veg.hpp`.
+The core library's `litepgo/mesh/extract_surface.hpp` provides `litepgo::extract_surface(mesh)`:
+the boundary of a conforming tet or hex mesh as outward-wound triangles (hex quads are split), keeping only
+boundary vertices in their original order. Write it with `write_obj` to view a
+volume mesh as a surface; Python exposes it as `io.extract_surface` beside the mesh types.
 `MeshData<K>` owns vertex-major xyz doubles and a `MeshTopology<K>`;
 `TriangleMesh`, `TetMesh`, `HexMesh` name the supported shapes.
 VEG readers return `VolumeMesh`, a tet/hex variant.
@@ -65,6 +69,7 @@ Python exposes the same operations through `from litepgo import io`:
 mesh = io.read_veg("model.veg")
 assert mesh.positions.dtype.name == "float64"
 io.write_veg("copy.veg", mesh)
+io.write_obj("surface.obj", io.extract_surface(mesh))
 mesh = io.TetMesh(mesh.positions, mesh.cells)
 # io.has_gmsh reports whether read_msh/write_msh are enabled.
 ```

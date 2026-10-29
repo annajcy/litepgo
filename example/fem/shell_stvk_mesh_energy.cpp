@@ -1,4 +1,4 @@
-#include "litepgo/energy/quadratic_energy.hpp"
+#include "litepgo/energy/vertex_pulling_energy.hpp"
 #include "litepgo/energy/weighted_energy_sum.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/shell_fem_energy.hpp"
@@ -7,6 +7,8 @@
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include "litepgo/solver/newton.hpp"
 
+#include <algorithm>
+#include <array>
 #include <iostream>
 #include <memory>
 #include <utility>
@@ -34,41 +36,53 @@ int main(int argc, char** argv) {
         map, std::move(rest), std::vector<double>(map.num_elements(), thickness),
         std::vector<Eigen::VectorXd>(map.num_elements(), theta));
 
-    // Clamp the left face and distribute a total downward load over the right face.
-    const double xmin = rest_nodes.col(0).minCoeff(), xmax = rest_nodes.col(0).maxCoeff();
-    const double tolerance = (xmax - xmin) * 1e-8;
-    if (!(xmax > xmin))
-        throw std::runtime_error("Example requires nonzero x extent");
-    int loaded = 0, tip = 0;
-    for (int v = 0; v < topology.num_vertices(); ++v)
-        if (rest_nodes(v, 0) >= xmax - tolerance) {
-            ++loaded;
-            tip = v;
-        }
-    std::vector<int> fixed_dofs;
-    Vec force = Vec::Zero(elastic->num_dofs());
+    // Pull the four corners of the flat xy-plane sheet outward in plane and alternately
+    // up and down out of plane, so the anchors span a saddle.
+    const Eigen::Vector3d lower = rest_nodes.colwise().minCoeff().transpose();
+    const Eigen::Vector3d upper = rest_nodes.colwise().maxCoeff().transpose();
+    const Eigen::Vector3d center = (lower + upper) / 2;
+    const double size = (upper - lower).head<2>().maxCoeff(), tolerance = size * 1e-8;
+    if (!((upper - lower).head<2>().array() > tolerance).all() || upper.z() - lower.z() > tolerance)
+        throw std::runtime_error("Example requires a flat sheet in the xy plane");
+    std::vector<int> corners;
     for (int v = 0; v < topology.num_vertices(); ++v) {
-        if (rest_nodes(v, 0) <= xmin + tolerance)
-            for (int c = 0; c < 3; ++c)
-                fixed_dofs.push_back(3 * v + c);
-        if (rest_nodes(v, 0) >= xmax - tolerance)
-            force[3 * v + 2] = -0.001 / loaded;
+        const Eigen::Vector2d X = rest_nodes.row(v).head<2>().transpose();
+        if (((X - lower.head<2>()).array().abs() <= tolerance || (X - upper.head<2>()).array().abs() <= tolerance)
+                .all())
+            corners.push_back(v);
     }
+    if (corners.size() != 4)
+        throw std::runtime_error("Example requires a vertex at each bounding-box corner");
+    const double stretch = 0.1, lift = 0.2 * size, stiffness = 10;
+    std::vector<std::array<int, 3>> pulled_dofs;
+    Vec targets(3 * corners.size());
+    for (std::size_t i = 0; i < corners.size(); ++i) {
+        const int v = corners[i];
+        const Eigen::Vector3d offset = rest_nodes.row(v).transpose() - center;
+        pulled_dofs.push_back({3 * v, 3 * v + 1, 3 * v + 2});
+        targets.segment<3>(3 * Eigen::Index(i)) =
+            Eigen::Vector3d(stretch * offset.x(), stretch * offset.y(), offset.x() * offset.y() > 0 ? lift : -lift);
+    }
+    auto pulling =
+        std::make_shared<VertexPullingEnergy>(elastic->num_dofs(), std::move(pulled_dofs), targets, stiffness);
 
-    // Static equilibrium minimizes total potential: Pi(u) = E_elastic(u) - force.dot(u).
-    SpMat zero(elastic->num_dofs(), elastic->num_dofs());
-    auto load = std::make_shared<QuadraticEnergy>(zero, -force);
-    WeightedEnergySum potential({{elastic, 1}, {load, 1}});
-    const DofReduction fixed(elastic->num_dofs(), std::move(fixed_dofs));
+    // Static equilibrium minimizes Pi(u) = E_elastic(u) + E_pulling(u); the springs
+    // remove all rigid motions, so no DOF is fixed.
+    WeightedEnergySum potential({{elastic, 1}, {pulling, 1}});
+    const DofReduction unconstrained(elastic->num_dofs(), {});
     const Vec initial = Vec::Zero(elastic->num_dofs());
     NewtonOptions options;
     options.gradient_tolerance = 1e-8;
     EigenLDLT solver;
-    const auto result = newton_solve(potential, fixed, initial, options, solver);
+    const auto result = newton_solve(potential, unconstrained, initial, options, solver);
     const bool converged = result.status == NewtonStatus::Converged;
+    double corner_gap = 0;
+    for (std::size_t i = 0; i < corners.size(); ++i)
+        corner_gap = std::max(corner_gap,
+                              (result.x.segment<3>(3 * corners[i]) - targets.segment<3>(3 * Eigen::Index(i))).norm());
     std::cout << "converged=" << converged << ", iterations=" << result.iterations << ", potential=" << result.energy
-              << ", elastic=" << elastic->eval_value(result.x) << ", free residual=" << result.gradient_norm
-              << ", tip displacement=" << result.x.segment<3>(3 * tip).transpose() << '\n';
+              << ", elastic=" << elastic->eval_value(result.x) << ", pulling=" << pulling->eval_value(result.x)
+              << ", free residual=" << result.gradient_norm << ", max corner-anchor distance=" << corner_gap << '\n';
     const std::filesystem::path output = argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/shell_stvk_mesh_energy.obj";
     if (!output.parent_path().empty())
         std::filesystem::create_directories(output.parent_path());

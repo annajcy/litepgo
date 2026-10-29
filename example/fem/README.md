@@ -509,24 +509,26 @@ Hex Q1 uses two boxes with widths 1 and 2 sharing nodal displacement DOFs and in
 
 The shell StVK example is implemented entirely in `main()` in `shell_stvk_mesh_energy.cpp`. It uses six vertices and four triangles `{0,1,2}`, `{2,1,3}`, `{0,2,4}`, `{1,0,5}`, with reference areas `1,2,1/2,2`. Setup builds edge-neighbor stencils, a three-DOF-per-vertex `StencilDofMap`, and fixed `TriangleMidEdgeRestData`. This reference-data type is declared in `fem/kinematics/triangle_mid_edge_kinematics.hpp` and has no material dependency. `ShellFemEnergy<KoiterStVK>` owns the per-face reference data, thicknesses, and parameters. Each face callback integrates the constant density from `ShellMaterialLocalEnergy2D<KoiterStVK>` at the centroid with the reference face area. Thickness is `0.1`; `Y=100` and `nu=0.3` are converted to plane-stress Lamé parameters.
 
-All four executables minimize total potential `Pi(u) = E_elastic(u) - f.dot(u)` from
-zero displacement. A `QuadraticEnergy` with a zero matrix and linear coefficient
-`-f` represents the constant nodal load; `WeightedEnergySum` combines it with the
-elastic energy. `DofReduction` imposes zero displacement on fixed DOFs.
-`newton_solve` uses `EigenLDLT`, projected element Hessians, feasible-step bounds,
-line search, and a free-gradient infinity-norm tolerance of `1e-8`.
+All four executables minimize total potential `Pi(u) = E_elastic(u) + E_pulling(u)`
+from zero displacement. `VertexPullingEnergy` (`litepgo/energy/vertex_pulling_energy.hpp`)
+adds zero-rest-length springs `k/2 |u_i - t_i|^2` that pull each bounding-box corner
+vertex toward an anchor, where `t_i` is the anchor minus the rest position.
+`WeightedEnergySum` combines it with the elastic energy. The springs remove all rigid
+motions, so no DOF is fixed. `newton_solve` uses `EigenLDLT`, projected element
+Hessians, feasible-step bounds, line search, and a free-gradient infinity-norm
+tolerance of `1e-8`.
 
-| Example | Fixed DOFs | Nodal load |
-| --- | --- | --- |
-| Tet P1 | All displacement components at vertices 0, 1, 2 (the shared face) | Vertex 3: `f_z = 0.02` |
-| Hex Q1 | All displacement components on `X=0` | Total `f_z = -0.02`, split equally over the four vertices on `X=3` |
-| Hex Hermite | All 24 physical displacement/derivative DOFs per vertex on `X=0` | Same end force, applied only to displacement slots |
-| Shell StVK | All displacement components at central-face vertices 0, 1, 2 | Vertex 3: `f_z = -0.001` |
+| Example | Pulled vertices | Anchors | `k` |
+| --- | --- | --- | --- |
+| Tet P1, Hex Q1 | The eight box corners | The box enlarged by `1.3` about its minimum corner, whose anchor is its rest position | `1` |
+| Hex Hermite | Same corners, displacement slots only; derivative DOFs stay free | Same | `1` |
+| Shell StVK | The four corners of the flat xy-plane sheet | In-plane `1.1x` about the center, lifted by `+-0.2` sheet size with alternating signs, so they span a saddle | `10` |
 
-The loads are nodal forces, not distributed tractions. Each executable prints
-convergence, iteration count, total potential, elastic energy, the free-DOF residual,
-and one loaded vertex's displacement. Reactions at fixed DOFs need not vanish.
-A nonconverged solve or a residual above tolerance returns a nonzero exit code.
+Corner springs act like point loads: the corners nearly reach their anchors while
+the faces between them lag behind. Each executable prints convergence, iteration
+count, total potential, elastic and pulling energies, the free-DOF residual, and the
+largest corner-to-anchor distance. A nonconverged solve or a residual above
+tolerance returns a nonzero exit code.
 CTest runs all four executables as equilibrium regressions; the existing unit tests
 retain the analytical stretch and derivative checks.
 
@@ -548,6 +550,7 @@ build/debug/example/fem/tet_p1_mesh_energy assets/box-tet.veg /tmp/deformed.veg
 build/debug/example/fem/shell_stvk_mesh_energy assets/shell.obj /tmp/deformed.obj
 ```
 
-Examples clamp the minimum-x boundary and distribute a total load over the
-maximum-x boundary. Hex Hermite still requires axis-aligned affine cells; its
+The volume examples also write the deformed boundary as a triangle OBJ beside the
+VEG output (same name, `.obj` extension) through `extract_surface` (`litepgo/mesh/extract_surface.hpp`), for viewers
+that do not read VEG. Hex Hermite still requires axis-aligned affine cells; its
 output stores displaced corner positions, not derivative DOFs or the curved field.
