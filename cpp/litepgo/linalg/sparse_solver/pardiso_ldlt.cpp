@@ -1,5 +1,7 @@
 #include "litepgo/linalg/sparse_solver/pardiso_ldlt.hpp"
 
+#include "litepgo/linalg/sparse_solver/pardiso_matrix.hpp"
+
 #include <Eigen/PardisoSupport>
 
 #include <stdexcept>
@@ -14,6 +16,7 @@ struct PardisoLDLT::Impl {
         solver.pardisoParameterArray()[20] = 1;
     }
     Eigen::PardisoLDLT<SpMat, Eigen::Lower> solver;
+    SpMat with_diagonal;
 };
 
 PardisoLDLT::PardisoLDLT() : impl_(std::make_unique<Impl>()) {}
@@ -23,12 +26,12 @@ PardisoLDLT::~PardisoLDLT() = default;
 // PARDISO can reject a pattern; Eigen then drops the analysis and would assert
 // in factorize(), which SparseSolver never calls after a failed analysis.
 bool PardisoLDLT::analyze_pattern(const SpMat& A) {
-    impl_->solver.analyzePattern(A);
+    impl_->solver.analyzePattern(detail::with_stored_diagonal(A, impl_->with_diagonal));
     return impl_->solver.info() == Eigen::Success;
 }
 
 bool PardisoLDLT::factor_values(const SpMat& A) {
-    impl_->solver.factorize(A);
+    impl_->solver.factorize(detail::with_stored_diagonal(A, impl_->with_diagonal));
     return impl_->solver.info() == Eigen::Success;
 }
 

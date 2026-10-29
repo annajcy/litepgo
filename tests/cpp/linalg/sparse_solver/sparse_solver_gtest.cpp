@@ -40,9 +40,9 @@ SpMat laplacian(int n, double scale = 1.0) {
 }
 
 // Saddle-point matrix [[K, B^T], [B, 0]] with K a Laplacian and B a row of ones:
-// symmetric, nonsingular, indefinite. The zero diagonal entry is stored, so a
-// diagonal shift stays within the pattern.
-SpMat saddle_point(int n) {
+// symmetric, nonsingular, indefinite. By default the zero diagonal entry is stored,
+// so a diagonal shift stays within the pattern; scipy.sparse.bmat leaves it out.
+SpMat saddle_point(int n, bool store_zero_diagonal = true) {
     std::vector<Triplet> entries;
     const SpMat K = laplacian(n);
     for (int column = 0; column < K.outerSize(); ++column) {
@@ -54,7 +54,9 @@ SpMat saddle_point(int n) {
         entries.emplace_back(n, i, 1.0);
         entries.emplace_back(i, n, 1.0);
     }
-    entries.emplace_back(n, n, 0.0);
+    if (store_zero_diagonal) {
+        entries.emplace_back(n, n, 0.0);
+    }
     SpMat A(n + 1, n + 1);
     A.setFromTriplets(entries.begin(), entries.end());
     return A;
@@ -187,6 +189,18 @@ TYPED_TEST(IndefiniteSolvers, SolvesSaddlePoint) {
     expect_solution(solver, A);
 }
 
+// PARDISO reads out of bounds, only now and then, on a symmetric matrix that does
+// not store its whole diagonal; repeat to give a regression a chance to show.
+TYPED_TEST(IndefiniteSolvers, SolvesSaddlePointWithoutItsZeroDiagonal) {
+    const SpMat A = saddle_point(12, false);
+    ASSERT_EQ(A.nonZeros() + 1, saddle_point(12).nonZeros());
+    for (int repeat = 0; repeat < 200; ++repeat) {
+        TypeParam solver;
+        ASSERT_TRUE(solver.compute(A));
+        expect_solution(solver, A);
+    }
+}
+
 // Cholesky backends reject an indefinite matrix but keep its analysis.
 template <class Solver> void expect_cholesky_fails_on_indefinite() {
     Solver solver;
@@ -211,6 +225,14 @@ TEST(AccelerateLLT, FailsOnIndefiniteButKeepsTheAnalysis) {
 #if defined(LITEPGO_HAS_MKL)
 TEST(PardisoLLT, FailsOnIndefiniteButKeepsTheAnalysis) {
     expect_cholesky_fails_on_indefinite<litepgo::linalg::PardisoLLT>();
+}
+
+TEST(PardisoLLT, FailsOnIndefiniteWithoutItsZeroDiagonal) {
+    const SpMat A = saddle_point(12, false);
+    for (int repeat = 0; repeat < 200; ++repeat) {
+        litepgo::linalg::PardisoLLT solver;
+        EXPECT_FALSE(solver.compute(A));
+    }
 }
 #endif
 
