@@ -4,6 +4,7 @@
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
+#include "litepgo/io/veg.hpp"
 #include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
 #include "litepgo/solver/newton.hpp"
 
@@ -12,16 +13,15 @@
 #include <utility>
 #include <vector>
 
-int main() {
+int main(int argc, char** argv) {
     using namespace litepgo;
-    // Two boxes of sizes (1,2,3) and (2,2,3) share the face at X = 1.
-    Eigen::Matrix<double, 12, 3> rest_nodes;
-    rest_nodes << 0, 0, 0, 1, 0, 0, 1, 2, 0, 0, 2, 0, 0, 0, 3, 1, 0, 3, 1, 2, 3, 0, 2, 3, 3, 0, 0, 3, 2, 0, 3, 0, 3, 3,
-        2, 3;
-    const Vec rest_positions = rest_nodes.reshaped<Eigen::RowMajor>();
-
-    // Shared face at X = 1: vertices 1, 2, 5, 6 reuse all 24 physical DOFs per vertex.
-    const auto topology = HexTopology(12, {{0, 1, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 2, 5, 10, 11, 6}});
+    const auto mesh = std::get<HexMesh>(io::read_veg(argc > 1 ? argv[1] : LITEPGO_ASSETS_DIR "/box-hex.veg"));
+    const auto& topology = mesh.topology;
+    const Vec& rest_positions = mesh.positions;
+    const Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>> rest_nodes(
+        rest_positions.data(), topology.num_vertices(), 3);
+    if (topology.num_cells() == 0)
+        throw std::runtime_error("Example requires a nonempty mesh");
     const VertexDofMap rest_position_map(topology, 3), displacement_map(topology, 24);
     using XField = InterpolatedField3D<HexQ1Basis>;
     std::vector<XField> rest_position_fields;
@@ -35,16 +35,25 @@ int main() {
         displacement_map, std::move(rest_position_fields), std::vector<IdentityField3D>(topology.num_cells(), Fp),
         std::vector<IdentityField3D>(topology.num_cells(), theta));
 
-    // Clamp X=0; distribute a total downward force of 0.02 over X=3.
-    // All 24 physical displacement/derivative slots are fixed at clamped Hermite vertices.
+    // Clamp the left face and distribute a total downward load over the right face.
+    const double xmin = rest_nodes.col(0).minCoeff(), xmax = rest_nodes.col(0).maxCoeff();
+    const double tolerance = (xmax - xmin) * 1e-8;
+    if (!(xmax > xmin))
+        throw std::runtime_error("Example requires nonzero x extent");
+    int loaded = 0, tip = 0;
+    for (int v = 0; v < topology.num_vertices(); ++v)
+        if (rest_nodes(v, 0) >= xmax - tolerance) {
+            ++loaded;
+            tip = v;
+        }
     std::vector<int> fixed_dofs;
     Vec force = Vec::Zero(elastic->num_dofs());
     for (int v = 0; v < topology.num_vertices(); ++v) {
-        if (rest_nodes(v, 0) == 0)
+        if (rest_nodes(v, 0) <= xmin + tolerance)
             for (int c = 0; c < 24; ++c)
                 fixed_dofs.push_back(24 * v + c);
-        if (rest_nodes(v, 0) == 3)
-            force[24 * v + 2] = -0.02 / 4;
+        if (rest_nodes(v, 0) >= xmax - tolerance)
+            force[24 * v + 2] = -0.02 / loaded;
     }
 
     // Static equilibrium minimizes total potential: Pi(u) = E_elastic(u) - force.dot(u).
@@ -60,6 +69,15 @@ int main() {
     const bool converged = result.status == NewtonStatus::Converged;
     std::cout << "converged=" << converged << ", iterations=" << result.iterations << ", potential=" << result.energy
               << ", elastic=" << elastic->eval_value(result.x) << ", free residual=" << result.gradient_norm
-              << ", tip displacement=" << result.x.segment<3>(24 * 8).transpose() << '\n';
+              << ", tip displacement=" << result.x.segment<3>(24 * tip).transpose() << '\n';
+    const std::filesystem::path output = argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/hex_hermite_mesh_energy.veg";
+    if (!output.parent_path().empty())
+        std::filesystem::create_directories(output.parent_path());
+    {
+        Vec deformed = rest_positions;
+        for (int v = 0; v < topology.num_vertices(); ++v)
+            deformed.segment<3>(3 * v) += result.x.segment<3>(24 * v);
+        io::write_veg(output, HexMesh{std::move(deformed), topology});
+    }
     return converged ? 0 : 1;
 }

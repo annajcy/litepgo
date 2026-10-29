@@ -1,7 +1,10 @@
 # Build trees
 /build/
 /out/
+/output/
 /compile_commands.json
+# Gmsh configure-time documentation output
+/cmake_options.texi
 CMakeUserPresets.json
 
 # Python

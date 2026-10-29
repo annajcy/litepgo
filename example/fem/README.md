@@ -533,3 +533,21 @@ retain the analytical stretch and derivative checks.
 Tests cover row/column packing, coefficient and physical finite differences, warped coordinate mappings, different displacement/coordinate bases, direct and derived deformation inputs, all active material inputs, shared/element/global DOF assembly, coefficient ownership, coefficient-transform validation, unsupported capabilities, and pointwise evaluation counts. Basis and interpolated-field tests also verify that unrequested quantities are not evaluated. Feasible-segment tests cover polynomial degree reduction, interior and repeated determinant roots, material parameter bounds, and physical Hermite directions. Constrained Newton relaxation is exercised by both tet and shell tests.
 
 Element tests compare energy, both derivatives, and feasible steps against explicit quadrature integration for Tet P1, warped Hex Q1, and Hermite displacement with Q1 geometry. They also check directional finite differences, fixed integration weights, live material fields, independent output requests, construction-time geometry validation, non-material local energies with arbitrary DOF counts, and numerical overflow.
+
+## File-backed examples
+
+All four executables now read default meshes from `assets`.
+Pass an input path as the first argument and an optional deformed output path
+as the second. Without an output argument, results are always written to the repository
+root `output/<executable-name>.obj` or `.veg`; the directory is created automatically
+and ignored by Git. Shell uses OBJ; the three volume examples use VEG.
+For example:
+
+```sh
+build/debug/example/fem/tet_p1_mesh_energy assets/box-tet.veg /tmp/deformed.veg
+build/debug/example/fem/shell_stvk_mesh_energy assets/shell.obj /tmp/deformed.obj
+```
+
+Examples clamp the minimum-x boundary and distribute a total load over the
+maximum-x boundary. Hex Hermite still requires axis-aligned affine cells; its
+output stores displaced corner positions, not derivative DOFs or the curved field.

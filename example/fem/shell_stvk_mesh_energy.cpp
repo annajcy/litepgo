@@ -2,6 +2,7 @@
 #include "litepgo/energy/weighted_energy_sum.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/shell_fem_energy.hpp"
+#include "litepgo/io/obj.hpp"
 #include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include "litepgo/solver/newton.hpp"
@@ -11,15 +12,15 @@
 #include <utility>
 #include <vector>
 
-int main() {
+int main(int argc, char** argv) {
     using namespace litepgo;
-    // A flat patch with face areas 1, 2, 1/2, 2 and consistent winding.
-    Eigen::Matrix<double, 6, 3> rest_nodes;
-    rest_nodes << 0, 0, 0, 2, 0, 0, 0, 1, 0, 2, 2, 0, -1, 0, 0, 0, -2, 0;
-    const Vec rest_positions = rest_nodes.reshaped<Eigen::RowMajor>();
-
-    // Face 0 has three neighbors; boundary faces each have one neighbor.
-    const auto topology = TriangleTopology(6, {{0, 1, 2}, {2, 1, 3}, {0, 2, 4}, {1, 0, 5}});
+    const auto mesh = io::read_obj(argc > 1 ? argv[1] : LITEPGO_ASSETS_DIR "/shell.obj");
+    const auto& topology = mesh.topology;
+    const Vec& rest_positions = mesh.positions;
+    const Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>> rest_nodes(
+        rest_positions.data(), topology.num_vertices(), 3);
+    if (topology.num_cells() == 0)
+        throw std::runtime_error("Example requires a nonempty mesh");
     const auto stencils = make_triangle_mid_edge_stencils(topology);
     const StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
     std::vector<TriangleMidEdgeRestData> rest;
@@ -33,13 +34,26 @@ int main() {
         map, std::move(rest), std::vector<double>(map.num_elements(), thickness),
         std::vector<Eigen::VectorXd>(map.num_elements(), theta));
 
-    // Fix the central triangle and pull vertex 3 downward.
+    // Clamp the left face and distribute a total downward load over the right face.
+    const double xmin = rest_nodes.col(0).minCoeff(), xmax = rest_nodes.col(0).maxCoeff();
+    const double tolerance = (xmax - xmin) * 1e-8;
+    if (!(xmax > xmin))
+        throw std::runtime_error("Example requires nonzero x extent");
+    int loaded = 0, tip = 0;
+    for (int v = 0; v < topology.num_vertices(); ++v)
+        if (rest_nodes(v, 0) >= xmax - tolerance) {
+            ++loaded;
+            tip = v;
+        }
     std::vector<int> fixed_dofs;
-    for (int v : {0, 1, 2})
-        for (int c = 0; c < 3; ++c)
-            fixed_dofs.push_back(3 * v + c);
     Vec force = Vec::Zero(elastic->num_dofs());
-    force[3 * 3 + 2] = -0.001;
+    for (int v = 0; v < topology.num_vertices(); ++v) {
+        if (rest_nodes(v, 0) <= xmin + tolerance)
+            for (int c = 0; c < 3; ++c)
+                fixed_dofs.push_back(3 * v + c);
+        if (rest_nodes(v, 0) >= xmax - tolerance)
+            force[3 * v + 2] = -0.001 / loaded;
+    }
 
     // Static equilibrium minimizes total potential: Pi(u) = E_elastic(u) - force.dot(u).
     SpMat zero(elastic->num_dofs(), elastic->num_dofs());
@@ -54,6 +68,10 @@ int main() {
     const bool converged = result.status == NewtonStatus::Converged;
     std::cout << "converged=" << converged << ", iterations=" << result.iterations << ", potential=" << result.energy
               << ", elastic=" << elastic->eval_value(result.x) << ", free residual=" << result.gradient_norm
-              << ", tip displacement=" << result.x.segment<3>(3 * 3).transpose() << '\n';
+              << ", tip displacement=" << result.x.segment<3>(3 * tip).transpose() << '\n';
+    const std::filesystem::path output = argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/shell_stvk_mesh_energy.obj";
+    if (!output.parent_path().empty())
+        std::filesystem::create_directories(output.parent_path());
+    io::write_obj(output, TriangleMesh{rest_positions + result.x, topology});
     return converged ? 0 : 1;
 }

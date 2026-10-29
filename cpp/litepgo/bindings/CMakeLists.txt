@@ -1,5 +1,5 @@
-nanobind_add_module(_core NB_STATIC module.cpp energy.cpp linalg.cpp solver.cpp)
-target_link_libraries(_core PRIVATE litepgo::litepgo litepgo::warnings)
+nanobind_add_module(_core NB_STATIC module.cpp energy.cpp linalg.cpp solver.cpp io.cpp)
+target_link_libraries(_core PRIVATE litepgo::io litepgo::litepgo litepgo::warnings)
 
 # The build tree holds an importable package: _core is built into it, and
 # litepgo_dev links the Python sources beside it and registers it with the
@@ -12,3 +12,7 @@ add_custom_target(litepgo_dev ALL
     DEPENDS _core
     COMMENT "Registering this litepgo build with ${Python_EXECUTABLE}"
     VERBATIM)
+
+if(LITEPGO_WITH_GMSH)
+    target_link_libraries(_core PRIVATE litepgo::io_gmsh)
+endif()

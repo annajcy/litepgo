@@ -21,6 +21,9 @@ NB_MODULE(_core, m) {
         return result;
     });
 
+    nb::module_ io = m.def_submodule("io");
+    litepgo::bindings::bind_io(io);
+
     nb::module_ linalg = m.def_submodule("linalg");
     litepgo::bindings::bind_linalg(linalg);
 

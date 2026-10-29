@@ -4,6 +4,7 @@
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
+#include "litepgo/io/veg.hpp"
 #include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
 #include "litepgo/solver/newton.hpp"
 
@@ -12,14 +13,15 @@
 #include <utility>
 #include <vector>
 
-int main() {
+int main(int argc, char** argv) {
     using namespace litepgo;
-    // Two positively oriented tets share a face; their volumes are 1/6 and 1/3.
-    Eigen::Matrix<double, 5, 3> rest_nodes;
-    rest_nodes << 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0.3, 0.2, -2;
-    const Vec rest_positions = rest_nodes.reshaped<Eigen::RowMajor>();
-
-    const TetTopology topology(5, {{0, 1, 2, 3}, {0, 2, 1, 4}});
+    const auto mesh = std::get<TetMesh>(io::read_veg(argc > 1 ? argv[1] : LITEPGO_ASSETS_DIR "/box-tet.veg"));
+    const auto& topology = mesh.topology;
+    const Vec& rest_positions = mesh.positions;
+    const Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>> rest_nodes(
+        rest_positions.data(), topology.num_vertices(), 3);
+    if (topology.num_cells() == 0)
+        throw std::runtime_error("Example requires a nonempty mesh");
     const VertexDofMap rest_position_map(topology, 3);
     using XField = InterpolatedField3D<TetP1Basis>;
     std::vector<XField> rest_position_fields;
@@ -34,13 +36,26 @@ int main() {
         std::vector<IdentityField3D>(topology.num_cells(), Fp_field),
         std::vector<IdentityField3D>(topology.num_cells(), theta_field));
 
-    // Clamp the shared face z=0 and pull the upper tip in +z.
+    // Clamp the left face and distribute a total downward load over the right face.
+    const double xmin = rest_nodes.col(0).minCoeff(), xmax = rest_nodes.col(0).maxCoeff();
+    const double tolerance = (xmax - xmin) * 1e-8;
+    if (!(xmax > xmin))
+        throw std::runtime_error("Example requires nonzero x extent");
+    int loaded = 0, tip = 0;
+    for (int v = 0; v < topology.num_vertices(); ++v)
+        if (rest_nodes(v, 0) >= xmax - tolerance) {
+            ++loaded;
+            tip = v;
+        }
     std::vector<int> fixed_dofs;
-    for (int v : {0, 1, 2})
-        for (int c = 0; c < 3; ++c)
-            fixed_dofs.push_back(3 * v + c);
     Vec force = Vec::Zero(elastic->num_dofs());
-    force[3 * 3 + 2] = 0.02;
+    for (int v = 0; v < topology.num_vertices(); ++v) {
+        if (rest_nodes(v, 0) <= xmin + tolerance)
+            for (int c = 0; c < 3; ++c)
+                fixed_dofs.push_back(3 * v + c);
+        if (rest_nodes(v, 0) >= xmax - tolerance)
+            force[3 * v + 2] = -0.02 / loaded;
+    }
 
     // Static equilibrium minimizes total potential: Pi(u) = E_elastic(u) - force.dot(u).
     SpMat zero(elastic->num_dofs(), elastic->num_dofs());
@@ -55,6 +70,10 @@ int main() {
     const bool converged = result.status == NewtonStatus::Converged;
     std::cout << "converged=" << converged << ", iterations=" << result.iterations << ", potential=" << result.energy
               << ", elastic=" << elastic->eval_value(result.x) << ", free residual=" << result.gradient_norm
-              << ", tip displacement=" << result.x.segment<3>(3 * 3).transpose() << '\n';
+              << ", tip displacement=" << result.x.segment<3>(3 * tip).transpose() << '\n';
+    const std::filesystem::path output = argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/tet_p1_mesh_energy.veg";
+    if (!output.parent_path().empty())
+        std::filesystem::create_directories(output.parent_path());
+    io::write_veg(output, TetMesh{rest_positions + result.x, topology});
     return converged ? 0 : 1;
 }
