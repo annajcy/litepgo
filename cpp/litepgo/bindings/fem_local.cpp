@@ -1,5 +1,6 @@
 #include "litepgo/bindings/bindings.hpp"
 #include "litepgo/bindings/templates.hpp"
+#include "litepgo/fem/kinematics/basis_dof_transform.hpp"
 #include "litepgo/fem/kinematics/positive_det_feasible_step.hpp"
 #include "litepgo/fem/kinematics/triangle_mid_edge_kinematics.hpp"
 #include "litepgo/fem/kinematics/volumetric_element.hpp"
@@ -14,9 +15,11 @@
 
 #include <nanobind/eigen/dense.h>
 #include <nanobind/stl/array.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 
 #include <array>
+#include <optional>
 #include <string>
 
 namespace nb = nanobind;
@@ -94,6 +97,32 @@ template <class M> void bind_shell_local(nb::module_& m) {
     register_instance(m, "ShellMaterialLocalEnergy2D", key, nb::type<Energy>());
 }
 
+// Physical displacement DOFs (one row per vertex) <-> basis coefficients (one row per basis function).
+template <class B> void bind_dof_transform(nb::module_& m) {
+    using Transform = BasisDofTransform<B>;
+    const nb::tuple key = nb::make_tuple(nb::type<B>());
+    const std::string name = "BasisDofTransform[" + class_name(key[0]) + "]";
+    nb::class_<Transform> cls(m, name.c_str());
+    cls.attr("dofs_per_vertex") = Transform::dofs_per_vertex;
+    cls.def(nb::init<const Field3D&>(), "X_field"_a,
+            "Caches the scaling for one element's geometry; keeps no reference.")
+        .def(
+            "to_coefficients",
+            [](const Transform& transform, const Eigen::MatrixXd& local) { return transform.to_coefficients(local); },
+            "local"_a, "Basis coefficients from physical DOFs gathered with dofs_per_vertex DOFs per vertex.")
+        .def(
+            "pullback",
+            [](const Transform& transform, std::optional<Eigen::VectorXd> gradient,
+               std::optional<Eigen::MatrixXd> hessian) {
+                transform.pullback(gradient ? &*gradient : nullptr, hessian ? &*hessian : nullptr);
+                return nb::make_tuple(gradient ? nb::cast(*gradient) : nb::none(),
+                                      hessian ? nb::cast(*hessian) : nb::none());
+            },
+            "gradient"_a = nb::none(), "hessian"_a = nb::none(),
+            "(gradient or None, Hessian or None) with respect to coefficients, pulled back to physical DOFs.");
+    register_instance(m, "BasisDofTransform", key, nb::type<Transform>());
+}
+
 template <class Q, class... Materials> void bind_volumetric_element(nb::module_& m) {
     using Element = VolumetricElement3D<Q>;
     const nb::tuple key = nb::make_tuple(nb::type<Q>());
@@ -126,6 +155,10 @@ void bind_local(nb::module_& m) {
     bind_local_energy<3>(m, "LocalEnergy3D");
     bind_volumetric_locals<NeoHookean>(m);
     bind_shell_local<KoiterStVK>(m);
+
+    bind_dof_transform<TetP1Basis>(m);
+    bind_dof_transform<HexQ1Basis>(m);
+    bind_dof_transform<HexHermiteBasis>(m);
 
     bind_volumetric_element<TetCentroidQuadrature, NeoHookean>(m);
     bind_volumetric_element<GaussLegendre3D<2>, NeoHookean>(m);

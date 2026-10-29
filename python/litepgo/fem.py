@@ -92,6 +92,7 @@ VolumetricMaterialLocalEnergyFp3D = _templates["VolumetricMaterialLocalEnergyFp3
 VolumetricMaterialLocalEnergyTheta3D = _templates["VolumetricMaterialLocalEnergyTheta3D"]
 ShellMaterialLocalEnergy2D = _templates["ShellMaterialLocalEnergy2D"]
 VolumetricElement3D = _templates["VolumetricElement3D"]
+BasisDofTransform = _templates["BasisDofTransform"]
 
 VolumetricFemEnergy = _templates["VolumetricFemEnergy"]
 ShellFemEnergy = _templates["ShellFemEnergy"]
@@ -131,6 +132,7 @@ __all__ = [
     "VolumetricMaterialLocalEnergyTheta3D",
     "ShellMaterialLocalEnergy2D",
     "VolumetricElement3D",
+    "BasisDofTransform",
     "VolumetricFemEnergy",
     "ShellFemEnergy",
 ]

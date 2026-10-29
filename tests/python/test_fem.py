@@ -286,3 +286,27 @@ def test_kinematic_helpers():
     D, g, H = rng.standard_normal((9, 5)), rng.standard_normal((3, 3)), rng.standard_normal((9, 9))
     np.testing.assert_allclose(fem.eval_gradient_wrt_dofs(D, g), D.T @ g.ravel(order="F"))
     np.testing.assert_allclose(fem.eval_hessian_wrt_dofs(D, H), D.T @ H @ D, atol=1e-12)
+
+
+def test_basis_dof_transform_maps_physical_hermite_dofs():
+    size, origin = np.array([2.0, 1.0, 3.0]), np.array([0.5, -1.0, 2.0])
+    X_nodes = origin + size * np.array([fem.HexQ1Basis.reference_node(v) for v in range(8)])
+    X_field = fem.InterpolatedField3D[fem.HexQ1Basis](X_nodes)
+    transform = fem.BasisDofTransform[fem.HexHermiteBasis](X_field)
+    assert transform.dofs_per_vertex == 24
+    # An affine displacement u = A X: physical slots u, u_X, u_Y, u_Z, then zero mixed derivatives.
+    A = np.array([[0.1, -0.2, 0.05], [0.3, 0.0, -0.1], [0.02, 0.15, 0.2]])
+    local = np.hstack([X_nodes @ A.T, np.tile(A.T.ravel(), (8, 1)), np.zeros((8, 12))])
+    u_field = fem.InterpolatedField3D[fem.HexHermiteBasis](transform.to_coefficients(local))
+    F = fem.DeformationGradientField3D(u_field, X_field)
+    for xi in ([0.2, 0.7, 0.4], [0.9, 0.1, 0.5]):
+        np.testing.assert_allclose(F.eval_value(np.array(xi)), (np.eye(3) + A).ravel(order="F"), atol=1e-13)
+    # Pullback scales each coefficient by its slot's element lengths: 1, hx, hy, hz, hx hy, hx hz, hy hz, hx hy hz.
+    gradient, hessian = transform.pullback(gradient=np.ones(192))
+    assert hessian is None
+    hx, hy, hz = size
+    slots = np.array([1, hx, hy, hz, hx * hy, hx * hz, hy * hz, hx * hy * hz])
+    np.testing.assert_allclose(gradient, np.tile(np.repeat(slots, 3), 8))
+    nodal = fem.BasisDofTransform[fem.HexQ1Basis](X_field)
+    assert nodal.dofs_per_vertex == 3
+    np.testing.assert_array_equal(nodal.to_coefficients(X_nodes), X_nodes)

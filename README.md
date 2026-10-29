@@ -124,7 +124,8 @@ elastic = Energy(dof.VertexDofMap(data.topology, 24), X, Fp, theta)
 
 The building blocks are bound too: `LocalEnergy2D/3D`,
 `VolumetricMaterialLocalEnergy{F,Fp,Theta}3D[M]` (which borrow their fields and keep
-them alive), `ShellMaterialLocalEnergy2D[M]`, `VolumetricElement3D[Q]`, and the
+them alive), `ShellMaterialLocalEnergy2D[M]`, `VolumetricElement3D[Q]`,
+`BasisDofTransform[B]` (physical DOFs to basis coefficients, e.g. Hermite slots), and the
 kinematics and chain-rule functions. Where C++ fills optional output pointers or adds
 into caller buffers (`eval`, `accumulate`, `eval_triangle_mid_edge_kinematics`), Python
 takes `gradient=`/`hessian=` flags and returns `(value, gradient or None, hessian or None)`.
