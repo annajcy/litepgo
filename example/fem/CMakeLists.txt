@@ -15,3 +15,5 @@ foreach(target hex_q1_mesh_energy tet_p1_mesh_energy shell_stvk_mesh_energy hex_
         LITEPGO_ASSETS_DIR="${PROJECT_SOURCE_DIR}/assets"
         LITEPGO_OUTPUT_DIR="${PROJECT_SOURCE_DIR}/output")
 endforeach()
+
+add_subdirectory(plastic_twist)

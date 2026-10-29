@@ -201,6 +201,66 @@ def test_python_examples_match_cpp(tmp_path, name, suffix):
         assert py_out.with_suffix(".obj").read_bytes() == cpp_out.with_suffix(".obj").read_bytes()
 
 
+# example/fem/plastic_twist: the plastic displacement u_p twists the bar by 90 degrees and Fp is
+# DeformationGradientField3D(u_p, X). u_p is interpolated in the displacement space (C1 Hermite for the
+# Hermite example), so the released bar takes the shape X + u_p stress-free. Clamped, it keeps residual
+# stress.
+
+
+def parse_plastic_twist(stdout):
+    results = {}
+    for line in stdout.splitlines():
+        case, fields = line.split(": ", 1)
+        values = dict(item.split("=") for item in fields.split(", "))
+        results[case] = {
+            "converged": values["converged"] == "1",
+            "iterations": int(values["iterations"]),
+            "elastic": float(values["elastic"]),
+            "twist": float(values["top twist"].removesuffix(" deg")),
+        }
+    return results
+
+
+@pytest.mark.parametrize(
+    "name,asset",
+    [
+        ("tet_p1_plastic_twist", "box-tet.veg"),
+        ("hex_q1_plastic_twist", "box-hex.veg"),
+        ("hex_hermite_plastic_twist", "box-hex.veg"),
+    ],
+)
+def test_plastic_twist_examples(tmp_path, name, asset):
+    executable = EXAMPLES / "plastic_twist" / name
+    if not executable.exists():
+        pytest.skip(f"{executable} is not built")
+    script = Path(__file__).resolve().parents[2] / "example" / "fem" / "plastic_twist" / f"{name}.py"
+    cpp = subprocess.run([executable, ASSETS / asset, tmp_path / "cpp.veg"], check=True, capture_output=True, text=True)
+    py = subprocess.run(
+        [sys.executable, script, ASSETS / asset, tmp_path / "py.veg"], check=True, capture_output=True, text=True
+    )
+    # The C++ compiler may contract the examples' u_p arithmetic into fused multiply-adds, so the
+    # mirrors agree to rounding rather than bit for bit.
+    cpp_results, py_results = parse_plastic_twist(cpp.stdout), parse_plastic_twist(py.stdout)
+    for case in ("free", "clamped"):
+        assert py_results[case]["converged"] == cpp_results[case]["converged"]
+        assert py_results[case]["iterations"] == cpp_results[case]["iterations"]
+        assert py_results[case]["elastic"] == pytest.approx(cpp_results[case]["elastic"], rel=1e-9, abs=1e-12)
+        assert py_results[case]["twist"] == pytest.approx(cpp_results[case]["twist"], abs=1e-9)
+        cpp_mesh, py_mesh = mesh.read_veg(tmp_path / f"cpp_{case}.veg"), mesh.read_veg(tmp_path / f"py_{case}.veg")
+        np.testing.assert_array_equal(py_mesh.cells, cpp_mesh.cells)
+        np.testing.assert_allclose(py_mesh.positions, cpp_mesh.positions, rtol=0, atol=1e-12)
+        cpp_surface = mesh.read_obj(tmp_path / f"cpp_{case}.obj")
+        py_surface = mesh.read_obj(tmp_path / f"py_{case}.obj")
+        np.testing.assert_array_equal(py_surface.cells, cpp_surface.cells)
+        np.testing.assert_allclose(py_surface.positions, cpp_surface.positions, rtol=0, atol=1e-12)
+    free, clamped = cpp_results["free"], cpp_results["clamped"]
+    assert free["converged"] and clamped["converged"]
+    assert free["twist"] == pytest.approx(90.0, abs=1e-6)
+    assert free["elastic"] < 1e-12
+    assert clamped["twist"] == pytest.approx(0.0, abs=1e-9)
+    assert clamped["elastic"] > 0.05  # held in place, the bar keeps residual stress
+
+
 # Building blocks: one element assembled by hand must agree with the mesh energies.
 
 

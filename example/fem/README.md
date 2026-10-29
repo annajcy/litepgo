@@ -566,3 +566,43 @@ The volume examples also write the deformed boundary as a triangle OBJ beside th
 VEG output (same name, `.obj` extension) through `extract_surface` (`litepgo/mesh/extract_surface.hpp`), for viewers
 that do not read VEG. Hex Hermite still requires axis-aligned affine cells; its
 output stores displaced corner positions, not derivative DOFs or the curved field.
+
+## Plastic twist
+
+`example/fem/plastic_twist/` holds three C++ examples and their line-by-line Python
+mirrors (`tet_p1`, `hex_q1`, `hex_hermite`), with the same arguments as the examples
+above. Each gives a bar the permanent deformation left after twisting it past yield.
+The plastic displacement `u_p` is the twist a released bar keeps: about the vertical
+center axis, growing linearly from 0 at the bottom to 90 degrees at the top. It is
+interpolated in the displacement space: Tet P1 and Hex Q1 interpolate its nodal values;
+Hex Hermite gives each vertex the twist's value and derivatives `u, u_X, u_Y, u_Z, u_XY,
+u_XZ, u_YZ, u_XYZ`, which `BasisDofTransform<HexHermiteBasis>` converts to each element's
+basis coefficients, so `u_p` is C1 like the displacement. Then
+
+```
+Fp = DeformationGradientField3D(u_p, X) = I + du_p/dX
+```
+
+is the gradient of `X + u_p`: a rotation times a shear with `det Fp = 1`, not a
+rotation. `W = det(Fp) psi(F Fp^-1)` then equals the elastic energy measured from the
+shape `X + u_p`, so that shape is the bar's stress-free state. `DeformationGradientField3D`
+borrows `u_p` and `X`: in C++ both field vectors are filled before taking references and
+outlive the energy; in Python the field keeps them alive.
+
+Each run solves twice and writes `<stem>_free` and `<stem>_clamped` VEG and surface OBJ
+files: `free` clamps the bottom face, so the bar twists; `clamped` also holds the top
+face, so it cannot and keeps residual stress. Hermite clamps fix `u, u_X, u_Y, u_XY`,
+which determine the displacement on a face `z = const`.
+
+| Example | Free top twist | Free elastic energy | Clamped elastic energy |
+| --- | --- | --- | --- |
+| Tet P1 | 90 deg | 6e-19 | 7.9e-2 |
+| Hex Q1 | 90 deg | 1e-18 | 6.6e-2 |
+| Hex Hermite | 90 deg | 6e-18 | 6.3e-2 |
+
+Each displacement space contains its interpolated `u_p`, so the released bar reaches
+`X + u_p` exactly. A Q1 `u_p` would not do for Hermite: it kinks at element faces,
+which C1 Hermite displacement cannot follow, leaving residual stress.
+`tests/python/test_fem.py` checks these values and compares each C++ and Python pair
+to rounding: the C++ compiler may fuse the examples' `u_p` arithmetic into
+multiply-adds, so their output need not match bit for bit. CTest runs the C++ examples.

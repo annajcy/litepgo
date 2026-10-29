@@ -77,3 +77,9 @@ foreach(example tet_p1_mesh_energy hex_q1_mesh_energy hex_hermite_mesh_energy sh
     add_dependencies(litepgo_tests ${example})
     add_test(NAME FemEquilibrium.${example} COMMAND $<TARGET_FILE:${example}>)
 endforeach()
+
+# The plastic twist examples solve a released and a clamped bar with a plastic torsion Fp.
+foreach(example tet_p1_plastic_twist hex_q1_plastic_twist hex_hermite_plastic_twist)
+    add_dependencies(litepgo_tests ${example})
+    add_test(NAME FemPlasticTwist.${example} COMMAND $<TARGET_FILE:${example}>)
+endforeach()
