@@ -1,6 +1,5 @@
 #include "litepgo/bindings/bindings.hpp"
 #include "litepgo/bindings/sparse_matrix.hpp"
-#include "litepgo/dof/dof_reduction.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
 #include "litepgo/linalg/sparse_solver/eigen_sparse_lu.hpp"
@@ -49,34 +48,6 @@ void bind(nb::module_& m) {
     nb::class_<AccelerateLLT, SparseSolver>(m, "AccelerateLLT").def(nb::init<>());
     nb::class_<AccelerateLDLT, SparseSolver>(m, "AccelerateLDLT").def(nb::init<>());
 #endif
-
-    nb::class_<dof::DofReduction>(m, "DofReduction")
-        .def(nb::init<int, std::vector<int>>(), "num_dofs"_a, "fixed_dofs"_a)
-        .def_prop_ro("num_dofs", &dof::DofReduction::num_dofs)
-        .def_prop_ro("num_free", &dof::DofReduction::num_free)
-        .def_prop_ro(
-            "fixed_dofs",
-            [](const dof::DofReduction& reduction) {
-                const auto dofs = reduction.fixed_dofs();
-                return Eigen::VectorXi(Eigen::Map<const Eigen::VectorXi>(dofs.data(), std::ssize(dofs)));
-            },
-            "Fixed DOFs in increasing order (a copy).")
-        .def_prop_ro(
-            "free_dofs",
-            [](const dof::DofReduction& reduction) {
-                const auto dofs = reduction.free_dofs();
-                return Eigen::VectorXi(Eigen::Map<const Eigen::VectorXi>(dofs.data(), std::ssize(dofs)));
-            },
-            "Free DOFs in increasing order (a copy).")
-        .def("free_index", &dof::DofReduction::free_index, "dof"_a)
-        .def("reduce", nb::overload_cast<const ConstVecRef&>(&dof::DofReduction::reduce, nb::const_), "full"_a,
-             "Free entries of a vector.")
-        .def(
-            "reduce",
-            [](const dof::DofReduction& reduction, const SparseArgument& A) { return reduction.reduce(A.matrix); },
-            "A"_a, "Principal submatrix of a scipy.sparse matrix on the free DOFs.")
-        .def("expand", &dof::DofReduction::expand, "reduced"_a, "full"_a.noconvert(),
-             "Write reduced into the free entries of full, a contiguous writable float64 array.");
 
     // The C++ aliases: the same class objects under a second name.
     m.attr("AutoSparseSolver") = nb::type<AutoSparseSolver>();

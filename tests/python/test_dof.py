@@ -2,11 +2,11 @@ import numpy as np
 import pytest
 import scipy.sparse as sp
 
-import litepgo.linalg as la
+from litepgo import dof
 
 
 def test_dof_reduction_splits_dofs():
-    reduction = la.DofReduction(6, np.array([4, 1]))
+    reduction = dof.DofReduction(6, np.array([4, 1]))
     assert (reduction.num_dofs, reduction.num_free) == (6, 4)
     np.testing.assert_array_equal(reduction.fixed_dofs, [1, 4])
     np.testing.assert_array_equal(reduction.free_dofs, [0, 2, 3, 5])
@@ -18,11 +18,11 @@ def test_dof_reduction_splits_dofs():
 @pytest.mark.parametrize("fixed", [[1, 1], [6], [-1]], ids=["duplicate", "too_large", "negative"])
 def test_dof_reduction_rejects_invalid_fixed_dofs(fixed):
     with pytest.raises(ValueError):
-        la.DofReduction(6, fixed)
+        dof.DofReduction(6, fixed)
 
 
 def test_dof_reduction_vectors_match_numpy_indexing():
-    reduction = la.DofReduction(6, [4, 1])
+    reduction = dof.DofReduction(6, [4, 1])
     full = np.linspace(10.0, 15.0, 6)
     np.testing.assert_array_equal(reduction.reduce(full), full[reduction.free_dofs])
 
@@ -36,7 +36,7 @@ def test_dof_reduction_vectors_match_numpy_indexing():
 @pytest.mark.parametrize("convert", [sp.csc_matrix, sp.csr_matrix, sp.csc_array, lambda A: A.toarray()],
                          ids=["csc", "csr", "csc_array", "dense"])
 def test_dof_reduction_matrix_matches_numpy_indexing(convert):
-    reduction = la.DofReduction(6, [4, 1])
+    reduction = dof.DofReduction(6, [4, 1])
     A = sp.random(6, 6, density=0.6, format="csc", random_state=0)
     A = (A + A.T).tocsc()
     reduced = reduction.reduce(convert(A))
@@ -46,16 +46,41 @@ def test_dof_reduction_matrix_matches_numpy_indexing(convert):
 
 
 def test_dof_reduction_with_everything_fixed():
-    reduction = la.DofReduction(3, [0, 1, 2])
+    reduction = dof.DofReduction(3, [0, 1, 2])
     assert reduction.reduce(np.ones(3)).shape == (0,)
     assert reduction.reduce(sp.eye(3, format="csc")).shape == (0, 0)
 
 
 def test_dof_reduction_rejects_lists_and_unwritable_targets():
-    reduction = la.DofReduction(4, [0])
+    reduction = dof.DofReduction(4, [0])
     with pytest.raises(TypeError):
         reduction.reduce([1.0, 2.0, 3.0, 4.0])
     with pytest.raises(TypeError):
         reduction.expand(np.ones(3), np.zeros(8)[::2])
     with pytest.raises(ValueError):
         reduction.expand(np.ones(2), np.zeros(4))
+
+
+def test_dof_maps_mirror_cpp():
+    from litepgo import mesh
+
+    topology = mesh.TriangleTopology(4, np.array([[0, 1, 2], [2, 1, 3]], dtype=np.int32))
+    x = np.arange(8.0)
+    vertex = dof.VertexDofMap(topology, 2)
+    assert (vertex.num_elements, vertex.num_dofs, vertex.dofs_per_vertex) == (2, 8, 2)
+    np.testing.assert_array_equal(vertex.dof_indices(1), [4, 5, 2, 3, 6, 7])
+    np.testing.assert_array_equal(vertex.gather(1, x), [[4, 5], [2, 3], [6, 7]])
+    element = dof.ElementDofMap(topology, 3)
+    assert (element.num_dofs, element.dofs_per_element) == (6, 3)
+    np.testing.assert_array_equal(element.dof_indices(1), [3, 4, 5])
+    constant = dof.ConstantDofMap(topology, 2)
+    np.testing.assert_array_equal(constant.dof_indices(1), [0, 1])
+    stencil = dof.StencilDofMap(4, [[0, 1, 2, 3], [2, 1, 3]], 2)
+    np.testing.assert_array_equal(stencil.vertex_indices(0), [0, 1, 2, 3])
+    np.testing.assert_array_equal(stencil.gather(1, x), [[4, 5], [2, 3], [6, 7]])
+    with pytest.raises(IndexError):
+        vertex.dof_indices(2)
+    with pytest.raises(ValueError):
+        vertex.gather(0, x[:7])
+    with pytest.raises(ValueError):
+        dof.StencilDofMap(4, [[0, 0, 1]], 2)

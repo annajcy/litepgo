@@ -2,8 +2,8 @@
 #include "litepgo/energy/weighted_energy_sum.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/shell_fem_energy.hpp"
-#include "litepgo/io/obj.hpp"
 #include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
+#include "litepgo/mesh/io/obj.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include "litepgo/solver/newton.hpp"
 
@@ -16,7 +16,7 @@
 
 int main(int argc, char** argv) {
     using namespace litepgo;
-    const auto mesh = io::read_obj(argc > 1 ? argv[1] : LITEPGO_ASSETS_DIR "/shell.obj");
+    const auto mesh = mesh::read_obj(argc > 1 ? argv[1] : LITEPGO_ASSETS_DIR "/shell.obj");
     const auto& topology = mesh.topology;
     const Vec& rest_positions = mesh.positions;
     const Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>> rest_nodes(
@@ -86,6 +86,6 @@ int main(int argc, char** argv) {
     const std::filesystem::path output = argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/shell_stvk_mesh_energy.obj";
     if (!output.parent_path().empty())
         std::filesystem::create_directories(output.parent_path());
-    io::write_obj(output, mesh::TriangleMesh{rest_positions + result.x, topology});
+    mesh::write_obj(output, mesh::TriangleMesh{rest_positions + result.x, topology});
     return converged ? 0 : 1;
 }

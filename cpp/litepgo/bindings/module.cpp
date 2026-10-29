@@ -5,6 +5,8 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
+#include <utility>
+
 namespace nb = nanobind;
 
 NB_MODULE(_core, m) {
@@ -21,15 +23,12 @@ NB_MODULE(_core, m) {
         return result;
     });
 
-    nb::module_ io = m.def_submodule("io");
-    litepgo::io::binding::bind(io);
-
-    nb::module_ linalg = m.def_submodule("linalg");
-    litepgo::linalg::binding::bind(linalg);
-
-    nb::module_ energy = m.def_submodule("energy");
-    litepgo::energy::binding::bind(energy);
-
-    nb::module_ solver = m.def_submodule("solver");
-    litepgo::solver::binding::bind(solver);
+    // Bases come first: fem uses mesh and dof types, and its energies derive from energy.Energy.
+    for (const auto& [name, bind] :
+         {std::pair{"mesh", &litepgo::mesh::binding::bind}, std::pair{"dof", &litepgo::dof::binding::bind},
+          std::pair{"linalg", &litepgo::linalg::binding::bind}, std::pair{"energy", &litepgo::energy::binding::bind},
+          std::pair{"fem", &litepgo::fem::binding::bind}, std::pair{"solver", &litepgo::solver::binding::bind}}) {
+        nb::module_ submodule = m.def_submodule(name);
+        bind(submodule);
+    }
 }

@@ -4,10 +4,10 @@
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
-#include "litepgo/io/obj.hpp"
-#include "litepgo/io/veg.hpp"
 #include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
 #include "litepgo/mesh/extract_surface.hpp"
+#include "litepgo/mesh/io/obj.hpp"
+#include "litepgo/mesh/io/veg.hpp"
 #include "litepgo/solver/newton.hpp"
 
 #include <algorithm>
@@ -19,7 +19,7 @@
 
 int main(int argc, char** argv) {
     using namespace litepgo;
-    const auto mesh = std::get<mesh::HexMesh>(io::read_veg(argc > 1 ? argv[1] : LITEPGO_ASSETS_DIR "/box-hex.veg"));
+    const auto mesh = std::get<mesh::HexMesh>(mesh::read_veg(argc > 1 ? argv[1] : LITEPGO_ASSETS_DIR "/box-hex.veg"));
     const auto& topology = mesh.topology;
     const Vec& rest_positions = mesh.positions;
     const Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>> rest_nodes(
@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
     if (!output.parent_path().empty())
         std::filesystem::create_directories(output.parent_path());
     const mesh::HexMesh deformed{rest_positions + result.x, topology};
-    io::write_veg(output, deformed);
-    io::write_obj(std::filesystem::path(output).replace_extension(".obj"), mesh::extract_surface(deformed));
+    mesh::write_veg(output, deformed);
+    mesh::write_obj(std::filesystem::path(output).replace_extension(".obj"), mesh::extract_surface(deformed));
     return converged ? 0 : 1;
 }
