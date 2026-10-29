@@ -99,6 +99,18 @@ void Assembler::assemble(std::span<const Vec> gradients, std::span<const Eigen::
                          SpMat* hessian) const {
     if (!gradient && !hessian)
         return;
+    const auto count = element_dof_indices_.size();
+    if ((gradient && gradients.size() != count) || (hessian && hessians.size() != count))
+        throw std::invalid_argument("Assembler::assemble requires one local result per element");
+    for (std::size_t e = 0; e < count; ++e) {
+        const auto n = static_cast<Eigen::Index>(element_dof_indices_[e].size());
+        if ((gradient && gradients[e].size() != n) || (hessian && (hessians[e].rows() != n || hessians[e].cols() != n)))
+            throw std::invalid_argument("Assembler::assemble: local result size does not match its element");
+    }
+    if (hessian && !linalg::same_pattern(*hessian, pattern_))
+        throw std::invalid_argument("Assembler::assemble: Hessian pattern does not match hessian_pattern()");
+    if (gradient)
+        gradient->resize(num_dofs_);
     // A task owns complete CSC columns and matching gradient entries; no shared writes.
     tbb::parallel_for(tbb::blocked_range<int>(0, num_dofs_, 64), [&](const auto& range) {
         if (hessian && hessian->nonZeros() != 0) {
@@ -124,6 +136,10 @@ void Assembler::assemble(std::span<const Vec> gradients, std::span<const Eigen::
                 (*gradient)[column] = g;
         }
     });
+    if (gradient && !gradient->allFinite())
+        throw std::domain_error("Assembler::assemble: non-finite gradient");
+    if (hessian && !Eigen::Map<const Vec>(hessian->valuePtr(), hessian->nonZeros()).allFinite())
+        throw std::domain_error("Assembler::assemble: non-finite Hessian");
 }
 
 } // namespace litepgo::dof

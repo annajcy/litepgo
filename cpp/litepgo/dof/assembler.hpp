@@ -4,10 +4,6 @@
 #include <span>
 #include <vector>
 
-namespace litepgo::energy {
-class MeshEnergy;
-} // namespace litepgo::energy
-
 namespace litepgo::dof {
 
 // Fixed scatter plan. Local entries follow the supplied per-element index order.
@@ -27,11 +23,15 @@ class Assembler final {
     void add_gradient(int element, const ConstVecRef& local, VecRef global) const;
     void add_hessian(int element, const Eigen::Ref<const Eigen::MatrixXd>& local, SpMat& global) const;
 
-  private:
-    // MeshEnergy validates all local outputs and the global pattern before scatter.
-    friend class energy::MeshEnergy;
+    // Overwrites gradient (resized to num_dofs) and the values of hessian with the sums
+    // of one local result per element, in parallel and in a fixed order. Each requested
+    // span holds num_elements() results sized to their elements' DOFs; hessian must have
+    // hessian_pattern(). Invalid sizes or patterns throw std::invalid_argument before any
+    // write; a non-finite sum throws std::domain_error and leaves the outputs unspecified.
     void assemble(std::span<const Vec> gradients, std::span<const Eigen::MatrixXd> hessians, Vec* gradient,
                   SpMat* hessian) const;
+
+  private:
     void check_element(int element) const;
 
     struct Contribution {

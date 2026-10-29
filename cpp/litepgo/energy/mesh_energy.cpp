@@ -68,10 +68,6 @@ double MeshEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessi
         throw;
     }
     assembler_.assemble(local_gradients_, local_hessians_, gradient, hessian);
-    if (gradient && !gradient->allFinite())
-        throw std::domain_error("MeshEnergy: non-finite assembled gradient");
-    if (hessian && !Eigen::Map<const Vec>(hessian->valuePtr(), hessian->nonZeros()).allFinite())
-        throw std::domain_error("MeshEnergy: non-finite assembled Hessian");
     // Retain the original element order for the scalar energy sum.
     const double value = std::accumulate(local_values_.begin(), local_values_.end(), 0.0);
     if (!std::isfinite(value))

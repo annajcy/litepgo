@@ -5,6 +5,9 @@
 #include <algorithm>
 #include <gtest/gtest.h>
 #include <limits>
+#include <span>
+#include <stdexcept>
+#include <vector>
 
 namespace litepgo::dof::test {
 
@@ -140,5 +143,76 @@ TEST(Assembler, AllowsEmptyPlansAndEmptyElements) {
     EXPECT_EQ(hessian.nonZeros(), 0);
 }
 } // namespace
+
+TEST(Assembler, AssembleOverwritesWithTheSumOfAddedResults) {
+    // Repeated and shared indices, including an element with no DOFs.
+    const Assembler assembler(4, {{2, 0}, {0, 3, 1}, {}, {1, 1}});
+    std::vector<Vec> gradients;
+    std::vector<Eigen::MatrixXd> hessians;
+    Vec expected_gradient = Vec::Zero(4);
+    SpMat expected_hessian = assembler.hessian_pattern();
+    for (int e = 0; e < assembler.num_elements(); ++e) {
+        const auto n = static_cast<Eigen::Index>(assembler.dof_indices(e).size());
+        gradients.push_back(Vec::LinSpaced(n, e + 1.0, e + 2.0));
+        hessians.push_back(Eigen::MatrixXd::Random(n, n));
+        assembler.add_gradient(e, gradients.back(), expected_gradient);
+        assembler.add_hessian(e, hessians.back(), expected_hessian);
+    }
+    Vec gradient = Vec::Constant(7, 9.0); // resized and overwritten
+    SpMat hessian = assembler.hessian_pattern();
+    hessian.coeffs().setConstant(9.0);
+    assembler.assemble(gradients, hessians, &gradient, &hessian);
+    EXPECT_TRUE(gradient.isApprox(expected_gradient, 1e-15));
+    EXPECT_TRUE(Eigen::MatrixXd(hessian).isApprox(Eigen::MatrixXd(expected_hessian), 1e-15));
+    // Either output alone, and neither.
+    Vec gradient_only;
+    assembler.assemble(gradients, {}, &gradient_only, nullptr);
+    EXPECT_EQ(gradient_only, gradient);
+    SpMat hessian_only = assembler.hessian_pattern();
+    assembler.assemble({}, hessians, nullptr, &hessian_only);
+    EXPECT_EQ(Eigen::MatrixXd(hessian_only), Eigen::MatrixXd(hessian));
+    assembler.assemble({}, {}, nullptr, nullptr);
+}
+
+TEST(Assembler, AssembleRejectsInvalidInputsBeforeWriting) {
+    const Assembler assembler(3, {{0, 2}, {1}});
+    const std::vector<Vec> gradients = {Vec::Ones(2), Vec::Ones(1)};
+    const std::vector<Eigen::MatrixXd> hessians = {Eigen::MatrixXd::Ones(2, 2), Eigen::MatrixXd::Ones(1, 1)};
+    Vec gradient = Vec::Constant(3, 5.0);
+    SpMat hessian = assembler.hessian_pattern();
+    hessian.coeffs().setConstant(5.0);
+    const auto expect_untouched = [&] {
+        EXPECT_EQ(gradient, Vec::Constant(3, 5.0));
+        EXPECT_TRUE((hessian.coeffs() == 5.0).all());
+    };
+    EXPECT_THROW(assembler.assemble(std::span(gradients).first(1), hessians, &gradient, &hessian),
+                 std::invalid_argument);
+    expect_untouched();
+    EXPECT_THROW(assembler.assemble(gradients, std::span(hessians).first(1), &gradient, &hessian),
+                 std::invalid_argument);
+    expect_untouched();
+    const std::vector<Vec> wrong_gradient = {Vec::Ones(2), Vec::Ones(2)};
+    EXPECT_THROW(assembler.assemble(wrong_gradient, hessians, &gradient, &hessian), std::invalid_argument);
+    expect_untouched();
+    const std::vector<Eigen::MatrixXd> wrong_hessian = {Eigen::MatrixXd::Ones(2, 1), Eigen::MatrixXd::Ones(1, 1)};
+    EXPECT_THROW(assembler.assemble(gradients, wrong_hessian, &gradient, &hessian), std::invalid_argument);
+    expect_untouched();
+    SpMat other_pattern(3, 3);
+    other_pattern.insert(0, 0) = 5.0;
+    EXPECT_THROW(assembler.assemble(gradients, hessians, &gradient, &other_pattern), std::invalid_argument);
+    expect_untouched();
+}
+
+TEST(Assembler, AssembleRejectsNonFiniteSums) {
+    const Assembler assembler(2, {{0, 1}});
+    std::vector<Vec> gradients = {Vec::Ones(2)};
+    std::vector<Eigen::MatrixXd> hessians = {Eigen::MatrixXd::Ones(2, 2)};
+    gradients[0][1] = std::numeric_limits<double>::quiet_NaN();
+    hessians[0](1, 0) = std::numeric_limits<double>::infinity();
+    Vec gradient;
+    SpMat hessian = assembler.hessian_pattern();
+    EXPECT_THROW(assembler.assemble(gradients, {}, &gradient, nullptr), std::domain_error);
+    EXPECT_THROW(assembler.assemble({}, hessians, nullptr, &hessian), std::domain_error);
+}
 
 } // namespace litepgo::dof::test
