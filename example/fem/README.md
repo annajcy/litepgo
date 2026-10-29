@@ -1,5 +1,24 @@
 # FEM with MeshEnergy
 
+Each example is a standalone `.cpp` with setup and evaluation directly in `main()`. There are no example headers. Regression fixtures live in the test `.cpp` files.
+
+Tet P1, Hex Q1, and Hex Hermite use `VolumetricFemEnergy<Material, UBasis, Quadrature, XField, FpField, ThetaField>` from `litepgo/fem/volumetric_fem_energy.hpp`. Construct it with `(displacement_map, rest_position_fields, Fp_fields, theta_fields)`. The caller constructs all three field arrays in element order. `BasisDofTransform<UBasis>` specifies the physical DOF layout and converts gathered displacement to `InterpolatedField3D<UBasis>` coefficients: Tet P1 and Hex Q1 use three DOFs per vertex with identity conversion; Hex Hermite uses 24 physical DOFs per vertex. Reference fields may use a different basis but must use the same reference coordinates. The unknown is displacement. The energy owns snapshots of reference geometry and concrete `Field3D` inputs in `std::vector<XField>`, `std::vector<FpField>` and `std::vector<ThetaField>` stored by value (borrowed dependencies must outlive the energy). Each vector must contain one field per element in map order. Fields may differ between elements and vary over reference coordinates; rebuild the energy to change these inputs. Evaluation, derivatives, and feasible steps require no user callbacks. Hermite transforms are cached per element, applied to both displacement and direction, and pull gradients and Hessians back before projection and assembly. The Hermite transform accepts any `Field3D` representing a positive axis-aligned affine box throughout the reference domain. It checks corner values only; this does not certify the interior geometry of an arbitrary field. Unsupported bases require an explicit transform specialization; there is no identity fallback.
+
+`ShellFemEnergy<Material>` in `fem/shell_fem_energy.hpp` wraps the triangle mid-edge shell.
+Construct it with `(displacement_map, rest_data, thickness, theta)`: a `StencilDofMap`
+with three DOFs per vertex, and one `TriangleMidEdgeRestData`, positive thickness, and
+material parameter vector per face. Arrays and local rows must match the map order.
+The first three stencil vertices form the central face; neighbor vertices contribute
+to bending and the full stencil gradient/Hessian. Inputs are owned snapshots.
+Construction validates reference geometry, area, stencil sizes and the starting material state.
+Evaluation binds current displacements and integrates the constant face density with
+reference area `0.5 * sqrt_det_a_bar`. The exact Hessian includes geometric second
+derivatives; `MeshEnergy` handles projection and assembly. Feasible steps preserve
+face areas and averaged normals and validate the starting material state. Materials
+must introduce no extra deformation-dependent feasibility constraints beyond these
+geometric conditions; the tested material is `KoiterStVK`. The shell StVK example uses
+this class without user callbacks.
+
 Quadrature supplies reference coordinates `xi` and weights. A `Field3D` computes values and derivatives at `xi` through virtual functions. `DeformationGradientField3D` composes displacement and coordinate fields at one `xi`, returning column-flattened `F`. Materials consume numerical `F`, `Fp`, and `theta`. Local energies bind one active coefficient block and supply density and coefficient derivatives. `VolumetricElement3D` caches fixed reference geometry and integrates the supplied local energy; `MeshEnergy` gathers and assembles the element results.
 
 ```mermaid
@@ -246,13 +265,7 @@ The increment uses that local energy's DOF order. The pointwise step method is
 required only when the element step method is used; it is not added to the
 `LocalEnergy3D` virtual interface. Exceptions propagate without retrying.
 
-The three solid examples share immutable element arrays between MeshEnergy's
-evaluation and step callbacks. Each callback binds the current displacement,
-deformation field, and material local energy. MeshEnergy still handles
-gathering, projection, and global assembly. Element const methods use call-local
-scratch and may run concurrently when the supplied local energy supports it.
-
-Each volumetric example groups its coordinate field, integration data, and (for Hermite) DOF transform in a local `ReferenceData` struct. Evaluation and step callbacks share one immutable vector.
+The three solid examples use `VolumetricFemEnergy`, which owns separate vectors of coordinate fields, fixed material fields, integration caches, and basis DOF transforms. Evaluation and step callbacks bind current displacement, deformation, and local energy on the stack. `MeshEnergy` handles gathering, projection, and assembly. Element const methods use call-local scratch and may run concurrently when the supplied fields support it.
 
 `GaussLegendre3D<PointsPerAxis>` uses `PointsPerAxis^3` integration points on `[0,1]^3`; `<2>` therefore uses eight points.
 
@@ -335,7 +348,7 @@ const litepgo::InterpolatedField2D<litepgo::TriangleP1Basis> u_field(u_local.top
 
 For each triangle `f`, `stencils.vertices[f]` starts with its three vertices in connectivity order. Edge `k` joins local face vertices `(k+1)%3` and `(k+2)%3`. Opposite vertices across edges `0,1,2` are appended in that order, with shared opposite vertices included only once. A face therefore has 3 to 6 stencil vertices. `stencils.opposite[f][k]` is the neighbor's opposite vertex row in the gathered matrix; `-1` denotes a boundary edge and is never a global DOF. The builder rejects duplicate faces, inconsistent shared-edge directions, and edges with more than two incident faces. It does not choose a boundary curvature rule or validate geometry.
 
-Use `MeshEnergy(map, eval_face, step_face)` directly. Its callback receives the full stencil matrix, including neighbors, and returns only the central face's integrated energy. For `n` stencil vertices, requested outputs must overwrite all `3*n` gradient entries and the full `3*n`-by-`3*n` Hessian, including zero entries. `MeshEnergy` includes all stencil couplings in its fixed sparse pattern. Capture reference stencil positions and opposite-row metadata by value or through owned shared data. A shell callback must provide its own geometric feasibility step. Curvature reconstruction and Koiter energy remain separate from this DOF map.
+For the existing triangle mid-edge material model, use `ShellFemEnergy<Material>`. For a custom model, use `MeshEnergy(map, eval_face, step_face)` directly. Its callback receives the full stencil matrix, including neighbors, and returns only the central face's integrated energy. For `n` stencil vertices, requested outputs must overwrite all `3*n` gradient entries and the full `3*n`-by-`3*n` Hessian, including zero entries. `MeshEnergy` includes all stencil couplings in its fixed sparse pattern. Capture reference stencil positions and opposite-row metadata by value or through owned shared data. A shell callback must provide its own geometric feasibility step. Curvature reconstruction and Koiter energy remain separate from this DOF map.
 
 ## Triangle mid-edge kinematics
 
@@ -421,18 +434,17 @@ The current shell path optimizes displacement only and uses per-face constant pa
 
 ## Hex Hermite physical DOFs
 
-`eval_hex_hermite_dof_transform` accepts an `8`-by-`3` matrix `X_nodes` containing one reference element's physical vertex coordinates, ordered as the corners of `HexHermiteBasis`. The example uses a Q1 coordinate field to construct the cached volumetric element. Displacement uses 64 reference coefficients per component. Each vertex supplies the physical slots `u, u_X, u_Y, u_Z, u_XY, u_XZ, u_YZ, u_XYZ`, each a three-vector. The gathered `u_physical_local` has shape 8-by-24; the field's `u_local` has shape 64-by-3.
+`BasisDofTransform<HexHermiteBasis>` accepts a reference `Field3D` and owns the physical-to-reference scales. The example uses a Q1 coordinate field to construct the cached volumetric element. Displacement uses 64 reference coefficients per component. Each vertex supplies the physical slots `u, u_X, u_Y, u_Z, u_XY, u_XZ, u_YZ, u_XYZ`, each a three-vector. The gathered `u_physical_local` has shape 8-by-24; the field's `u_local` has shape 64-by-3.
 
 ```cpp
-#include "litepgo/fem/kinematics/hex_hermite_dof_transform.hpp"
+#include "litepgo/fem/kinematics/basis_dof_transform.hpp"
 
-const auto S = litepgo::eval_hex_hermite_dof_transform(X_nodes); // Once per fixed rest element.
-const Eigen::VectorXd u_local_flat = S * u_physical_local.reshaped<Eigen::RowMajor>();
-const Eigen::MatrixXd u_local = u_local_flat.reshaped<Eigen::RowMajor>(64, 3);
+const litepgo::BasisDofTransform<litepgo::HexHermiteBasis> transform(X_field);
+const Eigen::MatrixXd u_local = transform.to_coefficients(u_physical_local);
 const auto u_field = litepgo::InterpolatedField3D<litepgo::HexHermiteBasis>(u_local);
 ```
 
-`S` is an owning 192-by-192 Eigen diagonal matrix storing only 192 scalars. Its eight slot factors are `1, hx, hy, hz, hx*hy, hx*hz, hy*hz, hx*hy*hz`, repeated over three components at each vertex. For example, `u_xi = hx*u_X`. This coefficient conversion precedes field construction; `dxi_dX` subsequently converts spatial gradients during deformation evaluation.
+The transform stores only 192 scales, representing a diagonal matrix `S`. Its eight slot factors are `1, hx, hy, hz, hx*hy, hx*hz, hy*hz, hx*hy*hz`, repeated over three components at each vertex. For example, `u_xi = hx*u_X`. This coefficient conversion precedes field construction; `dxi_dX` subsequently converts spatial gradients during deformation evaluation.
 
 $$
 \operatorname{flatten}(u_{\mathrm{local}})=S\operatorname{flatten}(u_{\mathrm{physical,local}}),\qquad
@@ -460,7 +472,7 @@ Use explicit `2D` / `3D` names for dimension-specific types. The dimensionless n
 | `Interpolation`, `InterpolatedValueField` | `InterpolatedField2D` / `InterpolatedField3D` |
 | `fem/geometry/rest.hpp` or `fem/interpolation/rest_point.hpp` | `fem/field/field.hpp` |
 | `rest_point(X_field, xi)`, `RestPointData` | `X_field.eval_value(xi)` and `X_field.eval_dvalue_dxi(xi)`; geometric consumers validate and invert the derivative as needed |
-| `fem/interpolation/hex_hermite_dof_transform.hpp` or `fem/field/hex_hermite_dof_transform.hpp` | `fem/kinematics/hex_hermite_dof_transform.hpp` |
+| `fem/interpolation/hex_hermite_dof_transform.hpp` or `fem/field/hex_hermite_dof_transform.hpp` | `fem/kinematics/basis_dof_transform.hpp` |
 | `DeformationGradient` and its sample interface | `DeformationGradientField3D(u_field, X_field)` with named, longer-lived inputs |
 | `field.value(point)` | `field.eval_value(xi)`; composed deformation fields return nine components |
 | `dvalue_dx_local(xi)`, `dgrad_xi_dx_local(xi)` | `eval_dvalue_dcoeffs(xi)`, `eval_dgrad_xi_dcoeffs(xi)` |
@@ -495,9 +507,11 @@ ctest --preset debug --output-on-failure
 
 Hex Q1 uses two boxes with widths 1 and 2 sharing nodal displacement DOFs and integrates with `GaussLegendre3D<2>`. Tet P1 uses two tetrahedra with volumes 1/6 and 1/3 and `TetCentroidQuadrature`. Hex Hermite uses two boxes of sizes (1,2,3) and (2,2,3), sharing all physical derivative DOFs at their common face, and `GaussLegendre3D<4>`.
 
-The shell StVK example is implemented in `shell_stvk_mesh_energy.hpp` and `shell_stvk_mesh_energy.cpp`. It uses six vertices and four triangles `{0,1,2}`, `{2,1,3}`, `{0,2,4}`, `{1,0,5}`, with reference areas `1,2,1/2,2`. Setup builds edge-neighbor stencils, a three-DOF-per-vertex `StencilDofMap`, and fixed `TriangleMidEdgeRestData`. This reference-data type is declared in `fem/kinematics/triangle_mid_edge_kinematics.hpp` and has no material dependency. Evaluation and step callbacks share one immutable reference-data vector. Each face callback integrates `ShellMaterialLocalEnergy2D<KoiterStVK>` with `TriangleCentroidQuadrature`. Thickness is `0.1`; `Y=100` and `nu=0.3` are converted to plane-stress Lamé parameters.
+The shell StVK example is implemented entirely in `main()` in `shell_stvk_mesh_energy.cpp`. It uses six vertices and four triangles `{0,1,2}`, `{2,1,3}`, `{0,2,4}`, `{1,0,5}`, with reference areas `1,2,1/2,2`. Setup builds edge-neighbor stencils, a three-DOF-per-vertex `StencilDofMap`, and fixed `TriangleMidEdgeRestData`. This reference-data type is declared in `fem/kinematics/triangle_mid_edge_kinematics.hpp` and has no material dependency. `ShellFemEnergy<KoiterStVK>` owns the per-face reference data, thicknesses, and parameters. Each face callback integrates the constant density from `ShellMaterialLocalEnergy2D<KoiterStVK>` at the centroid with the reference face area. Thickness is `0.1`; `Y=100` and `nu=0.3` are converted to plane-stress Lamé parameters.
 
-All four executables follow the same flow: construct fixed reference coordinates, set a uniform stretch, assemble energy/gradient/Hessian, verify the zero and analytical energies, and print one line containing `E`, `|g|`, and `H nnz`. For the shell, `u=0.1*X` gives `a=1.21*a_bar` and `b=b_bar=0`; density is constant across the patch, whose total reference area is `5.5`. Its callback validates the starting material state and delegates feasible-step bounds to the kinematics helper.
+All four executables construct fixed reference coordinates, apply a uniform stretch,
+assemble energy/gradient/Hessian, and print the energy, gradient norm, and Hessian
+nonzero count. Regression fixtures and analytical checks live in the test files.
 
 Tests cover row/column packing, coefficient and physical finite differences, warped coordinate mappings, different displacement/coordinate bases, direct and derived deformation inputs, all active material inputs, shared/element/global DOF assembly, coefficient ownership, coefficient-transform validation, unsupported capabilities, and pointwise evaluation counts. Basis and interpolated-field tests also verify that unrequested quantities are not evaluated. Feasible-segment tests cover polynomial degree reduction, interior and repeated determinant roots, material parameter bounds, and physical Hermite directions. Constrained Newton relaxation is exercised by both tet and shell tests.
 

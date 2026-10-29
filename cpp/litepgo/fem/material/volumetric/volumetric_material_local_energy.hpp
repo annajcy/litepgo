@@ -53,18 +53,30 @@ template <class Material> class VolumetricMaterialLocalEnergy3D : public LocalEn
     double accumulate(const Eigen::Vector3d& xi, double weight, Eigen::VectorXd* gradient,
                       Eigen::MatrixXd* hessian) const override {
         if (!xi.allFinite() || !std::isfinite(weight))
-            throw std::invalid_argument(
-                "VolumetricMaterialLocalEnergy3D::accumulate requires finite parameters and weight");
+            throw std::invalid_argument("VolumetricMaterialLocalEnergy3D: invalid parameters or weight");
+        const double result = accumulate_impl(xi, weight, gradient, hessian, true);
+        if (!std::isfinite(result) || (gradient && !gradient->allFinite()))
+            throw std::domain_error("VolumetricMaterialLocalEnergy3D: non-finite accumulation");
+        if (hessian && !hessian->allFinite())
+            throw std::domain_error("VolumetricMaterialLocalEnergy3D: non-finite accumulation");
+        return result;
+    }
+    double accumulate_for_integration(const Eigen::Vector3d& xi, double weight, Eigen::VectorXd* gradient,
+                                      Eigen::MatrixXd* hessian) const override {
+        return accumulate_impl(xi, weight, gradient, hessian, false);
+    }
+
+  private:
+    double accumulate_impl(const Eigen::Vector3d& xi, double weight, Eigen::VectorXd* gradient,
+                           Eigen::MatrixXd* hessian, bool check_derivative) const {
         const auto input = eval_inputs(xi);
         const double result = weight * Material::eval_W(input);
-        if (!std::isfinite(result))
-            throw std::domain_error("VolumetricMaterialLocalEnergy3D: non-finite weighted density");
         if (gradient || hessian) {
-            const auto derivative = eval_active_derivative(xi);
+            const auto derivative = eval_active_derivative(xi, check_derivative);
             if (gradient)
-                add_gradient_wrt_dofs(derivative, eval_material_gradient(input), weight, *gradient);
+                add_gradient_wrt_dofs(derivative, eval_material_gradient(input), weight, *gradient, false);
             if (hessian)
-                add_hessian_wrt_dofs(derivative, eval_material_hessian(input), weight, *hessian);
+                add_hessian_wrt_dofs(derivative, eval_material_hessian(input), weight, *hessian, false);
         }
         return result;
     }
@@ -95,10 +107,10 @@ template <class Material> class VolumetricMaterialLocalEnergy3D : public LocalEn
             throw std::invalid_argument("VolumetricMaterialLocalEnergy3D requires compatible finite material inputs");
         return {F.reshaped(3, 3), Fp.reshaped(3, 3), theta};
     }
-    Eigen::MatrixXd eval_active_derivative(const Eigen::Vector3d& xi) const {
+    Eigen::MatrixXd eval_active_derivative(const Eigen::Vector3d& xi, bool check_finite = true) const {
         const auto derivative = active_field_.eval_dvalue_dcoeffs(xi);
         if (derivative.rows() != active_field_.num_components() || derivative.cols() != num_dofs() ||
-            !derivative.allFinite())
+            (check_finite && !derivative.allFinite()))
             throw std::invalid_argument("VolumetricMaterialLocalEnergy3D: invalid active coefficient derivative");
         return derivative;
     }

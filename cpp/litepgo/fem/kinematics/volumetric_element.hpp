@@ -49,10 +49,10 @@ template <Quadrature3D Q> class VolumetricElement3D final {
             hessian->setZero(n, n);
         double E = 0;
         for (const auto& point : points_) {
-            E += local_energy.accumulate(point.xi, point.w_dV, gradient, hessian);
-            if (!std::isfinite(E))
-                throw std::domain_error("VolumetricElement3D: non-finite integrated energy");
+            E += local_energy.accumulate_for_integration(point.xi, point.w_dV, gradient, hessian);
         }
+        if (!std::isfinite(E))
+            throw std::domain_error("VolumetricElement3D: non-finite integrated energy");
         if ((gradient && gradient->size() != n) || (hessian && (hessian->rows() != n || hessian->cols() != n)))
             throw std::logic_error("VolumetricElement3D: invalid local-energy derivative dimensions");
         if ((gradient && !gradient->allFinite()) || (hessian && !hessian->allFinite()))

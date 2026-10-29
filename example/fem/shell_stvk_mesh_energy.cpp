@@ -1,23 +1,37 @@
-#include "shell_stvk_mesh_energy.hpp"
+#include "litepgo/fem/material/shell/koiter_stvk.hpp"
+#include "litepgo/fem/shell_fem_energy.hpp"
+#include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 
-#include <cassert>
-#include <cmath>
 #include <iostream>
-
-using namespace litepgo;
+#include <memory>
+#include <utility>
+#include <vector>
 
 int main() {
-    const Vec X_nodes = example::shell_stvk_rest_positions();
-    auto energy = example::make_shell_stvk_mesh_energy(X_nodes);
-    const Vec u = 0.1 * X_nodes; // Uniform stretch: a = 1.21*a_bar, b = b_bar = 0.
-    Vec gradient;
-    SpMat hessian = energy.hessian_pattern();
-    const double E = energy.eval(u, &gradient, &hessian);
-    assert(energy.eval_value(Vec::Zero(X_nodes.size())) == 0.0);
-    const double Y = 100, nu = 0.3;
+    using namespace litepgo;
+    // A flat patch with face areas 1, 2, 1/2, 2 and consistent winding.
+    Eigen::Matrix<double, 6, 3> rest_nodes;
+    rest_nodes << 0, 0, 0, 2, 0, 0, 0, 1, 0, 2, 2, 0, -1, 0, 0, 0, -2, 0;
+    const Vec rest_positions = rest_nodes.reshaped<Eigen::RowMajor>();
+
+    // Face 0 has three neighbors; boundary faces each have one neighbor.
+    const auto topology = TriangleTopology(6, {{0, 1, 2}, {2, 1, 3}, {0, 2, 4}, {1, 0, 5}});
+    const auto stencils = make_triangle_mid_edge_stencils(topology);
+    const StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
+    std::vector<TriangleMidEdgeRestData> rest;
+    for (int f = 0; f < map.num_elements(); ++f)
+        rest.emplace_back(map.gather(f, rest_positions), stencils.opposite[static_cast<std::size_t>(f)]);
+
+    const double thickness = 0.1, Y = 100, nu = 0.3;
+    // Plane-stress Lame parameters for a shell.
     const Eigen::Vector2d theta(Y * nu / (1 - nu * nu), Y / (2 * (1 + nu)));
-    assert(std::abs(E - 5.5 * KoiterStVK::eval_W({1.21 * Eigen::Matrix2d::Identity(), Eigen::Matrix2d::Zero(),
-                                                  Eigen::Matrix2d::Identity(), Eigen::Matrix2d::Zero(), 0.1, theta})) <
-           1e-12);
-    std::cout << "E=" << E << ", |g|=" << gradient.norm() << ", H nnz=" << hessian.nonZeros() << '\n';
+    auto elastic = std::make_shared<ShellFemEnergy<KoiterStVK>>(
+        map, std::move(rest), std::vector<double>(map.num_elements(), thickness),
+        std::vector<Eigen::VectorXd>(map.num_elements(), theta));
+
+    const Vec u = 0.1 * rest_positions;
+    Vec gradient;
+    SpMat hessian = elastic->hessian_pattern();
+    const double value = elastic->eval(u, &gradient, &hessian);
+    std::cout << "E=" << value << ", |g|=" << gradient.norm() << ", H nnz=" << hessian.nonZeros() << '\n';
 }

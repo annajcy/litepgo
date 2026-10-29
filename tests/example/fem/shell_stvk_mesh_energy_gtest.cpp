@@ -1,4 +1,46 @@
-#include "../../../example/fem/shell_stvk_mesh_energy.hpp"
+
+#include "litepgo/dof/stencil_dof_map.hpp"
+#include "litepgo/fem/material/shell/koiter_stvk.hpp"
+#include "litepgo/fem/material/shell/shell_material_local_energy.hpp"
+#include "litepgo/fem/quadrature/2d/triangle_centroid_quadrature.hpp"
+#include "litepgo/fem/shell_fem_energy.hpp"
+#include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
+
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+namespace litepgo::example {
+
+inline TriangleTopology shell_stvk_topology() {
+    // Face 0 has three neighbors; boundary faces each have one neighbor.
+    return TriangleTopology(6, {{0, 1, 2}, {2, 1, 3}, {0, 2, 4}, {1, 0, 5}});
+}
+
+inline Vec shell_stvk_rest_positions() {
+    // A flat patch with face areas 1, 2, 1/2, 2 and consistent winding.
+    Eigen::Matrix<double, 6, 3> X_nodes;
+    X_nodes << 0, 0, 0, 2, 0, 0, 0, 1, 0, 2, 2, 0, -1, 0, 0, 0, -2, 0;
+    return X_nodes.reshaped<Eigen::RowMajor>();
+}
+
+inline auto make_shell_stvk_mesh_energy(const Vec& X_nodes) {
+    const auto topology = shell_stvk_topology();
+    const auto stencils = make_triangle_mid_edge_stencils(topology);
+    const StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
+    std::vector<TriangleMidEdgeRestData> rest;
+    for (int f = 0; f < map.num_elements(); ++f)
+        rest.emplace_back(map.gather(f, X_nodes), stencils.opposite[static_cast<std::size_t>(f)]);
+
+    const double thickness = 0.1, Y = 100, nu = 0.3;
+    // Plane-stress Lame parameters for a shell.
+    const Eigen::Vector2d theta(Y * nu / (1 - nu * nu), Y / (2 * (1 + nu)));
+    return ShellFemEnergy<KoiterStVK>(map, std::move(rest), std::vector<double>(map.num_elements(), thickness),
+                                      std::vector<Eigen::VectorXd>(map.num_elements(), theta));
+}
+
+} // namespace litepgo::example
+
 #include "../../cpp/testing/finite_difference.hpp"
 #include "litepgo/dof/dof_reduction.hpp"
 #include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"

@@ -1,4 +1,55 @@
-#include "../../../example/fem/hex_hermite_mesh_energy.hpp"
+
+#include "litepgo/dof/vertex_dof_map.hpp"
+#include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
+#include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
+#include "litepgo/fem/field/deformation_gradient_field.hpp"
+#include "litepgo/fem/field/identity_field.hpp"
+#include "litepgo/fem/field/interpolated_field.hpp"
+#include "litepgo/fem/kinematics/basis_dof_transform.hpp"
+#include "litepgo/fem/kinematics/volumetric_element.hpp"
+#include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
+#include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
+#include "litepgo/fem/volumetric_fem_energy.hpp"
+
+#include <memory>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+namespace litepgo::example {
+
+inline HexTopology hex_hermite_topology() {
+    // Shared face at X = 1: vertices 1, 2, 5, 6 reuse all 24 physical DOFs per vertex.
+    return HexTopology(12, {{0, 1, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 2, 5, 10, 11, 6}});
+}
+
+inline Vec hex_hermite_rest_positions() {
+    // Two boxes of sizes (1,2,3) and (2,2,3) share the face at X = 1.
+    Eigen::Matrix<double, 12, 3> X_nodes;
+    X_nodes << 0, 0, 0, 1, 0, 0, 1, 2, 0, 0, 2, 0, 0, 0, 3, 1, 0, 3, 1, 2, 3, 0, 2, 3, 3, 0, 0, 3, 2, 0, 3, 0, 3, 3, 2,
+        3;
+    return X_nodes.reshaped<Eigen::RowMajor>();
+}
+
+inline auto make_hex_hermite_mesh_energy(const Vec& rest_positions) {
+    const auto topology = hex_hermite_topology();
+    const VertexDofMap rest_position_map(topology, 3), displacement_map(topology, 24);
+    using XField = InterpolatedField3D<HexQ1Basis>;
+    std::vector<XField> rest_position_fields;
+    rest_position_fields.reserve(topology.num_cells());
+    for (int e = 0; e < topology.num_cells(); ++e)
+        rest_position_fields.emplace_back(rest_position_map.gather(e, rest_positions));
+    const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
+    const IdentityField3D theta(Eigen::Vector2d(2, 3));
+    return VolumetricFemEnergy<NeoHookean, HexHermiteBasis, GaussLegendre3D<4>, XField, IdentityField3D,
+                               IdentityField3D>(displacement_map, std::move(rest_position_fields),
+                                                std::vector<IdentityField3D>(topology.num_cells(), Fp),
+                                                std::vector<IdentityField3D>(topology.num_cells(), theta));
+}
+
+} // namespace litepgo::example
+
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 
 #include <gtest/gtest.h>
@@ -43,8 +94,8 @@ TEST(HexHermiteExample, ReproducesAffineDisplacementAndVolumeWeightedEnergy) {
     for (int e = 0; e < 2; ++e) {
         const auto X_local = geometry_map.gather(e, X_nodes);
         const InterpolatedField3D<HexQ1Basis> X_field(X_local);
-        const auto coefficients = example::hex_hermite_reference_coefficients(
-            displacement_map.gather(e, x), eval_hex_hermite_dof_transform(X_local).diagonal());
+        const auto coefficients =
+            BasisDofTransform<HexHermiteBasis>(X_field).to_coefficients(displacement_map.gather(e, x));
         const InterpolatedField3D<HexHermiteBasis> displacement(coefficients);
         const auto F = DeformationGradientField3D(displacement, X_field);
         for (const auto& xi : points) {
@@ -83,10 +134,8 @@ TEST(HexHermiteExample, SharedFacesHaveContinuousValuesAndPhysicalGradientsInAll
         const std::array<Eigen::MatrixXd, 2> X_local{geometry_map.gather(0, X_nodes), geometry_map.gather(1, X_nodes)};
         const std::array<InterpolatedField3D<HexQ1Basis>, 2> X_fields{InterpolatedField3D<HexQ1Basis>(X_local[0]),
                                                                       InterpolatedField3D<HexQ1Basis>(X_local[1])};
-        const auto c0 = example::hex_hermite_reference_coefficients(
-            displacement_map.gather(0, x), eval_hex_hermite_dof_transform(X_local[0]).diagonal());
-        const auto c1 = example::hex_hermite_reference_coefficients(
-            displacement_map.gather(1, x), eval_hex_hermite_dof_transform(X_local[1]).diagonal());
+        const auto c0 = BasisDofTransform<HexHermiteBasis>(X_fields[0]).to_coefficients(displacement_map.gather(0, x));
+        const auto c1 = BasisDofTransform<HexHermiteBasis>(X_fields[1]).to_coefficients(displacement_map.gather(1, x));
         const InterpolatedField3D<HexHermiteBasis> u0(c0), u1(c1);
         const auto F0 = DeformationGradientField3D(u0, X_fields[0]);
         const auto F1 = DeformationGradientField3D(u1, X_fields[1]);
@@ -176,19 +225,17 @@ TEST(HexHermiteExample, RejectsUnsupportedGeometryAndIncorrectDofShapes) {
         EXPECT_THROW(example::make_hex_hermite_mesh_energy(X_nodes), std::invalid_argument);
     }
     EXPECT_THROW(example::make_hex_hermite_mesh_energy(Vec::Zero(35)), std::invalid_argument);
-    EXPECT_THROW(example::hex_hermite_reference_coefficients(Eigen::MatrixXd::Zero(8, 3), Vec::Ones(192)),
+    const VertexDofMap map(example::hex_hermite_topology(), 3);
+    Eigen::MatrixXd nodes = map.gather(0, example::hex_hermite_rest_positions());
+    const BasisDofTransform<HexHermiteBasis> transform{InterpolatedField3D<HexQ1Basis>(nodes)};
+    EXPECT_THROW(transform.to_coefficients(Eigen::MatrixXd::Zero(8, 3)), std::invalid_argument);
+    EXPECT_THROW(transform.to_coefficients(Eigen::MatrixXd::Constant(8, 24, std::numeric_limits<double>::infinity())),
                  std::invalid_argument);
-    EXPECT_THROW(example::hex_hermite_reference_coefficients(Eigen::MatrixXd::Zero(8, 24), Vec::Ones(191)),
+    EXPECT_THROW(transform.to_coefficients(Eigen::MatrixXd::Constant(8, 24, std::numeric_limits<double>::quiet_NaN())),
                  std::invalid_argument);
-    EXPECT_THROW(example::hex_hermite_reference_coefficients(
-                     Eigen::MatrixXd::Constant(8, 24, std::numeric_limits<double>::infinity()), Vec::Ones(192)),
-                 std::invalid_argument);
-    EXPECT_THROW(example::hex_hermite_reference_coefficients(
-                     Eigen::MatrixXd::Ones(8, 24), Vec::Constant(192, std::numeric_limits<double>::quiet_NaN())),
-                 std::invalid_argument);
-    EXPECT_THROW(
-        example::hex_hermite_reference_coefficients(Eigen::MatrixXd::Constant(8, 24, 1e200), Vec::Constant(192, 1e200)),
-        std::domain_error);
+    nodes.col(0) *= 1e100;
+    const BasisDofTransform<HexHermiteBasis> large{InterpolatedField3D<HexQ1Basis>(nodes)};
+    EXPECT_THROW(large.to_coefficients(Eigen::MatrixXd::Constant(8, 24, 1e250)), std::domain_error);
 }
 
 TEST(HexHermiteExample, FeasibleStepMapsPhysicalDerivativeDofsAndChecksAllQuadraturePoints) {
@@ -206,4 +253,90 @@ TEST(HexHermiteExample, FeasibleStepMapsPhysicalDerivativeDofsAndChecksAllQuadra
     const Vec current = affine_dofs(X, 0.1 * Eigen::Matrix3d::Identity());
     EXPECT_NEAR(energy.max_feasible_step(current, direction), 0.2475, 1e-6);
     EXPECT_THROW(energy.max_feasible_step(affine_dofs(X, -Eigen::Matrix3d::Identity()), zero), std::domain_error);
+}
+
+TEST(HexHermiteExample, BasisTransformsUsePhysicalDofLayoutAndIndependentPullbacks) {
+    static_assert(BasisDofTransform<TetP1Basis>::dofs_per_vertex == 3);
+    static_assert(BasisDofTransform<HexQ1Basis>::dofs_per_vertex == 3);
+    static_assert(BasisDofTransform<HexHermiteBasis>::dofs_per_vertex == 24);
+    const VertexDofMap map(example::hex_hermite_topology(), 3);
+    const Eigen::MatrixXd nodes = map.gather(0, example::hex_hermite_rest_positions());
+    const InterpolatedField3D<HexQ1Basis> X(nodes);
+    const BasisDofTransform<HexQ1Basis> nodal(X);
+    EXPECT_EQ(nodal.to_coefficients(nodes), nodes);
+    const BasisDofTransform<HexHermiteBasis> hermite(X);
+    Vec scales(192);
+    const std::array<double, 8> slots{1, 1, 2, 3, 2, 3, 6, 6};
+    for (int v = 0; v < 8; ++v)
+        for (int slot = 0; slot < 8; ++slot)
+            scales.segment<3>(24 * v + 3 * slot).setConstant(slots[slot]);
+    const auto coeffs = hermite.to_coefficients(Eigen::MatrixXd::Ones(8, 24));
+    EXPECT_EQ(Vec(coeffs.reshaped<Eigen::RowMajor>()), scales);
+    Vec gradient = Vec::Ones(192);
+    hermite.pullback(&gradient, nullptr);
+    EXPECT_EQ(gradient, scales);
+    Eigen::MatrixXd hessian = Eigen::MatrixXd::Ones(192, 192);
+    hermite.pullback(nullptr, &hessian);
+    EXPECT_TRUE(hessian.isApprox(scales * scales.transpose(), 0));
+    EXPECT_NO_THROW(hermite.pullback(nullptr, nullptr));
+    EXPECT_THROW(nodal.to_coefficients(Eigen::MatrixXd::Zero(8, 24)), std::invalid_argument);
+}
+
+TEST(HexHermiteExample, AcceptsHermiteReferenceFieldsRepresentingAffineBoxes) {
+    const auto topology = example::hex_hermite_topology();
+    const VertexDofMap rest_position_map(topology, 3), displacement_map(topology, 24);
+    const Vec positions = example::hex_hermite_rest_positions();
+    using XField = InterpolatedField3D<HexHermiteBasis>;
+    std::vector<XField> fields;
+    for (int e = 0; e < topology.num_cells(); ++e) {
+        const auto nodes = rest_position_map.gather(e, positions);
+        const InterpolatedField3D<HexQ1Basis> q1(nodes);
+        Eigen::MatrixXd coefficients = Eigen::MatrixXd::Zero(64, 3);
+        for (int v = 0; v < 8; ++v) {
+            coefficients.row(8 * v) = nodes.row(v);
+            const auto jacobian = q1.eval_dvalue_dxi(HexQ1Basis::reference_node(v));
+            for (int axis = 0; axis < 3; ++axis)
+                coefficients.row(8 * v + 1 + axis) = jacobian.col(axis).transpose();
+        }
+        fields.emplace_back(coefficients);
+        const BasisDofTransform<HexHermiteBasis> from_hermite(fields.back()), from_q1(q1);
+        EXPECT_TRUE(from_hermite.to_coefficients(Eigen::MatrixXd::Ones(8, 24))
+                        .isApprox(from_q1.to_coefficients(Eigen::MatrixXd::Ones(8, 24)), 1e-12));
+    }
+    const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped()), theta(Eigen::Vector2d(2, 3));
+    VolumetricFemEnergy<NeoHookean, HexHermiteBasis, GaussLegendre3D<4>, XField, IdentityField3D, IdentityField3D>
+        energy(displacement_map, std::move(fields), {Fp, Fp}, {theta, theta});
+    auto reference = example::make_hex_hermite_mesh_energy(positions);
+    const Vec u = affine_dofs(positions, 0.1 * Eigen::Matrix3d::Identity());
+    EXPECT_NEAR(energy.eval_value(u), reference.eval_value(u), 1e-11);
+    EXPECT_TRUE(energy.eval_gradient(u).isApprox(reference.eval_gradient(u), 1e-11));
+    EXPECT_TRUE(Eigen::MatrixXd(energy.eval_hessian(u)).isApprox(Eigen::MatrixXd(reference.eval_hessian(u)), 1e-11));
+    const Vec direction = affine_dofs(positions, -4 * Eigen::Matrix3d::Identity());
+    EXPECT_NEAR(energy.max_feasible_step(u, direction), reference.max_feasible_step(u, direction), 1e-12);
+}
+
+TEST(HexHermiteExample, CachedKinematicsMatchesUncachedAcrossChangingDisplacements) {
+    const Vec positions = example::hex_hermite_rest_positions();
+    const auto topology = example::hex_hermite_topology();
+    const VertexDofMap rest_map(topology, 3), map(topology, 24);
+    auto cached = example::make_hex_hermite_mesh_energy(positions);
+    MeshEnergy uncached(map, [&](int e, const Eigen::MatrixXd& u, Vec* g, Eigen::MatrixXd* H) {
+        const InterpolatedField3D<HexQ1Basis> X(rest_map.gather(e, positions));
+        const BasisDofTransform<HexHermiteBasis> transform(X);
+        const InterpolatedField3D<HexHermiteBasis> displacement(transform.to_coefficients(u));
+        const DeformationGradientField3D F(displacement, X);
+        const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped()), theta(Eigen::Vector2d(2, 3));
+        const VolumetricMaterialLocalEnergyF3D<NeoHookean> local(F, Fp, theta);
+        const double value = VolumetricElement3D<GaussLegendre3D<4>>(X).eval(local, g, H);
+        transform.pullback(g, H);
+        return value;
+    });
+    for (int pose : {0, 1, 2, 0}) {
+        Vec u = affine_dofs(positions, 0.03 * pose * Eigen::Matrix3d::Identity());
+        for (int j = 0; j < u.size(); ++j)
+            u[j] += 0.002 * std::sin(j + pose);
+        EXPECT_NEAR(cached.eval_value(u), uncached.eval_value(u), 1e-11);
+        EXPECT_TRUE(cached.eval_gradient(u).isApprox(uncached.eval_gradient(u), 1e-11));
+        EXPECT_TRUE(Eigen::MatrixXd(cached.eval_hessian(u)).isApprox(Eigen::MatrixXd(uncached.eval_hessian(u)), 1e-11));
+    }
 }

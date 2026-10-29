@@ -23,6 +23,11 @@ template <int ParamDim> class LocalEnergyT {
     // Non-finite numerical results throw std::domain_error.
     virtual double accumulate(const Coordinate& xi, double weight, Eigen::VectorXd* gradient,
                               Eigen::MatrixXd* hessian) const;
+    // Integrators supply finite coordinates/weights and check final outputs for finiteness.
+    virtual double accumulate_for_integration(const Coordinate& xi, double weight, Eigen::VectorXd* gradient,
+                                              Eigen::MatrixXd* hessian) const {
+        return accumulate(xi, weight, gradient, hessian);
+    }
 };
 
 extern template class LocalEnergyT<2>;

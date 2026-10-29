@@ -17,8 +17,9 @@ Eigen::MatrixXd eval_hessian_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& d
 // inputs. In particular, the Hessian product accumulates without an n-by-n temporary.
 void add_gradient_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoeffs,
                            const Eigen::Ref<const Eigen::MatrixXd>& gradient, double weight,
-                           Eigen::Ref<Eigen::VectorXd> output);
+                           Eigen::Ref<Eigen::VectorXd> output, bool check_finite = true);
+// With check_finite=false, the caller must validate the completed accumulation.
 void add_hessian_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoeffs,
                           const Eigen::Ref<const Eigen::MatrixXd>& hessian, double weight,
-                          Eigen::Ref<Eigen::MatrixXd> output);
+                          Eigen::Ref<Eigen::MatrixXd> output, bool check_finite = true);
 } // namespace litepgo

@@ -14,7 +14,6 @@ add_library(litepgo STATIC
     fem/local/local_energy.cpp
     fem/kinematics/triangle_mid_edge_kinematics.cpp
     fem/kinematics/positive_det_feasible_step.cpp
-    fem/kinematics/hex_hermite_dof_transform.cpp
     fem/basis/2d/quad_hermite_basis.cpp
     fem/basis/2d/triangle_p1_basis.cpp
     fem/basis/3d/hex_q1_basis.cpp

@@ -16,7 +16,7 @@ namespace litepgo {
 // Derivatives use the corresponding flattened scalar-slot order, without repacking.
 // Numerical overflow in projection or assembly throws std::domain_error; invalid
 // callback outputs (including non-finite values) remain logic_error.
-class MeshEnergy final : public FixedPatternEnergy {
+class MeshEnergy : public FixedPatternEnergy {
   public:
     // Only for energies feasible along every finite segment: step defaults to 1.
     // eval_local(e, x_local, gradient*, hessian*) returns integrated energy.
