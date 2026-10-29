@@ -154,21 +154,21 @@ TEST(InterpolatedField3D, CoefficientsAreCopiedAndTranslationHasZeroGradient) {
 TEST(InterpolatedField3D, ValueAndGradientValidateIndependently) {
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
     const InterpolatedField3D<InvalidBasis<0>> bad_values(corners());
-    EXPECT_THROW(bad_values.eval_value(xi), std::invalid_argument);
+    EXPECT_THROW(bad_values.eval_value(xi), std::domain_error);
     EXPECT_THROW(bad_values.eval_dvalue_dcoeffs(xi), std::invalid_argument);
     EXPECT_TRUE(bad_values.eval_dvalue_dxi(xi).isIdentity(1e-14));
     EXPECT_TRUE(bad_values.eval_dgrad_xi_dcoeffs(xi).allFinite());
     EXPECT_TRUE(bad_values.eval_d2value_dxi2(xi).allFinite());
     EXPECT_TRUE(bad_values.eval_dhess_xi_dcoeffs(xi).allFinite());
     const InterpolatedField3D<InvalidBasis<1>> bad_gradients(corners());
-    EXPECT_THROW(bad_gradients.eval_dvalue_dxi(xi), std::invalid_argument);
+    EXPECT_THROW(bad_gradients.eval_dvalue_dxi(xi), std::domain_error);
     EXPECT_THROW(bad_gradients.eval_dgrad_xi_dcoeffs(xi), std::invalid_argument);
     EXPECT_TRUE(bad_gradients.eval_value(xi).isApprox(xi, 1e-14));
     EXPECT_TRUE(bad_gradients.eval_dvalue_dcoeffs(xi).allFinite());
     EXPECT_TRUE(bad_gradients.eval_d2value_dxi2(xi).allFinite());
     EXPECT_TRUE(bad_gradients.eval_dhess_xi_dcoeffs(xi).allFinite());
     const InterpolatedField3D<InvalidBasis<2>> bad_hessians(corners());
-    EXPECT_THROW(bad_hessians.eval_d2value_dxi2(xi), std::invalid_argument);
+    EXPECT_THROW(bad_hessians.eval_d2value_dxi2(xi), std::domain_error);
     EXPECT_THROW(bad_hessians.eval_dhess_xi_dcoeffs(xi), std::invalid_argument);
     EXPECT_TRUE(bad_hessians.eval_value(xi).allFinite());
     EXPECT_TRUE(bad_hessians.eval_dvalue_dxi(xi).allFinite());

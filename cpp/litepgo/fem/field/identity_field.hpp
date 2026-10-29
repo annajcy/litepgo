@@ -8,7 +8,8 @@
 
 namespace litepgo {
 
-// Spatially constant; coefficients and values use the same component vector.
+// Reference coordinates are unused and need not be finite. Spatially constant; coefficients and values use the same
+// component vector.
 template <int ParamDim> class IdentityFieldT final : public FieldT<ParamDim> {
     using Base = FieldT<ParamDim>;
 
@@ -27,36 +28,26 @@ template <int ParamDim> class IdentityFieldT final : public FieldT<ParamDim> {
     int num_components() const override {
         return static_cast<int>(coeffs_.size());
     }
-    Eigen::VectorXd eval_value(const Coordinate& xi) const override {
-        check_xi(xi);
+    Eigen::VectorXd eval_value(const Coordinate&) const override {
         return coeffs_;
     }
-    SpatialDerivative eval_dvalue_dxi(const Coordinate& xi) const override {
-        check_xi(xi);
+    SpatialDerivative eval_dvalue_dxi(const Coordinate&) const override {
         return SpatialDerivative::Zero(coeffs_.size(), ParamDim);
     }
-    Eigen::MatrixXd eval_dvalue_dcoeffs(const Coordinate& xi) const override {
-        check_xi(xi);
+    Eigen::MatrixXd eval_dvalue_dcoeffs(const Coordinate&) const override {
         return Eigen::MatrixXd::Identity(coeffs_.size(), coeffs_.size());
     }
-    Eigen::MatrixXd eval_dgrad_xi_dcoeffs(const Coordinate& xi) const override {
-        check_xi(xi);
+    Eigen::MatrixXd eval_dgrad_xi_dcoeffs(const Coordinate&) const override {
         return Eigen::MatrixXd::Zero(ParamDim * coeffs_.size(), coeffs_.size());
     }
-    SpatialHessian eval_d2value_dxi2(const Coordinate& xi) const override {
-        check_xi(xi);
+    SpatialHessian eval_d2value_dxi2(const Coordinate&) const override {
         return SpatialHessian::Zero(coeffs_.size(), Base::num_second_derivatives);
     }
-    Eigen::MatrixXd eval_dhess_xi_dcoeffs(const Coordinate& xi) const override {
-        check_xi(xi);
+    Eigen::MatrixXd eval_dhess_xi_dcoeffs(const Coordinate&) const override {
         return Eigen::MatrixXd::Zero(Base::num_second_derivatives * coeffs_.size(), coeffs_.size());
     }
 
   private:
-    static void check_xi(const Coordinate& xi) {
-        if (!xi.allFinite())
-            throw std::invalid_argument("IdentityFieldT requires finite parameters");
-    }
     Eigen::VectorXd coeffs_;
 };
 

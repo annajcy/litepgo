@@ -110,10 +110,10 @@ TEST(LocalField, IdentityFieldReturnsDynamicVectorsAndValidatesValues) {
     input[0] = std::numeric_limits<double>::infinity();
     EXPECT_THROW((litepgo::IdentityField3D{input}), std::invalid_argument);
     const Eigen::Vector3d invalid_xi = Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());
-    EXPECT_THROW(field.eval_value(invalid_xi), std::invalid_argument);
-    EXPECT_THROW(field.eval_dvalue_dxi(invalid_xi), std::invalid_argument);
-    EXPECT_THROW(field.eval_dvalue_dcoeffs(invalid_xi), std::invalid_argument);
-    EXPECT_THROW(field.eval_dgrad_xi_dcoeffs(invalid_xi), std::invalid_argument);
+    EXPECT_NO_THROW(field.eval_value(invalid_xi));
+    EXPECT_NO_THROW(field.eval_dvalue_dxi(invalid_xi));
+    EXPECT_NO_THROW(field.eval_dvalue_dcoeffs(invalid_xi));
+    EXPECT_NO_THROW(field.eval_dgrad_xi_dcoeffs(invalid_xi));
 }
 
 namespace {
@@ -137,12 +137,12 @@ template <int Dim> void check_constant_spatial_derivatives() {
     EXPECT_TRUE(field.eval_d2value_dxi2(xi).isZero());
     EXPECT_TRUE(field.eval_dhess_xi_dcoeffs(xi).isZero());
     const Coordinate bad = Coordinate::Constant(std::numeric_limits<double>::quiet_NaN());
-    EXPECT_THROW(field.eval_value(bad), std::invalid_argument);
-    EXPECT_THROW(field.eval_dvalue_dcoeffs(bad), std::invalid_argument);
-    EXPECT_THROW(field.eval_dvalue_dxi(bad), std::invalid_argument);
-    EXPECT_THROW(field.eval_dgrad_xi_dcoeffs(bad), std::invalid_argument);
-    EXPECT_THROW(field.eval_d2value_dxi2(bad), std::invalid_argument);
-    EXPECT_THROW(field.eval_dhess_xi_dcoeffs(bad), std::invalid_argument);
+    EXPECT_EQ(field.eval_value(bad), field.eval_value(xi));
+    EXPECT_NO_THROW(field.eval_dvalue_dcoeffs(bad));
+    EXPECT_NO_THROW(field.eval_dvalue_dxi(bad));
+    EXPECT_NO_THROW(field.eval_dgrad_xi_dcoeffs(bad));
+    EXPECT_TRUE(field.eval_d2value_dxi2(bad).isZero());
+    EXPECT_NO_THROW(field.eval_dhess_xi_dcoeffs(bad));
 }
 } // namespace
 
