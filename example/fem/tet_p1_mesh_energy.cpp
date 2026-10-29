@@ -4,7 +4,7 @@
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
-#include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
+#include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include "litepgo/mesh/extract_surface.hpp"
 #include "litepgo/mesh/io/obj.hpp"
 #include "litepgo/mesh/io/veg.hpp"
@@ -74,7 +74,7 @@ int main(int argc, char** argv) {
     const Vec initial = Vec::Zero(elastic->num_dofs());
     solver::NewtonOptions options;
     options.gradient_tolerance = 1e-8;
-    linalg::EigenLDLT solver;
+    linalg::AutoSparseSolver solver;
     const auto result = solver::newton_solve(potential, unconstrained, initial, options, solver);
     const bool converged = result.status == solver::NewtonStatus::Converged;
     double corner_gap = 0;

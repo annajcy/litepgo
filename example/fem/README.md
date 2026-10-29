@@ -514,7 +514,7 @@ from zero displacement. `VertexPullingEnergy` (`litepgo/energy/vertex_pulling_en
 adds zero-rest-length springs `k/2 |u_i - t_i|^2` that pull each bounding-box corner
 vertex toward an anchor, where `t_i` is the anchor minus the rest position.
 `WeightedEnergySum` combines it with the elastic energy. The springs remove all rigid
-motions, so no DOF is fixed. `newton_solve` uses `EigenLDLT`, projected element
+motions, so no DOF is fixed. `newton_solve` uses `AutoSparseSolver`, projected element
 Hessians, feasible-step bounds, line search, and a free-gradient infinity-norm
 tolerance of `1e-8`.
 
@@ -559,8 +559,10 @@ by default:
 uv run --no-sync python example/fem/tet_p1_mesh_energy.py assets/box-tet.veg /tmp/deformed.veg
 ```
 
-`tests/python/test_fem.py` runs each pair and requires identical printed results
-and byte-identical output files.
+`tests/python/test_fem.py` runs each pair and requires the same convergence,
+iteration counts, and connectivity, with printed values and positions equal to
+rounding: `AutoSparseSolver`'s threaded factorizations (PARDISO, Accelerate) need
+not repeat bit for bit.
 
 The volume examples also write the deformed boundary as a triangle OBJ beside the
 VEG output (same name, `.obj` extension) through `extract_surface` (`litepgo/mesh/extract_surface.hpp`), for viewers

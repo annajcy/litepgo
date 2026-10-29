@@ -3,7 +3,7 @@
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
-#include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
+#include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include "litepgo/mesh/extract_surface.hpp"
 #include "litepgo/mesh/io/obj.hpp"
 #include "litepgo/mesh/io/veg.hpp"
@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
         solver::NewtonOptions options;
         options.gradient_tolerance = 1e-8;
         options.max_iterations = 200;
-        linalg::EigenLDLT solver;
+        linalg::AutoSparseSolver solver;
         const auto result = solver::newton_solve(elastic, fixed, initial, options, solver);
         converged = converged && result.status == solver::NewtonStatus::Converged;
         // The top face's twist about the axis, from its vertices' summed in-plane rotation.
