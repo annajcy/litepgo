@@ -2,7 +2,7 @@
 
 #include <Eigen/Core>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Linear nodal basis on [0, 1], ordered by the nodes 0, 1 (libpgo convention).
 class LinearLagrangeBasis {
@@ -21,4 +21,4 @@ class LinearLagrangeBasis {
     }
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

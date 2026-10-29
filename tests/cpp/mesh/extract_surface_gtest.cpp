@@ -8,14 +8,9 @@
 #include <stdexcept>
 #include <utility>
 
-namespace {
+namespace litepgo::mesh::test {
 
-using litepgo::HexMesh;
-using litepgo::HexTopology;
-using litepgo::TetMesh;
-using litepgo::TetTopology;
-using litepgo::TriangleMesh;
-using litepgo::Vec;
+namespace {
 
 // Volume enclosed by outward-wound triangles, by the divergence theorem.
 double enclosed_volume(const TriangleMesh& surface) {
@@ -59,7 +54,7 @@ TEST(ExtractSurface, SingleTetDropsUnusedVertices) {
     Vec positions(15);
     positions << 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 5, 5;
     const TetMesh mesh{positions, TetTopology(5, {{0, 1, 2, 3}})};
-    const TriangleMesh surface = litepgo::extract_surface(mesh);
+    const TriangleMesh surface = litepgo::mesh::extract_surface(mesh);
     EXPECT_EQ(surface.topology.num_vertices(), 4);
     EXPECT_EQ(surface.topology.num_cells(), 4);
     EXPECT_EQ(surface.positions, positions.head(12));
@@ -75,7 +70,7 @@ TEST(ExtractSurface, TwoHexesShareAnInteriorFace) {
     for (int j = 0; j < 4; ++j) // right corners 1, 2, 5, 6 are new vertices 8..11
         positions.segment<3>(3 * (8 + j)) = right.segment<3>(3 * std::array{1, 2, 5, 6}[j]);
     const HexMesh mesh{positions, HexTopology(12, {{0, 1, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 2, 5, 10, 11, 6}})};
-    const TriangleMesh surface = litepgo::extract_surface(litepgo::VolumeMesh(mesh));
+    const TriangleMesh surface = litepgo::mesh::extract_surface(litepgo::mesh::VolumeMesh(mesh));
     EXPECT_EQ(surface.topology.num_vertices(), 12);
     EXPECT_EQ(surface.topology.num_cells(), 20); // 10 boundary quads
     EXPECT_TRUE(closed_and_consistent(surface));
@@ -86,5 +81,7 @@ TEST(ExtractSurface, RejectsFaceSharedByThreeCells) {
     Vec positions(18);
     positions << 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1, 1, 1, 1;
     const TetMesh mesh{positions, TetTopology(6, {{0, 1, 2, 3}, {0, 2, 1, 4}, {0, 1, 2, 5}})};
-    EXPECT_THROW(litepgo::extract_surface(mesh), std::invalid_argument);
+    EXPECT_THROW(litepgo::mesh::extract_surface(mesh), std::invalid_argument);
 }
+
+} // namespace litepgo::mesh::test

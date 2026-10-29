@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace litepgo {
+namespace litepgo::energy {
 
 namespace {
 
@@ -15,8 +15,8 @@ SpMat checked_pattern(int num_dofs, const SpMat& pattern) {
     if (pattern.rows() != num_dofs || pattern.cols() != num_dofs) {
         throw std::invalid_argument("Energy pattern must be num_dofs x num_dofs");
     }
-    SpMat checked = pattern_of(pattern);
-    if (!is_canonical(checked)) {
+    SpMat checked = linalg::pattern_of(pattern);
+    if (!linalg::is_canonical(checked)) {
         throw std::invalid_argument("Energy pattern must have sorted row indices and no duplicate entries");
     }
     return checked;
@@ -49,7 +49,7 @@ bool Energy::update_pattern(const ConstVecRef& x) {
 double Energy::eval(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const {
     BusyScope scope(busy_, "Energy");
     check_size(x, "eval");
-    if (hessian != nullptr && !same_pattern(*hessian, pattern_)) {
+    if (hessian != nullptr && !linalg::same_pattern(*hessian, pattern_)) {
         throw std::invalid_argument("Energy::eval: the hessian does not have this energy's current sparsity "
                                     "pattern; copy hessian_pattern() again after update_pattern()");
     }
@@ -104,4 +104,4 @@ void Energy::check_size(const ConstVecRef& x, const char* caller) const {
     }
 }
 
-} // namespace litepgo
+} // namespace litepgo::energy

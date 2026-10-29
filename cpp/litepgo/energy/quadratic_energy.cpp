@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace litepgo {
+namespace litepgo::energy {
 
 namespace {
 
@@ -18,11 +18,11 @@ SpMat checked_symmetric(SpMat A) {
         throw std::invalid_argument("QuadraticEnergy requires a square matrix");
     }
     A.makeCompressed();
-    if (!is_canonical(A)) {
+    if (!linalg::is_canonical(A)) {
         throw std::invalid_argument("QuadraticEnergy requires sorted row indices and no duplicate entries");
     }
     const SpMat transposed = SpMat(A.transpose());
-    if (!same_pattern(A, transposed)) {
+    if (!linalg::same_pattern(A, transposed)) {
         throw std::invalid_argument("QuadraticEnergy requires a symmetric sparsity pattern");
     }
     double scale = 0.0;
@@ -66,4 +66,4 @@ double QuadraticEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* 
     return 0.5 * x.dot(Ax) + b_.dot(x);
 }
 
-} // namespace litepgo
+} // namespace litepgo::energy

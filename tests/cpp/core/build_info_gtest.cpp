@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+namespace litepgo::test {
+
 TEST(BuildInfo, ReportsPinnedDependencies) {
     const litepgo::BuildInfo info = litepgo::build_info();
     EXPECT_EQ(info.version, LITEPGO_VERSION);
@@ -22,3 +24,5 @@ TEST(BuildInfo, ListsTheCompiledSparseBackends) {
 #endif
     EXPECT_EQ(litepgo::build_info().sparse_backends, expected);
 }
+
+} // namespace litepgo::test

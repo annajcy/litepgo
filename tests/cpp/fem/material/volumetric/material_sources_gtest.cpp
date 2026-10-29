@@ -20,9 +20,9 @@
 #include <cmath>
 #include <gtest/gtest.h>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
-using namespace litepgo::test;
 
 const auto element_energy = [](const Field3D& X_field, const LocalEnergy3D& energy, Eigen::VectorXd* g = nullptr,
                                Eigen::MatrixXd* H = nullptr) {
@@ -45,7 +45,7 @@ const auto element_energy = [](const Field3D& X_field, const LocalEnergy3D& ener
     return result;
 };
 struct Fixture {
-    HexTopology topology{12, {{0, 1, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 2, 5, 10, 11, 6}}};
+    mesh::HexTopology topology{12, {{0, 1, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 2, 5, 10, 11, 6}}};
     Eigen::Matrix<double, 12, 3> X;
     Vec u = Vec::Zero(36);
     Vec fp = Vec::Zero(18);
@@ -74,11 +74,11 @@ struct Fixture {
         return InterpolatedField3D<HexQ1Basis>(local);
     }
     auto fields(int e) const {
-        const VertexDofMap map(topology, 3);
+        const dof::VertexDofMap map(topology, 3);
         return MaterialSources{
-            OwnedDeformationField(InterpolatedField3D<litepgo::HexQ1Basis>(map.gather(e, u)), X_field(e)),
-            IdentityField3D(ElementDofMap(topology, 9).gather(e, fp)),
-            IdentityField3D(ConstantDofMap(topology, 2).gather(e, theta))};
+            OwnedDeformationField(InterpolatedField3D<litepgo::fem::HexQ1Basis>(map.gather(e, u)), X_field(e)),
+            IdentityField3D(dof::ElementDofMap(topology, 9).gather(e, fp)),
+            IdentityField3D(dof::ConstantDofMap(topology, 2).gather(e, theta))};
     }
 };
 
@@ -126,7 +126,7 @@ void check_fd(const Field3D& X_field, const Eigen::Matrix<double, NumDofs, 1>& x
 
 TEST(MaterialSources, MixedRepresentationsPointInputsAndLocalFiniteDifferences) {
     const Fixture f;
-    const VertexDofMap map(f.topology, 3);
+    const dof::VertexDofMap map(f.topology, 3);
     for (int e = 0; e < 2; ++e) {
         SCOPED_TRACE(e);
         const auto X_field = f.X_field(e);
@@ -139,7 +139,7 @@ TEST(MaterialSources, MixedRepresentationsPointInputsAndLocalFiniteDifferences) 
                                          InterpolatedField3D<HexQ1Basis>(ue).eval_dvalue_dxi(ref_xi) *
                                              X_field.eval_dvalue_dxi(ref_xi).inverse()));
             EXPECT_EQ(point.Fp, f.fp.segment<9>(9 * e).reshaped(3, 3));
-            EXPECT_EQ(point.theta, ConstantDofMap(f.topology, 2).gather(0, f.theta));
+            EXPECT_EQ(point.theta, dof::ConstantDofMap(f.topology, 2).gather(0, f.theta));
             EXPECT_TRUE(fields.Fp.eval_dvalue_dcoeffs(ref_xi).isIdentity());
             EXPECT_TRUE(fields.theta.eval_dvalue_dcoeffs(ref_xi).isIdentity());
         }
@@ -155,9 +155,9 @@ TEST(MaterialSources, MixedRepresentationsPointInputsAndLocalFiniteDifferences) 
                 Eigen::Matrix<double, 8, 3> c;
                 for (int j = 0; j < 24; ++j)
                     c(j / 3, j % 3) = x[j];
-                return MaterialSources{OwnedDeformationField(InterpolatedField3D<litepgo::HexQ1Basis>(c), X_field),
-                                       IdentityField3D(ElementDofMap(f.topology, 9).gather(e, f.fp)),
-                                       IdentityField3D(ConstantDofMap(f.topology, 2).gather(e, f.theta))};
+                return MaterialSources{OwnedDeformationField(InterpolatedField3D<litepgo::fem::HexQ1Basis>(c), X_field),
+                                       IdentityField3D(dof::ElementDofMap(f.topology, 9).gather(e, f.fp)),
+                                       IdentityField3D(dof::ConstantDofMap(f.topology, 2).gather(e, f.theta))};
             },
             [&](const auto& local_fields) {
                 return bind_energy<VolumetricMaterialLocalEnergyF3D<NeoHookean>>(local_fields);
@@ -167,18 +167,19 @@ TEST(MaterialSources, MixedRepresentationsPointInputsAndLocalFiniteDifferences) 
         check_fd(
             X_field, pvec,
             [&](const Eigen::Matrix<double, 9, 1>& x) {
-                return MaterialSources{OwnedDeformationField(InterpolatedField3D<litepgo::HexQ1Basis>(ue), X_field),
-                                       IdentityField3D(x),
-                                       IdentityField3D(ConstantDofMap(f.topology, 2).gather(e, f.theta))};
+                return MaterialSources{
+                    OwnedDeformationField(InterpolatedField3D<litepgo::fem::HexQ1Basis>(ue), X_field),
+                    IdentityField3D(x), IdentityField3D(dof::ConstantDofMap(f.topology, 2).gather(e, f.theta))};
             },
             [&](const auto& local_fields) {
                 return bind_energy<VolumetricMaterialLocalEnergyFp3D<NeoHookean>>(local_fields);
             });
         check_fd(
-            X_field, ConstantDofMap(f.topology, 2).gather(0, f.theta),
+            X_field, dof::ConstantDofMap(f.topology, 2).gather(0, f.theta),
             [&](const Eigen::Matrix<double, 2, 1>& x) {
-                return MaterialSources{OwnedDeformationField(InterpolatedField3D<litepgo::HexQ1Basis>(ue), X_field),
-                                       IdentityField3D(fp.reshaped()), IdentityField3D(x)};
+                return MaterialSources{
+                    OwnedDeformationField(InterpolatedField3D<litepgo::fem::HexQ1Basis>(ue), X_field),
+                    IdentityField3D(fp.reshaped()), IdentityField3D(x)};
             },
             [&](const auto& local_fields) {
                 return bind_energy<VolumetricMaterialLocalEnergyTheta3D<NeoHookean>>(local_fields);
@@ -231,7 +232,7 @@ TEST(MaterialSources, SameQuadratureAcceptsDifferentActiveDofCounts) {
 
 TEST(MaterialSources, ElementAndSharedDofNumbersAccumulateIntoDifferentGlobalBlocks) {
     Fixture f;
-    const VertexDofMap map(f.topology, 3);
+    const dof::VertexDofMap map(f.topology, 3);
     const auto total = [&](const Fixture& data) {
         double value = 0;
         for (int e = 0; e < 2; ++e) {
@@ -247,8 +248,8 @@ TEST(MaterialSources, ElementAndSharedDofNumbersAccumulateIntoDifferentGlobalBlo
         const auto X_field = f.X_field(e);
         const auto fields = f.fields(e);
         const auto uidx = map.dof_indices(e);
-        const auto pidx = ElementDofMap(f.topology, 9).dof_indices(e);
-        const auto tidx = ConstantDofMap(f.topology, 2).dof_indices(e);
+        const auto pidx = dof::ElementDofMap(f.topology, 9).dof_indices(e);
+        const auto tidx = dof::ConstantDofMap(f.topology, 2).dof_indices(e);
         Eigen::VectorXd ug, pg, tg;
         Eigen::MatrixXd ph, th;
         element_energy(X_field, bind_energy<VolumetricMaterialLocalEnergyF3D<NeoHookean>>(fields), &ug);
@@ -317,7 +318,7 @@ TEST(MaterialSources, SharedParameterHessianIncludesBothElements) {
             volume += GaussLegendre3D<2>::weights()[q] *
                       X_field.eval_dvalue_dxi(GaussLegendre3D<2>::points().row(q).transpose()).determinant();
         check_fd(
-            X_field, ConstantDofMap(f.topology, 2).gather(0, f.theta),
+            X_field, dof::ConstantDofMap(f.topology, 2).gather(0, f.theta),
             [&](const Eigen::Vector2d& theta) { return MaterialSources{fields.F, fields.Fp, IdentityField3D(theta)}; },
             [&](const auto& local_fields) {
                 return bind_energy<VolumetricMaterialLocalEnergyTheta3D<QuadraticParameterMaterial<2>>>(local_fields);
@@ -344,3 +345,5 @@ TEST(MaterialSources, DirectInfeasiblePlasticStateReachesMaterialValidation) {
         std::domain_error);
 }
 } // namespace
+
+} // namespace litepgo::fem::test

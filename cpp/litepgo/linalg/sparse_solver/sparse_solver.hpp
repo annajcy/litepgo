@@ -5,7 +5,7 @@
 #include <atomic>
 #include <vector>
 
-namespace litepgo {
+namespace litepgo::linalg {
 
 // Direct factorization of a square sparse matrix, split into its two phases:
 //
@@ -69,4 +69,4 @@ class SparseSolver {
     mutable std::atomic<bool> busy_ = false;
 };
 
-} // namespace litepgo
+} // namespace litepgo::linalg

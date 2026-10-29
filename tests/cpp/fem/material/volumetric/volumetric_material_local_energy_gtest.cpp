@@ -12,8 +12,9 @@
 #include <stdexcept>
 #include <type_traits>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 auto coordinates(double scale = 1) {
     Eigen::Matrix<double, 8, 3> X_local;
     for (int a = 0; a < 8; ++a)
@@ -71,9 +72,10 @@ TEST(VolumetricMaterialLocalEnergy3D, DirectFieldsBindCorrectDerivativesAndBorro
     IdentityField3D F_field(F.reshaped());
     const IdentityField3D Fp_field(Fp.reshaped());
     const IdentityField3D theta_field(Eigen::Vector2d(2, 3));
-    const auto energy = litepgo::VolumetricMaterialLocalEnergyF3D<NeoHookean>(F_field, Fp_field, theta_field);
-    const auto plastic = litepgo::VolumetricMaterialLocalEnergyFp3D<NeoHookean>(F_field, Fp_field, theta_field);
-    const auto parameters = litepgo::VolumetricMaterialLocalEnergyTheta3D<NeoHookean>(F_field, Fp_field, theta_field);
+    const auto energy = litepgo::fem::VolumetricMaterialLocalEnergyF3D<NeoHookean>(F_field, Fp_field, theta_field);
+    const auto plastic = litepgo::fem::VolumetricMaterialLocalEnergyFp3D<NeoHookean>(F_field, Fp_field, theta_field);
+    const auto parameters =
+        litepgo::fem::VolumetricMaterialLocalEnergyTheta3D<NeoHookean>(F_field, Fp_field, theta_field);
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
     const VolumetricMaterialInputs inputs{F, Fp, Eigen::Vector2d(2, 3)};
     const double W = NeoHookean::eval_W(inputs);
@@ -98,19 +100,19 @@ TEST(VolumetricMaterialLocalEnergy3D, InactiveInputsNeedOnlyValuesAndActiveCapab
     const ValueOnlyF readonly_F;
     const ValueOnlyParameters readonly_theta;
     const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
-    const auto energy = litepgo::VolumetricMaterialLocalEnergyFp3D<NeoHookean>(readonly_F, Fp, readonly_theta);
+    const auto energy = litepgo::fem::VolumetricMaterialLocalEnergyFp3D<NeoHookean>(readonly_F, Fp, readonly_theta);
     EXPECT_DOUBLE_EQ(energy.eval_value({0.2, 0.3, 0.4}), 0);
     EXPECT_EQ(energy.eval_hessian({0.2, 0.3, 0.4}).rows(), 9);
-    EXPECT_THROW((litepgo::VolumetricMaterialLocalEnergyF3D<NeoHookean>(readonly_F, Fp, readonly_theta)),
+    EXPECT_THROW((litepgo::fem::VolumetricMaterialLocalEnergyF3D<NeoHookean>(readonly_F, Fp, readonly_theta)),
                  std::invalid_argument);
-    EXPECT_THROW((litepgo::VolumetricMaterialLocalEnergyTheta3D<NeoHookean>(readonly_F, Fp, readonly_theta)),
+    EXPECT_THROW((litepgo::fem::VolumetricMaterialLocalEnergyTheta3D<NeoHookean>(readonly_F, Fp, readonly_theta)),
                  std::invalid_argument);
     ValueOnlyParameters bad;
     bad.data.resize(0);
-    const auto empty = litepgo::VolumetricMaterialLocalEnergyFp3D<NeoHookean>(readonly_F, Fp, bad);
+    const auto empty = litepgo::fem::VolumetricMaterialLocalEnergyFp3D<NeoHookean>(readonly_F, Fp, bad);
     EXPECT_THROW(empty.eval_value({0.2, 0.3, 0.4}), std::invalid_argument);
     bad.data = Eigen::Vector2d(2, std::numeric_limits<double>::infinity());
-    const auto nonfinite = litepgo::VolumetricMaterialLocalEnergyFp3D<NeoHookean>(readonly_F, Fp, bad);
+    const auto nonfinite = litepgo::fem::VolumetricMaterialLocalEnergyFp3D<NeoHookean>(readonly_F, Fp, bad);
     EXPECT_THROW(nonfinite.eval_hessian({0.2, 0.3, 0.4}), std::invalid_argument);
 }
 struct MappedParameters final : Field3D {
@@ -152,10 +154,12 @@ TEST(VolumetricMaterialLocalEnergy3D, AnotherMaterialUsesOnlyItsActiveDerivative
 }
 
 template <class Energy> void check_temporary_inputs_rejected() {
-    static_assert(!std::is_constructible_v<Energy, IdentityField3D&&, const IdentityField3D&, const IdentityField3D&>);
     static_assert(
-        !std::is_constructible_v<Energy, const IdentityField3D&, const IdentityField3D&&, const IdentityField3D&>);
-    static_assert(!std::is_constructible_v<Energy, const IdentityField3D&, const IdentityField3D&, IdentityField3D&&>);
+        !std::is_constructible_v<Energy, IdentityField3D&&, const IdentityField3D&, const IdentityField3D&>);
+    static_assert(!std::is_constructible_v<Energy, const IdentityField3D&, const IdentityField3D&&,
+                                           const IdentityField3D&>);
+    static_assert(
+        !std::is_constructible_v<Energy, const IdentityField3D&, const IdentityField3D&, IdentityField3D&&>);
 }
 
 TEST(VolumetricMaterialLocalEnergy3D, AllThreeClassesRejectTemporaryFields) {
@@ -189,9 +193,9 @@ template <class Value> struct CountingField final : Field3D {
 TEST(VolumetricMaterialLocalEnergy3D, AccumulationReusesInputValuesAndTheActiveDerivative) {
     const CountingField<Eigen::Matrix3d> F{1.1 * Eigen::Matrix3d::Identity()}, Fp{0.95 * Eigen::Matrix3d::Identity()};
     const CountingField<Eigen::VectorXd> theta{Eigen::Vector2d(2, 3)};
-    const auto eF = litepgo::VolumetricMaterialLocalEnergyF3D<NeoHookean>(F, Fp, theta);
-    const auto ep = litepgo::VolumetricMaterialLocalEnergyFp3D<NeoHookean>(F, Fp, theta);
-    const auto et = litepgo::VolumetricMaterialLocalEnergyTheta3D<NeoHookean>(F, Fp, theta);
+    const auto eF = litepgo::fem::VolumetricMaterialLocalEnergyF3D<NeoHookean>(F, Fp, theta);
+    const auto ep = litepgo::fem::VolumetricMaterialLocalEnergyFp3D<NeoHookean>(F, Fp, theta);
+    const auto et = litepgo::fem::VolumetricMaterialLocalEnergyTheta3D<NeoHookean>(F, Fp, theta);
     for (const LocalEnergy3D* energy : {static_cast<const LocalEnergy3D*>(&eF), static_cast<const LocalEnergy3D*>(&ep),
                                         static_cast<const LocalEnergy3D*>(&et)}) {
         const Eigen::Vector3d xi(0.2, 0.3, 0.4);
@@ -299,7 +303,7 @@ TEST(VolumetricMaterialLocalEnergy3D, RejectsInvalidActiveDerivativeShapesCounts
     const ValueOnlyParameters parameters;
     const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
     const auto bind = [&](const BadActiveField& F) {
-        return litepgo::VolumetricMaterialLocalEnergyF3D<NeoHookean>(F, Fp, parameters);
+        return litepgo::fem::VolumetricMaterialLocalEnergyF3D<NeoHookean>(F, Fp, parameters);
     };
     BadActiveField bad;
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
@@ -348,24 +352,25 @@ TEST(VolumetricMaterialLocalEnergy3D, InactiveDeformationNeedsNoCoefficientDeriv
     const DeformationGradientField3D deformation(u_field, X_field);
     const ValueOnlyParameters parameters;
     const auto Fp = IdentityField3D(Eigen::Matrix3d::Identity().reshaped());
-    const auto energy = litepgo::VolumetricMaterialLocalEnergyFp3D<NeoHookean>(deformation, Fp, parameters);
+    const auto energy = litepgo::fem::VolumetricMaterialLocalEnergyFp3D<NeoHookean>(deformation, Fp, parameters);
     EXPECT_GT(energy.eval_value({0.2, 0.3, 0.4}), 0);
     EXPECT_EQ(energy.eval_hessian({0.2, 0.3, 0.4}).rows(), 9);
-    EXPECT_THROW((litepgo::VolumetricMaterialLocalEnergyF3D<NeoHookean>(deformation, Fp, parameters)),
+    EXPECT_THROW((litepgo::fem::VolumetricMaterialLocalEnergyF3D<NeoHookean>(deformation, Fp, parameters)),
                  std::invalid_argument);
 }
 } // namespace
 
 TEST(VolumetricMaterialLocalEnergy3D, RejectsInvalidFAndFpSizesBeforeReshaping) {
     const ValueOnlyParameters parameters;
-    const auto Fp = litepgo::IdentityField3D(Eigen::Matrix3d::Identity().reshaped());
+    const auto Fp = litepgo::fem::IdentityField3D(Eigen::Matrix3d::Identity().reshaped());
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
     for (int size : {1, 4, 8, 10}) {
         SCOPED_TRACE(size);
-        const litepgo::IdentityField3D invalid(Eigen::VectorXd::Ones(size));
-        const auto invalid_F = litepgo::VolumetricMaterialLocalEnergyFp3D<litepgo::NeoHookean>(invalid, Fp, parameters);
+        const litepgo::fem::IdentityField3D invalid(Eigen::VectorXd::Ones(size));
+        const auto invalid_F =
+            litepgo::fem::VolumetricMaterialLocalEnergyFp3D<litepgo::fem::NeoHookean>(invalid, Fp, parameters);
         const auto invalid_Fp =
-            litepgo::VolumetricMaterialLocalEnergyFp3D<litepgo::NeoHookean>(Fp, invalid, parameters);
+            litepgo::fem::VolumetricMaterialLocalEnergyFp3D<litepgo::fem::NeoHookean>(Fp, invalid, parameters);
         for (const auto* energy : {&invalid_F, &invalid_Fp}) {
             EXPECT_THROW(energy->eval_value(xi), std::invalid_argument);
             EXPECT_THROW(energy->eval_gradient(xi), std::invalid_argument);
@@ -391,13 +396,13 @@ TEST(VolumetricMaterialLocalEnergy3D, InactiveInterpolatedParametersDoNotRequire
     Eigen::Matrix<double, 8, 2> theta_local;
     theta_local.col(0).setConstant(2);
     theta_local.col(1).setConstant(3);
-    const auto theta_field = litepgo::InterpolatedField3D<InvalidParameterGradients>(theta_local);
+    const auto theta_field = litepgo::fem::InterpolatedField3D<InvalidParameterGradients>(theta_local);
     const auto X_field = coordinates();
-    const litepgo::InterpolatedField3D<litepgo::HexQ1Basis> u_field(Eigen::MatrixXd::Zero(8, 3));
-    const litepgo::DeformationGradientField3D deformation(u_field, X_field);
-    const litepgo::IdentityField3D Fp_field(Eigen::Matrix3d::Identity().reshaped());
+    const litepgo::fem::InterpolatedField3D<litepgo::fem::HexQ1Basis> u_field(Eigen::MatrixXd::Zero(8, 3));
+    const litepgo::fem::DeformationGradientField3D deformation(u_field, X_field);
+    const litepgo::fem::IdentityField3D Fp_field(Eigen::Matrix3d::Identity().reshaped());
     const auto energy =
-        litepgo::VolumetricMaterialLocalEnergyF3D<litepgo::NeoHookean>(deformation, Fp_field, theta_field);
+        litepgo::fem::VolumetricMaterialLocalEnergyF3D<litepgo::fem::NeoHookean>(deformation, Fp_field, theta_field);
     Eigen::VectorXd g = Eigen::VectorXd::Zero(energy.num_dofs());
     Eigen::MatrixXd H = Eigen::MatrixXd::Zero(energy.num_dofs(), energy.num_dofs());
     EXPECT_DOUBLE_EQ(energy.accumulate({0.2, 0.3, 0.4}, 1, &g, &H), 0);
@@ -405,3 +410,5 @@ TEST(VolumetricMaterialLocalEnergy3D, InactiveInterpolatedParametersDoNotRequire
     EXPECT_GT(H.norm(), 0);
 }
 } // namespace
+
+} // namespace litepgo::fem::test

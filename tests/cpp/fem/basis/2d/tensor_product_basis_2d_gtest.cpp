@@ -5,8 +5,9 @@
 
 #include <gtest/gtest.h>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 using B = TensorProductBasis2D<LinearLagrangeBasis>;
 static_assert(Basis2D<B>);
 static_assert(!Basis3D<B>);
@@ -58,3 +59,5 @@ TEST(TensorProductBasis2D, BilinearFieldsProvideZeroPureAndNonzeroMixedSecondDer
     EXPECT_EQ(field.eval_dhess_xi_dcoeffs(xi), expected);
 }
 } // namespace
+
+} // namespace litepgo::fem::test

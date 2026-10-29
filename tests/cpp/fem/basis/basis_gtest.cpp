@@ -13,8 +13,9 @@
 
 #include <array>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 
 struct ConstantBasis {
     static constexpr int num_basis_functions = 1;
@@ -177,3 +178,5 @@ TEST(Basis3D, TensorProductsAndFieldsEvaluateOnlyRequestedQuantities) {
     check_evaluation_counts<TensorProductBasis3D<CountingBasis>, 3>();
 }
 } // namespace
+
+} // namespace litepgo::fem::test

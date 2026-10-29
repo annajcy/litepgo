@@ -6,10 +6,11 @@
 #include <array>
 #include <stdexcept>
 
+namespace litepgo::fem::test {
+
 namespace {
-using litepgo::TriangleP1Basis;
-static_assert(litepgo::Basis2D<TriangleP1Basis>);
-static_assert(!litepgo::Basis3D<TriangleP1Basis>);
+static_assert(litepgo::fem::Basis2D<TriangleP1Basis>);
+static_assert(!litepgo::fem::Basis3D<TriangleP1Basis>);
 
 const std::array<Eigen::Vector2d, 5> samples{{Eigen::Vector2d(0, 0), Eigen::Vector2d(1.0 / 3, 1.0 / 3),
                                               Eigen::Vector2d(0.2, 0.3), Eigen::Vector2d(0.4, 0.6),
@@ -63,3 +64,5 @@ TEST(TriangleP1Basis, FirstAndSecondDerivativesMatchFiniteDifferences) {
         }
     }
 }
+
+} // namespace litepgo::fem::test

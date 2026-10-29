@@ -5,7 +5,7 @@
 
 #include <variant>
 
-namespace litepgo {
+namespace litepgo::mesh {
 
 // Coordinates use vertex-major xyz order, matching VertexDofMap(topology, 3).
 template <int K> struct MeshData {
@@ -23,4 +23,4 @@ using TetMesh = MeshData<4>;
 using HexMesh = MeshData<8>;
 using VolumeMesh = std::variant<TetMesh, HexMesh>;
 
-} // namespace litepgo
+} // namespace litepgo::mesh

@@ -1,11 +1,12 @@
 #include "litepgo/dof/constant_dof_map.hpp"
 #include <gtest/gtest.h>
 
+namespace litepgo::dof::test {
+
 namespace {
-using namespace litepgo;
 
 TEST(ConstantDofMap, EveryElementUsesTheSameIndependentSnapshotAndIndices) {
-    const HexTopology topology(8, {{7, 6, 5, 4, 3, 2, 1, 0}, {0, 1, 2, 3, 4, 5, 6, 7}});
+    const mesh::HexTopology topology(8, {{7, 6, 5, 4, 3, 2, 1, 0}, {0, 1, 2, 3, 4, 5, 6, 7}});
     const ConstantDofMap map(topology, 2);
     Vec data(Eigen::Vector2d(2, 3));
     for (int e = 0; e < 2; ++e) {
@@ -31,20 +32,20 @@ TEST(ConstantDofMap, EveryElementUsesTheSameIndependentSnapshotAndIndices) {
 }
 
 TEST(ConstantDofMap, ChecksIndicesIncludingEmptyTopology) {
-    const ConstantDofMap map(TetTopology(4, {{0, 1, 2, 3}}), 2);
+    const ConstantDofMap map(mesh::TetTopology(4, {{0, 1, 2, 3}}), 2);
     const Vec data(Eigen::Vector2d(2, 3));
     for (int e : {-1, 1}) {
         EXPECT_THROW(map.gather(e, data), std::out_of_range);
         EXPECT_THROW(map.dof_indices(e), std::out_of_range);
     }
-    const ConstantDofMap empty(TriangleTopology(0, {}), 2);
+    const ConstantDofMap empty(mesh::TriangleTopology(0, {}), 2);
     EXPECT_THROW(empty.gather(0, data), std::out_of_range);
     EXPECT_THROW(empty.dof_indices(0), std::out_of_range);
 }
 
 TEST(ConstantDofMap, OwnsCountAfterTopologyDestruction) {
     const auto map = [] {
-        const TriangleTopology topology(3, {{0, 1, 2}});
+        const mesh::TriangleTopology topology(3, {{0, 1, 2}});
         return ConstantDofMap(topology, 9);
     }();
     const Vec data(Eigen::Matrix3d::Identity().eval().reshaped().eval());
@@ -54,14 +55,16 @@ TEST(ConstantDofMap, OwnsCountAfterTopologyDestruction) {
 } // namespace
 
 TEST(ConstantDofMap, OwnsRuntimeLayoutAndValidatesWidthAndLength) {
-    const litepgo::TriangleTopology topology(3, {{0, 1, 2}, {2, 1, 0}});
-    const litepgo::ConstantDofMap map(topology, 4);
+    const litepgo::mesh::TriangleTopology topology(3, {{0, 1, 2}, {2, 1, 0}});
+    const litepgo::dof::ConstantDofMap map(topology, 4);
     EXPECT_EQ(map.num_dofs(), 4);
     EXPECT_EQ(map.num_elements(), 2);
     const litepgo::Vec values = litepgo::Vec::LinSpaced(6, 0, 5);
     EXPECT_EQ(map.gather(1, values.segment(1, 4)), values.segment(1, 4));
     for (int width : {0, -1})
-        EXPECT_THROW((litepgo::ConstantDofMap(topology, width)), std::invalid_argument);
+        EXPECT_THROW((litepgo::dof::ConstantDofMap(topology, width)), std::invalid_argument);
     for (int size : {3, 5})
         EXPECT_THROW(map.gather(0, litepgo::Vec::Zero(size)), std::invalid_argument);
 }
+
+} // namespace litepgo::dof::test

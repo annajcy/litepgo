@@ -5,8 +5,9 @@
 #include <array>
 #include <cmath>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 static_assert(Basis2D<QuadHermiteBasis>);
 static_assert(QuadHermiteBasis::num_basis_functions == 16);
 
@@ -92,3 +93,5 @@ TEST(QuadHermiteBasis, FirstAndSecondDerivativesMatchFiniteDifferences) {
     }
 }
 } // namespace
+
+} // namespace litepgo::fem::test

@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-namespace litepgo {
+namespace litepgo::dof {
 
 DofReduction::DofReduction(int num_dofs, std::vector<int> fixed_dofs)
     : num_dofs_(num_dofs), fixed_dofs_(std::move(fixed_dofs)) {
@@ -74,7 +74,7 @@ void DofReduction::expand(const ConstVecRef& reduced, VecRef full) const {
 }
 
 SpMat DofReduction::reduce(const SpMat& A) const {
-    return ReducedMatrix(*this, A).matrix();
+    return linalg::ReducedMatrix(*this, A).matrix();
 }
 
-} // namespace litepgo
+} // namespace litepgo::dof

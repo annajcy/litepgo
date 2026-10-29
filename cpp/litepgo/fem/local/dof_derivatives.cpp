@@ -3,7 +3,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 Eigen::VectorXd eval_gradient_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoeffs,
                                        const Eigen::Ref<const Eigen::MatrixXd>& gradient) {
@@ -51,4 +51,4 @@ void add_hessian_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoeff
         throw std::domain_error("add_hessian_wrt_dofs: non-finite accumulation");
 }
 
-} // namespace litepgo
+} // namespace litepgo::fem

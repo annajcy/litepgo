@@ -5,11 +5,12 @@
 #include <gtest/gtest.h>
 #include <limits>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
-TriangleTopology topology() {
+mesh::TriangleTopology topology() {
     // Face 0 has three neighbors; boundary faces each have one neighbor.
-    return TriangleTopology(6, {{0, 1, 2}, {2, 1, 3}, {0, 2, 4}, {1, 0, 5}});
+    return mesh::TriangleTopology(6, {{0, 1, 2}, {2, 1, 3}, {0, 2, 4}, {1, 0, 5}});
 }
 Vec rest_positions() {
     // A flat patch with face areas 1, 2, 1/2, 2 and consistent winding.
@@ -18,12 +19,12 @@ Vec rest_positions() {
     return X_nodes.reshaped<Eigen::RowMajor>();
 }
 struct Patch {
-    StencilDofMap map{6, make_triangle_mid_edge_stencils(topology()).vertices, 3};
+    dof::StencilDofMap map{6, mesh::make_triangle_mid_edge_stencils(topology()).vertices, 3};
     std::vector<TriangleMidEdgeRestData> rest;
     std::vector<double> thickness{0.1, 0.2, 0.15, 0.3};
     std::vector<Vec> theta{Eigen::Vector2d(2, 3), Eigen::Vector2d(4, 5), Eigen::Vector2d(6, 7), Eigen::Vector2d(8, 9)};
     Patch() {
-        const auto stencils = make_triangle_mid_edge_stencils(topology());
+        const auto stencils = mesh::make_triangle_mid_edge_stencils(topology());
         const Vec X = rest_positions();
         for (int e = 0; e < 4; ++e)
             rest.emplace_back(map.gather(e, X), stencils.opposite[static_cast<std::size_t>(e)]);
@@ -64,7 +65,7 @@ TEST(ShellFemEnergy, PerFaceInputsMatchExplicitIntegrationAndScatter) {
     EXPECT_TRUE(energy.eval_gradient(u).isApprox(g, 1e-12));
     EXPECT_TRUE(Eigen::MatrixXd(energy.eval_hessian(u)).isApprox(H, 1e-12));
     EXPECT_DOUBLE_EQ(energy.max_feasible_step(u, du), step);
-    litepgo::testing::expect_derivatives_match(energy, u, 2e-6);
+    energy::test::expect_derivatives_match(energy, u, 2e-6);
     patch.rest[0].X_local.setZero();
     patch.thickness[0] = 100;
     patch.theta[0].setZero();
@@ -77,11 +78,11 @@ TEST(ShellFemEnergy, RejectsInvalidArraysStencilsThicknessAndMaterial) {
     EXPECT_THROW((Shell(p.map, {}, p.thickness, p.theta)), std::invalid_argument);
     EXPECT_THROW((Shell(p.map, p.rest, {}, p.theta)), std::invalid_argument);
     EXPECT_THROW((Shell(p.map, p.rest, p.thickness, {})), std::invalid_argument);
-    const auto vertices = make_triangle_mid_edge_stencils(topology()).vertices;
-    EXPECT_THROW((Shell(StencilDofMap(6, vertices, 2), p.rest, p.thickness, p.theta)), std::invalid_argument);
+    const auto vertices = mesh::make_triangle_mid_edge_stencils(topology()).vertices;
+    EXPECT_THROW((Shell(dof::StencilDofMap(6, vertices, 2), p.rest, p.thickness, p.theta)), std::invalid_argument);
     auto wrong = vertices;
     wrong[0].pop_back();
-    EXPECT_THROW((Shell(StencilDofMap(6, wrong, 3), p.rest, p.thickness, p.theta)), std::invalid_argument);
+    EXPECT_THROW((Shell(dof::StencilDofMap(6, wrong, 3), p.rest, p.thickness, p.theta)), std::invalid_argument);
     for (double value : {0., -1., std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()}) {
         auto thickness = p.thickness;
         thickness[3] = value;
@@ -101,10 +102,12 @@ TEST(ShellFemEnergy, RejectsInvalidArraysStencilsThicknessAndMaterial) {
 }
 
 TEST(ShellFemEnergy, EmptyMeshProducesZeroAndFullStep) {
-    ShellFemEnergy<KoiterStVK> energy(StencilDofMap(0, {}, 3), {}, {}, {});
+    ShellFemEnergy<KoiterStVK> energy(dof::StencilDofMap(0, {}, 3), {}, {}, {});
     EXPECT_EQ(energy.eval_value(Vec(0)), 0);
     EXPECT_EQ(energy.eval_gradient(Vec(0)).size(), 0);
     EXPECT_EQ(energy.eval_hessian(Vec(0)).rows(), 0);
     EXPECT_EQ(energy.max_feasible_step(Vec(0), Vec(0)), 1);
 }
 } // namespace
+
+} // namespace litepgo::fem::test

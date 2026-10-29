@@ -2,7 +2,7 @@
 
 #include <Eigen/Core>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Centroid rule on r,s,t >= 0, r+s+t <= 1, exact through degree 1.
 // The weight includes the reference tetrahedron's volume of 1/6.
@@ -22,4 +22,4 @@ class TetCentroidQuadrature final {
     }
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

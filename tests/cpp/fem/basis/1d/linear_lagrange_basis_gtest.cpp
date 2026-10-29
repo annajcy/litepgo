@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-using litepgo::LinearLagrangeBasis;
+namespace litepgo::fem::test {
 
 static_assert(LinearLagrangeBasis::num_basis_functions == 2);
 
@@ -40,3 +40,5 @@ TEST(LinearLagrangeBasis, ReproducesLinearFunctionsAndDerivatives) {
         }
     }
 }
+
+} // namespace litepgo::fem::test

@@ -6,11 +6,9 @@
 #include <stdexcept>
 #include <vector>
 
-namespace {
+namespace litepgo::dof::test {
 
-using litepgo::DofReduction;
-using litepgo::SpMat;
-using litepgo::Vec;
+namespace {
 
 std::vector<int> as_vector(std::span<const int> values) {
     return {values.begin(), values.end()};
@@ -115,3 +113,5 @@ TEST(DofReduction, ReduceChecksTheMatrix) {
     ASSERT_FALSE(uncompressed.isCompressed());
     EXPECT_THROW(reduction.reduce(uncompressed), std::invalid_argument);
 }
+
+} // namespace litepgo::dof::test

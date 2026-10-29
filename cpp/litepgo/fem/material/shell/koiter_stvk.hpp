@@ -2,7 +2,7 @@
 
 #include "litepgo/fem/material/shell/shell_material_inputs.hpp"
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Density per reference area: W = t*psi((a-a_bar)/2) + t^3/12*psi(b-b_bar),
 // psi(S) = lambda_ps/2*tr(a_bar^-1*S)^2 + mu*tr(a_bar^-1*S*a_bar^-1*S).
@@ -19,4 +19,4 @@ class KoiterStVK final {
     static Eigen::Matrix<double, 6, 6> eval_d2W_dab2(const ShellMaterialInputs& inputs);
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

@@ -2,7 +2,7 @@
 
 #include "litepgo/energy/energy.hpp"
 
-namespace litepgo {
+namespace litepgo::energy {
 
 // Base for energies whose Hessian pattern is given at construction and never
 // changes, such as quadratic and FEM energies.
@@ -16,4 +16,4 @@ class FixedPatternEnergy : public Energy {
     }
 };
 
-} // namespace litepgo
+} // namespace litepgo::energy

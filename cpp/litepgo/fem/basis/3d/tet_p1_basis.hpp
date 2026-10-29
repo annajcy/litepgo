@@ -2,7 +2,7 @@
 
 #include <Eigen/Core>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Scalar P1 basis on r,s,t >= 0, r+s+t <= 1, with vertices ordered as
 // (0,0,0), (1,0,0), (0,1,0), (0,0,1).
@@ -18,4 +18,4 @@ class TetP1Basis final {
     static Eigen::Vector3d reference_node(int basis_index);
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

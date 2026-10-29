@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace litepgo {
+namespace litepgo::mesh {
 namespace {
 // Local faces wound outward for a positively oriented cell.
 constexpr std::array<std::array<int, 3>, 4> tet_faces{{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}};
@@ -90,4 +90,4 @@ TriangleMesh extract_surface(const HexMesh& mesh) {
 TriangleMesh extract_surface(const VolumeMesh& mesh) {
     return std::visit([](const auto& data) { return extract_surface(data); }, mesh);
 }
-} // namespace litepgo
+} // namespace litepgo::mesh

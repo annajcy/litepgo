@@ -3,7 +3,7 @@
 #include <Eigen/Core>
 #include <array>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Build once per fixed reference face, using the same stencil and curvature rule as the current pose.
 struct TriangleMidEdgeRestData {
@@ -43,4 +43,4 @@ double eval_triangle_mid_edge_feasible_step(const Eigen::Ref<const Eigen::Matrix
                                             const Eigen::Ref<const Eigen::MatrixXd>& dx,
                                             const std::array<int, 3>& opposite);
 
-} // namespace litepgo
+} // namespace litepgo::fem

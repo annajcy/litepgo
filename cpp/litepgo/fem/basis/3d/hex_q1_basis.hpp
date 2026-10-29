@@ -3,7 +3,7 @@
 #include "litepgo/fem/basis/1d/linear_lagrange_basis.hpp"
 #include "litepgo/fem/basis/3d/tensor_product_basis_3d.hpp"
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Scalar Q1 basis on [0,1]^3, in libpgo Hex corner order:
 // (0,0,0), (1,0,0), (1,1,0), (0,1,0),
@@ -22,4 +22,4 @@ class HexQ1Basis final {
     static Eigen::Vector3d reference_node(int basis_index);
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

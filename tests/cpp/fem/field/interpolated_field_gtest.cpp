@@ -10,8 +10,9 @@
 #include <limits>
 #include <type_traits>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 static_assert(std::is_same_v<InterpolatedFieldT<HexQ1Basis, 3>, InterpolatedField3D<HexQ1Basis>>);
 
 template <class B>
@@ -212,3 +213,5 @@ TEST(InterpolatedField3D, LinearTetFieldsReturnZeroSecondSpatialAndCoefficientDe
     EXPECT_EQ(field.eval_dhess_xi_dcoeffs(xi).cols(), 12);
     EXPECT_TRUE(field.eval_dhess_xi_dcoeffs(xi).isZero());
 }
+
+} // namespace litepgo::fem::test

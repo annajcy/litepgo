@@ -4,6 +4,8 @@
 
 #include <array>
 
+namespace litepgo::test {
+
 TEST(Memory, Overlaps) {
     std::array<double, 10> data{};
     const double* p = data.data();
@@ -15,3 +17,5 @@ TEST(Memory, Overlaps) {
     EXPECT_FALSE(litepgo::overlaps(p, 0, p, 5));
     EXPECT_FALSE(litepgo::overlaps(p, 5, p, 0));
 }
+
+} // namespace litepgo::test

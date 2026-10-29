@@ -4,7 +4,7 @@
 
 #include <unsupported/Eigen/KroneckerProduct>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Two copies of a 1D rule on a Cartesian product; weights multiply.
 template <Quadrature1D Rule1D> class TensorProductQuadrature2D final {
@@ -34,4 +34,4 @@ template <Quadrature1D Rule1D> class TensorProductQuadrature2D final {
     }
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <unsupported/Eigen/KroneckerProduct>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Borrows u and X; both must outlive this field. Only u's coefficients are active.
 class DeformationGradientField3D final : public Field3D {
@@ -72,4 +72,4 @@ class DeformationGradientField3D final : public Field3D {
     const Field3D& X_field_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

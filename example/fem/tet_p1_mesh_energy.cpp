@@ -19,26 +19,27 @@
 
 int main(int argc, char** argv) {
     using namespace litepgo;
-    const auto mesh = std::get<TetMesh>(io::read_veg(argc > 1 ? argv[1] : LITEPGO_ASSETS_DIR "/box-tet.veg"));
+    const auto mesh = std::get<mesh::TetMesh>(io::read_veg(argc > 1 ? argv[1] : LITEPGO_ASSETS_DIR "/box-tet.veg"));
     const auto& topology = mesh.topology;
     const Vec& rest_positions = mesh.positions;
     const Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>> rest_nodes(
         rest_positions.data(), topology.num_vertices(), 3);
     if (topology.num_cells() == 0)
         throw std::runtime_error("Example requires a nonempty mesh");
-    const VertexDofMap rest_position_map(topology, 3);
-    using XField = InterpolatedField3D<TetP1Basis>;
+    const dof::VertexDofMap rest_position_map(topology, 3);
+    using XField = fem::InterpolatedField3D<fem::TetP1Basis>;
     std::vector<XField> rest_position_fields;
     rest_position_fields.reserve(topology.num_cells());
     for (int e = 0; e < topology.num_cells(); ++e)
         rest_position_fields.emplace_back(rest_position_map.gather(e, rest_positions));
-    const IdentityField3D Fp_field(Eigen::Matrix3d::Identity().reshaped());
-    const IdentityField3D theta_field(Eigen::Vector2d(2, 3));
-    auto elastic = std::make_shared<
-        VolumetricFemEnergy<NeoHookean, TetP1Basis, TetCentroidQuadrature, XField, IdentityField3D, IdentityField3D>>(
-        rest_position_map, std::move(rest_position_fields),
-        std::vector<IdentityField3D>(topology.num_cells(), Fp_field),
-        std::vector<IdentityField3D>(topology.num_cells(), theta_field));
+    const fem::IdentityField3D Fp_field(Eigen::Matrix3d::Identity().reshaped());
+    const fem::IdentityField3D theta_field(Eigen::Vector2d(2, 3));
+    auto elastic =
+        std::make_shared<fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature, XField,
+                                                  fem::IdentityField3D, fem::IdentityField3D>>(
+            rest_position_map, std::move(rest_position_fields),
+            std::vector<fem::IdentityField3D>(topology.num_cells(), Fp_field),
+            std::vector<fem::IdentityField3D>(topology.num_cells(), theta_field));
 
     // Pull the bounding-box corners toward a copy of the box enlarged about its minimum
     // corner, whose anchor coincides with that corner's rest position.
@@ -64,18 +65,18 @@ int main(int argc, char** argv) {
         targets.segment<3>(3 * Eigen::Index(i)) = stretch * (rest_nodes.row(v).transpose() - lower);
     }
     auto pulling =
-        std::make_shared<VertexPullingEnergy>(elastic->num_dofs(), std::move(pulled_dofs), targets, stiffness);
+        std::make_shared<energy::VertexPullingEnergy>(elastic->num_dofs(), std::move(pulled_dofs), targets, stiffness);
 
     // Static equilibrium minimizes Pi(u) = E_elastic(u) + E_pulling(u); the springs
     // remove all rigid motions, so no DOF is fixed.
-    WeightedEnergySum potential({{elastic, 1}, {pulling, 1}});
-    const DofReduction unconstrained(elastic->num_dofs(), {});
+    energy::WeightedEnergySum potential({{elastic, 1}, {pulling, 1}});
+    const dof::DofReduction unconstrained(elastic->num_dofs(), {});
     const Vec initial = Vec::Zero(elastic->num_dofs());
-    NewtonOptions options;
+    solver::NewtonOptions options;
     options.gradient_tolerance = 1e-8;
-    EigenLDLT solver;
-    const auto result = newton_solve(potential, unconstrained, initial, options, solver);
-    const bool converged = result.status == NewtonStatus::Converged;
+    linalg::EigenLDLT solver;
+    const auto result = solver::newton_solve(potential, unconstrained, initial, options, solver);
+    const bool converged = result.status == solver::NewtonStatus::Converged;
     double corner_gap = 0;
     for (std::size_t i = 0; i < corners.size(); ++i)
         corner_gap = std::max(corner_gap,
@@ -86,8 +87,8 @@ int main(int argc, char** argv) {
     const std::filesystem::path output = argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/tet_p1_mesh_energy.veg";
     if (!output.parent_path().empty())
         std::filesystem::create_directories(output.parent_path());
-    const TetMesh deformed{rest_positions + result.x, topology};
+    const mesh::TetMesh deformed{rest_positions + result.x, topology};
     io::write_veg(output, deformed);
-    io::write_obj(std::filesystem::path(output).replace_extension(".obj"), extract_surface(deformed));
+    io::write_obj(std::filesystem::path(output).replace_extension(".obj"), mesh::extract_surface(deformed));
     return converged ? 0 : 1;
 }

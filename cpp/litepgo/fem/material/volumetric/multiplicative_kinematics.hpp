@@ -2,7 +2,7 @@
 
 #include <Eigen/Core>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // A pointwise snapshot of Fe = F Fp^-1 and det_Fp = det(Fp).
 class MultiplicativeKinematics final {
@@ -41,4 +41,4 @@ class MultiplicativeKinematics final {
     double det_Fp_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

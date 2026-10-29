@@ -19,8 +19,9 @@
 #include <limits>
 #include <utility>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 
 template <class B, class Q>
 double eval_displacement(const VolumetricElement3D<Q>& element, const Field3D& X, const Eigen::MatrixXd& u,
@@ -479,3 +480,5 @@ TEST(VolumetricElement3D, InvertedStatesAndNumericalOverflowThrowDomainError) {
 }
 
 } // namespace
+
+} // namespace litepgo::fem::test

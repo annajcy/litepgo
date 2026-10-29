@@ -10,7 +10,7 @@
 #include "litepgo/linalg/sparse_solver/eigen_sparse_lu.hpp"
 #endif
 
-namespace litepgo {
+namespace litepgo::linalg {
 
 #if defined(LITEPGO_HAS_ACCELERATE)
 using AutoSparseSolver = AccelerateLLT;
@@ -20,4 +20,4 @@ using AutoSparseSolver = EigenLDLT;
 using AutoIndefiniteSparseSolver = EigenSparseLU;
 #endif
 
-} // namespace litepgo
+} // namespace litepgo::linalg

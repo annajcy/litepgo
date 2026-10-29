@@ -3,6 +3,8 @@
 #include "litepgo/fem/quadrature/3d/tensor_product_quadrature_3d.hpp"
 #include "litepgo/fem/quadrature/quadrature.hpp"
 
+namespace litepgo::fem::test {
+
 namespace {
 
 struct OnePointRule {
@@ -64,35 +66,37 @@ struct TwoDimensionalRule : OnePointRule {
 };
 
 template <class Q>
-concept CanFormTensorProduct = requires { typename litepgo::TensorProductQuadrature3D<Q>; };
+concept CanFormTensorProduct = requires { typename litepgo::fem::TensorProductQuadrature3D<Q>; };
 
-static_assert(litepgo::Quadrature1D<OnePointRule>);
-static_assert(litepgo::Quadrature1D<litepgo::GaussLegendre1D<2>>);
-static_assert(litepgo::Quadrature3D<litepgo::GaussLegendre3D<2>>);
-static_assert(litepgo::Quadrature3D<litepgo::TensorProductQuadrature3D<OnePointRule>>);
-static_assert(litepgo::Quadrature<TwoDimensionalRule, 2>);
-static_assert(!litepgo::Quadrature1D<MissingCount>);
-static_assert(!litepgo::Quadrature1D<MissingPoints>);
-static_assert(!litepgo::Quadrature1D<MissingWeights>);
-static_assert(!litepgo::Quadrature1D<NonConstantCount>);
-static_assert(!litepgo::Quadrature1D<ZeroCount>);
-static_assert(!litepgo::Quadrature1D<NegativeCount>);
-static_assert(!litepgo::Quadrature1D<WrongPointRows>);
-static_assert(!litepgo::Quadrature1D<WrongWeightRows>);
-static_assert(!litepgo::Quadrature1D<WrongWeightColumns>);
-static_assert(!litepgo::Quadrature1D<WrongScalar>);
-static_assert(!litepgo::Quadrature1D<PointsByValue>);
-static_assert(!litepgo::Quadrature1D<MutableWeights>);
-static_assert(!litepgo::Quadrature1D<TwoDimensionalRule>);
-static_assert(!litepgo::Quadrature3D<OnePointRule>);
-static_assert(!litepgo::Quadrature1D<litepgo::GaussLegendre3D<2>>);
-static_assert(!litepgo::Quadrature3D<litepgo::GaussLegendre1D<2>>);
-static_assert(!litepgo::Quadrature<OnePointRule, 0>);
-static_assert(!litepgo::Quadrature<OnePointRule, -1>);
+static_assert(litepgo::fem::Quadrature1D<OnePointRule>);
+static_assert(litepgo::fem::Quadrature1D<litepgo::fem::GaussLegendre1D<2>>);
+static_assert(litepgo::fem::Quadrature3D<litepgo::fem::GaussLegendre3D<2>>);
+static_assert(litepgo::fem::Quadrature3D<litepgo::fem::TensorProductQuadrature3D<OnePointRule>>);
+static_assert(litepgo::fem::Quadrature<TwoDimensionalRule, 2>);
+static_assert(!litepgo::fem::Quadrature1D<MissingCount>);
+static_assert(!litepgo::fem::Quadrature1D<MissingPoints>);
+static_assert(!litepgo::fem::Quadrature1D<MissingWeights>);
+static_assert(!litepgo::fem::Quadrature1D<NonConstantCount>);
+static_assert(!litepgo::fem::Quadrature1D<ZeroCount>);
+static_assert(!litepgo::fem::Quadrature1D<NegativeCount>);
+static_assert(!litepgo::fem::Quadrature1D<WrongPointRows>);
+static_assert(!litepgo::fem::Quadrature1D<WrongWeightRows>);
+static_assert(!litepgo::fem::Quadrature1D<WrongWeightColumns>);
+static_assert(!litepgo::fem::Quadrature1D<WrongScalar>);
+static_assert(!litepgo::fem::Quadrature1D<PointsByValue>);
+static_assert(!litepgo::fem::Quadrature1D<MutableWeights>);
+static_assert(!litepgo::fem::Quadrature1D<TwoDimensionalRule>);
+static_assert(!litepgo::fem::Quadrature3D<OnePointRule>);
+static_assert(!litepgo::fem::Quadrature1D<litepgo::fem::GaussLegendre3D<2>>);
+static_assert(!litepgo::fem::Quadrature3D<litepgo::fem::GaussLegendre1D<2>>);
+static_assert(!litepgo::fem::Quadrature<OnePointRule, 0>);
+static_assert(!litepgo::fem::Quadrature<OnePointRule, -1>);
 static_assert(CanFormTensorProduct<OnePointRule>);
-static_assert(CanFormTensorProduct<litepgo::GaussLegendre1D<2>>);
+static_assert(CanFormTensorProduct<litepgo::fem::GaussLegendre1D<2>>);
 static_assert(!CanFormTensorProduct<WrongScalar>);
 static_assert(!CanFormTensorProduct<MissingWeights>);
-static_assert(!CanFormTensorProduct<litepgo::GaussLegendre3D<2>>);
+static_assert(!CanFormTensorProduct<litepgo::fem::GaussLegendre3D<2>>);
 
 } // namespace
+
+} // namespace litepgo::fem::test

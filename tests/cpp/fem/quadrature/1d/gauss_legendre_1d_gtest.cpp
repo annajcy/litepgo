@@ -6,18 +6,20 @@
 #include <cmath>
 #include <concepts>
 
+namespace litepgo::fem::test {
+
 namespace {
 
-static_assert(litepgo::GaussLegendre1D<2>::num_points == 2);
-static_assert(std::same_as<decltype(litepgo::GaussLegendre1D<2>::points()), const Eigen::Vector2d&>);
-static_assert(std::same_as<decltype(litepgo::GaussLegendre1D<2>::weights()), const Eigen::Vector2d&>);
-static_assert(litepgo::Quadrature1D<litepgo::GaussLegendre1D<4>>);
+static_assert(litepgo::fem::GaussLegendre1D<2>::num_points == 2);
+static_assert(std::same_as<decltype(litepgo::fem::GaussLegendre1D<2>::points()), const Eigen::Vector2d&>);
+static_assert(std::same_as<decltype(litepgo::fem::GaussLegendre1D<2>::weights()), const Eigen::Vector2d&>);
+static_assert(litepgo::fem::Quadrature1D<litepgo::fem::GaussLegendre1D<4>>);
 
 } // namespace
 
 TEST(GaussLegendre1D, HasOrderedInteriorPointsAndNormalizedWeights) {
-    const auto& points = litepgo::GaussLegendre1D<2>::points();
-    const auto& weights = litepgo::GaussLegendre1D<2>::weights();
+    const auto& points = litepgo::fem::GaussLegendre1D<2>::points();
+    const auto& weights = litepgo::fem::GaussLegendre1D<2>::weights();
     EXPECT_NEAR(points[0], 0.21132486540518713, 1e-15);
     EXPECT_NEAR(points[1], 0.7886751345948129, 1e-15);
     EXPECT_GT(points[0], 0.0);
@@ -32,17 +34,17 @@ TEST(GaussLegendre1D, IntegratesMonomialsThroughDegreeThree) {
     for (int degree = 0; degree <= 3; ++degree) {
         SCOPED_TRACE(degree);
         double integral = 0.0;
-        for (int q = 0; q < litepgo::GaussLegendre1D<2>::num_points; ++q) {
-            integral +=
-                litepgo::GaussLegendre1D<2>::weights()[q] * std::pow(litepgo::GaussLegendre1D<2>::points()[q], degree);
+        for (int q = 0; q < litepgo::fem::GaussLegendre1D<2>::num_points; ++q) {
+            integral += litepgo::fem::GaussLegendre1D<2>::weights()[q] *
+                        std::pow(litepgo::fem::GaussLegendre1D<2>::points()[q], degree);
         }
         EXPECT_NEAR(integral, 1.0 / (degree + 1), 1e-15);
     }
 }
 
 TEST(GaussLegendre1D, FourPointsIntegrateMonomialsThroughDegreeSeven) {
-    const auto& points = litepgo::GaussLegendre1D<4>::points();
-    const auto& weights = litepgo::GaussLegendre1D<4>::weights();
+    const auto& points = litepgo::fem::GaussLegendre1D<4>::points();
+    const auto& weights = litepgo::fem::GaussLegendre1D<4>::weights();
     EXPECT_GT(points[0], 0);
     EXPECT_LT(points[3], 1);
     EXPECT_GT(weights.minCoeff(), 0);
@@ -57,3 +59,5 @@ TEST(GaussLegendre1D, FourPointsIntegrateMonomialsThroughDegreeSeven) {
         EXPECT_NEAR(weights.dot(points.array().pow(degree).matrix()), 1.0 / (degree + 1), 1e-15);
     }
 }
+
+} // namespace litepgo::fem::test

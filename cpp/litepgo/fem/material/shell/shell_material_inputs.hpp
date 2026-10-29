@@ -2,7 +2,7 @@
 
 #include <Eigen/Core>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Numerical shell inputs. Reference geometry, thickness, and parameters are held
 // fixed when differentiating the current symmetric forms (a11,a12,a22,b11,b12,b22).
@@ -15,4 +15,4 @@ struct ShellMaterialInputs {
     Eigen::VectorXd theta;
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

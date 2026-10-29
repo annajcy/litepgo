@@ -10,7 +10,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Owns fixed reference geometry and integrates a caller-supplied local energy.
 // Rebuild after changing rest geometry. Const evaluations share no scratch storage.
@@ -86,4 +86,4 @@ template <Quadrature3D Q> class VolumetricElement3D final {
     std::array<Point, Q::num_points> points_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

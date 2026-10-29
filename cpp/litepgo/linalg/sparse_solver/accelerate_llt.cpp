@@ -4,7 +4,7 @@
 
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::linalg {
 
 struct AccelerateLLT::Impl {
     Eigen::AccelerateLLT<SpMat> solver;
@@ -33,4 +33,4 @@ void AccelerateLLT::solve_factored(const ConstVecRef& rhs, VecRef x) const {
     }
 }
 
-} // namespace litepgo
+} // namespace litepgo::linalg

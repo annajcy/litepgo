@@ -2,7 +2,7 @@
 
 #include "litepgo/energy/energy.hpp"
 
-namespace litepgo {
+namespace litepgo::energy {
 
 // Base for energies whose Hessian pattern depends on the state, such as contact,
 // whose pattern follows the active pairs. A subclass states the pattern it needs
@@ -18,4 +18,4 @@ class DynamicPatternEnergy : public Energy {
     virtual SpMat pattern_at(const ConstVecRef& x) const = 0;
 };
 
-} // namespace litepgo
+} // namespace litepgo::energy

@@ -19,24 +19,26 @@
 #include <stdexcept>
 #include <tbb/global_control.h>
 
-namespace {
-using namespace litepgo;
-using namespace litepgo::test;
+namespace litepgo::energy::test {
 
-HexTopology two_hexes() {
-    return HexTopology(12, {{1, 3, 9, 4, 7, 6, 0, 10}, {3, 8, 5, 9, 6, 2, 11, 0}});
+namespace {
+using namespace litepgo::fem::test;
+
+mesh::HexTopology two_hexes() {
+    return mesh::HexTopology(12, {{1, 3, 9, 4, 7, 6, 0, 10}, {3, 8, 5, 9, 6, 2, 11, 0}});
 }
-InterpolatedField3D<HexQ1Basis> make_X_field() {
+fem::InterpolatedField3D<fem::HexQ1Basis> make_X_field() {
     Eigen::Matrix<double, 8, 3> nodes;
     for (int i = 0; i < 8; ++i)
-        nodes.row(i) = HexQ1Basis::reference_node(i).transpose();
-    return InterpolatedField3D<HexQ1Basis>(nodes);
+        nodes.row(i) = fem::HexQ1Basis::reference_node(i).transpose();
+    return fem::InterpolatedField3D<fem::HexQ1Basis>(nodes);
 }
 auto passive_fields() {
     Eigen::Matrix3d F;
     F << 1.1, 0.04, 0.02, -0.03, 0.95, 0.01, 0.02, 0.03, 1.05;
-    return MaterialSources{IdentityField3D(F.reshaped()), IdentityField3D(Eigen::Matrix3d::Identity().reshaped()),
-                           IdentityField3D(Eigen::Vector2d(2, 3))};
+    return MaterialSources{fem::IdentityField3D(F.reshaped()),
+                           fem::IdentityField3D(Eigen::Matrix3d::Identity().reshaped()),
+                           fem::IdentityField3D(Eigen::Vector2d(2, 3))};
 }
 
 void check_fd(MeshEnergy& energy, const Vec& x) {
@@ -84,7 +86,7 @@ void check_material_path(const Map& map, const Vec& data, Fields fields, Bind bi
             g->setZero(local_energy.num_dofs());
         if (h)
             h->setZero(local_energy.num_dofs(), local_energy.num_dofs());
-        using Q = GaussLegendre3D<2>;
+        using Q = fem::GaussLegendre3D<2>;
         double result = 0;
         for (int q = 0; q < Q::num_points; ++q) {
             const Eigen::Vector3d xi = Q::points().row(q).transpose();
@@ -99,7 +101,7 @@ void check_material_path(const Map& map, const Vec& data, Fields fields, Bind bi
 
 TEST(MeshEnergy, HexNodeDisplacementAndPlasticDisplacement) {
     const auto topology = two_hexes();
-    const VertexDofMap map(topology, 3);
+    const dof::VertexDofMap map(topology, 3);
     Vec data = Vec::Zero(36);
     for (int i = 0; i < data.size(); ++i)
         data[i] = 0.01 * std::sin(i + 0.3);
@@ -109,19 +111,22 @@ TEST(MeshEnergy, HexNodeDisplacementAndPlasticDisplacement) {
             EXPECT_EQ(x_local.rows(), 8);
             EXPECT_EQ(x_local.cols(), 3);
             auto fields = passive_fields();
-            return MaterialSources{OwnedDeformationField(InterpolatedField3D<HexQ1Basis>(x_local), make_X_field()),
-                                   fields.Fp, fields.theta};
+            return MaterialSources{
+                OwnedDeformationField(fem::InterpolatedField3D<fem::HexQ1Basis>(x_local), make_X_field()), fields.Fp,
+                fields.theta};
         },
-        [](const auto& fields) { return bind_energy<VolumetricMaterialLocalEnergyF3D<NeoHookean>>(fields); });
+        [](const auto& fields) { return bind_energy<fem::VolumetricMaterialLocalEnergyF3D<fem::NeoHookean>>(fields); });
     check_material_path(
         map, data,
         [](const auto& x_local) {
             auto fields = passive_fields();
-            return MaterialSources{fields.F,
-                                   OwnedDeformationField(InterpolatedField3D<HexQ1Basis>(x_local), make_X_field()),
-                                   fields.theta};
+            return MaterialSources{
+                fields.F, OwnedDeformationField(fem::InterpolatedField3D<fem::HexQ1Basis>(x_local), make_X_field()),
+                fields.theta};
         },
-        [](const auto& fields) { return bind_energy<VolumetricMaterialLocalEnergyFp3D<NeoHookean>>(fields); });
+        [](const auto& fields) {
+            return bind_energy<fem::VolumetricMaterialLocalEnergyFp3D<fem::NeoHookean>>(fields);
+        });
 }
 
 TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
@@ -134,32 +139,38 @@ TEST(MeshEnergy, HexElementPlasticAndNodeOrSharedParameters) {
         plastic.segment<9>(9 * e) = p.reshaped();
     }
     check_material_path(
-        ElementDofMap(topology, 9), plastic,
+        dof::ElementDofMap(topology, 9), plastic,
         [](const Eigen::VectorXd& x_local) {
             auto fields = passive_fields();
-            return MaterialSources{fields.F, IdentityField3D(x_local), fields.theta};
+            return MaterialSources{fields.F, fem::IdentityField3D(x_local), fields.theta};
         },
-        [](const auto& fields) { return bind_energy<VolumetricMaterialLocalEnergyFp3D<NeoHookean>>(fields); });
+        [](const auto& fields) {
+            return bind_energy<fem::VolumetricMaterialLocalEnergyFp3D<fem::NeoHookean>>(fields);
+        });
     Vec nodal = Vec::Zero(24);
     for (int i = 0; i < 12; ++i) {
         nodal[2 * i] = 2 + 0.01 * i;
         nodal[2 * i + 1] = 3 + 0.02 * i;
     }
     check_material_path(
-        VertexDofMap(topology, 2), nodal,
+        dof::VertexDofMap(topology, 2), nodal,
         [](const auto& x_local) {
             auto fields = passive_fields();
-            return MaterialSources{fields.F, fields.Fp, InterpolatedField3D<litepgo::HexQ1Basis>(x_local)};
+            return MaterialSources{fields.F, fields.Fp, fem::InterpolatedField3D<litepgo::fem::HexQ1Basis>(x_local)};
         },
-        [](const auto& fields) { return bind_energy<VolumetricMaterialLocalEnergyTheta3D<NeoHookean>>(fields); });
+        [](const auto& fields) {
+            return bind_energy<fem::VolumetricMaterialLocalEnergyTheta3D<fem::NeoHookean>>(fields);
+        });
     Vec shared(Eigen::Vector2d(2, 3));
     check_material_path(
-        ConstantDofMap(topology, 2), shared,
+        dof::ConstantDofMap(topology, 2), shared,
         [](const Eigen::VectorXd& x_local) {
             auto fields = passive_fields();
-            return MaterialSources{fields.F, fields.Fp, IdentityField3D(x_local)};
+            return MaterialSources{fields.F, fields.Fp, fem::IdentityField3D(x_local)};
         },
-        [](const auto& fields) { return bind_energy<VolumetricMaterialLocalEnergyTheta3D<NeoHookean>>(fields); });
+        [](const auto& fields) {
+            return bind_energy<fem::VolumetricMaterialLocalEnergyTheta3D<fem::NeoHookean>>(fields);
+        });
 }
 
 TEST(MeshEnergy, OwnsPlanUsesCurrentXAndSupportsTriangleAndTet) {
@@ -171,7 +182,7 @@ TEST(MeshEnergy, OwnsPlanUsesCurrentXAndSupportsTriangleAndTet) {
             *h = (e + 1) * Eigen::MatrixXd::Identity(flat.size(), flat.size());
         return 0.5 * (e + 1) * flat.squaredNorm();
     };
-    MeshEnergy triangle(VertexDofMap(TriangleTopology(4, {{2, 0, 1}, {1, 0, 3}}), 2), quadratic);
+    MeshEnergy triangle(dof::VertexDofMap(mesh::TriangleTopology(4, {{2, 0, 1}, {1, 0, 3}}), 2), quadratic);
     Vec x = Vec::LinSpaced(8, 0.1, 0.8);
     check_fd(triangle, x);
     Vec counts(8);
@@ -180,15 +191,15 @@ TEST(MeshEnergy, OwnsPlanUsesCurrentXAndSupportsTriangleAndTet) {
     EXPECT_TRUE(Eigen::MatrixXd(triangle.eval_hessian(x)).isApprox(Eigen::MatrixXd(counts.asDiagonal()), 1e-14));
     EXPECT_NE(triangle.eval_value(x), triangle.eval_value(2 * x));
     EXPECT_DOUBLE_EQ(triangle.max_feasible_step(x, x), 1);
-    MeshEnergy tet(VertexDofMap(TetTopology(4, {{3, 1, 2, 0}}), 1), quadratic);
+    MeshEnergy tet(dof::VertexDofMap(mesh::TetTopology(4, {{3, 1, 2, 0}}), 1), quadratic);
     check_fd(tet, Vec::LinSpaced(4, 0.1, 0.4));
 }
 
 TEST(MeshEnergy, StencilMapsAssembleNeighborCouplingsAndVariableLocalSizes) {
-    const TriangleTopology topology(10, {{4, 1, 5}, {5, 1, 3}, {4, 5, 0}, {1, 4, 2}, {6, 7, 8}});
-    const auto stencils = make_triangle_mid_edge_stencils(topology);
+    const mesh::TriangleTopology topology(10, {{4, 1, 5}, {5, 1, 3}, {4, 5, 0}, {1, 4, 2}, {6, 7, 8}});
+    const auto stencils = mesh::make_triangle_mid_edge_stencils(topology);
     auto energy = [&] {
-        const StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
+        const dof::StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
         return MeshEnergy(map, [](int e, const Eigen::MatrixXd& local, Vec* g, Eigen::MatrixXd* h) {
             const Vec q = local.reshaped<Eigen::RowMajor>();
             if (g)
@@ -238,7 +249,7 @@ TEST(MeshEnergy, StencilMapsAssembleNeighborCouplingsAndVariableLocalSizes) {
 
 TEST(MeshEnergy, ProjectsEachLocalHessianBeforeScatter) {
     const auto topology = two_hexes();
-    MeshEnergy energy(ConstantDofMap(topology, 1),
+    MeshEnergy energy(dof::ConstantDofMap(topology, 1),
                       [](int e, const Eigen::VectorXd& x_local, Vec* g, Eigen::MatrixXd* h) {
                           double k = e == 0 ? -2 : 3;
                           if (g)
@@ -254,7 +265,7 @@ TEST(MeshEnergy, ProjectsEachLocalHessianBeforeScatter) {
 TEST(MeshEnergy, FeasibleStepUsesMatchingLocalDofValuesAndDeltas) {
     const auto topology = two_hexes();
     MeshEnergy energy(
-        ElementDofMap(topology, 2),
+        dof::ElementDofMap(topology, 2),
         [](int, const Eigen::VectorXd& x_local, Vec*, Eigen::MatrixXd*) {
             if (x_local.minCoeff() <= 0)
                 throw std::domain_error("positive only");
@@ -280,7 +291,7 @@ TEST(MeshEnergy, FeasibleStepUsesMatchingLocalDofValuesAndDeltas) {
 }
 
 TEST(MeshEnergy, RejectsMalformedOutputsAndHandlesIndependentRequests) {
-    const ConstantDofMap map(TriangleTopology(3, {{0, 1, 2}}), 2);
+    const dof::ConstantDofMap map(mesh::TriangleTopology(3, {{0, 1, 2}}), 2);
     MeshEnergy value_only(map, [](int, const Eigen::VectorXd&, Vec* g, Eigen::MatrixXd* h) {
         if (g || h)
             throw std::logic_error("unsupported");
@@ -316,14 +327,14 @@ TEST(MeshEnergy, RejectsMalformedOutputsAndHandlesIndependentRequests) {
     EXPECT_THROW(bad.eval_value(Vec::Zero(1)), std::invalid_argument);
     EXPECT_THROW(bad.eval_value(Vec::Constant(2, std::numeric_limits<double>::infinity())), std::invalid_argument);
     EXPECT_THROW(
-        (MeshEnergy(VertexDofMap(two_hexes(), 0), [](int, const auto&, Vec*, Eigen::MatrixXd*) { return 0.; })),
+        (MeshEnergy(dof::VertexDofMap(two_hexes(), 0), [](int, const auto&, Vec*, Eigen::MatrixXd*) { return 0.; })),
         std::invalid_argument);
 }
 
 TEST(MeshEnergy, EmptyMeshProducesZeroOutputs) {
-    MeshEnergy energy(VertexDofMap(HexTopology(2, {}), 3), [](int, const auto&, Vec*, Eigen::MatrixXd*) -> double {
-        throw std::logic_error("must not run");
-    });
+    MeshEnergy energy(
+        dof::VertexDofMap(mesh::HexTopology(2, {}), 3),
+        [](int, const auto&, Vec*, Eigen::MatrixXd*) -> double { throw std::logic_error("must not run"); });
     EXPECT_EQ(energy.eval_value(Vec::Zero(6)), 0);
     EXPECT_TRUE(energy.eval_gradient(Vec::Zero(6)).isZero());
     EXPECT_EQ(energy.eval_hessian(Vec::Zero(6)).nonZeros(), 0);
@@ -332,7 +343,7 @@ TEST(MeshEnergy, EmptyMeshProducesZeroOutputs) {
 
 TEST(MeshEnergy, RejectsWrongSparsePatternBeforeCallbacksOrOutputWrites) {
     int calls = 0;
-    const ElementDofMap map(TriangleTopology(3, {{0, 1, 2}}), 2);
+    const dof::ElementDofMap map(mesh::TriangleTopology(3, {{0, 1, 2}}), 2);
     MeshEnergy energy(map, [&calls](int, const auto&, Vec*, Eigen::MatrixXd*) {
         ++calls;
         return 0.;
@@ -349,7 +360,7 @@ TEST(MeshEnergy, RejectsWrongSparsePatternBeforeCallbacksOrOutputWrites) {
 }
 
 TEST(MeshEnergy, RejectsProjectionOverflowAtAssemblyBoundary) {
-    const ConstantDofMap map(TriangleTopology(3, {{0, 1, 2}}), 2);
+    const dof::ConstantDofMap map(mesh::TriangleTopology(3, {{0, 1, 2}}), 2);
     MeshEnergy energy(map, [](int, const auto&, Vec*, Eigen::MatrixXd* h) {
         if (h)
             *h = Eigen::Matrix2d::Constant(std::numeric_limits<double>::max());
@@ -361,7 +372,7 @@ TEST(MeshEnergy, RejectsProjectionOverflowAtAssemblyBoundary) {
 }
 
 TEST(MeshEnergy, OverflowingSumsOfFiniteElementValuesAndDerivativesThrowDomainError) {
-    const ConstantDofMap map(TriangleTopology(3, {{0, 1, 2}, {0, 1, 2}}), 2);
+    const dof::ConstantDofMap map(mesh::TriangleTopology(3, {{0, 1, 2}, {0, 1, 2}}), 2);
     const Vec x = Vec::Zero(2);
     for (int request : {0, 1, 2}) {
         double scale = std::numeric_limits<double>::max();
@@ -423,7 +434,7 @@ TEST(MeshEnergy, ParallelAssemblyMatchesSerialWithSharedRepeatedAndUnusedDofs) {
         return 0.5 * x_local.dot(derivative);
     };
     MeshEnergy energy(map, local);
-    const Assembler serial(map.num_dofs(), map.indices);
+    const dof::Assembler serial(map.num_dofs(), map.indices);
     for (int state = 0; state < 3; ++state) {
         const Vec x = Vec::LinSpaced(map.num_dofs(), -0.4 + state, 0.7 + state);
         Vec expected_g = Vec::Zero(map.num_dofs());
@@ -455,7 +466,7 @@ TEST(MeshEnergy, ParallelAssemblyMatchesSerialWithSharedRepeatedAndUnusedDofs) {
 
 TEST(MeshEnergy, ReusedBuffersRejectIncompleteWritesAndRecoverAfterExceptions) {
     bool write = true;
-    MeshEnergy energy(ConstantDofMap(TriangleTopology(3, {{0, 1, 2}, {0, 1, 2}}), 2),
+    MeshEnergy energy(dof::ConstantDofMap(mesh::TriangleTopology(3, {{0, 1, 2}, {0, 1, 2}}), 2),
                       [&write](int e, const Vec& x_local, Vec* g, Eigen::MatrixXd* h) {
                           if (write && g)
                               *g = 2 * (e + 1) * x_local;
@@ -515,3 +526,5 @@ TEST(MeshEnergy, ParallelFeasibleStepMatchesSerialAndPropagatesErrors) {
     }
 }
 } // namespace
+
+} // namespace litepgo::energy::test

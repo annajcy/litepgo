@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 Eigen::Vector3d TriangleP1Basis::eval_N(const Eigen::Vector2d& xi) {
     return {1 - xi.sum(), xi.x(), xi.y()};
@@ -27,4 +27,4 @@ Eigen::Vector2d TriangleP1Basis::reference_node(int basis_index) {
     return result;
 }
 
-} // namespace litepgo
+} // namespace litepgo::fem

@@ -4,7 +4,11 @@
 #include <span>
 #include <vector>
 
-namespace litepgo {
+namespace litepgo::energy {
+class MeshEnergy;
+} // namespace litepgo::energy
+
+namespace litepgo::dof {
 
 // Fixed scatter plan. Local entries follow the supplied per-element index order.
 // Outputs must be initialized by the caller. Adds values without resizing or
@@ -25,7 +29,7 @@ class Assembler final {
 
   private:
     // MeshEnergy validates all local outputs and the global pattern before scatter.
-    friend class MeshEnergy;
+    friend class energy::MeshEnergy;
     void assemble(std::span<const Vec> gradients, std::span<const Eigen::MatrixXd> hessians, Vec* gradient,
                   SpMat* hessian) const;
     void check_element(int element) const;
@@ -42,4 +46,4 @@ class Assembler final {
     std::vector<std::vector<Contribution>> dof_contributions_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::dof

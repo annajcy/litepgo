@@ -6,9 +6,10 @@
 #include <array>
 #include <stdexcept>
 
+namespace litepgo::fem::test {
+
 namespace {
-using litepgo::TetP1Basis;
-static_assert(litepgo::Basis3D<TetP1Basis>);
+static_assert(litepgo::fem::Basis3D<TetP1Basis>);
 
 const std::array<Eigen::Vector3d, 4> samples{{Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(0.25, 0.25, 0.25),
                                               Eigen::Vector3d(0.2, 0.3, 0.1), Eigen::Vector3d(1.2, -0.1, 0.4)}};
@@ -58,3 +59,5 @@ TEST(TetP1Basis, GradientsMatchFiniteDifferences) {
         }
     }
 }
+
+} // namespace litepgo::fem::test

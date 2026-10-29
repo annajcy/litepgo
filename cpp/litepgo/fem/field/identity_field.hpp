@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Reference coordinates are unused and need not be finite. Spatially constant; coefficients and values use the same
 // component vector.
@@ -54,4 +54,4 @@ template <int ParamDim> class IdentityFieldT final : public FieldT<ParamDim> {
 using IdentityField2D = IdentityFieldT<2>;
 using IdentityField3D = IdentityFieldT<3>;
 
-} // namespace litepgo
+} // namespace litepgo::fem

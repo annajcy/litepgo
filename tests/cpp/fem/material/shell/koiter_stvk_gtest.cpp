@@ -9,8 +9,9 @@
 #include <limits>
 #include <stdexcept>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 
 ShellMaterialInputs inputs() {
     ShellMaterialInputs p;
@@ -165,3 +166,5 @@ TEST(KoiterStVK, RejectsUnrepresentableStiffnessAndDensity) {
     EXPECT_THROW(KoiterStVK::eval_W(bad), std::domain_error);
 }
 } // namespace
+
+} // namespace litepgo::fem::test

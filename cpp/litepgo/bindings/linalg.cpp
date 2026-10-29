@@ -17,9 +17,9 @@
 namespace nb = nanobind;
 using namespace nb::literals;
 
-namespace litepgo::bindings {
+namespace litepgo::linalg::binding {
 
-void bind_linalg(nb::module_& m) {
+void bind(nb::module_& m) {
     m.doc() = "Sparse linear solvers (cpp/litepgo/linalg)";
 
     // Matrices arrive as scipy.sparse and are copied into C++ (see
@@ -50,31 +50,32 @@ void bind_linalg(nb::module_& m) {
     nb::class_<AccelerateLDLT, SparseSolver>(m, "AccelerateLDLT").def(nb::init<>());
 #endif
 
-    nb::class_<DofReduction>(m, "DofReduction")
+    nb::class_<dof::DofReduction>(m, "DofReduction")
         .def(nb::init<int, std::vector<int>>(), "num_dofs"_a, "fixed_dofs"_a)
-        .def_prop_ro("num_dofs", &DofReduction::num_dofs)
-        .def_prop_ro("num_free", &DofReduction::num_free)
+        .def_prop_ro("num_dofs", &dof::DofReduction::num_dofs)
+        .def_prop_ro("num_free", &dof::DofReduction::num_free)
         .def_prop_ro(
             "fixed_dofs",
-            [](const DofReduction& reduction) {
+            [](const dof::DofReduction& reduction) {
                 const auto dofs = reduction.fixed_dofs();
                 return Eigen::VectorXi(Eigen::Map<const Eigen::VectorXi>(dofs.data(), std::ssize(dofs)));
             },
             "Fixed DOFs in increasing order (a copy).")
         .def_prop_ro(
             "free_dofs",
-            [](const DofReduction& reduction) {
+            [](const dof::DofReduction& reduction) {
                 const auto dofs = reduction.free_dofs();
                 return Eigen::VectorXi(Eigen::Map<const Eigen::VectorXi>(dofs.data(), std::ssize(dofs)));
             },
             "Free DOFs in increasing order (a copy).")
-        .def("free_index", &DofReduction::free_index, "dof"_a)
-        .def("reduce", nb::overload_cast<const ConstVecRef&>(&DofReduction::reduce, nb::const_), "full"_a,
+        .def("free_index", &dof::DofReduction::free_index, "dof"_a)
+        .def("reduce", nb::overload_cast<const ConstVecRef&>(&dof::DofReduction::reduce, nb::const_), "full"_a,
              "Free entries of a vector.")
         .def(
-            "reduce", [](const DofReduction& reduction, const SparseArgument& A) { return reduction.reduce(A.matrix); },
+            "reduce",
+            [](const dof::DofReduction& reduction, const SparseArgument& A) { return reduction.reduce(A.matrix); },
             "A"_a, "Principal submatrix of a scipy.sparse matrix on the free DOFs.")
-        .def("expand", &DofReduction::expand, "reduced"_a, "full"_a.noconvert(),
+        .def("expand", &dof::DofReduction::expand, "reduced"_a, "full"_a.noconvert(),
              "Write reduced into the free entries of full, a contiguous writable float64 array.");
 
     // The C++ aliases: the same class objects under a second name.
@@ -82,4 +83,4 @@ void bind_linalg(nb::module_& m) {
     m.attr("AutoIndefiniteSparseSolver") = nb::type<AutoIndefiniteSparseSolver>();
 }
 
-} // namespace litepgo::bindings
+} // namespace litepgo::linalg::binding

@@ -96,21 +96,23 @@ std::string compact(std::string text) {
     return text;
 }
 
-template <int K> MeshData<K> makeMesh(const std::vector<Eigen::Vector3d>& vertices, const std::vector<int>& elements) {
+template <int K>
+mesh::MeshData<K> makeMesh(const std::vector<Eigen::Vector3d>& vertices, const std::vector<int>& elements) {
     if (vertices.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()))
         throw std::runtime_error("VEG vertex count exceeds int range");
     Vec positions(static_cast<Eigen::Index>(vertices.size()) * 3);
     for (std::size_t i = 0; i < vertices.size(); ++i)
         positions.segment<3>(static_cast<Eigen::Index>(i) * 3) = vertices[i];
-    std::vector<typename MeshTopology<K>::Cell> cells(elements.size() / K);
+    std::vector<typename mesh::MeshTopology<K>::Cell> cells(elements.size() / K);
     for (std::size_t e = 0; e < cells.size(); ++e)
         std::copy_n(elements.begin() + static_cast<std::ptrdiff_t>(e * K), K, cells[e].begin());
-    MeshData<K> mesh{std::move(positions), MeshTopology<K>(static_cast<int>(vertices.size()), std::move(cells))};
+    mesh::MeshData<K> mesh{std::move(positions),
+                           mesh::MeshTopology<K>(static_cast<int>(vertices.size()), std::move(cells))};
     mesh.validate();
     return mesh;
 }
 
-VolumeMesh readGeometry(const std::filesystem::path& path) {
+mesh::VolumeMesh readGeometry(const std::filesystem::path& path) {
     const std::vector<std::string> lines = readAsciiLines(path);
     std::vector<Eigen::Vector3d> vertices;
     std::vector<int> elements;
@@ -197,11 +199,11 @@ VolumeMesh readGeometry(const std::filesystem::path& path) {
 }
 } // namespace
 
-VolumeMesh read_veg(const std::filesystem::path& path) {
+mesh::VolumeMesh read_veg(const std::filesystem::path& path) {
     return readGeometry(path);
 }
 
-void write_veg(const std::filesystem::path& path, const VolumeMesh& mesh) {
+void write_veg(const std::filesystem::path& path, const mesh::VolumeMesh& mesh) {
     std::visit([](const auto& data) { data.validate(); }, mesh);
     std::ofstream out(path);
     if (!out)

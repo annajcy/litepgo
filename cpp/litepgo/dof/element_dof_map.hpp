@@ -4,12 +4,12 @@
 #include <limits>
 #include <stdexcept>
 #include <vector>
-namespace litepgo {
+namespace litepgo::dof {
 // Owns layout counts; retains no topology or value references.
 class ElementDofMap final {
   public:
     template <int VerticesPerCell>
-    ElementDofMap(const MeshTopology<VerticesPerCell>& topology, int dofs_per_element)
+    ElementDofMap(const mesh::MeshTopology<VerticesPerCell>& topology, int dofs_per_element)
         : num_elements_(topology.num_cells()), width_(dofs_per_element) {
         if (width_ <= 0 || num_elements_ > std::numeric_limits<int>::max() / width_)
             throw std::invalid_argument("ElementDofMap: invalid DOF count");
@@ -45,4 +45,4 @@ class ElementDofMap final {
     int num_elements_;
     int width_;
 };
-} // namespace litepgo
+} // namespace litepgo::dof

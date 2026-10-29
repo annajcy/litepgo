@@ -2,7 +2,7 @@
 
 #include <Eigen/Core>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Scalar P1 basis on xi,eta >= 0, xi+eta <= 1, with vertices ordered as
 // (0,0), (1,0), (0,1).
@@ -18,4 +18,4 @@ class TriangleP1Basis final {
     static Eigen::Vector2d reference_node(int basis_index);
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

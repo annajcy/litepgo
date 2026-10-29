@@ -3,8 +3,8 @@
 
 #include <Eigen/LU>
 
-#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 
 #include <gtest/gtest.h>
@@ -15,9 +15,9 @@
 #include <stdexcept>
 #include <utility>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
-using namespace litepgo::test;
 
 const auto element_energy = [](const Field3D& X_field, const LocalEnergy3D& energy, Eigen::VectorXd* g = nullptr,
                                Eigen::MatrixXd* H = nullptr) {
@@ -174,3 +174,5 @@ TEST(TetP1Integration, RejectsDegenerateAndNegativelyOrientedRestGeometry) {
                      std::invalid_argument);
     }
 }
+
+} // namespace litepgo::fem::test

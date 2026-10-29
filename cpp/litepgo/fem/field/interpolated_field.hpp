@@ -8,7 +8,7 @@
 #include <unsupported/Eigen/KroneckerProduct>
 #include <utility>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Scalar coefficients flatten by row: m*a+c. Reference derivatives have m rows and ParamDim columns.
 template <class B, int ParamDim>
@@ -93,4 +93,4 @@ class InterpolatedFieldT final : public FieldT<ParamDim> {
 template <Basis2D B> using InterpolatedField2D = InterpolatedFieldT<B, 2>;
 template <Basis3D B> using InterpolatedField3D = InterpolatedFieldT<B, 3>;
 
-} // namespace litepgo
+} // namespace litepgo::fem

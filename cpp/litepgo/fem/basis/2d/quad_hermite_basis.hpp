@@ -3,7 +3,7 @@
 #include "litepgo/fem/basis/1d/cubic_hermite_basis.hpp"
 #include "litepgo/fem/basis/2d/tensor_product_basis_2d.hpp"
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Bicubic Hermite basis on [0,1]^2, corners (0,0), (1,0), (1,1), (0,1).
 // Index 4*vertex+slot uses slots u, u_xi, u_eta, u_xi_eta.
@@ -20,4 +20,4 @@ class QuadHermiteBasis final {
     static Eigen::Vector2d reference_node(int basis_index);
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

@@ -8,7 +8,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Shared density evaluation and coefficient pullbacks. All input fields must outlive the energy.
 template <class Material> class VolumetricMaterialLocalEnergy3D : public LocalEnergy3D {
@@ -195,4 +195,4 @@ class VolumetricMaterialLocalEnergyTheta3D final : public VolumetricMaterialLoca
     }
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

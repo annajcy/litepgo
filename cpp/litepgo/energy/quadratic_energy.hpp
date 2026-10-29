@@ -2,7 +2,7 @@
 
 #include "litepgo/energy/fixed_pattern_energy.hpp"
 
-namespace litepgo {
+namespace litepgo::energy {
 
 // E(x) = 1/2 x^T A x + b^T x with a symmetric A (pattern and values). A is not
 // projected: both Hessian kinds return it, so with an indefinite A the "projected"
@@ -26,4 +26,4 @@ class QuadraticEnergy final : public FixedPatternEnergy {
     Vec b_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::energy

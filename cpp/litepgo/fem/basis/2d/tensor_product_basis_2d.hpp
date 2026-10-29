@@ -4,7 +4,7 @@
 
 #include <unsupported/Eigen/KroneckerProduct>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Two copies of a 1D basis; index i*n+j has the last parameter varying fastest.
 template <Basis1D B> class TensorProductBasis2D {
@@ -37,4 +37,4 @@ template <Basis1D B> class TensorProductBasis2D {
     }
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

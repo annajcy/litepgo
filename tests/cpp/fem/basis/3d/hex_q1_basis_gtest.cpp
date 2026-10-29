@@ -5,9 +5,9 @@
 #include <array>
 #include <stdexcept>
 
-namespace {
+namespace litepgo::fem::test {
 
-using litepgo::HexQ1Basis;
+namespace {
 
 Eigen::Matrix<double, 3, 8> reference_corners() {
     Eigen::Matrix<double, 3, 8> points;
@@ -104,3 +104,5 @@ TEST(HexQ1Basis, GradientsMatchFiniteDifferences) {
         }
     }
 }
+
+} // namespace litepgo::fem::test

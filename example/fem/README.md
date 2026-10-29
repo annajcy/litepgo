@@ -102,9 +102,9 @@ vec(F)[i+3*d] = F(i,d)
 #include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 
-const auto X_field = litepgo::InterpolatedField3D<litepgo::HexQ1Basis>(X_local);
-const auto u_field = litepgo::InterpolatedField3D<litepgo::HexHermiteBasis>(u_local);
-const litepgo::Field3D& field = u_field;
+const auto X_field = litepgo::fem::InterpolatedField3D<litepgo::fem::HexQ1Basis>(X_local);
+const auto u_field = litepgo::fem::InterpolatedField3D<litepgo::fem::HexHermiteBasis>(u_local);
+const litepgo::fem::Field3D& field = u_field;
 const auto u = field.eval_value(xi);
 const auto du_dcoeffs = field.eval_dvalue_dcoeffs(xi);
 ```
@@ -147,13 +147,13 @@ Every basis provides static `eval_N`, `eval_dN_dxi`, and `eval_d2N_dxi2` functio
 #include "litepgo/fem/quadrature/2d/gauss_legendre_2d.hpp"
 
 // coeffs is 16-by-3: four vector slots at each of four corners.
-const litepgo::InterpolatedField2D<litepgo::QuadHermiteBasis> u_field(coeffs);
-const litepgo::Field2D& field = u_field;
+const litepgo::fem::InterpolatedField2D<litepgo::fem::QuadHermiteBasis> u_field(coeffs);
+const litepgo::fem::Field2D& field = u_field;
 const Eigen::Vector2d xi(0.2, 0.3);
 const auto u = field.eval_value(xi);        // 3 components
 const auto du = field.eval_dvalue_dxi(xi);   // 3-by-2
 const auto d2u = field.eval_d2value_dxi2(xi); // 3-by-3: (11,12,22)
-using Q = litepgo::GaussLegendre2D<4>;       // 16 points on [0,1]^2
+using Q = litepgo::fem::GaussLegendre2D<4>;       // 16 points on [0,1]^2
 ```
 
 `QuadHermiteBasis` uses corners `(0,0), (1,0), (1,1), (0,1)`. Index `4*vertex+slot` stores `[u, u_xi, u_eta, u_xi_eta]`, with the same row order for basis values and derivatives. `QuadTopology` is `MeshTopology<4>`. `VertexDofMap(topology,12)` gathers a three-component Hermite field as a 4-by-12 matrix, which reshapes by row into 16-by-3 coefficients.
@@ -167,8 +167,8 @@ Triangles use a nodal P1 basis on `xi >= 0, eta >= 0, xi+eta <= 1`, with referen
 #include "litepgo/fem/quadrature/2d/triangle_centroid_quadrature.hpp"
 
 // triangle_displacements is 3-by-3: one displacement vector per vertex.
-const litepgo::InterpolatedField2D<litepgo::TriangleP1Basis> u_field(triangle_displacements);
-using Q = litepgo::TriangleCentroidQuadrature;
+const litepgo::fem::InterpolatedField2D<litepgo::fem::TriangleP1Basis> u_field(triangle_displacements);
+using Q = litepgo::fem::TriangleCentroidQuadrature;
 ```
 
 `TriangleP1Basis` provides `N = (1-xi-eta, xi, eta)`, constant first derivatives, and zero second derivatives in columns `(11,12,22)`. It also supports scalar nodal fields with 3-by-1 coefficients. Reference positions and displacements can use separate fields with the same basis, keeping reference positions fixed while displacement coefficients change. Mid-edge curvature reconstruction requires a neighboring-face stencil and is separate from this basis.
@@ -184,8 +184,8 @@ Material input fields inherit `Field3D`. Only the selected active field needs us
 ```cpp
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 
-const litepgo::DeformationGradientField3D F_field(u_field, X_field);
-const litepgo::Field3D& field = F_field;
+const litepgo::fem::DeformationGradientField3D F_field(u_field, X_field);
+const litepgo::fem::Field3D& field = F_field;
 const Eigen::Matrix3d F = field.eval_value(xi).reshaped(3, 3);
 const auto derivative = field.eval_dvalue_dcoeffs(xi);
 ```
@@ -244,9 +244,9 @@ Both fields must outlive the deformation field.
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 
-const litepgo::VolumetricElement3D<litepgo::GaussLegendre3D<2>> element(X_field);
-const litepgo::DeformationGradientField3D F(u_field, X_field);
-const litepgo::VolumetricMaterialLocalEnergyF3D<litepgo::NeoHookean> local_energy(
+const litepgo::fem::VolumetricElement3D<litepgo::fem::GaussLegendre3D<2>> element(X_field);
+const litepgo::fem::DeformationGradientField3D F(u_field, X_field);
+const litepgo::fem::VolumetricMaterialLocalEnergyF3D<litepgo::fem::NeoHookean> local_energy(
     F, Fp_field, theta_field);
 const double E = element.eval(local_energy, g, H);
 const double alpha = element.max_feasible_step(local_energy, delta_coeffs);
@@ -338,12 +338,12 @@ Names distinguish pointwise `dW_du_local`, `d2W_du_local2` from integrated `dE_d
 #include "litepgo/dof/stencil_dof_map.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 
-const auto stencils = litepgo::make_triangle_mid_edge_stencils(topology);
-const litepgo::StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
+const auto stencils = litepgo::mesh::make_triangle_mid_edge_stencils(topology);
+const litepgo::dof::StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
 const auto X_local = map.gather(f, X_nodes_packed); // fixed reference positions
 const auto u_local = map.gather(f, u);             // current displacements
 const Eigen::MatrixXd positions = X_local + u_local;
-const litepgo::InterpolatedField2D<litepgo::TriangleP1Basis> u_field(u_local.topRows(3));
+const litepgo::fem::InterpolatedField2D<litepgo::fem::TriangleP1Basis> u_field(u_local.topRows(3));
 ```
 
 For each triangle `f`, `stencils.vertices[f]` starts with its three vertices in connectivity order. Edge `k` joins local face vertices `(k+1)%3` and `(k+2)%3`. Opposite vertices across edges `0,1,2` are appended in that order, with shared opposite vertices included only once. A face therefore has 3 to 6 stencil vertices. `stencils.opposite[f][k]` is the neighbor's opposite vertex row in the gathered matrix; `-1` denotes a boundary edge and is never a global DOF. The builder rejects duplicate faces, inconsistent shared-edge directions, and edges with more than two incident faces. It does not choose a boundary curvature rule or validate geometry.
@@ -360,9 +360,9 @@ The numerical function `eval_triangle_mid_edge_kinematics` accepts a gathered po
 const Eigen::MatrixXd x_local = X_local + u_local;
 Eigen::MatrixXd dab_dx;
 std::array<Eigen::MatrixXd, 6> d2ab_dx2;
-const auto current = litepgo::eval_triangle_mid_edge_kinematics(
+const auto current = litepgo::fem::eval_triangle_mid_edge_kinematics(
     x_local, stencils.opposite[f], &dab_dx, &d2ab_dx2);
-const auto reference = litepgo::eval_triangle_mid_edge_kinematics(X_local, stencils.opposite[f]);
+const auto reference = litepgo::fem::eval_triangle_mid_edge_kinematics(X_local, stencils.opposite[f]);
 const Eigen::Matrix2d a_bar = reference.a;
 const Eigen::Matrix2d b_bar = reference.b;
 ```
@@ -408,7 +408,7 @@ Build fixed reference data once for each face:
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/quadrature/2d/triangle_centroid_quadrature.hpp"
 
-std::vector<litepgo::TriangleMidEdgeRestData> rest;
+std::vector<litepgo::fem::TriangleMidEdgeRestData> rest;
 for (int f = 0; f < map.num_elements(); ++f)
     rest.emplace_back(map.gather(f, X_nodes_packed), stencils.opposite[f]);
 ```
@@ -416,13 +416,13 @@ for (int f = 0; f < map.num_elements(); ++f)
 Each record owns `X_local`, `opposite`, `a_bar`, `b_bar`, and `sqrt_det_a_bar`. In the `MeshEnergy` callback, `u_local` is the full stencil matrix gathered by `StencilDofMap`:
 
 ```cpp
-const litepgo::ShellMaterialLocalEnergy2D<litepgo::KoiterStVK> local_energy(
+const litepgo::fem::ShellMaterialLocalEnergy2D<litepgo::fem::KoiterStVK> local_energy(
     rest[f], u_local, thickness, Eigen::Vector2d(lambda_ps, mu));
 if (g)
     g->setZero(local_energy.num_dofs());
 if (H)
     H->setZero(local_energy.num_dofs(), local_energy.num_dofs());
-using Q = litepgo::TriangleCentroidQuadrature;
+using Q = litepgo::fem::TriangleCentroidQuadrature;
 const Eigen::Vector2d xi = Q::points().row(0).transpose();
 const double weight = Q::weights()[0] * rest[f].sqrt_det_a_bar;
 return local_energy.accumulate(xi, weight, g, H);
@@ -439,9 +439,9 @@ The current shell path optimizes displacement only and uses per-face constant pa
 ```cpp
 #include "litepgo/fem/kinematics/basis_dof_transform.hpp"
 
-const litepgo::BasisDofTransform<litepgo::HexHermiteBasis> transform(X_field);
+const litepgo::fem::BasisDofTransform<litepgo::fem::HexHermiteBasis> transform(X_field);
 const Eigen::MatrixXd u_local = transform.to_coefficients(u_physical_local);
-const auto u_field = litepgo::InterpolatedField3D<litepgo::HexHermiteBasis>(u_local);
+const auto u_field = litepgo::fem::InterpolatedField3D<litepgo::fem::HexHermiteBasis>(u_local);
 ```
 
 The transform stores only 192 scales, representing a diagonal matrix `S`. Its eight slot factors are `1, hx, hy, hz, hx*hy, hx*hz, hy*hz, hx*hy*hz`, repeated over three components at each vertex. For example, `u_xi = hx*u_X`. This coefficient conversion precedes field construction; `dxi_dX` subsequently converts spatial gradients during deformation evaluation.

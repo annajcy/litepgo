@@ -2,7 +2,7 @@
 
 #include "litepgo/fem/material/volumetric/volumetric_material_inputs.hpp"
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // W = det(Fp) * psi, psi = mu/2 (||Fe||^2 - 3) - mu log(det_Fe) + lambda/2 log(det_Fe)^2,
 // Fe = F Fp^-1, det_Fe = det(Fe). W is density per original reference volume.
@@ -29,4 +29,4 @@ class NeoHookean final {
                                      const VolumetricMaterialInputs& delta_inputs);
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

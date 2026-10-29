@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 TriangleMidEdgeRestData::TriangleMidEdgeRestData(Eigen::MatrixXd X, std::array<int, 3> opposite_rows)
     : X_local(std::move(X)), opposite(opposite_rows) {
@@ -211,4 +211,4 @@ double eval_triangle_mid_edge_feasible_step(const Eigen::Ref<const Eigen::Matrix
     return alpha;
 }
 
-} // namespace litepgo
+} // namespace litepgo::fem

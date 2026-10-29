@@ -5,7 +5,7 @@
 #include <limits>
 #include <type_traits>
 
-using namespace litepgo;
+namespace litepgo::fem::test {
 
 TEST(LocalField, DirectValuesIgnoreLocationAndOwnData) {
     Eigen::Matrix3d input;
@@ -33,54 +33,55 @@ TEST(LocalField, DirectValuesIgnoreLocationAndOwnData) {
 
 TEST(LocalField, ExplicitlyExtractedValuesOwnOnlySelectedSnapshots) {
     litepgo::Vec data = Vec::Zero(18);
-    const ElementDofMap map(TetTopology(4, {{0, 1, 2, 3}, {0, 1, 2, 3}}), 9);
+    const dof::ElementDofMap map(mesh::TetTopology(4, {{0, 1, 2, 3}, {0, 1, 2, 3}}), 9);
     data.head<9>() = Eigen::Matrix3d::Identity().eval().reshaped();
     data.tail<9>() = (2 * Eigen::Matrix3d::Identity()).eval().reshaped();
-    const litepgo::IdentityField3D first(map.gather(0, data));
-    const litepgo::IdentityField3D second(map.gather(1, data));
+    const litepgo::fem::IdentityField3D first(map.gather(0, data));
+    const litepgo::fem::IdentityField3D second(map.gather(1, data));
     EXPECT_EQ(first.num_dofs(), 9);
     EXPECT_EQ(data.size(), 18);
     data.head<9>() = (3 * Eigen::Matrix3d::Identity()).eval().reshaped();
     EXPECT_EQ(first.eval_value(Eigen::Vector3d::Zero()), Eigen::Matrix3d::Identity().reshaped());
     EXPECT_EQ(second.eval_value(Eigen::Vector3d::Zero()), (2 * Eigen::Matrix3d::Identity()).reshaped());
-    EXPECT_THROW((litepgo::IdentityField3D(map.gather(-1, data))), std::out_of_range);
-    EXPECT_THROW((litepgo::IdentityField3D(map.gather(2, data))), std::out_of_range);
+    EXPECT_THROW((litepgo::fem::IdentityField3D(map.gather(-1, data))), std::out_of_range);
+    EXPECT_THROW((litepgo::fem::IdentityField3D(map.gather(2, data))), std::out_of_range);
     data[0] = std::numeric_limits<double>::infinity();
-    EXPECT_THROW((litepgo::IdentityField3D(map.gather(0, data))), std::invalid_argument);
+    EXPECT_THROW((litepgo::fem::IdentityField3D(map.gather(0, data))), std::invalid_argument);
     const auto owned = [] {
         litepgo::Vec temporary = Vec::Zero(2);
         temporary << 4, 5;
-        return litepgo::IdentityField3D(ElementDofMap(TetTopology(4, {{0, 1, 2, 3}}), 2).gather(0, temporary));
+        return litepgo::fem::IdentityField3D(
+            dof::ElementDofMap(mesh::TetTopology(4, {{0, 1, 2, 3}}), 2).gather(0, temporary));
     }();
     EXPECT_EQ(owned.eval_value(Eigen::Vector3d::Zero()), Eigen::Vector2d(4, 5));
 
     litepgo::Vec shared(Eigen::Vector2d(2, 3));
-    const litepgo::IdentityField3D snapshot(shared);
+    const litepgo::fem::IdentityField3D snapshot(shared);
     shared << 4, 5;
     EXPECT_EQ(snapshot.eval_value(Eigen::Vector3d::Zero()), Eigen::Vector2d(2, 3));
     EXPECT_EQ(snapshot.eval_value(Eigen::Vector3d::Zero()), snapshot.eval_value(Eigen::Vector3d::Zero()));
     EXPECT_TRUE(snapshot.eval_dvalue_dcoeffs(Eigen::Vector3d::Zero()).isIdentity());
     const auto shared_owned = [] {
         const litepgo::Vec temporary(Eigen::Vector2d(6, 7));
-        return litepgo::IdentityField3D(temporary);
+        return litepgo::fem::IdentityField3D(temporary);
     }();
     EXPECT_EQ(shared_owned.eval_value(Eigen::Vector3d::Zero()), Eigen::Vector2d(6, 7));
     shared[0] = std::numeric_limits<double>::quiet_NaN();
-    EXPECT_THROW((litepgo::IdentityField3D(shared)), std::invalid_argument);
+    EXPECT_THROW((litepgo::fem::IdentityField3D(shared)), std::invalid_argument);
 }
 
 TEST(LocalField, FlattenedMatrixJacobianUsesColumnMajorDofs) {
     Eigen::Matrix<double, 2, 2, Eigen::RowMajor> input;
     input << 1, 2, 3, 4;
     const litepgo::Vec data(input.reshaped().eval());
-    const litepgo::IdentityField3D field(data);
+    const litepgo::fem::IdentityField3D field(data);
     EXPECT_EQ(field.eval_value(Eigen::Vector3d::Zero()), Eigen::Vector4d(1, 3, 2, 4));
     for (int j = 0; j < 4; ++j) {
         auto plus = data, minus = data;
         plus[j] += 1e-4;
         minus[j] -= 1e-4;
-        const Eigen::VectorXd fd = (litepgo::IdentityField3D(plus).eval_value(Eigen::Vector3d::Zero()) -
-                                    litepgo::IdentityField3D(minus).eval_value(Eigen::Vector3d::Zero())) /
+        const Eigen::VectorXd fd = (litepgo::fem::IdentityField3D(plus).eval_value(Eigen::Vector3d::Zero()) -
+                                    litepgo::fem::IdentityField3D(minus).eval_value(Eigen::Vector3d::Zero())) /
                                    2e-4;
         EXPECT_LT((fd - field.eval_dvalue_dcoeffs(Eigen::Vector3d::Zero()).col(j)).norm(), 1e-10);
     }
@@ -89,9 +90,9 @@ TEST(LocalField, FlattenedMatrixJacobianUsesColumnMajorDofs) {
 TEST(LocalField, IdentityFieldReturnsDynamicVectorsAndValidatesValues) {
     const Eigen::Vector3d point = Eigen::Vector3d::Zero();
     Eigen::VectorXd input = Eigen::VectorXd::LinSpaced(4, 1, 4);
-    const litepgo::IdentityField3D field(input);
+    const litepgo::fem::IdentityField3D field(input);
     static_assert(std::is_same_v<decltype(field.eval_value(point)), Eigen::VectorXd>);
-    const litepgo::IdentityField3D fixed(Eigen::Vector2d(2, 3));
+    const litepgo::fem::IdentityField3D fixed(Eigen::Vector2d(2, 3));
     static_assert(std::is_same_v<decltype(fixed.eval_value(point)), Eigen::VectorXd>);
     EXPECT_EQ(field.num_dofs(), 4);
     EXPECT_TRUE(field.eval_dvalue_dcoeffs(point).isIdentity());
@@ -101,14 +102,14 @@ TEST(LocalField, IdentityFieldReturnsDynamicVectorsAndValidatesValues) {
         auto plus = field.eval_value(point), minus = plus;
         plus[j] += 1e-4;
         minus[j] -= 1e-4;
-        const Eigen::VectorXd fd =
-            (litepgo::IdentityField3D(plus).eval_value(point) - litepgo::IdentityField3D(minus).eval_value(point)) /
-            2e-4;
+        const Eigen::VectorXd fd = (litepgo::fem::IdentityField3D(plus).eval_value(point) -
+                                    litepgo::fem::IdentityField3D(minus).eval_value(point)) /
+                                   2e-4;
         EXPECT_TRUE(fd.isApprox(field.eval_dvalue_dcoeffs(point).col(j), 1e-10));
     }
-    EXPECT_THROW((litepgo::IdentityField3D{Eigen::VectorXd{}}), std::invalid_argument);
+    EXPECT_THROW((litepgo::fem::IdentityField3D{Eigen::VectorXd{}}), std::invalid_argument);
     input[0] = std::numeric_limits<double>::infinity();
-    EXPECT_THROW((litepgo::IdentityField3D{input}), std::invalid_argument);
+    EXPECT_THROW((litepgo::fem::IdentityField3D{input}), std::invalid_argument);
     const Eigen::Vector3d invalid_xi = Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());
     EXPECT_NO_THROW(field.eval_value(invalid_xi));
     EXPECT_NO_THROW(field.eval_dvalue_dxi(invalid_xi));
@@ -150,3 +151,5 @@ TEST(LocalField, ConstantFieldsSupportTwoAndThreeParameterDimensions) {
     check_constant_spatial_derivatives<2>();
     check_constant_spatial_derivatives<3>();
 }
+
+} // namespace litepgo::fem::test

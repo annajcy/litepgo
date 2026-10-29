@@ -11,8 +11,9 @@
 #include <limits>
 #include <stdexcept>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 
 Eigen::Matrix<double, 8, 3> box_nodes(const Eigen::Vector3d& lengths,
                                       const Eigen::Vector3d& origin = Eigen::Vector3d::Zero()) {
@@ -179,3 +180,5 @@ TEST(BasisDofTransform, RejectsDerivativeShapesBeforeModifyingEitherOutput) {
     check_pullback_dimensions(BasisDofTransform<HexHermiteBasis>(X), 192);
 }
 } // namespace
+
+} // namespace litepgo::fem::test

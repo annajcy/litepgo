@@ -17,9 +17,9 @@
 namespace nb = nanobind;
 using namespace nb::literals;
 
-namespace litepgo::bindings {
+namespace litepgo::solver::binding {
 
-void bind_solver(nb::module_& m) {
+void bind(nb::module_& m) {
     m.doc() = "Nonlinear solvers (cpp/litepgo/solver)";
 
     nb::enum_<NewtonStatus>(m, "NewtonStatus")
@@ -31,12 +31,12 @@ void bind_solver(nb::module_& m) {
     nb::class_<NewtonOptions>(m, "NewtonOptions")
         .def(
             "__init__",
-            [](NewtonOptions* self, double gradient_tolerance, int max_iterations, HessianKind hessian,
+            [](NewtonOptions* self, double gradient_tolerance, int max_iterations, energy::HessianKind hessian,
                int max_line_search_steps, double line_search_shrink) {
                 new (self) NewtonOptions{gradient_tolerance, max_iterations, hessian, max_line_search_steps,
                                          line_search_shrink};
             },
-            "gradient_tolerance"_a, "max_iterations"_a = 50, "hessian"_a = HessianKind::Projected,
+            "gradient_tolerance"_a, "max_iterations"_a = 50, "hessian"_a = energy::HessianKind::Projected,
             "max_line_search_steps"_a = 30, "line_search_shrink"_a = 0.5)
         .def_rw("gradient_tolerance", &NewtonOptions::gradient_tolerance)
         .def_rw("max_iterations", &NewtonOptions::max_iterations)
@@ -65,10 +65,10 @@ void bind_solver(nb::module_& m) {
     // It receives each NewtonStep by value, so Python may keep it after the call.
     m.def(
         "newton_solve",
-        [](Energy& energy, const ConstVecRef& x0, const NewtonOptions& options,
-           std::optional<std::vector<int>> fixed_dofs, SparseSolver* sparse_solver,
+        [](energy::Energy& energy, const ConstVecRef& x0, const NewtonOptions& options,
+           std::optional<std::vector<int>> fixed_dofs, linalg::SparseSolver* sparse_solver,
            std::optional<std::function<void(NewtonStep)>> on_iteration) {
-            const DofReduction fixed(energy.num_dofs(), fixed_dofs.value_or(std::vector<int>{}));
+            const dof::DofReduction fixed(energy.num_dofs(), fixed_dofs.value_or(std::vector<int>{}));
             std::function<void(const NewtonStep&)> callback;
             if (on_iteration) {
                 callback = [&on_iteration](const NewtonStep& step) {
@@ -80,7 +80,7 @@ void bind_solver(nb::module_& m) {
             if (sparse_solver != nullptr) {
                 return newton_solve(energy, fixed, x0, options, *sparse_solver, callback);
             }
-            AutoSparseSolver default_solver;
+            linalg::AutoSparseSolver default_solver;
             return newton_solve(energy, fixed, x0, options, default_solver, callback);
         },
         "energy"_a, "x0"_a, "options"_a, "fixed_dofs"_a = nb::none(), "sparse_solver"_a = nb::none(),
@@ -89,4 +89,4 @@ void bind_solver(nb::module_& m) {
         "AutoSparseSolver(); pass AutoIndefiniteSparseSolver() with HessianKind.Exact.");
 }
 
-} // namespace litepgo::bindings
+} // namespace litepgo::solver::binding

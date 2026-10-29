@@ -10,7 +10,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace litepgo::testing {
+namespace litepgo::energy::test {
 
 // Whether pattern stores (row, column).
 inline bool stores(const SpMat& pattern, int row, int column) {
@@ -49,12 +49,12 @@ inline void zero_values(SpMat& matrix) {
 // E(x) = sum_i (x_i^2 - 1)^2 + sum_i (x_i - x_{i+1})^2: nonlinear, tridiagonal.
 // Its projected Hessian clamps each double well's curvature 12 x^2 - 4 at zero,
 // so it differs from the exact one wherever |x_i| < 1 / sqrt(3).
-class DoubleWellChain final : public FixedPatternEnergy {
+class DoubleWellChain final : public energy::FixedPatternEnergy {
   public:
-    explicit DoubleWellChain(int n) : FixedPatternEnergy(n, chain_pattern(n, all_pair_starts(n))) {}
+    explicit DoubleWellChain(int n) : energy::FixedPatternEnergy(n, chain_pattern(n, all_pair_starts(n))) {}
 
   private:
-    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const override {
+    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, energy::HessianKind kind) const override {
         const int n = num_dofs();
         double value = 0.0;
         if (gradient != nullptr) {
@@ -71,7 +71,8 @@ class DoubleWellChain final : public FixedPatternEnergy {
             }
             if (hessian != nullptr) {
                 const double curvature = 12.0 * x[i] * x[i] - 4.0;
-                hessian->coeffRef(i, i) += kind == HessianKind::Projected ? std::max(curvature, 0.0) : curvature;
+                hessian->coeffRef(i, i) +=
+                    kind == energy::HessianKind::Projected ? std::max(curvature, 0.0) : curvature;
             }
         }
         for (int i = 0; i + 1 < n; ++i) {
@@ -94,9 +95,9 @@ class DoubleWellChain final : public FixedPatternEnergy {
 
 // E(x) = -log(1 - x_k), defined for x_k < 1; elsewhere it throws std::domain_error.
 // Its feasible step keeps 10% of the remaining distance to the boundary.
-class HalfSpaceBarrier final : public FixedPatternEnergy {
+class HalfSpaceBarrier final : public energy::FixedPatternEnergy {
   public:
-    HalfSpaceBarrier(int n, int k) : FixedPatternEnergy(n, single_entry_pattern(n, k)), k_(k) {}
+    HalfSpaceBarrier(int n, int k) : energy::FixedPatternEnergy(n, single_entry_pattern(n, k)), k_(k) {}
 
   private:
     static SpMat single_entry_pattern(int n, int k) {
@@ -106,7 +107,7 @@ class HalfSpaceBarrier final : public FixedPatternEnergy {
         return pattern;
     }
 
-    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const override {
+    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, energy::HessianKind) const override {
         const double gap = 1.0 - x[k_];
         if (!(gap > 0.0)) {
             throw std::domain_error("HalfSpaceBarrier: x_k must be below 1");
@@ -139,9 +140,9 @@ class HalfSpaceBarrier final : public FixedPatternEnergy {
 // A dynamic-pattern energy: E(x) = sum_i x_i^2 + sum over active pairs of
 // x_i x_{i+1}, where (i, i + 1) is active when x_i + x_{i+1} > 0. Its pattern
 // holds the diagonal and the active pairs, like contact holding active contacts.
-class SwitchingEnergy final : public DynamicPatternEnergy {
+class SwitchingEnergy final : public energy::DynamicPatternEnergy {
   public:
-    explicit SwitchingEnergy(int n) : DynamicPatternEnergy(n, chain_pattern(n, {})) {}
+    explicit SwitchingEnergy(int n) : energy::DynamicPatternEnergy(n, chain_pattern(n, {})) {}
 
     static std::vector<int> active_pairs(const ConstVecRef& x) {
         std::vector<int> active;
@@ -158,7 +159,7 @@ class SwitchingEnergy final : public DynamicPatternEnergy {
         return chain_pattern(num_dofs(), active_pairs(x));
     }
 
-    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const override {
+    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, energy::HessianKind) const override {
         const std::vector<int> active = active_pairs(x);
         if (hessian != nullptr) {
             for (const int i : active) {
@@ -193,4 +194,4 @@ class SwitchingEnergy final : public DynamicPatternEnergy {
     }
 };
 
-} // namespace litepgo::testing
+} // namespace litepgo::energy::test

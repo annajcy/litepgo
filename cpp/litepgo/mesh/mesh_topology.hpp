@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-namespace litepgo {
+namespace litepgo::mesh {
 
 // Fixed-arity connectivity. Cell vertices must be ordered to match the chosen
 // basis; the vertex count alone does not determine the local numbering.
@@ -68,4 +68,4 @@ using QuadTopology = MeshTopology<4>;
 using TetTopology = MeshTopology<4>;
 using HexTopology = MeshTopology<8>;
 
-} // namespace litepgo
+} // namespace litepgo::mesh

@@ -14,8 +14,9 @@
 #include <limits>
 #include <type_traits>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 using F = InterpolatedField2D<QuadHermiteBasis>;
 static_assert(std::is_same_v<LocalEnergy3D, LocalEnergyT<3>>);
 static_assert(std::is_same_v<LocalEnergy2D, LocalEnergyT<2>>);
@@ -66,11 +67,11 @@ F coordinates(int element) {
     return F(coefficients);
 }
 
-MeshEnergy surface_energy() {
-    const QuadTopology topology(6, {{0, 1, 2, 3}, {1, 4, 5, 2}});
-    const VertexDofMap map(topology, 12);
+energy::MeshEnergy surface_energy() {
+    const mesh::QuadTopology topology(6, {{0, 1, 2, 3}, {1, 4, 5, 2}});
+    const dof::VertexDofMap map(topology, 12);
     const std::array<F, 2> X_fields{coordinates(0), coordinates(1)};
-    return MeshEnergy(map, [X_fields](int e, const Eigen::MatrixXd& x_local, Vec* g, Eigen::MatrixXd* H) {
+    return energy::MeshEnergy(map, [X_fields](int e, const Eigen::MatrixXd& x_local, Vec* g, Eigen::MatrixXd* H) {
         const F u_field(x_local.reshaped<Eigen::RowMajor>(16, 3));
         const QuadraticFieldEnergy local(u_field);
         if (g)
@@ -105,7 +106,7 @@ TEST(SurfaceIntegration, AssembledGradientAndHessianMatchFiniteDifferencesWithSh
     Vec x(energy.num_dofs());
     for (int j = 0; j < x.size(); ++j)
         x[j] = 0.07 * std::sin(0.3 * (j + 1));
-    litepgo::testing::expect_derivatives_match(energy, x, 2e-7);
+    energy::test::expect_derivatives_match(energy, x, 2e-7);
     const Eigen::MatrixXd H = energy.eval_hessian(x);
     EXPECT_TRUE(H.isApprox(H.transpose(), 1e-13));
     EXPECT_GT(H.block(12, 48, 12, 12).norm(), 0);
@@ -160,3 +161,5 @@ TEST(SurfaceIntegration, LocalEnergy2DRetainsOptionalDerivativeCapabilities) {
     EXPECT_THROW(local.accumulate(xi, 1, nullptr, &H), std::logic_error);
 }
 } // namespace
+
+} // namespace litepgo::fem::test

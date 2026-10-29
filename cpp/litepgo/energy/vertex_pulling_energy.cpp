@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace litepgo {
+namespace litepgo::energy {
 
 namespace {
 
@@ -78,4 +78,4 @@ double VertexPullingEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpM
     return 0.5 * stiffness_ * squared_distance;
 }
 
-} // namespace litepgo
+} // namespace litepgo::energy

@@ -2,7 +2,7 @@
 
 #include "litepgo/core/types.hpp"
 
-namespace litepgo {
+namespace litepgo::linalg {
 
 // Whether A is compressed with strictly increasing row indices in every column:
 // sorted, with no duplicate entries.
@@ -15,4 +15,4 @@ bool same_pattern(const SpMat& a, const SpMat& b);
 // A compressed copy of A's pattern with every stored value set to zero.
 SpMat pattern_of(const SpMat& A);
 
-} // namespace litepgo
+} // namespace litepgo::linalg

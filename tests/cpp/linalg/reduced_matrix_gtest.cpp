@@ -9,12 +9,11 @@
 #include <stdexcept>
 #include <vector>
 
+namespace litepgo::linalg::test {
+
 namespace {
 
-using litepgo::DofReduction;
-using litepgo::ReducedMatrix;
-using litepgo::SpMat;
-using litepgo::Triplet;
+using litepgo::dof::DofReduction;
 
 // Tridiagonal symmetric matrix whose values depend on scale.
 SpMat tridiagonal(int n, double scale) {
@@ -38,7 +37,7 @@ void expect_same(const SpMat& actual, const SpMat& expected) {
 } // namespace
 
 TEST(ReducedMatrix, MatchesReduce) {
-    const DofReduction reduction(8, {0, 3, 7});
+    const dof::DofReduction reduction(8, {0, 3, 7});
     const SpMat A = tridiagonal(8, 1.0);
     const ReducedMatrix reduced(reduction, A);
     expect_same(reduced.matrix(), reduction.reduce(A));
@@ -46,7 +45,7 @@ TEST(ReducedMatrix, MatchesReduce) {
 }
 
 TEST(ReducedMatrix, AssignRefreshesValuesInPlace) {
-    const DofReduction reduction(8, {0, 3, 7});
+    const dof::DofReduction reduction(8, {0, 3, 7});
     ReducedMatrix reduced(reduction, tridiagonal(8, 1.0));
     const double* values = reduced.matrix().valuePtr();
     const int* inner = reduced.matrix().innerIndexPtr();
@@ -59,7 +58,7 @@ TEST(ReducedMatrix, AssignRefreshesValuesInPlace) {
 }
 
 TEST(ReducedMatrix, AssignRejectsAnotherPattern) {
-    const DofReduction reduction(8, {0, 3, 7});
+    const dof::DofReduction reduction(8, {0, 3, 7});
     ReducedMatrix reduced(reduction, tridiagonal(8, 1.0));
     const SpMat before = reduced.matrix();
 
@@ -73,14 +72,14 @@ TEST(ReducedMatrix, AssignRejectsAnotherPattern) {
 
 TEST(ReducedMatrix, CoversNoAndAllFixedDofs) {
     const SpMat A = tridiagonal(5, 1.0);
-    expect_same(ReducedMatrix(DofReduction(5, {}), A).matrix(), A);
-    const ReducedMatrix none_free(DofReduction(5, {0, 1, 2, 3, 4}), A);
+    expect_same(ReducedMatrix(dof::DofReduction(5, {}), A).matrix(), A);
+    const ReducedMatrix none_free(dof::DofReduction(5, {0, 1, 2, 3, 4}), A);
     EXPECT_EQ(none_free.matrix().rows(), 0);
     EXPECT_EQ(none_free.matrix().nonZeros(), 0);
 }
 
 TEST(ReducedMatrix, ChecksTheMatrix) {
-    const DofReduction reduction(5, {1});
+    const dof::DofReduction reduction(5, {1});
     EXPECT_THROW(ReducedMatrix(reduction, tridiagonal(4, 1.0)), std::invalid_argument);
 }
 
@@ -89,18 +88,18 @@ TEST(ReducedMatrix, StoresTheWholeDiagonal) {
     const std::vector<Triplet> entries = {{0, 2, 1.0}, {2, 0, 1.0}, {1, 3, -2.0}, {3, 1, -2.0}};
     SpMat A(4, 4);
     A.setFromTriplets(entries.begin(), entries.end());
-    const DofReduction reduction(4, {3});
+    const dof::DofReduction reduction(4, {3});
     const ReducedMatrix reduced(reduction, A);
     ASSERT_EQ(reduced.matrix().nonZeros(), 5); // (0,2), (2,0) and three diagonal zeros
     for (int i = 0; i < 3; ++i) {
         EXPECT_EQ(reduced.matrix().coeff(i, i), 0.0);
     }
     EXPECT_EQ(reduced.matrix().coeff(0, 2), 1.0);
-    EXPECT_TRUE(litepgo::is_canonical(reduced.matrix()));
+    EXPECT_TRUE(litepgo::linalg::is_canonical(reduced.matrix()));
 }
 
 TEST(ReducedMatrix, ShiftsTheDiagonalUntilTheNextAssign) {
-    const DofReduction reduction(6, {2});
+    const dof::DofReduction reduction(6, {2});
     const SpMat A = tridiagonal(6, 1.0);
     ReducedMatrix reduced(reduction, A);
     const Eigen::MatrixXd before = Eigen::MatrixXd(reduced.matrix());
@@ -109,3 +108,5 @@ TEST(ReducedMatrix, ShiftsTheDiagonalUntilTheNextAssign) {
     reduced.assign(A);
     EXPECT_EQ(Eigen::MatrixXd(reduced.matrix()), before);
 }
+
+} // namespace litepgo::linalg::test

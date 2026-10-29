@@ -13,21 +13,18 @@
 #include <memory>
 #include <stdexcept>
 
+namespace litepgo::energy::test {
+
 namespace {
 
-using litepgo::HessianKind;
-using litepgo::SpMat;
-using litepgo::Vec;
-using litepgo::testing::DoubleWellChain;
-
 // Breaks the contract in configurable ways.
-class MisbehavingEnergy final : public litepgo::FixedPatternEnergy {
+class MisbehavingEnergy final : public litepgo::energy::FixedPatternEnergy {
   public:
     double step = 1.0;
     double returned = 0.0;
     bool reenter = false;
 
-    MisbehavingEnergy() : FixedPatternEnergy(2, litepgo::testing::chain_pattern(2, {})) {}
+    MisbehavingEnergy() : FixedPatternEnergy(2, chain_pattern(2, {})) {}
 
   private:
     double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const override {
@@ -38,7 +35,7 @@ class MisbehavingEnergy final : public litepgo::FixedPatternEnergy {
             gradient->setZero();
         }
         if (hessian != nullptr) {
-            litepgo::testing::zero_values(*hessian);
+            zero_values(*hessian);
         }
         return returned;
     }
@@ -62,7 +59,7 @@ TEST(Energy, ConveniencesAgreeWithEvaluate) {
 
 TEST(Energy, ChainDerivativesMatchFiniteDifferences) {
     const DoubleWellChain energy(6);
-    litepgo::testing::expect_derivatives_match(energy, Vec::LinSpaced(6, -1.3, 1.1));
+    expect_derivatives_match(energy, Vec::LinSpaced(6, -1.3, 1.1));
 }
 
 TEST(Energy, ProjectedHessianIsPositiveSemidefinite) {
@@ -78,7 +75,7 @@ TEST(Energy, ChecksArgumentsBeforeWriting) {
     const DoubleWellChain energy(4);
     EXPECT_THROW(energy.eval_value(Vec::Zero(3)), std::invalid_argument);
 
-    SpMat wrong = litepgo::testing::chain_pattern(4, {});
+    SpMat wrong = chain_pattern(4, {});
     Vec gradient = Vec::Constant(2, 7.0);
     EXPECT_THROW(energy.eval(Vec::Zero(4), &gradient, &wrong), std::invalid_argument);
     EXPECT_EQ(gradient, Vec::Constant(2, 7.0)); // untouched
@@ -121,9 +118,9 @@ TEST(Energy, RejectsNonFiniteValuesAsABrokenEnergy) {
         energy->returned = returned;
         EXPECT_THROW(energy->eval_value(Vec::Zero(2)), std::logic_error);
         // The error surfaces through composites too, and is not mistaken for infeasibility.
-        const litepgo::WeightedEnergySum sum({{energy, -1.0}});
+        const litepgo::energy::WeightedEnergySum sum({{energy, -1.0}});
         EXPECT_THROW(sum.eval_value(Vec::Zero(2)), std::logic_error);
-        const litepgo::AffineMappedEnergy mapped(energy, SpMat(Eigen::MatrixXd::Identity(2, 2).sparseView()));
+        const litepgo::energy::AffineMappedEnergy mapped(energy, SpMat(Eigen::MatrixXd::Identity(2, 2).sparseView()));
         EXPECT_THROW(mapped.eval_value(Vec::Zero(2)), std::logic_error);
         try {
             sum.eval_value(Vec::Zero(2));
@@ -133,3 +130,5 @@ TEST(Energy, RejectsNonFiniteValuesAsABrokenEnergy) {
         }
     }
 }
+
+} // namespace litepgo::energy::test

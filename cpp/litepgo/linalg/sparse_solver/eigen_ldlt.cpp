@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::linalg {
 
 bool EigenLDLT::analyze_pattern(const SpMat& A) {
     // Eigen's analysis has no failure mode short of throwing on allocation.
@@ -22,4 +22,4 @@ void EigenLDLT::solve_factored(const ConstVecRef& rhs, VecRef x) const {
     }
 }
 
-} // namespace litepgo
+} // namespace litepgo::linalg

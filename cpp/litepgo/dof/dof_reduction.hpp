@@ -5,7 +5,7 @@
 #include <span>
 #include <vector>
 
-namespace litepgo {
+namespace litepgo::dof {
 
 // Splits num_dofs indices into fixed and free ones. Reduced coordinates are the
 // free DOFs in increasing order. Holds indices only: fixed values belong to the
@@ -52,4 +52,4 @@ class DofReduction {
     std::vector<int> free_index_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::dof

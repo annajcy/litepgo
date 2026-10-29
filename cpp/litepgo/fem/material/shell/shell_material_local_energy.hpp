@@ -9,7 +9,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Density per reference area; only row-packed stencil displacements are active.
 // Owns snapshots of all inputs. Thickness and material parameters are constant on the face.
@@ -123,4 +123,4 @@ template <class Material> class ShellMaterialLocalEnergy2D final : public LocalE
     Eigen::VectorXd theta_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

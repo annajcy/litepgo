@@ -5,7 +5,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::fem {
 namespace {
 
 Eigen::Matrix<double, 6, 1> eval_delta_ab(const ShellMaterialInputs& inputs) {
@@ -80,4 +80,4 @@ Eigen::Matrix<double, 6, 6> KoiterStVK::eval_d2W_dab2(const ShellMaterialInputs&
     return H;
 }
 
-} // namespace litepgo
+} // namespace litepgo::fem

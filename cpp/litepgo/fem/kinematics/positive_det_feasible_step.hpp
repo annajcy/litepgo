@@ -2,7 +2,7 @@
 
 #include <Eigen/Core>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Safe inclusive bound in [0,1] for det(A+t*delta_A)>0 over the whole segment.
 // Finds the first zero of the determinant cubic, including repeated roots, and
@@ -11,4 +11,4 @@ namespace litepgo {
 // determinant throws std::domain_error. An unrepresentable direction may return 0.
 double eval_positive_det_feasible_step(const Eigen::Matrix3d& A, const Eigen::Matrix3d& delta_A);
 
-} // namespace litepgo
+} // namespace litepgo::fem

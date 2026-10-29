@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace litepgo {
+namespace litepgo::mesh {
 
 TriangleMidEdgeStencils make_triangle_mid_edge_stencils(const TriangleTopology& topology) {
     TriangleMidEdgeStencils result;
@@ -57,4 +57,4 @@ TriangleMidEdgeStencils make_triangle_mid_edge_stencils(const TriangleTopology& 
     return result;
 }
 
-} // namespace litepgo
+} // namespace litepgo::mesh

@@ -5,10 +5,9 @@
 #include <utility>
 #include <vector>
 
-namespace {
+namespace litepgo::linalg::test {
 
-using litepgo::SpMat;
-using litepgo::Triplet;
+namespace {
 
 SpMat from_triplets(int n, const std::vector<Triplet>& entries) {
     SpMat A(n, n);
@@ -20,29 +19,31 @@ SpMat from_triplets(int n, const std::vector<Triplet>& entries) {
 
 TEST(SparsePattern, IsCanonical) {
     SpMat A = from_triplets(3, {{0, 0, 1.0}, {2, 0, 1.0}, {1, 1, 1.0}});
-    EXPECT_TRUE(litepgo::is_canonical(A));
+    EXPECT_TRUE(litepgo::linalg::is_canonical(A));
     SpMat unsorted = A;
     std::swap(unsorted.innerIndexPtr()[0], unsorted.innerIndexPtr()[1]);
-    EXPECT_FALSE(litepgo::is_canonical(unsorted));
+    EXPECT_FALSE(litepgo::linalg::is_canonical(unsorted));
     SpMat uncompressed(2, 2);
     uncompressed.reserve(Eigen::VectorXi::Constant(2, 1));
     uncompressed.insert(0, 0) = 1.0;
-    EXPECT_FALSE(litepgo::is_canonical(uncompressed));
+    EXPECT_FALSE(litepgo::linalg::is_canonical(uncompressed));
 }
 
 TEST(SparsePattern, SamePatternIgnoresValues) {
     const SpMat A = from_triplets(3, {{0, 0, 1.0}, {1, 2, 5.0}});
     const SpMat B = from_triplets(3, {{0, 0, -4.0}, {1, 2, 0.0}});
     const SpMat C = from_triplets(3, {{0, 0, 1.0}, {2, 1, 5.0}});
-    EXPECT_TRUE(litepgo::same_pattern(A, B));
-    EXPECT_FALSE(litepgo::same_pattern(A, C));
-    EXPECT_FALSE(litepgo::same_pattern(A, from_triplets(4, {{0, 0, 1.0}, {1, 2, 5.0}})));
+    EXPECT_TRUE(litepgo::linalg::same_pattern(A, B));
+    EXPECT_FALSE(litepgo::linalg::same_pattern(A, C));
+    EXPECT_FALSE(litepgo::linalg::same_pattern(A, from_triplets(4, {{0, 0, 1.0}, {1, 2, 5.0}})));
 }
 
 TEST(SparsePattern, PatternOfZeroesValues) {
     const SpMat A = from_triplets(3, {{0, 0, 1.0}, {1, 2, 5.0}});
-    const SpMat pattern = litepgo::pattern_of(A);
-    EXPECT_TRUE(litepgo::same_pattern(pattern, A));
+    const SpMat pattern = litepgo::linalg::pattern_of(A);
+    EXPECT_TRUE(litepgo::linalg::same_pattern(pattern, A));
     EXPECT_EQ(pattern.coeff(0, 0), 0.0);
     EXPECT_EQ(pattern.coeff(1, 2), 0.0);
 }
+
+} // namespace litepgo::linalg::test

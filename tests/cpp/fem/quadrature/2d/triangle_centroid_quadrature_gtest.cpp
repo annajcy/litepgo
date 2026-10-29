@@ -6,8 +6,9 @@
 #include <Eigen/Geometry>
 #include <gtest/gtest.h>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 static_assert(Quadrature2D<TriangleCentroidQuadrature>);
 static_assert(!Quadrature3D<TriangleCentroidQuadrature>);
 
@@ -49,3 +50,5 @@ TEST(TriangleCentroidQuadrature, IntegratesAffineFieldsOnEmbeddedTrianglesUsingR
     }
 }
 } // namespace
+
+} // namespace litepgo::fem::test

@@ -5,8 +5,9 @@
 #include <limits>
 #include <stdexcept>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 
 struct ValueOnly : LocalEnergy3D {
     Eigen::Vector3d coefficients{0.2, -0.4, 0.6};
@@ -99,3 +100,5 @@ TEST(LocalEnergy3D, DefaultAccumulationAddsWeightedValuesAndChecksRequests) {
     EXPECT_THROW(full.accumulate(point, 1, nullptr, &wrong_h), std::invalid_argument);
 }
 } // namespace
+
+} // namespace litepgo::fem::test

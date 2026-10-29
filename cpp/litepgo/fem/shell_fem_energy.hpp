@@ -7,18 +7,18 @@
 #include <utility>
 #include <vector>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Triangle mid-edge shell with three displacement DOFs per stencil vertex.
 // Owns fixed per-face inputs; the first three stencil rows are the central face.
 // Material must remain feasible whenever the geometric step constraints hold
 // with fixed thickness and theta (as KoiterStVK does).
-template <class Material> class ShellFemEnergy final : public MeshEnergy {
+template <class Material> class ShellFemEnergy final : public energy::MeshEnergy {
   public:
     // Arrays and stencil rows must match the map's face and vertex order.
-    ShellFemEnergy(const StencilDofMap& displacement_map, std::vector<TriangleMidEdgeRestData> rest_data,
+    ShellFemEnergy(const dof::StencilDofMap& displacement_map, std::vector<TriangleMidEdgeRestData> rest_data,
                    std::vector<double> thickness, std::vector<Eigen::VectorXd> theta)
-        : MeshEnergy(
+        : energy::MeshEnergy(
               displacement_map,
               [this](int e, const Eigen::MatrixXd& u, Vec* g, Eigen::MatrixXd* H) {
                   const auto index = static_cast<std::size_t>(e);
@@ -61,4 +61,4 @@ template <class Material> class ShellFemEnergy final : public MeshEnergy {
     std::vector<Eigen::VectorXd> theta_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

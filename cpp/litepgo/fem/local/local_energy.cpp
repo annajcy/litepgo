@@ -3,7 +3,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 template <int ParamDim> bool LocalEnergyT<ParamDim>::has_gradient() const noexcept {
     return false;
@@ -51,4 +51,4 @@ double LocalEnergyT<ParamDim>::accumulate(const Coordinate& xi, double weight, E
 template class LocalEnergyT<2>;
 template class LocalEnergyT<3>;
 
-} // namespace litepgo
+} // namespace litepgo::fem

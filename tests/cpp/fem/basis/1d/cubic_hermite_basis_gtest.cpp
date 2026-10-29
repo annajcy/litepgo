@@ -5,9 +5,9 @@
 
 #include <cmath>
 
-using litepgo::CubicHermiteBasis;
+namespace litepgo::fem::test {
 
-static_assert(litepgo::Basis1D<CubicHermiteBasis>);
+static_assert(litepgo::fem::Basis1D<CubicHermiteBasis>);
 static_assert(CubicHermiteBasis::num_basis_functions == 4);
 
 TEST(CubicHermiteBasis, InterpolatesEndpointValuesAndDerivatives) {
@@ -46,3 +46,5 @@ TEST(CubicHermiteBasis, GradientsMatchFiniteDifferences) {
         EXPECT_TRUE((second_fd - CubicHermiteBasis::eval_d2N_dxi2(t)).isZero(3e-9));
     }
 }
+
+} // namespace litepgo::fem::test

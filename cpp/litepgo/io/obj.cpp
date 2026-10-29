@@ -10,7 +10,7 @@
 static_assert(std::is_same_v<tinyobj::real_t, double>);
 
 namespace litepgo::io {
-TriangleMesh read_obj(const std::filesystem::path& path) {
+mesh::TriangleMesh read_obj(const std::filesystem::path& path) {
     tinyobj::ObjReader reader;
     tinyobj::ObjReaderConfig config;
     config.triangulate = true;
@@ -21,7 +21,7 @@ TriangleMesh read_obj(const std::filesystem::path& path) {
         throw std::runtime_error("OBJ vertex count exceeds int range");
     Vec positions(static_cast<Eigen::Index>(vertices.size()));
     std::copy(vertices.begin(), vertices.end(), positions.data());
-    std::vector<TriangleTopology::Cell> faces;
+    std::vector<mesh::TriangleTopology::Cell> faces;
     for (const auto& shape : reader.GetShapes()) {
         std::size_t offset = 0;
         for (auto width : shape.mesh.num_face_vertices) {
@@ -32,12 +32,13 @@ TriangleMesh read_obj(const std::filesystem::path& path) {
             offset += 3;
         }
     }
-    TriangleMesh mesh{std::move(positions), TriangleTopology(static_cast<int>(vertices.size() / 3), std::move(faces))};
+    mesh::TriangleMesh mesh{std::move(positions),
+                            mesh::TriangleTopology(static_cast<int>(vertices.size() / 3), std::move(faces))};
     mesh.validate();
     return mesh;
 }
 
-void write_obj(const std::filesystem::path& path, const TriangleMesh& mesh) {
+void write_obj(const std::filesystem::path& path, const mesh::TriangleMesh& mesh) {
     mesh.validate();
     std::ofstream out(path);
     if (!out)

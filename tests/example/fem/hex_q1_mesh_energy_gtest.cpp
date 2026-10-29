@@ -14,7 +14,12 @@
 #include <utility>
 #include <vector>
 
-namespace litepgo::example {
+#include <cmath>
+#include <gtest/gtest.h>
+#include <limits>
+#include <stdexcept>
+
+namespace litepgo::example::test {
 
 inline Vec hex_q1_rest_positions() {
     // Two adjacent hexes of widths 1 and 2, sharing the face at X = 1.
@@ -25,33 +30,25 @@ inline Vec hex_q1_rest_positions() {
 }
 
 inline auto make_hex_q1_mesh_energy(const Vec& rest_positions) {
-    const HexTopology topology(12, {{0, 1, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 2, 5, 10, 11, 6}});
-    const VertexDofMap rest_position_map(topology, 3);
-    using XField = InterpolatedField3D<HexQ1Basis>;
+    const mesh::HexTopology topology(12, {{0, 1, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 2, 5, 10, 11, 6}});
+    const dof::VertexDofMap rest_position_map(topology, 3);
+    using XField = fem::InterpolatedField3D<fem::HexQ1Basis>;
     std::vector<XField> rest_position_fields;
     rest_position_fields.reserve(topology.num_cells());
     for (int e = 0; e < topology.num_cells(); ++e)
         rest_position_fields.emplace_back(rest_position_map.gather(e, rest_positions));
-    const IdentityField3D Fp_field(Eigen::Matrix3d::Identity().reshaped());
-    const IdentityField3D theta_field(Eigen::Vector2d(2, 3));
-    return VolumetricFemEnergy<NeoHookean, HexQ1Basis, GaussLegendre3D<2>, XField, IdentityField3D, IdentityField3D>(
+    const fem::IdentityField3D Fp_field(Eigen::Matrix3d::Identity().reshaped());
+    const fem::IdentityField3D theta_field(Eigen::Vector2d(2, 3));
+    return fem::VolumetricFemEnergy<fem::NeoHookean, fem::HexQ1Basis, fem::GaussLegendre3D<2>, XField,
+                                    fem::IdentityField3D, fem::IdentityField3D>(
         rest_position_map, std::move(rest_position_fields),
-        std::vector<IdentityField3D>(topology.num_cells(), Fp_field),
-        std::vector<IdentityField3D>(topology.num_cells(), theta_field));
+        std::vector<fem::IdentityField3D>(topology.num_cells(), Fp_field),
+        std::vector<fem::IdentityField3D>(topology.num_cells(), theta_field));
 }
 
-} // namespace litepgo::example
-
-#include <gtest/gtest.h>
-#include <stdexcept>
-
-#include <cmath>
-#include <limits>
-
 TEST(HexQ1Example, GradientAndHessianMatchFiniteDifferences) {
-    using namespace litepgo;
-    const Vec X_nodes = example::hex_q1_rest_positions();
-    auto energy = example::make_hex_q1_mesh_energy(X_nodes);
+    const Vec X_nodes = hex_q1_rest_positions();
+    auto energy = make_hex_q1_mesh_energy(X_nodes);
     ASSERT_EQ(X_nodes.size(), 36);
     for (int state : {0, 1, 2}) {
         SCOPED_TRACE(state);
@@ -100,30 +97,28 @@ TEST(HexQ1Example, GradientAndHessianMatchFiniteDifferences) {
 }
 
 TEST(HexQ1Example, ConstructionRejectsInvalidGeometry) {
-    using namespace litepgo;
     for (double scale : {0., -1., 1e200}) {
         SCOPED_TRACE(scale);
-        const Vec X_nodes = scale * example::hex_q1_rest_positions();
-        EXPECT_THROW(example::make_hex_q1_mesh_energy(X_nodes), std::invalid_argument);
+        const Vec X_nodes = scale * hex_q1_rest_positions();
+        EXPECT_THROW(make_hex_q1_mesh_energy(X_nodes), std::invalid_argument);
     }
-    EXPECT_THROW(example::make_hex_q1_mesh_energy(Vec::Zero(35)), std::invalid_argument);
+    EXPECT_THROW(make_hex_q1_mesh_energy(Vec::Zero(35)), std::invalid_argument);
     for (double bad : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
                        -std::numeric_limits<double>::infinity()}) {
-        Vec X_nodes = example::hex_q1_rest_positions();
+        Vec X_nodes = hex_q1_rest_positions();
         X_nodes[0] = bad;
-        EXPECT_THROW(example::make_hex_q1_mesh_energy(X_nodes), std::invalid_argument);
+        EXPECT_THROW(make_hex_q1_mesh_energy(X_nodes), std::invalid_argument);
     }
 }
 
 TEST(HexQ1Example, CachedElementIntegratesTranslatedWarpedGeometryAndIndependentOutputs) {
-    using namespace litepgo;
-    Vec X_nodes = example::hex_q1_rest_positions();
+    Vec X_nodes = hex_q1_rest_positions();
     for (int v = 0; v < 12; ++v) {
         const Eigen::Vector3d X = X_nodes.segment<3>(3 * v);
         X_nodes.segment<3>(3 * v) = Eigen::Vector3d(X.x() + 0.4 * X.y() * X.z(), X.y() + 0.2 * X.x() * X.z(), X.z()) +
                                     Eigen::Vector3d(1, -2, 3);
     }
-    auto energy = example::make_hex_q1_mesh_energy(X_nodes);
+    auto energy = make_hex_q1_mesh_energy(X_nodes);
     const Vec x = 0.1 * X_nodes;
     Vec g = Vec::Ones(1);
     SpMat H = energy.hessian_pattern();
@@ -131,7 +126,7 @@ TEST(HexQ1Example, CachedElementIntegratesTranslatedWarpedGeometryAndIndependent
     // det(dX/dxi) = cell_width * (1 - 0.08*z^2); integrate over both cells.
     const double volume = 3 * (1 - 0.08 / 3);
     EXPECT_NEAR(value,
-                volume * NeoHookean::eval_W(
+                volume * fem::NeoHookean::eval_W(
                              {1.1 * Eigen::Matrix3d::Identity(), Eigen::Matrix3d::Identity(), Eigen::Vector2d(2, 3)}),
                 1e-13);
     Vec g_only = Vec::Constant(2, 7);
@@ -147,17 +142,15 @@ TEST(HexQ1Example, CachedElementIntegratesTranslatedWarpedGeometryAndIndependent
 }
 
 TEST(HexQ1Example, ConstructionRejectsGeometryInvertedAtAQuadraturePoint) {
-    using namespace litepgo;
-    Vec X_nodes = example::hex_q1_rest_positions();
+    Vec X_nodes = hex_q1_rest_positions();
     for (int v = 0; v < 12; ++v)
         X_nodes[3 * v + 2] *= 1 - 1.5 * X_nodes[3 * v];
-    EXPECT_THROW(example::make_hex_q1_mesh_energy(X_nodes), std::invalid_argument);
+    EXPECT_THROW(make_hex_q1_mesh_energy(X_nodes), std::invalid_argument);
 }
 
 TEST(HexQ1Example, FeasibleStepDetectsInteriorCollapseAndTheMostRestrictiveElement) {
-    using namespace litepgo;
-    const Vec X = example::hex_q1_rest_positions(), zero = Vec::Zero(X.size());
-    auto energy = example::make_hex_q1_mesh_energy(X);
+    const Vec X = hex_q1_rest_positions(), zero = Vec::Zero(X.size());
+    auto energy = make_hex_q1_mesh_energy(X);
     EXPECT_EQ(energy.max_feasible_step(zero, zero), 1);
     EXPECT_EQ(energy.max_feasible_step(zero, 0.1 * X), 1);
     Vec direction = zero;
@@ -176,3 +169,5 @@ TEST(HexQ1Example, FeasibleStepDetectsInteriorCollapseAndTheMostRestrictiveEleme
     EXPECT_NEAR(energy.max_feasible_step(zero, direction), 0.225, 1e-12);
     EXPECT_THROW(energy.max_feasible_step(-X, zero), std::domain_error);
 }
+
+} // namespace litepgo::example::test

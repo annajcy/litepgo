@@ -16,8 +16,9 @@
 #include <type_traits>
 #include <vector>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 using Shell = ShellMaterialLocalEnergy2D<KoiterStVK>;
 static_assert(std::is_base_of_v<LocalEnergy2D, Shell>);
 
@@ -211,16 +212,16 @@ TEST(ShellMaterialLocalEnergy2D, RejectsDegenerateCurrentGeometryAndInvalidMater
 }
 
 TEST(ShellMaterialLocalEnergy2D, MeshEnergyAssemblesIntegratedStencilDerivatives) {
-    const TriangleTopology topology(6, {{0, 1, 2}, {2, 1, 3}, {0, 2, 4}, {1, 0, 5}});
-    const auto stencils = make_triangle_mid_edge_stencils(topology);
-    const StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
+    const mesh::TriangleTopology topology(6, {{0, 1, 2}, {2, 1, 3}, {0, 2, 4}, {1, 0, 5}});
+    const auto stencils = mesh::make_triangle_mid_edge_stencils(topology);
+    const dof::StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
     Eigen::Matrix<double, 6, 3> X;
     X << 0, 0, 0, 2, 0, 0, 0, 1, 0, 2, 2, 0, -1, 0, 0, 0, -2, 0;
     const Vec X_packed = X.reshaped<Eigen::RowMajor>();
     std::vector<TriangleMidEdgeRestData> rest;
     for (int f = 0; f < map.num_elements(); ++f)
         rest.emplace_back(map.gather(f, X_packed), stencils.opposite[static_cast<std::size_t>(f)]);
-    MeshEnergy energy(
+    energy::MeshEnergy energy(
         map,
         [rest](int f, const Eigen::MatrixXd& u_local, Vec* g, Eigen::MatrixXd* H) {
             const auto& r = rest[static_cast<std::size_t>(f)];
@@ -236,7 +237,7 @@ TEST(ShellMaterialLocalEnergy2D, MeshEnergyAssemblesIntegratedStencilDerivatives
             throw std::logic_error("This evaluation test does not provide geometric feasible-step bounds");
         });
     const Vec u = displacements(6).reshaped<Eigen::RowMajor>();
-    litepgo::testing::expect_derivatives_match(energy, u, 2e-6);
+    energy::test::expect_derivatives_match(energy, u, 2e-6);
     const auto H = energy.eval_hessian(u);
     EXPECT_GT(std::abs(H.coeff(3 * 3 + 2, 3 * 4 + 2)), 1e-8);
     const double uniform_density = 0.2 / 2 * 5 * 0.21 * 0.21;
@@ -245,3 +246,5 @@ TEST(ShellMaterialLocalEnergy2D, MeshEnergyAssemblesIntegratedStencilDerivatives
     EXPECT_FALSE(energy.update_pattern(u));
 }
 } // namespace
+
+} // namespace litepgo::fem::test

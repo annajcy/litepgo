@@ -4,7 +4,7 @@
 
 #include <memory>
 
-namespace litepgo {
+namespace litepgo::linalg {
 
 // Apple Accelerate's pivoted sparse LDLT, for symmetric indefinite matrices.
 // It reads the lower triangle.
@@ -24,4 +24,4 @@ class AccelerateLDLT final : public SparseSolver {
     std::unique_ptr<Impl> impl_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::linalg

@@ -3,6 +3,6 @@
 #include <filesystem>
 
 namespace litepgo::io {
-TriangleMesh read_obj(const std::filesystem::path& path);
-void write_obj(const std::filesystem::path& path, const TriangleMesh& mesh);
+mesh::TriangleMesh read_obj(const std::filesystem::path& path);
+void write_obj(const std::filesystem::path& path, const mesh::TriangleMesh& mesh);
 } // namespace litepgo::io

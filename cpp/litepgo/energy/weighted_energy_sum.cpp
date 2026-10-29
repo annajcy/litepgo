@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-namespace litepgo {
+namespace litepgo::energy {
 
 namespace {
 
@@ -104,7 +104,7 @@ std::optional<SpMat> WeightedEnergySum::refresh_pattern(const ConstVecRef& x) {
         terms_[i].energy->update_pattern(x);
         // Compare patterns rather than trust the return value: the term may have
         // been updated elsewhere, in which case its own update reports no change.
-        if (!same_pattern(energy.hessian_pattern(), scratch_[i].hessian)) {
+        if (!linalg::same_pattern(energy.hessian_pattern(), scratch_[i].hessian)) {
             scratch_[i].hessian = energy.hessian_pattern();
             changed = true;
         }
@@ -126,7 +126,7 @@ double WeightedEnergySum::eval_values(const ConstVecRef& x, Vec* gradient, SpMat
     if (hessian != nullptr) {
         for (size_t i = 0; i < terms_.size(); ++i) {
             if (!terms_[i].energy->has_fixed_pattern() &&
-                !same_pattern(terms_[i].energy->hessian_pattern(), scratch_[i].hessian)) {
+                !linalg::same_pattern(terms_[i].energy->hessian_pattern(), scratch_[i].hessian)) {
                 throw std::logic_error("WeightedEnergySum: the pattern of term " + std::to_string(i) +
                                        " changed after this sum's last update_pattern(); call update_pattern() on "
                                        "the outermost energy");
@@ -172,4 +172,4 @@ void WeightedEnergySum::rebuild_positions(const SpMat& pattern) {
     }
 }
 
-} // namespace litepgo
+} // namespace litepgo::energy

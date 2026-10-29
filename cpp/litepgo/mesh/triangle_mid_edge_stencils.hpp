@@ -5,7 +5,7 @@
 #include <array>
 #include <vector>
 
-namespace litepgo {
+namespace litepgo::mesh {
 
 struct TriangleMidEdgeStencils {
     // Per face: its three vertices in connectivity order, then unique opposite
@@ -20,4 +20,4 @@ struct TriangleMidEdgeStencils {
 // Owns its result; boundary geometry and boundary conditions are left to the caller.
 TriangleMidEdgeStencils make_triangle_mid_edge_stencils(const TriangleTopology& topology);
 
-} // namespace litepgo
+} // namespace litepgo::mesh

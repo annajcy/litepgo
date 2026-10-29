@@ -4,7 +4,7 @@
 
 #include <Eigen/SparseCholesky>
 
-namespace litepgo {
+namespace litepgo::linalg {
 
 // Eigen's SimplicialLDLT, without pivoting. For symmetric positive definite
 // matrices; it reads the lower triangle.
@@ -20,4 +20,4 @@ class EigenLDLT final : public SparseSolver {
     Eigen::SimplicialLDLT<SpMat> solver_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::linalg

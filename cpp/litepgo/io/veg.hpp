@@ -3,6 +3,6 @@
 #include <filesystem>
 
 namespace litepgo::io {
-VolumeMesh read_veg(const std::filesystem::path& path);
-void write_veg(const std::filesystem::path& path, const VolumeMesh& mesh);
+mesh::VolumeMesh read_veg(const std::filesystem::path& path);
+void write_veg(const std::filesystem::path& path, const mesh::VolumeMesh& mesh);
 } // namespace litepgo::io

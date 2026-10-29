@@ -23,16 +23,16 @@ int main(int argc, char** argv) {
         rest_positions.data(), topology.num_vertices(), 3);
     if (topology.num_cells() == 0)
         throw std::runtime_error("Example requires a nonempty mesh");
-    const auto stencils = make_triangle_mid_edge_stencils(topology);
-    const StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
-    std::vector<TriangleMidEdgeRestData> rest;
+    const auto stencils = mesh::make_triangle_mid_edge_stencils(topology);
+    const dof::StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
+    std::vector<fem::TriangleMidEdgeRestData> rest;
     for (int f = 0; f < map.num_elements(); ++f)
         rest.emplace_back(map.gather(f, rest_positions), stencils.opposite[static_cast<std::size_t>(f)]);
 
     const double thickness = 0.1, Y = 100, nu = 0.3;
     // Plane-stress Lame parameters for a shell.
     const Eigen::Vector2d theta(Y * nu / (1 - nu * nu), Y / (2 * (1 + nu)));
-    auto elastic = std::make_shared<ShellFemEnergy<KoiterStVK>>(
+    auto elastic = std::make_shared<fem::ShellFemEnergy<fem::KoiterStVK>>(
         map, std::move(rest), std::vector<double>(map.num_elements(), thickness),
         std::vector<Eigen::VectorXd>(map.num_elements(), theta));
 
@@ -64,18 +64,18 @@ int main(int argc, char** argv) {
             Eigen::Vector3d(stretch * offset.x(), stretch * offset.y(), offset.x() * offset.y() > 0 ? lift : -lift);
     }
     auto pulling =
-        std::make_shared<VertexPullingEnergy>(elastic->num_dofs(), std::move(pulled_dofs), targets, stiffness);
+        std::make_shared<energy::VertexPullingEnergy>(elastic->num_dofs(), std::move(pulled_dofs), targets, stiffness);
 
     // Static equilibrium minimizes Pi(u) = E_elastic(u) + E_pulling(u); the springs
     // remove all rigid motions, so no DOF is fixed.
-    WeightedEnergySum potential({{elastic, 1}, {pulling, 1}});
-    const DofReduction unconstrained(elastic->num_dofs(), {});
+    energy::WeightedEnergySum potential({{elastic, 1}, {pulling, 1}});
+    const dof::DofReduction unconstrained(elastic->num_dofs(), {});
     const Vec initial = Vec::Zero(elastic->num_dofs());
-    NewtonOptions options;
+    solver::NewtonOptions options;
     options.gradient_tolerance = 1e-8;
-    EigenLDLT solver;
-    const auto result = newton_solve(potential, unconstrained, initial, options, solver);
-    const bool converged = result.status == NewtonStatus::Converged;
+    linalg::EigenLDLT solver;
+    const auto result = solver::newton_solve(potential, unconstrained, initial, options, solver);
+    const bool converged = result.status == solver::NewtonStatus::Converged;
     double corner_gap = 0;
     for (std::size_t i = 0; i < corners.size(); ++i)
         corner_gap = std::max(corner_gap,
@@ -86,6 +86,6 @@ int main(int argc, char** argv) {
     const std::filesystem::path output = argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/shell_stvk_mesh_energy.obj";
     if (!output.parent_path().empty())
         std::filesystem::create_directories(output.parent_path());
-    io::write_obj(output, TriangleMesh{rest_positions + result.x, topology});
+    io::write_obj(output, mesh::TriangleMesh{rest_positions + result.x, topology});
     return converged ? 0 : 1;
 }

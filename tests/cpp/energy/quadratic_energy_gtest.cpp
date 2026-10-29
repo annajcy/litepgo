@@ -7,13 +7,9 @@
 #include <stdexcept>
 #include <vector>
 
-namespace {
+namespace litepgo::energy::test {
 
-using litepgo::HessianKind;
-using litepgo::QuadraticEnergy;
-using litepgo::SpMat;
-using litepgo::Triplet;
-using litepgo::Vec;
+namespace {
 
 SpMat symmetric_matrix() {
     const std::vector<Triplet> entries = {{0, 0, 4.0}, {1, 1, 3.0}, {2, 2, 5.0}, {0, 2, -1.0}, {2, 0, -1.0}};
@@ -34,7 +30,7 @@ TEST(QuadraticEnergy, EvaluatesValueGradientAndHessian) {
     EXPECT_EQ(energy.eval_gradient(x), Vec(dense * x + b));
     EXPECT_EQ(Eigen::MatrixXd(energy.eval_hessian(x)), dense);
     EXPECT_EQ(Eigen::MatrixXd(energy.eval_hessian(x, HessianKind::Projected)), dense);
-    litepgo::testing::expect_derivatives_match(energy, x);
+    expect_derivatives_match(energy, x);
 }
 
 TEST(QuadraticEnergy, DefaultsToNoLinearTerm) {
@@ -56,3 +52,5 @@ TEST(QuadraticEnergy, RejectsInvalidInput) {
     EXPECT_THROW(QuadraticEnergy(SpMat(3, 2)), std::invalid_argument);
     EXPECT_THROW(QuadraticEnergy(symmetric_matrix(), Vec::Ones(2)), std::invalid_argument);
 }
+
+} // namespace litepgo::energy::test

@@ -2,7 +2,7 @@
 
 #include <Eigen/Core>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Centroid rule on xi,eta >= 0, xi+eta <= 1, exact through degree 1.
 // The weight includes the reference triangle's area of 1/2.
@@ -22,4 +22,4 @@ class TriangleCentroidQuadrature final {
     }
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

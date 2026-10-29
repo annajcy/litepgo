@@ -4,7 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 MultiplicativeKinematics::MultiplicativeKinematics(const Eigen::Matrix3d& F, const Eigen::Matrix3d& Fp) {
     if (!F.allFinite() || !Fp.allFinite()) {
@@ -86,4 +86,4 @@ MultiplicativeKinematics::eval_d2W_dFp2(double psi, const Eigen::Matrix3d& dpsi_
     return d2W_dFp2;
 }
 
-} // namespace litepgo
+} // namespace litepgo::fem

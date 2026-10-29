@@ -5,7 +5,7 @@
 #include <array>
 #include <vector>
 
-namespace litepgo {
+namespace litepgo::energy {
 
 // Zero-rest-length springs pulling vertices toward targets:
 // E(x) = k/2 sum_i |x[d_i] - t_i|^2, where d_i lists vertex i's three position DOFs
@@ -36,4 +36,4 @@ class VertexPullingEnergy final : public FixedPatternEnergy {
     double stiffness_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::energy

@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace litepgo {
+namespace litepgo::dof {
 
 // Extracts each cell's vertex blocks in connectivity order, then slot order.
 // Indices address the supplied data, without offsets into a multi-field solver vector.
@@ -16,7 +16,7 @@ namespace litepgo {
 class VertexDofMap final {
   public:
     template <int VerticesPerCell>
-    explicit VertexDofMap(const MeshTopology<VerticesPerCell>& topology, int dofs_per_vertex)
+    explicit VertexDofMap(const mesh::MeshTopology<VerticesPerCell>& topology, int dofs_per_vertex)
         : num_vertices_(topology.num_vertices()), dofs_per_vertex_(dofs_per_vertex),
           cells_(topology.num_cells(), VerticesPerCell) {
         if (dofs_per_vertex <= 0 || num_vertices_ > std::numeric_limits<int>::max() / dofs_per_vertex)
@@ -71,4 +71,4 @@ class VertexDofMap final {
     Eigen::MatrixXi cells_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::dof

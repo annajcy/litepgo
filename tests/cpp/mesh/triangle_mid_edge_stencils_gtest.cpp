@@ -6,8 +6,9 @@
 #include <stdexcept>
 #include <vector>
 
+namespace litepgo::mesh::test {
+
 namespace {
-using namespace litepgo;
 
 TEST(TriangleMidEdgeStencils, PreservesFaceOrderAndAppendsNeighborsInOppositeEdgeOrder) {
     const TriangleTopology topology(7, {{4, 1, 5}, {5, 1, 3}, {4, 5, 0}, {1, 4, 2}});
@@ -51,3 +52,5 @@ TEST(TriangleMidEdgeStencils, RejectsInconsistentWindingAndNonManifoldEdges) {
                  std::invalid_argument);
 }
 } // namespace
+
+} // namespace litepgo::mesh::test

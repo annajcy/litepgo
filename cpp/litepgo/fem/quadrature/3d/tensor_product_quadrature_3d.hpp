@@ -5,7 +5,7 @@
 #include <Eigen/Core>
 #include <unsupported/Eigen/KroneckerProduct>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Three copies of a 1D rule with fixed-size Eigen column vectors returned by
 // points() and weights(). Coordinates form a Cartesian product; weights multiply.
@@ -44,4 +44,4 @@ template <Quadrature1D Rule1D> class TensorProductQuadrature3D final {
     }
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

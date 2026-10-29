@@ -5,7 +5,7 @@
 #include <Eigen/OrderingMethods>
 #include <Eigen/SparseLU>
 
-namespace litepgo {
+namespace litepgo::linalg {
 
 // Eigen's SparseLU with partial pivoting. Handles symmetric indefinite (and
 // general nonsingular) matrices, at a higher cost than an LDLT.
@@ -21,4 +21,4 @@ class EigenSparseLU final : public SparseSolver {
     Eigen::SparseLU<SpMat, Eigen::COLAMDOrdering<int>> solver_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::linalg

@@ -16,11 +16,9 @@
 #include <utility>
 #include <vector>
 
-namespace {
+namespace litepgo::linalg::test {
 
-using litepgo::SpMat;
-using litepgo::Triplet;
-using litepgo::Vec;
+namespace {
 
 // 1D Laplacian with Dirichlet ends, scaled: symmetric positive definite.
 SpMat laplacian(int n, double scale = 1.0) {
@@ -63,7 +61,7 @@ Vec dense_solution(const SpMat& A, const Vec& rhs) {
 }
 
 // Checks the solve against a dense LU, given a solver already factored for A.
-void expect_solution(const litepgo::SparseSolver& solver, const SpMat& A) {
+void expect_solution(const litepgo::linalg::SparseSolver& solver, const SpMat& A) {
     const Vec rhs = Vec::LinSpaced(A.rows(), -1.0, 2.0);
     EXPECT_LT((solver.solve(rhs) - dense_solution(A, rhs)).norm(), 1e-10);
 }
@@ -78,7 +76,7 @@ SpMat laplacian4_lookalike() {
 }
 
 // A test backend over Eigen's LDLT that counts analyses and can be told to fail.
-class CountingSolver final : public litepgo::SparseSolver {
+class CountingSolver final : public litepgo::linalg::SparseSolver {
   public:
     int analyze_calls = 0;
     bool fail_next_factor = false;
@@ -116,10 +114,10 @@ class CountingSolver final : public litepgo::SparseSolver {
 
 // Every backend on a positive definite matrix.
 template <class Solver> class AllSolvers : public ::testing::Test {};
-using AllSolverTypes = ::testing::Types<litepgo::EigenLDLT, litepgo::EigenSparseLU
+using AllSolverTypes = ::testing::Types<litepgo::linalg::EigenLDLT, litepgo::linalg::EigenSparseLU
 #if defined(LITEPGO_HAS_ACCELERATE)
                                         ,
-                                        litepgo::AccelerateLLT, litepgo::AccelerateLDLT
+                                        litepgo::linalg::AccelerateLLT, litepgo::linalg::AccelerateLDLT
 #endif
                                         >;
 TYPED_TEST_SUITE(AllSolvers, AllSolverTypes);
@@ -162,10 +160,10 @@ TYPED_TEST(AllSolvers, SolvesIntoProvidedVector) {
 
 // Backends that handle symmetric indefinite matrices.
 template <class Solver> class IndefiniteSolvers : public ::testing::Test {};
-using IndefiniteSolverTypes = ::testing::Types<litepgo::EigenSparseLU
+using IndefiniteSolverTypes = ::testing::Types<litepgo::linalg::EigenSparseLU
 #if defined(LITEPGO_HAS_ACCELERATE)
                                                ,
-                                               litepgo::AccelerateLDLT
+                                               litepgo::linalg::AccelerateLDLT
 #endif
                                                >;
 TYPED_TEST_SUITE(IndefiniteSolvers, IndefiniteSolverTypes);
@@ -179,7 +177,7 @@ TYPED_TEST(IndefiniteSolvers, SolvesSaddlePoint) {
 
 #if defined(LITEPGO_HAS_ACCELERATE)
 TEST(AccelerateLLT, FailsOnIndefiniteButKeepsTheAnalysis) {
-    litepgo::AccelerateLLT solver;
+    litepgo::linalg::AccelerateLLT solver;
     const SpMat A = saddle_point(12);
     ASSERT_TRUE(solver.analyze(A));
     EXPECT_FALSE(solver.factorize(A));
@@ -195,11 +193,11 @@ TEST(AccelerateLLT, FailsOnIndefiniteButKeepsTheAnalysis) {
 
 TEST(AutoSparseSolver, AliasesThePlatformDefaults) {
 #if defined(LITEPGO_HAS_ACCELERATE)
-    EXPECT_TRUE((std::is_same_v<litepgo::AutoSparseSolver, litepgo::AccelerateLLT>));
-    EXPECT_TRUE((std::is_same_v<litepgo::AutoIndefiniteSparseSolver, litepgo::AccelerateLDLT>));
+    EXPECT_TRUE((std::is_same_v<litepgo::linalg::AutoSparseSolver, litepgo::linalg::AccelerateLLT>));
+    EXPECT_TRUE((std::is_same_v<litepgo::linalg::AutoIndefiniteSparseSolver, litepgo::linalg::AccelerateLDLT>));
 #else
-    EXPECT_TRUE((std::is_same_v<litepgo::AutoSparseSolver, litepgo::EigenLDLT>));
-    EXPECT_TRUE((std::is_same_v<litepgo::AutoIndefiniteSparseSolver, litepgo::EigenSparseLU>));
+    EXPECT_TRUE((std::is_same_v<litepgo::linalg::AutoSparseSolver, litepgo::linalg::EigenLDLT>));
+    EXPECT_TRUE((std::is_same_v<litepgo::linalg::AutoIndefiniteSparseSolver, litepgo::linalg::EigenSparseLU>));
 #endif
 }
 
@@ -214,12 +212,12 @@ TEST(SparseSolver, AnalyzesOnlyWhenAsked) {
 }
 
 TEST(SparseSolver, FactorizeRequiresAnAnalysis) {
-    litepgo::EigenLDLT solver;
+    litepgo::linalg::EigenLDLT solver;
     EXPECT_THROW(solver.factorize(laplacian(5)), std::logic_error);
 }
 
 TEST(SparseSolver, FactorizeRejectsAnotherPattern) {
-    litepgo::EigenLDLT solver;
+    litepgo::linalg::EigenLDLT solver;
     ASSERT_TRUE(solver.analyze(laplacian(4)));
     const SpMat lookalike = laplacian4_lookalike();
     ASSERT_EQ(lookalike.nonZeros(), laplacian(4).nonZeros());
@@ -250,14 +248,14 @@ TEST(SparseSolver, BackendExceptionDiscardsTheAnalysis) {
 }
 
 TEST(SparseSolver, AnalyzeDiscardsTheFactorization) {
-    litepgo::EigenLDLT solver;
+    litepgo::linalg::EigenLDLT solver;
     ASSERT_TRUE(solver.compute(laplacian(6)));
     ASSERT_TRUE(solver.analyze(laplacian(6)));
     EXPECT_THROW(solver.solve(Vec::Ones(6)), std::logic_error);
 }
 
 TEST(SparseSolver, AnalyzeRejectsInvalidMatrices) {
-    litepgo::EigenLDLT solver;
+    litepgo::linalg::EigenLDLT solver;
     EXPECT_THROW(solver.analyze(SpMat(0, 0)), std::invalid_argument);
     EXPECT_THROW(solver.analyze(SpMat(3, 4)), std::invalid_argument);
 
@@ -280,7 +278,7 @@ TEST(SparseSolver, AnalyzeRejectsInvalidMatrices) {
 }
 
 TEST(SparseSolver, ChecksSolveArguments) {
-    litepgo::EigenLDLT solver;
+    litepgo::linalg::EigenLDLT solver;
     EXPECT_THROW(solver.solve(Vec::Ones(5)), std::logic_error);
     ASSERT_TRUE(solver.compute(laplacian(5)));
     EXPECT_THROW(solver.solve(Vec::Ones(4)), std::invalid_argument);
@@ -297,3 +295,5 @@ TEST(SparseSolver, RejectsOverlappingUse) {
     ASSERT_TRUE(solver.compute(laplacian(5)));
     expect_solution(solver, laplacian(5));
 }
+
+} // namespace litepgo::linalg::test

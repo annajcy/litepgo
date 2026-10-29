@@ -11,8 +11,9 @@
 #include <limits>
 #include <stdexcept>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 
 Eigen::MatrixXd curved_stencil() {
     Eigen::Matrix<double, 6, 3> x;
@@ -189,9 +190,9 @@ TEST(TriangleMidEdgeKinematics, DerivativesRespectTranslationAndHomogeneousScali
 }
 
 TEST(TriangleMidEdgeKinematics, DeduplicatedClosedStencilDerivativesMatchFiniteDifferences) {
-    const TriangleTopology topology(4, {{0, 1, 2}, {0, 3, 1}, {1, 3, 2}, {2, 3, 0}});
-    const auto stencils = make_triangle_mid_edge_stencils(topology);
-    const StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
+    const mesh::TriangleTopology topology(4, {{0, 1, 2}, {0, 3, 1}, {1, 3, 2}, {2, 3, 0}});
+    const auto stencils = mesh::make_triangle_mid_edge_stencils(topology);
+    const dof::StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
     Eigen::Matrix<double, 4, 3> X;
     X << 0, 0, 0, 1.2, 0, 0, 0, 0.9, 0, 0.1, 0.2, 1.1;
     const Vec packed = X.reshaped<Eigen::RowMajor>();
@@ -227,3 +228,5 @@ TEST(TriangleMidEdgeKinematics, RejectsDegenerateFacesCancellingNormalsAndOverfl
     EXPECT_THROW(eval_triangle_mid_edge_kinematics(1e200 * x, {3, 4, 5}), std::domain_error);
 }
 } // namespace
+
+} // namespace litepgo::fem::test

@@ -9,12 +9,9 @@
 #include <stdexcept>
 #include <vector>
 
-namespace {
+namespace litepgo::energy::test {
 
-using litepgo::HessianKind;
-using litepgo::SpMat;
-using litepgo::Vec;
-using litepgo::VertexPullingEnergy;
+namespace {
 
 // Two pulled vertices among eight DOFs, with position DOFs out of order.
 std::vector<std::array<int, 3>> position_dofs() {
@@ -49,7 +46,7 @@ TEST(VertexPullingEnergy, EvaluatesValueGradientAndHessian) {
     EXPECT_EQ(Eigen::MatrixXd(energy.eval_hessian(x, HessianKind::Projected)), expected_hessian);
     EXPECT_EQ(energy.hessian_pattern().nonZeros(), 6);
     EXPECT_TRUE(energy.has_fixed_pattern());
-    litepgo::testing::expect_derivatives_match(energy, x);
+    expect_derivatives_match(energy, x);
 }
 
 TEST(VertexPullingEnergy, VanishesAtTargets) {
@@ -83,3 +80,5 @@ TEST(VertexPullingEnergy, RejectsInvalidInput) {
     EXPECT_THROW(VertexPullingEnergy(8, {{0, 1, 2}, {-1, 5, 6}}, targets(), 1.0), std::invalid_argument);
     EXPECT_THROW(VertexPullingEnergy(8, {{0, 1, 2}, {2, 5, 6}}, targets(), 1.0), std::invalid_argument);
 }
+
+} // namespace litepgo::energy::test

@@ -4,7 +4,7 @@
 
 #include <cmath>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 template <int NumPoints> class GaussLegendre1D;
 
@@ -49,4 +49,4 @@ template <> class GaussLegendre1D<4> final {
     }
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

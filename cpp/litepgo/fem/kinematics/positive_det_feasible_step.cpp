@@ -8,7 +8,7 @@
 #include <limits>
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 double eval_positive_det_feasible_step(const Eigen::Matrix3d& A, const Eigen::Matrix3d& delta_A) {
     if (!A.allFinite() || !delta_A.allFinite())
@@ -83,4 +83,4 @@ double eval_positive_det_feasible_step(const Eigen::Matrix3d& A, const Eigen::Ma
     return 1;
 }
 
-} // namespace litepgo
+} // namespace litepgo::fem

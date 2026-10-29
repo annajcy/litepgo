@@ -20,19 +20,15 @@
 #include <stdexcept>
 #include <vector>
 
+namespace litepgo::solver::test {
+
 namespace {
 
-using litepgo::DofReduction;
-using litepgo::HessianKind;
-using litepgo::NewtonOptions;
-using litepgo::NewtonResult;
-using litepgo::NewtonStatus;
-using litepgo::NewtonStep;
-using litepgo::SpMat;
-using litepgo::Vec;
-using litepgo::testing::DoubleWellChain;
-using litepgo::testing::HalfSpaceBarrier;
-using litepgo::testing::SwitchingEnergy;
+using energy::test::DoubleWellChain;
+using energy::test::HalfSpaceBarrier;
+using energy::test::SwitchingEnergy;
+using litepgo::dof::DofReduction;
+using litepgo::energy::HessianKind;
 
 SpMat spd_matrix(int n) {
     std::vector<litepgo::Triplet> entries;
@@ -54,25 +50,26 @@ NewtonOptions options(double tolerance = 1e-10) {
     return result;
 }
 
-NewtonResult solve(litepgo::Energy& energy, const Vec& x0, std::vector<int> fixed = {},
+NewtonResult solve(litepgo::energy::Energy& energy, const Vec& x0, std::vector<int> fixed = {},
                    const NewtonOptions& opts = options(), std::vector<NewtonStep>* steps = nullptr) {
-    litepgo::AutoIndefiniteSparseSolver solver;
-    return litepgo::newton_solve(energy, DofReduction(energy.num_dofs(), std::move(fixed)), x0, opts, solver,
-                                 [&](const NewtonStep& step) {
-                                     if (steps != nullptr) {
-                                         steps->push_back(step);
-                                     }
-                                 });
+    litepgo::linalg::AutoIndefiniteSparseSolver solver;
+    return litepgo::solver::newton_solve(energy, dof::DofReduction(energy.num_dofs(), std::move(fixed)), x0, opts,
+                                         solver, [&](const NewtonStep& step) {
+                                             if (steps != nullptr) {
+                                                 steps->push_back(step);
+                                             }
+                                         });
 }
 
 // Value x^2 / 2 per DOF, but a gradient of the wrong sign: every Newton direction
 // raises the energy, so the line search must give up.
-class WrongGradientEnergy final : public litepgo::FixedPatternEnergy {
+class WrongGradientEnergy final : public litepgo::energy::FixedPatternEnergy {
   public:
-    explicit WrongGradientEnergy(int n) : FixedPatternEnergy(n, litepgo::testing::chain_pattern(n, {})) {}
+    explicit WrongGradientEnergy(int n) : energy::FixedPatternEnergy(n, energy::test::chain_pattern(n, {})) {}
 
   private:
-    double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const override {
+    double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian,
+                       energy::HessianKind) const override {
         if (gradient != nullptr) {
             *gradient = -x;
         }
@@ -84,12 +81,13 @@ class WrongGradientEnergy final : public litepgo::FixedPatternEnergy {
 };
 
 // A finite value and gradient but a NaN Hessian: no diagonal shift can repair it.
-class BrokenHessianEnergy final : public litepgo::FixedPatternEnergy {
+class BrokenHessianEnergy final : public litepgo::energy::FixedPatternEnergy {
   public:
-    explicit BrokenHessianEnergy(int n) : FixedPatternEnergy(n, litepgo::testing::chain_pattern(n, {})) {}
+    explicit BrokenHessianEnergy(int n) : energy::FixedPatternEnergy(n, energy::test::chain_pattern(n, {})) {}
 
   private:
-    double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const override {
+    double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian,
+                       energy::HessianKind) const override {
         if (gradient != nullptr) {
             *gradient = x;
         }
@@ -105,7 +103,7 @@ class BrokenHessianEnergy final : public litepgo::FixedPatternEnergy {
 TEST(Newton, SolvesAQuadraticInOneStep) {
     const SpMat A = spd_matrix(6);
     const Vec b = Vec::LinSpaced(6, -1.0, 2.0);
-    litepgo::QuadraticEnergy energy(A, b);
+    litepgo::energy::QuadraticEnergy energy(A, b);
     const NewtonResult result = solve(energy, Vec::Zero(6));
     EXPECT_EQ(result.status, NewtonStatus::Converged);
     EXPECT_EQ(result.iterations, 1);
@@ -115,19 +113,18 @@ TEST(Newton, SolvesAQuadraticInOneStep) {
 }
 
 TEST(Newton, PropagatesNeoHookeanTrialOverflowWithoutRetrying) {
-    using namespace litepgo;
-    const ConstantDofMap map(TetTopology(4, {{0, 1, 2, 3}}), 9);
-    const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
+    const dof::ConstantDofMap map(mesh::TetTopology(4, {{0, 1, 2, 3}}), 9);
+    const fem::IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
     // A tiny stiffness gives a finite Newton direction whose initial trial overflows ||F||^2.
-    const IdentityField3D theta(Eigen::Vector2d(0, 1e-155));
+    const fem::IdentityField3D theta(Eigen::Vector2d(0, 1e-155));
     int trial_evaluations = 0;
-    auto elastic = std::make_shared<MeshEnergy>(
+    auto elastic = std::make_shared<energy::MeshEnergy>(
         map,
         [Fp, theta, &trial_evaluations](int, const Vec& x, Vec* g, Eigen::MatrixXd* H) {
             if (!g && !H)
                 ++trial_evaluations;
-            const IdentityField3D F(x);
-            const VolumetricMaterialLocalEnergyF3D<NeoHookean> local(F, Fp, theta);
+            const fem::IdentityField3D F(x);
+            const fem::VolumetricMaterialLocalEnergyF3D<fem::NeoHookean> local(F, Fp, theta);
             if (g)
                 g->setZero(9);
             if (H)
@@ -135,10 +132,11 @@ TEST(Newton, PropagatesNeoHookeanTrialOverflowWithoutRetrying) {
             return local.accumulate(Eigen::Vector3d::Zero(), 1, g, H);
         },
         [](int, const Vec& x, const Vec& dx) {
-            const VolumetricMaterialInputs input{x.reshaped(3, 3), Eigen::Matrix3d::Identity(),
-                                                 Eigen::Vector2d(0, 1e-155)};
-            const VolumetricMaterialInputs delta{dx.reshaped(3, 3), Eigen::Matrix3d::Zero(), Eigen::Vector2d::Zero()};
-            return NeoHookean::eval_feasible_step(input, delta);
+            const fem::VolumetricMaterialInputs input{x.reshaped(3, 3), Eigen::Matrix3d::Identity(),
+                                                      Eigen::Vector2d(0, 1e-155)};
+            const fem::VolumetricMaterialInputs delta{dx.reshaped(3, 3), Eigen::Matrix3d::Zero(),
+                                                      Eigen::Vector2d::Zero()};
+            return fem::NeoHookean::eval_feasible_step(input, delta);
         });
     const Vec x0 = Eigen::Matrix3d::Identity().reshaped();
     Vec direction = Vec::Zero(9);
@@ -150,16 +148,16 @@ TEST(Newton, PropagatesNeoHookeanTrialOverflowWithoutRetrying) {
 
     Vec load = Vec::Zero(9);
     load[0] = -1;
-    auto loading = std::make_shared<QuadraticEnergy>(SpMat(9, 9), load);
-    WeightedEnergySum energy({{elastic, 1}, {loading, 1}});
+    auto loading = std::make_shared<energy::QuadraticEnergy>(SpMat(9, 9), load);
+    energy::WeightedEnergySum energy({{elastic, 1}, {loading, 1}});
     ASSERT_TRUE(std::isfinite(energy.eval_value(x0)));
     NewtonOptions opts = options();
     opts.max_iterations = 1;
-    opts.hessian = HessianKind::Exact;
-    EigenLDLT solver;
+    opts.hessian = energy::HessianKind::Exact;
+    linalg::EigenLDLT solver;
     std::vector<NewtonStep> steps;
     trial_evaluations = 0;
-    EXPECT_THROW(newton_solve(energy, DofReduction(9, {1, 2, 3, 4, 5, 6, 7, 8}), x0, opts, solver,
+    EXPECT_THROW(newton_solve(energy, dof::DofReduction(9, {1, 2, 3, 4, 5, 6, 7, 8}), x0, opts, solver,
                               [&](const NewtonStep& step) { steps.push_back(step); }),
                  std::domain_error);
     EXPECT_EQ(trial_evaluations, 1);
@@ -172,7 +170,7 @@ TEST(Newton, StillBacktracksWhenFiniteTrialEnergyIncreases) {
     const double initial_energy = energy.eval_value(x0);
     NewtonOptions opts = options();
     opts.max_iterations = 1;
-    opts.hessian = HessianKind::Exact;
+    opts.hessian = energy::HessianKind::Exact;
     std::vector<NewtonStep> steps;
     const auto result = solve(energy, x0, {}, opts, &steps);
     EXPECT_EQ(result.status, NewtonStatus::MaxIterations);
@@ -186,7 +184,7 @@ TEST(Newton, StillBacktracksWhenFiniteTrialEnergyIncreases) {
 }
 
 TEST(Newton, StopsAtOnceWhenAlreadyConverged) {
-    litepgo::QuadraticEnergy energy(spd_matrix(4));
+    litepgo::energy::QuadraticEnergy energy(spd_matrix(4));
     std::vector<NewtonStep> steps;
     const NewtonResult result = solve(energy, Vec::Zero(4), {}, options(), &steps);
     EXPECT_EQ(result.status, NewtonStatus::Converged);
@@ -198,7 +196,7 @@ TEST(Newton, StopsAtOnceWhenAlreadyConverged) {
 TEST(Newton, KeepsFixedDofsAtTheirInitialValues) {
     const SpMat A = spd_matrix(6);
     const Vec b = Vec::LinSpaced(6, -1.0, 2.0);
-    litepgo::QuadraticEnergy energy(A, b);
+    litepgo::energy::QuadraticEnergy energy(A, b);
     Vec x0 = Vec::Zero(6);
     x0[1] = 0.75;
     x0[4] = -1.5;
@@ -225,7 +223,7 @@ TEST(Newton, KeepsFixedDofsAtTheirInitialValues) {
 }
 
 TEST(Newton, ConvergesOnANonlinearEnergyFromFarAway) {
-    for (const HessianKind kind : {HessianKind::Projected, HessianKind::Exact}) {
+    for (const energy::HessianKind kind : {energy::HessianKind::Projected, energy::HessianKind::Exact}) {
         DoubleWellChain energy(6);
         NewtonOptions opts = options(1e-9);
         opts.hessian = kind;
@@ -239,7 +237,7 @@ TEST(Newton, ShiftsTheDiagonalForAnIndefiniteExactHessian) {
     // At x = 0.1 the double wells are concave: the exact Hessian is indefinite.
     DoubleWellChain energy(4);
     NewtonOptions opts = options(1e-9);
-    opts.hessian = HessianKind::Exact;
+    opts.hessian = energy::HessianKind::Exact;
     std::vector<NewtonStep> steps;
     const NewtonResult result = solve(energy, Vec::Constant(4, 0.1), {}, opts, &steps);
     EXPECT_EQ(result.status, NewtonStatus::Converged);
@@ -252,8 +250,8 @@ TEST(Newton, StaysFeasibleAgainstABarrier) {
     SpMat A(3, 3);
     A.setIdentity();
     const Vec b = (Vec(3) << -3.0, 0.0, 0.0).finished();
-    auto energy = litepgo::WeightedEnergySum(
-        {{std::make_shared<litepgo::QuadraticEnergy>(A, b), 1.0}, {std::make_shared<HalfSpaceBarrier>(3, 0), 1.0}});
+    auto energy = litepgo::energy::WeightedEnergySum({{std::make_shared<litepgo::energy::QuadraticEnergy>(A, b), 1.0},
+                                                      {std::make_shared<HalfSpaceBarrier>(3, 0), 1.0}});
     std::vector<NewtonStep> steps;
     const NewtonResult result = solve(energy, Vec::Zero(3), {}, options(1e-9), &steps);
     ASSERT_EQ(result.status, NewtonStatus::Converged);
@@ -307,7 +305,7 @@ TEST(Newton, ReportsAMissingDescentDirection) {
 }
 
 TEST(Newton, WithEveryDofFixedJustEvaluates) {
-    litepgo::QuadraticEnergy energy(spd_matrix(3));
+    litepgo::energy::QuadraticEnergy energy(spd_matrix(3));
     const Vec x0 = Vec::Ones(3);
     const NewtonResult result = solve(energy, x0, {0, 1, 2});
     EXPECT_EQ(result.status, NewtonStatus::Converged);
@@ -316,14 +314,16 @@ TEST(Newton, WithEveryDofFixedJustEvaluates) {
 }
 
 TEST(Newton, ChecksItsArguments) {
-    litepgo::QuadraticEnergy energy(spd_matrix(3));
-    litepgo::AutoSparseSolver solver;
-    EXPECT_THROW(litepgo::newton_solve(energy, DofReduction(3, {}), Vec::Zero(3), NewtonOptions(), solver),
+    litepgo::energy::QuadraticEnergy energy(spd_matrix(3));
+    litepgo::linalg::AutoSparseSolver solver;
+    EXPECT_THROW(litepgo::solver::newton_solve(energy, dof::DofReduction(3, {}), Vec::Zero(3), NewtonOptions(), solver),
                  std::invalid_argument); // no gradient tolerance
-    EXPECT_THROW(litepgo::newton_solve(energy, DofReduction(4, {}), Vec::Zero(3), options(), solver),
+    EXPECT_THROW(litepgo::solver::newton_solve(energy, dof::DofReduction(4, {}), Vec::Zero(3), options(), solver),
                  std::invalid_argument);
     NewtonOptions bad_shrink = options();
     bad_shrink.line_search_shrink = 1.0;
-    EXPECT_THROW(litepgo::newton_solve(energy, DofReduction(3, {}), Vec::Zero(3), bad_shrink, solver),
+    EXPECT_THROW(litepgo::solver::newton_solve(energy, dof::DofReduction(3, {}), Vec::Zero(3), bad_shrink, solver),
                  std::invalid_argument);
 }
+
+} // namespace litepgo::solver::test

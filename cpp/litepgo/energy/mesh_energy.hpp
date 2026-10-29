@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace litepgo {
+namespace litepgo::energy {
 
 // Owns a fixed DOF plan and callbacks, not references to the supplied map. Every call
 // uses x's current values. Callbacks must support concurrent calls on different
@@ -46,22 +46,22 @@ class MeshEnergy : public FixedPatternEnergy {
     }
 
   private:
-    template <class DofMap> static Assembler make_assembler(const DofMap& map) {
+    template <class DofMap> static dof::Assembler make_assembler(const DofMap& map) {
         std::vector<std::vector<int>> indices;
         for (int element = 0; element < map.num_elements(); ++element)
             indices.push_back(map.dof_indices(element));
-        return Assembler(map.num_dofs(), std::move(indices));
+        return dof::Assembler(map.num_dofs(), std::move(indices));
     }
 
-    explicit MeshEnergy(Assembler assembler);
+    explicit MeshEnergy(dof::Assembler assembler);
     double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const override;
     double feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const override;
 
-    Assembler assembler_;
+    dof::Assembler assembler_;
     std::function<double(int, const ConstVecRef&, Vec*, Eigen::MatrixXd*)> eval_local_;
     std::function<double(int, const ConstVecRef&, const ConstVecRef&)> local_step_;
     mutable std::vector<double> local_values_;
     mutable std::vector<Vec> local_gradients_;
     mutable std::vector<Eigen::MatrixXd> local_hessians_;
 };
-} // namespace litepgo
+} // namespace litepgo::energy

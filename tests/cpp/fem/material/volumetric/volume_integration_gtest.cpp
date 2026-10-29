@@ -15,9 +15,9 @@
 #include <limits>
 #include <stdexcept>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
-using namespace litepgo::test;
 
 const auto element_energy = [](const Field3D& X_field, const LocalEnergy3D& energy, Eigen::VectorXd* g = nullptr,
                                Eigen::MatrixXd* H = nullptr) {
@@ -74,9 +74,10 @@ NodalCoefficients fields(int seed = 0) {
 }
 
 auto eval_fields(const NodalCoefficients& coefficients, const InterpolatedField3D<HexQ1Basis>& X_field) {
-    return MaterialSources{OwnedDeformationField(InterpolatedField3D<litepgo::HexQ1Basis>(coefficients.u), X_field),
-                           OwnedDeformationField(InterpolatedField3D<litepgo::HexQ1Basis>(coefficients.up), X_field),
-                           InterpolatedField3D<litepgo::HexQ1Basis>(coefficients.theta)};
+    return MaterialSources{
+        OwnedDeformationField(InterpolatedField3D<litepgo::fem::HexQ1Basis>(coefficients.u), X_field),
+        OwnedDeformationField(InterpolatedField3D<litepgo::fem::HexQ1Basis>(coefficients.up), X_field),
+        InterpolatedField3D<litepgo::fem::HexQ1Basis>(coefficients.theta)};
 }
 
 template <class Member, class BindEnergy>
@@ -252,3 +253,5 @@ TEST(VolumeIntegration, PropagatesInvalidFieldsAndDomainErrors) {
 }
 
 } // namespace
+
+} // namespace litepgo::fem::test

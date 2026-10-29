@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-namespace litepgo {
+namespace litepgo::dof {
 
 // Owns variable-length vertex stencils. Rows retain the supplied vertex order;
 // scalar DOFs use vertex-major, then slot order, without multi-field offsets.
@@ -78,4 +78,4 @@ class StencilDofMap final {
     std::vector<std::vector<int>> stencils_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::dof

@@ -11,8 +11,9 @@
 #include <limits>
 #include <type_traits>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 using F = InterpolatedField2D<QuadHermiteBasis>;
 static_assert(std::is_same_v<F, InterpolatedFieldT<QuadHermiteBasis, 2>>);
 static_assert(std::is_base_of_v<Field2D, F>);
@@ -155,8 +156,8 @@ TEST(InterpolatedField2D, RejectsInvalidCoefficientsCoordinatesAndOverflow) {
 }
 
 TEST(InterpolatedField2D, SharedHermiteDofsPreserveC1AcrossUnequalParameterSpans) {
-    const QuadTopology topology(6, {{0, 1, 2, 3}, {1, 4, 5, 2}});
-    const VertexDofMap map(topology, 12);
+    const mesh::QuadTopology topology(6, {{0, 1, 2, 3}, {1, 4, 5, 2}});
+    const dof::VertexDofMap map(topology, 12);
     Vec dofs(map.num_dofs());
     for (int j = 0; j < dofs.size(); ++j)
         dofs[j] = std::sin(0.13 * (j + 1));
@@ -177,3 +178,5 @@ TEST(InterpolatedField2D, SharedHermiteDofsPreserveC1AcrossUnequalParameterSpans
     }
 }
 } // namespace
+
+} // namespace litepgo::fem::test

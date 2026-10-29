@@ -6,16 +6,17 @@
 #include <gtest/gtest.h>
 #include <limits>
 
+namespace litepgo::dof::test {
+
 namespace {
-using namespace litepgo;
 
 TEST(Assembler, SharedHexVerticesMatchDenseScatterAndGlobalFiniteDifferences) {
-    const HexTopology topology(12, {{1, 3, 9, 4, 7, 6, 0, 10}, {3, 8, 5, 9, 6, 2, 11, 0}});
+    const mesh::HexTopology topology(12, {{1, 3, 9, 4, 7, 6, 0, 10}, {3, 8, 5, 9, 6, 2, 11, 0}});
     const VertexDofMap map(topology, 3);
     const Vec data(Vec::LinSpaced(36, -0.2, 0.4));
     const Assembler assembler(36, {map.dof_indices(0), map.dof_indices(1)});
     SpMat hessian = assembler.hessian_pattern();
-    EXPECT_TRUE(is_canonical(hessian));
+    EXPECT_TRUE(linalg::is_canonical(hessian));
     EXPECT_EQ(hessian.nonZeros(), 2 * 24 * 24 - 12 * 12);
     EXPECT_TRUE(Eigen::MatrixXd(hessian).isZero());
     Vec gradient = Vec::Zero(36), expected_gradient = Vec::Zero(36);
@@ -43,7 +44,7 @@ TEST(Assembler, SharedHexVerticesMatchDenseScatterAndGlobalFiniteDifferences) {
     }
     EXPECT_TRUE(gradient.isApprox(expected_gradient, 1e-14));
     EXPECT_TRUE(Eigen::MatrixXd(hessian).isApprox(expected_hessian, 1e-14));
-    EXPECT_TRUE(same_pattern(hessian, assembler.hessian_pattern()));
+    EXPECT_TRUE(linalg::same_pattern(hessian, assembler.hessian_pattern()));
     EXPECT_TRUE(Eigen::MatrixXd(assembler.hessian_pattern()).isZero());
 
     const auto total = [&](const Vec& x) {
@@ -127,7 +128,7 @@ TEST(Assembler, RejectsInvalidInputsBeforeWriting) {
 TEST(Assembler, AllowsEmptyPlansAndEmptyElements) {
     const Assembler empty(0, {});
     EXPECT_EQ(empty.hessian_pattern().rows(), 0);
-    EXPECT_TRUE(is_canonical(empty.hessian_pattern()));
+    EXPECT_TRUE(linalg::is_canonical(empty.hessian_pattern()));
     Vec gradient(0);
     EXPECT_THROW(empty.add_gradient(0, Vec(0), gradient), std::out_of_range);
     const Assembler assembler(3, {{}});
@@ -139,3 +140,5 @@ TEST(Assembler, AllowsEmptyPlansAndEmptyElements) {
     EXPECT_EQ(hessian.nonZeros(), 0);
 }
 } // namespace
+
+} // namespace litepgo::dof::test

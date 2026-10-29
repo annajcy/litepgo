@@ -11,10 +11,10 @@
 
 namespace nb = nanobind;
 using namespace nb::literals;
-namespace litepgo::bindings {
+namespace litepgo::io::binding {
 namespace {
 template <int K> void bind_mesh(nb::module_& m, const char* name) {
-    using Mesh = MeshData<K>;
+    using Mesh = mesh::MeshData<K>;
     using Positions = Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>;
     using Cells = Eigen::Matrix<int, Eigen::Dynamic, K, Eigen::RowMajor>;
     nb::class_<Mesh>(m, name)
@@ -23,12 +23,12 @@ template <int K> void bind_mesh(nb::module_& m, const char* name) {
             [](Mesh* self, const Positions& positions, const Cells& cells) {
                 if (positions.rows() > std::numeric_limits<int>::max())
                     throw std::invalid_argument("Too many mesh vertices");
-                std::vector<typename MeshTopology<K>::Cell> connectivity(cells.rows());
+                std::vector<typename mesh::MeshTopology<K>::Cell> connectivity(cells.rows());
                 for (Eigen::Index e = 0; e < cells.rows(); ++e)
                     for (int j = 0; j < K; ++j)
                         connectivity[e][j] = cells(e, j);
                 Mesh mesh{positions.reshaped<Eigen::RowMajor>(),
-                          MeshTopology<K>(static_cast<int>(positions.rows()), std::move(connectivity))};
+                          mesh::MeshTopology<K>(static_cast<int>(positions.rows()), std::move(connectivity))};
                 mesh.validate();
                 new (self) Mesh(std::move(mesh));
             },
@@ -46,11 +46,11 @@ template <int K> void bind_mesh(nb::module_& m, const char* name) {
         });
 }
 } // namespace
-void bind_io(nb::module_& m) {
+void bind(nb::module_& m) {
 #ifdef LITEPGO_HAS_GMSH
     m.attr("has_gmsh") = true;
-    m.def("read_msh", &io::read_msh, "path"_a);
-    m.def("write_msh", &io::write_msh, "path"_a, "mesh"_a);
+    m.def("read_msh", &read_msh, "path"_a);
+    m.def("write_msh", &write_msh, "path"_a, "mesh"_a);
 #else
     m.attr("has_gmsh") = false;
     m.def(
@@ -59,7 +59,7 @@ void bind_io(nb::module_& m) {
         "path"_a);
     m.def(
         "write_msh",
-        [](const std::filesystem::path&, const VolumeMesh&) {
+        [](const std::filesystem::path&, const mesh::VolumeMesh&) {
             throw std::runtime_error("MSH I/O requires LITEPGO_WITH_GMSH=ON");
         },
         "path"_a, "mesh"_a);
@@ -67,12 +67,12 @@ void bind_io(nb::module_& m) {
     bind_mesh<3>(m, "TriangleMesh");
     bind_mesh<4>(m, "TetMesh");
     bind_mesh<8>(m, "HexMesh");
-    m.def("read_obj", &io::read_obj, "path"_a);
-    m.def("write_obj", &io::write_obj, "path"_a, "mesh"_a);
-    m.def("read_veg", &io::read_veg, "path"_a);
-    m.def("write_veg", &io::write_veg, "path"_a, "mesh"_a);
+    m.def("read_obj", &read_obj, "path"_a);
+    m.def("write_obj", &write_obj, "path"_a, "mesh"_a);
+    m.def("read_veg", &read_veg, "path"_a);
+    m.def("write_veg", &write_veg, "path"_a, "mesh"_a);
     m.def(
-        "extract_surface", [](const VolumeMesh& mesh) { return extract_surface(mesh); }, "mesh"_a,
+        "extract_surface", [](const mesh::VolumeMesh& mesh) { return mesh::extract_surface(mesh); }, "mesh"_a,
         "Outward-wound boundary triangles of a tet or hex mesh, keeping only boundary vertices.");
 }
-} // namespace litepgo::bindings
+} // namespace litepgo::io::binding

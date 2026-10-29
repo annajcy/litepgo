@@ -7,7 +7,7 @@
 #include <array>
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // No fallback: every supported basis must specify its physical DOF convention.
 template <class Basis> class BasisDofTransform;
@@ -101,4 +101,4 @@ template <> class BasisDofTransform<HexHermiteBasis> {
     Eigen::VectorXd scales_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

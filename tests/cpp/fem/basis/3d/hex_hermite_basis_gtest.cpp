@@ -7,9 +7,10 @@
 #include <cmath>
 #include <stdexcept>
 
+namespace litepgo::fem::test {
+
 namespace {
-using litepgo::HexHermiteBasis;
-static_assert(litepgo::Basis3D<HexHermiteBasis>);
+static_assert(litepgo::fem::Basis3D<HexHermiteBasis>);
 static_assert(HexHermiteBasis::num_basis_functions == 64);
 
 Eigen::Matrix<double, 8, 3> corners() {
@@ -97,7 +98,7 @@ TEST(HexHermiteBasis, ReproducesAffineVectorFieldsWith192Dofs) {
         for (int d = 0; d < 3; ++d)
             coefficients.row(8 * vertex + d + 1) = A.col(d).transpose();
     }
-    const litepgo::InterpolatedField3D<HexHermiteBasis> interpolation(coefficients);
+    const litepgo::fem::InterpolatedField3D<HexHermiteBasis> interpolation(coefficients);
     EXPECT_EQ(interpolation.num_dofs(), 192);
     for (const auto& xi : samples) {
         EXPECT_TRUE(interpolation.eval_value(xi).isApprox(A * xi + b, 1e-13));
@@ -126,3 +127,5 @@ TEST(HexHermiteBasis, GradientsMatchFiniteDifferences) {
         }
     }
 }
+
+} // namespace litepgo::fem::test

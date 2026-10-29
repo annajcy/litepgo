@@ -5,7 +5,7 @@
 #include <concepts>
 #include <type_traits>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Points are rows in parameter coordinates; weights form a column vector.
 // The concept checks the interface, not the domain or integration accuracy.
@@ -27,4 +27,4 @@ concept Quadrature2D = Quadrature<Q, 2>;
 template <class Q>
 concept Quadrature3D = Quadrature<Q, 3>;
 
-} // namespace litepgo
+} // namespace litepgo::fem

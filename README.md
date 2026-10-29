@@ -34,6 +34,16 @@ Edits to existing `.py` files take effect without a rebuild; adding or removing 
 
 Configuring a preset links `compile_commands.json` at the repository root to that build's database (the last preset configured wins). It covers the core, tests, and bindings. `asan` leaves the link alone, since it has no bindings.
 
+## Namespaces
+
+Each directory under `cpp/litepgo` is a module with its own namespace:
+`litepgo::dof`, `energy`, `fem`, `io`, `linalg`, `mesh`, `solver`. `core`
+(`Vec`, `SpMat`, ...) stays in the root `litepgo` namespace, so every module
+sees it unqualified; names from other modules are written `module::Name`.
+Python bindings for module `m` live in `litepgo::m::binding`, and C++ tests
+for it in `litepgo::m::test` (core: `litepgo::test`; example fixtures:
+`litepgo::example::test`).
+
 ## Formatting
 
 C++ headers use the `.hpp` extension.
@@ -46,7 +56,7 @@ git ls-files '*.h' '*.hpp' '*.cpp' | xargs uv run --no-sync clang-format -i
 
 `litepgo::io` (CMake target) provides `litepgo::io::read_obj/write_obj`
 and `read_veg/write_veg`. Include `litepgo/io/obj.hpp` or `veg.hpp`.
-The core library's `litepgo/mesh/extract_surface.hpp` provides `litepgo::extract_surface(mesh)`:
+The core library's `litepgo/mesh/extract_surface.hpp` provides `litepgo::mesh::extract_surface(mesh)`:
 the boundary of a conforming tet or hex mesh as outward-wound triangles (hex quads are split), keeping only
 boundary vertices in their original order. Write it with `write_obj` to view a
 volume mesh as a surface; Python exposes it as `io.extract_surface` beside the mesh types.

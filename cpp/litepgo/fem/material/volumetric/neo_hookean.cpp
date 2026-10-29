@@ -8,7 +8,7 @@
 #include <limits>
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::fem {
 namespace {
 
 double eval_log_det_Fe(const Eigen::Matrix3d& Fe, const Eigen::VectorXd& theta) {
@@ -142,4 +142,4 @@ double NeoHookean::eval_feasible_step(const VolumetricMaterialInputs& inputs,
     return alpha;
 }
 
-} // namespace litepgo
+} // namespace litepgo::fem

@@ -4,8 +4,9 @@
 
 #include <cmath>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 static_assert(Quadrature2D<GaussLegendre2D<2>>);
 static_assert(!Quadrature3D<GaussLegendre2D<2>>);
 static_assert(GaussLegendre2D<2>::num_points == 4);
@@ -58,3 +59,5 @@ TEST(TensorProductQuadrature2D, OrdersPointsWithLastAxisFastestAndMultipliesUneq
     EXPECT_NEAR(Q::weights().dot(Q::points().col(1)), 0.575, 1e-15);
 }
 } // namespace
+
+} // namespace litepgo::fem::test

@@ -2,7 +2,7 @@
 
 #include <Eigen/Core>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Cubic Hermite basis on [0,1], ordered as u(0), u'(0), u(1), u'(1).
 // Derivative coefficients are with respect to the reference parameter t.
@@ -24,4 +24,4 @@ class CubicHermiteBasis {
     }
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

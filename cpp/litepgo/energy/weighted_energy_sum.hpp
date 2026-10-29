@@ -5,7 +5,7 @@
 #include <memory>
 #include <vector>
 
-namespace litepgo {
+namespace litepgo::energy {
 
 struct WeightedEnergy {
     std::shared_ptr<Energy> energy;
@@ -56,4 +56,4 @@ class WeightedEnergySum final : public Energy {
     mutable std::vector<TermScratch> scratch_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::energy

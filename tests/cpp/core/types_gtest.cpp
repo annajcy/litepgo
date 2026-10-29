@@ -6,6 +6,8 @@
 #include <utility>
 #include <vector>
 
+namespace litepgo::test {
+
 namespace {
 
 static_assert(!litepgo::SpMat::IsRowMajor, "SpMat must be column-major");
@@ -60,3 +62,5 @@ TEST(Types, SymmetricSpMatStoresBothTriangles) {
     const litepgo::Vec expected = Eigen::MatrixXd(A) * x;
     EXPECT_EQ(litepgo::Vec(A * x), expected);
 }
+
+} // namespace litepgo::test

@@ -8,13 +8,13 @@
 #include <functional>
 #include <limits>
 
-namespace litepgo {
+namespace litepgo::solver {
 
 struct NewtonOptions {
     // Required: converged when the free DOFs' gradient max-norm is at most this.
     double gradient_tolerance = std::numeric_limits<double>::quiet_NaN();
     int max_iterations = 50;
-    HessianKind hessian = HessianKind::Projected;
+    energy::HessianKind hessian = energy::HessianKind::Projected;
     int max_line_search_steps = 30;
     double line_search_shrink = 0.5;
 };
@@ -63,8 +63,8 @@ struct NewtonResult {
 //
 // Outcomes are statuses. Any infeasible state throws std::domain_error; a broken energy
 // (a non-finite gradient) throws std::logic_error.
-NewtonResult newton_solve(Energy& energy, const DofReduction& fixed, const ConstVecRef& x0,
-                          const NewtonOptions& options, SparseSolver& solver,
+NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed, const ConstVecRef& x0,
+                          const NewtonOptions& options, linalg::SparseSolver& solver,
                           const std::function<void(const NewtonStep&)>& on_iteration = {});
 
-} // namespace litepgo
+} // namespace litepgo::solver

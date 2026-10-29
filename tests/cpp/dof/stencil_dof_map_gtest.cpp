@@ -11,8 +11,9 @@
 #include <utility>
 #include <vector>
 
+namespace litepgo::dof::test {
+
 namespace {
-using namespace litepgo;
 static_assert(std::same_as<decltype(std::declval<const StencilDofMap&>().gather(0, std::declval<const Vec&>())),
                            Eigen::MatrixXd>);
 
@@ -96,16 +97,16 @@ TEST(StencilDofMap, ChecksElementAndDataSizesIncludingEmptyStencils) {
 }
 
 TEST(StencilDofMap, MidEdgeStencilsKeepCentralFaceInterpolationSeparateFromNeighborSupport) {
-    const TriangleTopology topology(6, {{4, 1, 5}, {5, 1, 3}, {4, 5, 0}, {1, 4, 2}});
-    const auto stencils = make_triangle_mid_edge_stencils(topology);
+    const mesh::TriangleTopology topology(6, {{4, 1, 5}, {5, 1, 3}, {4, 5, 0}, {1, 4, 2}});
+    const auto stencils = mesh::make_triangle_mid_edge_stencils(topology);
     const StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
     const Vec rest = Vec::LinSpaced(map.num_dofs(), 0, map.num_dofs() - 1);
     Vec displacement = 0.1 * rest;
     const auto X_local = map.gather(0, rest);
     const auto u_local = map.gather(0, displacement);
     ASSERT_EQ(u_local.rows(), 6);
-    const InterpolatedField2D<TriangleP1Basis> X_field(X_local.topRows(3));
-    const InterpolatedField2D<TriangleP1Basis> u_field(u_local.topRows(3));
+    const fem::InterpolatedField2D<fem::TriangleP1Basis> X_field(X_local.topRows(3));
+    const fem::InterpolatedField2D<fem::TriangleP1Basis> u_field(u_local.topRows(3));
     const Eigen::Vector2d xi(0.2, 0.3);
     const Eigen::Vector3d expected =
         0.5 * u_local.row(0).transpose() + 0.2 * u_local.row(1).transpose() + 0.3 * u_local.row(2).transpose();
@@ -120,3 +121,5 @@ TEST(StencilDofMap, MidEdgeStencilsKeepCentralFaceInterpolationSeparateFromNeigh
     EXPECT_TRUE(X_field.eval_value(xi).isApprox(10 * expected, 1e-14));
 }
 } // namespace
+
+} // namespace litepgo::dof::test

@@ -4,8 +4,9 @@
 #include <gtest/gtest.h>
 #include <type_traits>
 
+namespace litepgo::fem::test {
+
 namespace {
-using namespace litepgo;
 
 template <class T>
 constexpr bool has_legacy_geometry_api = requires(const T& field, const Eigen::Vector3d& xi) { field.dX_dxi(xi); } ||
@@ -57,3 +58,5 @@ TEST(Field3D, IdentityFieldDispatchesValuesAndDerivativesThroughBaseReference) {
     EXPECT_TRUE(field.eval_dgrad_xi_dcoeffs(xi).isZero());
 }
 } // namespace
+
+} // namespace litepgo::fem::test

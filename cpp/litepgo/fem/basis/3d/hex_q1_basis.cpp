@@ -22,7 +22,7 @@ constexpr std::array<int, 8> hex_to_tensor{0, 4, 6, 2, 1, 5, 7, 3};
 
 } // namespace
 
-namespace litepgo {
+namespace litepgo::fem {
 
 Eigen::Matrix<double, 8, 1> HexQ1Basis::eval_N(const Eigen::Vector3d& xi) {
     return TensorProductBasis3D<LinearLagrangeBasis>::eval_N(xi)(hex_to_tensor);
@@ -44,4 +44,4 @@ Eigen::Vector3d HexQ1Basis::reference_node(int basis_index) {
     return {static_cast<double>(corner[0]), static_cast<double>(corner[1]), static_cast<double>(corner[2])};
 }
 
-} // namespace litepgo
+} // namespace litepgo::fem

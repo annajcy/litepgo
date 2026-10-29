@@ -8,7 +8,7 @@
 #include <tbb/parallel_for.h>
 #include <utility>
 
-namespace litepgo {
+namespace litepgo::dof {
 
 Assembler::Assembler(int num_dofs, std::vector<std::vector<int>> element_dof_indices)
     : num_dofs_(num_dofs), element_dof_indices_(std::move(element_dof_indices)) {
@@ -34,7 +34,7 @@ Assembler::Assembler(int num_dofs, std::vector<std::vector<int>> element_dof_ind
                 entries.emplace_back(row, column, 1.0);
     pattern_.resize(num_dofs, num_dofs);
     pattern_.setFromTriplets(entries.begin(), entries.end());
-    pattern_ = pattern_of(pattern_);
+    pattern_ = linalg::pattern_of(pattern_);
 
     // Preserve element/local-DOF order for deterministic sums, including repeated indices.
     dof_contributions_.resize(static_cast<std::size_t>(num_dofs_));
@@ -87,7 +87,7 @@ void Assembler::add_gradient(int element, const ConstVecRef& local, VecRef globa
 void Assembler::add_hessian(int element, const Eigen::Ref<const Eigen::MatrixXd>& local, SpMat& global) const {
     check_element(element);
     const auto n = static_cast<Eigen::Index>(element_dof_indices_[static_cast<std::size_t>(element)].size());
-    if (local.rows() != n || local.cols() != n || !local.allFinite() || !same_pattern(global, pattern_))
+    if (local.rows() != n || local.cols() != n || !local.allFinite() || !linalg::same_pattern(global, pattern_))
         throw std::invalid_argument("Assembler: invalid Hessian dimensions, values, or pattern");
     const auto& offsets = hessian_offsets_[static_cast<std::size_t>(element)];
     for (Eigen::Index j = 0; j < n; ++j)
@@ -126,4 +126,4 @@ void Assembler::assemble(std::span<const Vec> gradients, std::span<const Eigen::
     });
 }
 
-} // namespace litepgo
+} // namespace litepgo::dof

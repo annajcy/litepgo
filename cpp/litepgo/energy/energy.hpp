@@ -5,7 +5,7 @@
 #include <atomic>
 #include <optional>
 
-namespace litepgo {
+namespace litepgo::energy {
 
 // Which second derivative an energy assembles.
 enum class HessianKind {
@@ -102,4 +102,4 @@ class Energy {
     mutable std::atomic<bool> busy_ = false;
 };
 
-} // namespace litepgo
+} // namespace litepgo::energy

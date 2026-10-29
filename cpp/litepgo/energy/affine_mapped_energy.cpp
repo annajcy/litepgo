@@ -7,7 +7,7 @@
 #include <tuple>
 #include <utility>
 
-namespace litepgo {
+namespace litepgo::energy {
 
 AffineMappedEnergy::Setup AffineMappedEnergy::checked_setup(std::shared_ptr<Energy> energy, SpMat T, Vec offset) {
     if (energy == nullptr) {
@@ -91,7 +91,7 @@ std::optional<SpMat> AffineMappedEnergy::refresh_pattern(const ConstVecRef& z) {
     energy_->update_pattern(x_full_);
     // Compare patterns rather than trust the return value: the inner energy may
     // have been updated elsewhere, in which case its own update reports no change.
-    if (same_pattern(energy_->hessian_pattern(), hessian_full_)) {
+    if (linalg::same_pattern(energy_->hessian_pattern(), hessian_full_)) {
         return std::nullopt;
     }
     hessian_full_ = energy_->hessian_pattern();
@@ -102,7 +102,7 @@ std::optional<SpMat> AffineMappedEnergy::refresh_pattern(const ConstVecRef& z) {
 
 double AffineMappedEnergy::eval_values(const ConstVecRef& z, Vec* gradient, SpMat* hessian, HessianKind kind) const {
     if (hessian != nullptr && !energy_->has_fixed_pattern() &&
-        !same_pattern(energy_->hessian_pattern(), hessian_full_)) {
+        !linalg::same_pattern(energy_->hessian_pattern(), hessian_full_)) {
         throw std::logic_error("AffineMappedEnergy: the inner energy's pattern changed after this energy's last "
                                "update_pattern(); call update_pattern() on the outermost energy");
     }
@@ -129,4 +129,4 @@ double AffineMappedEnergy::feasible_step(const ConstVecRef& z, const ConstVecRef
     return energy_->max_feasible_step(x_full_, dx_full_);
 }
 
-} // namespace litepgo
+} // namespace litepgo::energy

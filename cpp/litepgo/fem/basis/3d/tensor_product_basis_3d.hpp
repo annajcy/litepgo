@@ -5,7 +5,7 @@
 #include <Eigen/Core>
 #include <unsupported/Eigen/KroneckerProduct>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Three copies of a 1D basis. Tensor indices are
 // flattened as (i*n + j)*n + k (the last parameter varies fastest, as in libpgo).
@@ -51,4 +51,4 @@ template <Basis1D B> class TensorProductBasis3D {
     }
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

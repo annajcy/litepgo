@@ -3,7 +3,7 @@
 #include <Eigen/Core>
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Vector-valued field, affine in its active coefficients. Gradient outputs flatten by column.
 template <int ParamDim> class FieldT {
@@ -37,4 +37,4 @@ template <int ParamDim> class FieldT {
 using Field2D = FieldT<2>;
 using Field3D = FieldT<3>;
 
-} // namespace litepgo
+} // namespace litepgo::fem

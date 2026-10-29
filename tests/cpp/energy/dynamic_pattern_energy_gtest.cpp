@@ -6,11 +6,9 @@
 
 #include <stdexcept>
 
-namespace {
+namespace litepgo::energy::test {
 
-using litepgo::SpMat;
-using litepgo::Vec;
-using litepgo::testing::SwitchingEnergy;
+namespace {
 
 // Pairs (0, 1) and (2, 3) active; (1, 2) inactive.
 Vec two_pairs_active() {
@@ -52,3 +50,5 @@ TEST(DynamicPatternEnergy, OldBuffersAreRejectedAfterAChange) {
     ASSERT_TRUE(energy.update_pattern(two_pairs_active()));
     EXPECT_THROW(energy.eval(two_pairs_active(), nullptr, &buffer), std::invalid_argument);
 }
+
+} // namespace litepgo::energy::test

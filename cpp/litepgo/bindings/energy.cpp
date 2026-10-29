@@ -23,9 +23,9 @@
 namespace nb = nanobind;
 using namespace nb::literals;
 
-namespace litepgo::bindings {
+namespace litepgo::energy::binding {
 
-void bind_energy(nb::module_& m) {
+void bind(nb::module_& m) {
     m.doc() = "Energies and their composites (cpp/litepgo/energy)";
 
     nb::enum_<HessianKind>(m, "HessianKind")
@@ -77,7 +77,7 @@ void bind_energy(nb::module_& m) {
     nb::class_<QuadraticEnergy, Energy>(m, "QuadraticEnergy")
         .def(
             "__init__",
-            [](QuadraticEnergy* self, const SparseArgument& A, std::optional<Vec> b) {
+            [](QuadraticEnergy* self, const linalg::binding::SparseArgument& A, std::optional<Vec> b) {
                 new (self) QuadraticEnergy(A.matrix, b.value_or(Vec()));
             },
             "A"_a, "b"_a = nb::none(), "E(x) = 1/2 x^T A x + b^T x with a symmetric A.");
@@ -115,11 +115,11 @@ void bind_energy(nb::module_& m) {
     nb::class_<AffineMappedEnergy, Energy>(m, "AffineMappedEnergy")
         .def(
             "__init__",
-            [](AffineMappedEnergy* self, std::shared_ptr<Energy> energy, const SparseArgument& T,
+            [](AffineMappedEnergy* self, std::shared_ptr<Energy> energy, const linalg::binding::SparseArgument& T,
                std::optional<Vec> offset) {
                 new (self) AffineMappedEnergy(std::move(energy), T.matrix, offset.value_or(Vec()));
             },
             "energy"_a, "T"_a, "offset"_a = nb::none(), "E(z) = energy(T z + offset).");
 }
 
-} // namespace litepgo::bindings
+} // namespace litepgo::energy::binding

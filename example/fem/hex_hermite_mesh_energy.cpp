@@ -19,25 +19,27 @@
 
 int main(int argc, char** argv) {
     using namespace litepgo;
-    const auto mesh = std::get<HexMesh>(io::read_veg(argc > 1 ? argv[1] : LITEPGO_ASSETS_DIR "/box-hex.veg"));
+    const auto mesh = std::get<mesh::HexMesh>(io::read_veg(argc > 1 ? argv[1] : LITEPGO_ASSETS_DIR "/box-hex.veg"));
     const auto& topology = mesh.topology;
     const Vec& rest_positions = mesh.positions;
     const Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>> rest_nodes(
         rest_positions.data(), topology.num_vertices(), 3);
     if (topology.num_cells() == 0)
         throw std::runtime_error("Example requires a nonempty mesh");
-    const VertexDofMap rest_position_map(topology, 3), displacement_map(topology, 24);
-    using XField = InterpolatedField3D<HexQ1Basis>;
+    const dof::VertexDofMap rest_position_map(topology, 3), displacement_map(topology, 24);
+    using XField = fem::InterpolatedField3D<fem::HexQ1Basis>;
     std::vector<XField> rest_position_fields;
     rest_position_fields.reserve(topology.num_cells());
     for (int e = 0; e < topology.num_cells(); ++e)
         rest_position_fields.emplace_back(rest_position_map.gather(e, rest_positions));
-    const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
-    const IdentityField3D theta(Eigen::Vector2d(2, 3));
-    auto elastic = std::make_shared<
-        VolumetricFemEnergy<NeoHookean, HexHermiteBasis, GaussLegendre3D<4>, XField, IdentityField3D, IdentityField3D>>(
-        displacement_map, std::move(rest_position_fields), std::vector<IdentityField3D>(topology.num_cells(), Fp),
-        std::vector<IdentityField3D>(topology.num_cells(), theta));
+    const fem::IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
+    const fem::IdentityField3D theta(Eigen::Vector2d(2, 3));
+    auto elastic =
+        std::make_shared<fem::VolumetricFemEnergy<fem::NeoHookean, fem::HexHermiteBasis, fem::GaussLegendre3D<4>,
+                                                  XField, fem::IdentityField3D, fem::IdentityField3D>>(
+            displacement_map, std::move(rest_position_fields),
+            std::vector<fem::IdentityField3D>(topology.num_cells(), Fp),
+            std::vector<fem::IdentityField3D>(topology.num_cells(), theta));
 
     // Pull the bounding-box corners toward a copy of the box enlarged about its minimum
     // corner, whose anchor coincides with that corner's rest position.
@@ -63,18 +65,18 @@ int main(int argc, char** argv) {
         targets.segment<3>(3 * Eigen::Index(i)) = stretch * (rest_nodes.row(v).transpose() - lower);
     }
     auto pulling =
-        std::make_shared<VertexPullingEnergy>(elastic->num_dofs(), std::move(pulled_dofs), targets, stiffness);
+        std::make_shared<energy::VertexPullingEnergy>(elastic->num_dofs(), std::move(pulled_dofs), targets, stiffness);
 
     // Static equilibrium minimizes Pi(u) = E_elastic(u) + E_pulling(u); the springs
     // remove all rigid motions, so no DOF is fixed.
-    WeightedEnergySum potential({{elastic, 1}, {pulling, 1}});
-    const DofReduction unconstrained(elastic->num_dofs(), {});
+    energy::WeightedEnergySum potential({{elastic, 1}, {pulling, 1}});
+    const dof::DofReduction unconstrained(elastic->num_dofs(), {});
     const Vec initial = Vec::Zero(elastic->num_dofs());
-    NewtonOptions options;
+    solver::NewtonOptions options;
     options.gradient_tolerance = 1e-8;
-    EigenLDLT solver;
-    const auto result = newton_solve(potential, unconstrained, initial, options, solver);
-    const bool converged = result.status == NewtonStatus::Converged;
+    linalg::EigenLDLT solver;
+    const auto result = solver::newton_solve(potential, unconstrained, initial, options, solver);
+    const bool converged = result.status == solver::NewtonStatus::Converged;
     double corner_gap = 0;
     for (std::size_t i = 0; i < corners.size(); ++i)
         corner_gap = std::max(corner_gap,
@@ -88,8 +90,8 @@ int main(int argc, char** argv) {
     Vec deformed_positions = rest_positions;
     for (int v = 0; v < topology.num_vertices(); ++v)
         deformed_positions.segment<3>(3 * v) += result.x.segment<3>(24 * v);
-    const HexMesh deformed{std::move(deformed_positions), topology};
+    const mesh::HexMesh deformed{std::move(deformed_positions), topology};
     io::write_veg(output, deformed);
-    io::write_obj(std::filesystem::path(output).replace_extension(".obj"), extract_surface(deformed));
+    io::write_obj(std::filesystem::path(output).replace_extension(".obj"), mesh::extract_surface(deformed));
     return converged ? 0 : 1;
 }

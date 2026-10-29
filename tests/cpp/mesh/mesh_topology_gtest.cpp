@@ -7,12 +7,9 @@
 #include <stdexcept>
 #include <vector>
 
-namespace {
+namespace litepgo::mesh::test {
 
-using litepgo::HexTopology;
-using litepgo::MeshTopology;
-using litepgo::TetTopology;
-using litepgo::TriangleTopology;
+namespace {
 
 static_assert(std::same_as<TriangleTopology, MeshTopology<3>>);
 static_assert(std::same_as<TetTopology, MeshTopology<4>>);
@@ -121,3 +118,5 @@ TEST(MeshTopology, SupportsOtherPositiveCellSizes) {
 }
 
 } // namespace
+
+} // namespace litepgo::mesh::test

@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 Eigen::Vector4d TetP1Basis::eval_N(const Eigen::Vector3d& xi) {
     return {1 - xi.sum(), xi.x(), xi.y(), xi.z()};
@@ -27,4 +27,4 @@ Eigen::Vector3d TetP1Basis::reference_node(int basis_index) {
     return result;
 }
 
-} // namespace litepgo
+} // namespace litepgo::fem

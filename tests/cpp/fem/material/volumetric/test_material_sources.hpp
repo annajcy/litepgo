@@ -7,7 +7,7 @@
 
 #include <utility>
 
-namespace litepgo::test {
+namespace litepgo::fem::test {
 // Fixtures returned by value own their inputs; each operation creates a short-lived borrowing field.
 template <class UField, class XField> class OwnedDeformationField final : public Field3D {
   public:
@@ -44,4 +44,4 @@ template <class FSource, class FpSource, class ThetaSource> struct MaterialSourc
 template <class Energy, class Sources> auto bind_energy(const Sources& fields) {
     return Energy(fields.F, fields.Fp, fields.theta);
 }
-} // namespace litepgo::test
+} // namespace litepgo::fem::test

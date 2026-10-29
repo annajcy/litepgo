@@ -12,7 +12,7 @@ Eigen::Matrix<double, 64, Columns> vertex_order(const Eigen::Matrix<double, 64, 
     constexpr std::array<int, 8> offsets{0, 16, 4, 1, 20, 17, 5, 21};
     Eigen::Matrix<double, 64, Columns> result;
     for (int vertex = 0; vertex < 8; ++vertex) {
-        const auto corner = litepgo::HexQ1Basis::reference_node(vertex);
+        const auto corner = litepgo::fem::HexQ1Basis::reference_node(vertex);
         const int base =
             32 * static_cast<int>(corner.x()) + 8 * static_cast<int>(corner.y()) + 2 * static_cast<int>(corner.z());
         for (int slot = 0; slot < 8; ++slot) {
@@ -25,7 +25,7 @@ Eigen::Matrix<double, 64, Columns> vertex_order(const Eigen::Matrix<double, 64, 
 
 } // namespace
 
-namespace litepgo {
+namespace litepgo::fem {
 
 Eigen::Matrix<double, 64, 1> HexHermiteBasis::eval_N(const Eigen::Vector3d& xi) {
     return vertex_order(TensorProductBasis3D<CubicHermiteBasis>::eval_N(xi));
@@ -45,4 +45,4 @@ Eigen::Vector3d HexHermiteBasis::reference_node(int basis_index) {
     return HexQ1Basis::reference_node(basis_index / 8);
 }
 
-} // namespace litepgo
+} // namespace litepgo::fem

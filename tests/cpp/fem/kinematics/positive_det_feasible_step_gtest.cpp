@@ -1,14 +1,15 @@
 #include "litepgo/energy/energy.hpp"
 #include "litepgo/fem/kinematics/positive_det_feasible_step.hpp"
 
-#include <stdexcept>
 #include <Eigen/Geometry>
 #include <Eigen/LU>
 #include <gtest/gtest.h>
 #include <limits>
+#include <stdexcept>
+
+namespace litepgo::fem::test {
 
 namespace {
-using namespace litepgo;
 
 void check_segment(const Eigen::Matrix3d& A, const Eigen::Matrix3d& dA, double alpha) {
     ASSERT_GE(alpha, 0);
@@ -95,3 +96,5 @@ TEST(PositiveDetFeasibleStep, RejectsInvalidStartsAndNonFiniteDirections) {
     }
 }
 } // namespace
+
+} // namespace litepgo::fem::test

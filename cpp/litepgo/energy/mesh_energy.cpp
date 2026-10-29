@@ -9,7 +9,7 @@
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
 
-namespace litepgo {
+namespace litepgo::energy {
 namespace {
 void project_hessian(Eigen::MatrixXd& hessian) {
     if (hessian.rows() == 0)
@@ -23,7 +23,7 @@ void project_hessian(Eigen::MatrixXd& hessian) {
 }
 } // namespace
 
-MeshEnergy::MeshEnergy(Assembler assembler)
+MeshEnergy::MeshEnergy(dof::Assembler assembler)
     : FixedPatternEnergy(static_cast<int>(assembler.hessian_pattern().rows()), assembler.hessian_pattern()),
       assembler_(std::move(assembler)) {}
 
@@ -95,4 +95,4 @@ double MeshEnergy::feasible_step(const ConstVecRef& x, const ConstVecRef& dx) co
         },
         [](double a, double b) { return std::min(a, b); });
 }
-} // namespace litepgo
+} // namespace litepgo::energy

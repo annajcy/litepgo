@@ -7,13 +7,13 @@
 #include <optional>
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::solver {
 
 namespace {
 
 constexpr int max_diagonal_shifts = 10;
 
-void check_arguments(const Energy& energy, const DofReduction& fixed, const ConstVecRef& x0,
+void check_arguments(const energy::Energy& energy, const dof::DofReduction& fixed, const ConstVecRef& x0,
                      const NewtonOptions& options) {
     if (fixed.num_dofs() != energy.num_dofs() || x0.size() != energy.num_dofs()) {
         throw std::invalid_argument("newton_solve: energy, fixed DOFs, and x0 must have the same DOF count");
@@ -35,8 +35,8 @@ bool is_converged(const NewtonStep& step, const NewtonOptions& options) {
 }
 
 // Evaluates value, gradient, and Hessian at x in one assembly, and the free gradient.
-double eval_state(const Energy& energy, const DofReduction& fixed, const Vec& x, HessianKind kind, Vec& gradient,
-                  SpMat& hessian, Vec& gradient_free) {
+double eval_state(const energy::Energy& energy, const dof::DofReduction& fixed, const Vec& x, energy::HessianKind kind,
+                  Vec& gradient, SpMat& hessian, Vec& gradient_free) {
     const double value = energy.eval(x, &gradient, &hessian, kind);
     if (!gradient.allFinite()) {
         throw std::logic_error("newton_solve: the energy returned a non-finite gradient");
@@ -49,7 +49,7 @@ double eval_state(const Energy& energy, const DofReduction& fixed, const Vec& x,
 // diagonal, and the sparse solver analyzed for its pattern.
 class LinearSystem {
   public:
-    LinearSystem(const DofReduction& fixed, SparseSolver& solver) : fixed_(fixed), solver_(solver) {}
+    LinearSystem(const dof::DofReduction& fixed, linalg::SparseSolver& solver) : fixed_(fixed), solver_(solver) {}
 
     // Rebuilds the free block and the analysis for a new Hessian pattern.
     void rebuild(const SpMat& hessian) {
@@ -82,9 +82,9 @@ class LinearSystem {
     }
 
   private:
-    const DofReduction& fixed_;
-    SparseSolver& solver_;
-    std::optional<ReducedMatrix> matrix_;
+    const dof::DofReduction& fixed_;
+    linalg::SparseSolver& solver_;
+    std::optional<linalg::ReducedMatrix> matrix_;
 };
 
 // Accepts a trial energy that decreases, or that stays within floating-point noise
@@ -99,7 +99,7 @@ bool accepts(double energy, double trial_energy) {
 // until the finite trial energy is accepted. Evaluation exceptions propagate;
 // a step that no longer moves x ends the search. Leaves the
 // accepted point in trial and returns its step length, or nullopt.
-std::optional<double> line_search(const Energy& energy, const Vec& x, const Vec& direction,
+std::optional<double> line_search(const energy::Energy& energy, const Vec& x, const Vec& direction,
                                   const NewtonOptions& options, Vec& trial, NewtonStep& step) {
     double alpha = energy.max_feasible_step(x, direction);
     step.feasible_step = alpha;
@@ -119,8 +119,8 @@ std::optional<double> line_search(const Energy& energy, const Vec& x, const Vec&
 
 } // namespace
 
-NewtonResult newton_solve(Energy& energy, const DofReduction& fixed, const ConstVecRef& x0,
-                          const NewtonOptions& options, SparseSolver& solver,
+NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed, const ConstVecRef& x0,
+                          const NewtonOptions& options, linalg::SparseSolver& solver,
                           const std::function<void(const NewtonStep&)>& on_iteration) {
     check_arguments(energy, fixed, x0, options);
     NewtonResult result;
@@ -190,4 +190,4 @@ NewtonResult newton_solve(Energy& energy, const DofReduction& fixed, const Const
     }
 }
 
-} // namespace litepgo
+} // namespace litepgo::solver

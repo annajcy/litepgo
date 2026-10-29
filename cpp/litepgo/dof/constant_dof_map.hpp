@@ -4,12 +4,12 @@
 #include <limits>
 #include <stdexcept>
 #include <vector>
-namespace litepgo {
+namespace litepgo::dof {
 // Owns layout counts; retains no topology or value references.
 class ConstantDofMap final {
   public:
     template <int VerticesPerCell>
-    ConstantDofMap(const MeshTopology<VerticesPerCell>& topology, int num_dofs)
+    ConstantDofMap(const mesh::MeshTopology<VerticesPerCell>& topology, int num_dofs)
         : num_elements_(topology.num_cells()), width_(num_dofs) {
         if (width_ <= 0)
             throw std::invalid_argument("ConstantDofMap: invalid DOF count");
@@ -43,4 +43,4 @@ class ConstantDofMap final {
     int num_elements_;
     int width_;
 };
-} // namespace litepgo
+} // namespace litepgo::dof

@@ -1,7 +1,7 @@
 #pragma once
 #include <Eigen/Core>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // dvalue_dcoeffs has output components in rows and local scalar DOFs in columns.
 // Input matrices flatten by column, independently of their storage order.
@@ -22,4 +22,4 @@ void add_gradient_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoef
 void add_hessian_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoeffs,
                           const Eigen::Ref<const Eigen::MatrixXd>& hessian, double weight,
                           Eigen::Ref<Eigen::MatrixXd> output, bool check_finite = true);
-} // namespace litepgo
+} // namespace litepgo::fem

@@ -21,8 +21,8 @@ struct Session {
     }
 };
 template <int K>
-MeshData<K> extract(const std::vector<std::size_t>& tags, const std::vector<double>& xyz,
-                    const std::vector<std::size_t>& nodes) {
+mesh::MeshData<K> extract(const std::vector<std::size_t>& tags, const std::vector<double>& xyz,
+                          const std::vector<std::size_t>& nodes) {
     if (tags.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()) || xyz.size() != tags.size() * 3 ||
         nodes.size() % K)
         throw std::runtime_error("Invalid or oversized MSH geometry");
@@ -32,7 +32,7 @@ MeshData<K> extract(const std::vector<std::size_t>& tags, const std::vector<doub
             throw std::runtime_error("Duplicate MSH node tag");
     Vec positions(static_cast<Eigen::Index>(xyz.size()));
     std::copy(xyz.begin(), xyz.end(), positions.data());
-    std::vector<typename MeshTopology<K>::Cell> cells(nodes.size() / K);
+    std::vector<typename mesh::MeshTopology<K>::Cell> cells(nodes.size() / K);
     for (std::size_t e = 0; e < cells.size(); ++e)
         for (int j = 0; j < K; ++j) {
             auto it = indices.find(nodes[e * K + j]);
@@ -40,12 +40,13 @@ MeshData<K> extract(const std::vector<std::size_t>& tags, const std::vector<doub
                 throw std::runtime_error("Missing MSH node");
             cells[e][j] = it->second;
         }
-    MeshData<K> mesh{std::move(positions), MeshTopology<K>(static_cast<int>(tags.size()), std::move(cells))};
+    mesh::MeshData<K> mesh{std::move(positions),
+                           mesh::MeshTopology<K>(static_cast<int>(tags.size()), std::move(cells))};
     mesh.validate();
     return mesh;
 }
 } // namespace
-VolumeMesh read_msh(const std::filesystem::path& path) {
+mesh::VolumeMesh read_msh(const std::filesystem::path& path) {
     std::lock_guard lock(gmsh_mutex);
     try {
         Session session;
@@ -65,7 +66,7 @@ VolumeMesh read_msh(const std::filesystem::path& path) {
         throw std::runtime_error(error);
     }
 }
-void write_msh(const std::filesystem::path& path, const VolumeMesh& mesh) {
+void write_msh(const std::filesystem::path& path, const mesh::VolumeMesh& mesh) {
     if (path.extension() != ".msh")
         throw std::invalid_argument("MSH output requires a .msh extension");
     std::visit(

@@ -9,17 +9,9 @@
 #include <stdexcept>
 #include <vector>
 
-namespace {
+namespace litepgo::energy::test {
 
-using litepgo::AffineMappedEnergy;
-using litepgo::Energy;
-using litepgo::HessianKind;
-using litepgo::SpMat;
-using litepgo::Triplet;
-using litepgo::Vec;
-using litepgo::testing::DoubleWellChain;
-using litepgo::testing::HalfSpaceBarrier;
-using litepgo::testing::SwitchingEnergy;
+namespace {
 
 SpMat from_triplets(int rows, int cols, const std::vector<Triplet>& entries) {
     SpMat T(rows, cols);
@@ -71,7 +63,7 @@ TEST(AffineMappedEnergy, MatchesDenseProductsForEveryKindOfMap) {
         const Vec z = Vec::LinSpaced(T.cols(), -0.7, 0.4);
         expect_mapped(mapped, *chain, T, offset, z, HessianKind::Exact);
         expect_mapped(mapped, *chain, T, offset, z, HessianKind::Projected);
-        litepgo::testing::expect_derivatives_match(mapped, z);
+        expect_derivatives_match(mapped, z);
     }
 }
 
@@ -112,7 +104,7 @@ TEST(AffineMappedEnergy, RebuildsWhenTheInnerPatternChanges) {
     EXPECT_FALSE(mapped.has_fixed_pattern());
 
     const Vec z = (Vec(3) << 1.0, -0.5, 0.8).finished();
-    ASSERT_FALSE(litepgo::testing::SwitchingEnergy::active_pairs(T * z).empty());
+    ASSERT_FALSE(SwitchingEnergy::active_pairs(T * z).empty());
     EXPECT_TRUE(mapped.update_pattern(z));
     EXPECT_FALSE(mapped.update_pattern(z));
     expect_mapped(mapped, *switching, T, offset, z, HessianKind::Exact);
@@ -128,3 +120,5 @@ TEST(AffineMappedEnergy, DetectsAnInnerEnergyUpdatedElsewhere) {
     EXPECT_TRUE(mapped.update_pattern(z));
     EXPECT_NO_THROW(mapped.eval_hessian(z));
 }
+
+} // namespace litepgo::energy::test

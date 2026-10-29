@@ -6,7 +6,8 @@
 #include <limits>
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::fem::test {
+
 namespace {
 
 TEST(MultiplicativeKinematics, FiniteTransformInputsWithOverflowingResultsThrowDomainError) {
@@ -144,4 +145,5 @@ TEST(MultiplicativeKinematics, ValidatesPlasticButLeavesElasticDomainToMaterial)
 }
 
 } // namespace
-} // namespace litepgo
+
+} // namespace litepgo::fem::test

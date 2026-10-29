@@ -5,7 +5,7 @@
 #include <memory>
 #include <vector>
 
-namespace litepgo {
+namespace litepgo::energy {
 
 // E(z) = F(T z + offset): the inner energy F seen through an affine map, such as
 // periodic or kinematic boundary conditions acting on independent fluctuations.
@@ -60,4 +60,4 @@ class AffineMappedEnergy final : public Energy {
     mutable SpMat hessian_full_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::energy

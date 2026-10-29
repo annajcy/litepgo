@@ -2,12 +2,20 @@
 
 #include <nanobind/nanobind.h>
 
-// One function per C++ directory, each filling the _core submodule of the same name.
-namespace litepgo::bindings {
+// Each bound module fills the _core submodule of the same name from
+// litepgo::<module>::binding::bind.
+namespace litepgo::io::binding {
+void bind(nanobind::module_& m);
+} // namespace litepgo::io::binding
 
-void bind_io(nanobind::module_& m);
-void bind_energy(nanobind::module_& m);
-void bind_linalg(nanobind::module_& m);
-void bind_solver(nanobind::module_& m);
+namespace litepgo::energy::binding {
+void bind(nanobind::module_& m);
+} // namespace litepgo::energy::binding
 
-} // namespace litepgo::bindings
+namespace litepgo::linalg::binding {
+void bind(nanobind::module_& m);
+} // namespace litepgo::linalg::binding
+
+namespace litepgo::solver::binding {
+void bind(nanobind::module_& m);
+} // namespace litepgo::solver::binding

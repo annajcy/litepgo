@@ -11,20 +11,20 @@
 #include <utility>
 #include <vector>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // BasisDofTransform defines the physical displacement DOFs. Fixed fields and rest geometry
 // are owned; fields that borrow data require that data to outlive the energy.
 // Field evaluations must support concurrent const calls.
 template <class Material, Basis3D UBasis, Quadrature3D Q, std::derived_from<Field3D> XField,
           std::derived_from<Field3D> FpField, std::derived_from<Field3D> ThetaField>
-class VolumetricFemEnergy final : public MeshEnergy {
+class VolumetricFemEnergy final : public energy::MeshEnergy {
   public:
     // Each field vector has one entry per element in map order, using the same
     // reference coordinates as UBasis. Reference geometry need not use UBasis.
-    VolumetricFemEnergy(const VertexDofMap& displacement_map, std::vector<XField> rest_position_fields,
+    VolumetricFemEnergy(const dof::VertexDofMap& displacement_map, std::vector<XField> rest_position_fields,
                         std::vector<FpField> Fp, std::vector<ThetaField> theta)
-        : MeshEnergy(
+        : energy::MeshEnergy(
               displacement_map,
               [this](int e, const Eigen::MatrixXd& u, Vec* g, Eigen::MatrixXd* H) {
                   const auto index = static_cast<std::size_t>(e);
@@ -106,4 +106,4 @@ class VolumetricFemEnergy final : public MeshEnergy {
     std::vector<BasisDofTransform<UBasis>> transforms_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

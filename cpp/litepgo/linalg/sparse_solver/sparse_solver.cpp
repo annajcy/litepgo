@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::linalg {
 
 namespace {
 
@@ -100,4 +100,4 @@ void SparseSolver::forget_analysis() {
     inner_indices_.clear();
 }
 
-} // namespace litepgo
+} // namespace litepgo::linalg

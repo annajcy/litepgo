@@ -2,7 +2,7 @@
 
 #include <Eigen/Core>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Pointwise density W and derivatives with respect to one declared, affine coefficient block.
 template <int ParamDim> class LocalEnergyT {
@@ -35,4 +35,4 @@ extern template class LocalEnergyT<3>;
 using LocalEnergy2D = LocalEnergyT<2>;
 using LocalEnergy3D = LocalEnergyT<3>;
 
-} // namespace litepgo
+} // namespace litepgo::fem

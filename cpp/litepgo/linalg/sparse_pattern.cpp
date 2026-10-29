@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace litepgo {
+namespace litepgo::linalg {
 
 bool is_canonical(const SpMat& A) {
     if (!A.isCompressed()) {
@@ -36,4 +36,4 @@ SpMat pattern_of(const SpMat& A) {
     return pattern;
 }
 
-} // namespace litepgo
+} // namespace litepgo::linalg

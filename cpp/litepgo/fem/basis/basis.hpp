@@ -4,7 +4,7 @@
 #include <concepts>
 #include <type_traits>
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Dim is the parameter-domain dimension, not the number of basis functions or
 // field components. In 1D the parameter is a scalar; otherwise it is a vector.
@@ -29,4 +29,4 @@ concept Basis2D = Basis<B, 2>;
 template <class B>
 concept Basis3D = Basis<B, 3>;
 
-} // namespace litepgo
+} // namespace litepgo::fem

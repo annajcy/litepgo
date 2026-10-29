@@ -8,7 +8,8 @@
 #include <limits>
 #include <stdexcept>
 
-namespace litepgo {
+namespace litepgo::fem::test {
+
 namespace {
 
 TEST(NeoHookean, FiniteInputsWithOverflowingValuesOrDerivativesThrowDomainError) {
@@ -331,4 +332,5 @@ TEST(NeoHookean, FeasibleStepRejectsMalformedDirectionsAndInfeasibleStarts) {
 }
 
 } // namespace
-} // namespace litepgo
+
+} // namespace litepgo::fem::test

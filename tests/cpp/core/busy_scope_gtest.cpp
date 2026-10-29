@@ -5,6 +5,8 @@
 #include <atomic>
 #include <stdexcept>
 
+namespace litepgo::test {
+
 TEST(BusyScope, RejectsOverlapAndReleasesOnExit) {
     std::atomic<bool> busy = false;
     {
@@ -16,3 +18,5 @@ TEST(BusyScope, RejectsOverlapAndReleasesOnExit) {
     EXPECT_FALSE(busy.load());
     EXPECT_NO_THROW(litepgo::BusyScope(busy, "Thing"));
 }
+
+} // namespace litepgo::test

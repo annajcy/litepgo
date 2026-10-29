@@ -5,7 +5,7 @@
 #include <nanobind/eigen/sparse.h>
 #include <nanobind/nanobind.h>
 
-namespace litepgo::bindings {
+namespace litepgo::linalg::binding {
 
 // A sparse-matrix argument from Python, converted to a canonical SpMat.
 //
@@ -19,12 +19,12 @@ struct SparseArgument {
     SpMat matrix;
 };
 
-} // namespace litepgo::bindings
+} // namespace litepgo::linalg::binding
 
 namespace nanobind::detail {
 
-template <> struct type_caster<litepgo::bindings::SparseArgument> {
-    NB_TYPE_CASTER(litepgo::bindings::SparseArgument, const_name("scipy.sparse.csc_matrix"))
+template <> struct type_caster<litepgo::linalg::binding::SparseArgument> {
+    NB_TYPE_CASTER(litepgo::linalg::binding::SparseArgument, const_name("scipy.sparse.csc_matrix"))
 
     bool from_python(handle src, uint32_t flags, cleanup_list*) noexcept {
         try {

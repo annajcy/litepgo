@@ -3,7 +3,7 @@
 #include "litepgo/fem/basis/1d/cubic_hermite_basis.hpp"
 #include "litepgo/fem/basis/3d/tensor_product_basis_3d.hpp"
 
-namespace litepgo {
+namespace litepgo::fem {
 
 // Tricubic Hermite basis on [0,1]^3, in HexQ1Basis corner order.
 // Index 8*vertex + slot uses slots u, u_xi, u_eta, u_zeta,
@@ -23,4 +23,4 @@ class HexHermiteBasis final {
     static Eigen::Vector3d reference_node(int basis_index);
 };
 
-} // namespace litepgo
+} // namespace litepgo::fem

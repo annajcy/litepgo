@@ -4,7 +4,7 @@
 
 #include <memory>
 
-namespace litepgo {
+namespace litepgo::linalg {
 
 // Apple Accelerate's sparse Cholesky. For symmetric positive definite matrices;
 // an indefinite matrix fails to factorize. It reads the lower triangle.
@@ -24,4 +24,4 @@ class AccelerateLLT final : public SparseSolver {
     std::unique_ptr<Impl> impl_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::linalg

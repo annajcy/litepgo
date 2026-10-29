@@ -13,23 +13,15 @@
 #include <stdexcept>
 #include <vector>
 
+namespace litepgo::energy::test {
+
 namespace {
 
-using litepgo::Energy;
-using litepgo::HessianKind;
-using litepgo::SpMat;
-using litepgo::Vec;
-using litepgo::WeightedEnergy;
-using litepgo::WeightedEnergySum;
-using litepgo::testing::DoubleWellChain;
-using litepgo::testing::HalfSpaceBarrier;
-using litepgo::testing::SwitchingEnergy;
-
-std::shared_ptr<litepgo::QuadraticEnergy> coupling(int n, int i, int j) {
+std::shared_ptr<litepgo::energy::QuadraticEnergy> coupling(int n, int i, int j) {
     std::vector<litepgo::Triplet> entries = {{i, i, 1.0}, {j, j, 1.0}, {i, j, -1.0}, {j, i, -1.0}};
     SpMat A(n, n);
     A.setFromTriplets(entries.begin(), entries.end());
-    return std::make_shared<litepgo::QuadraticEnergy>(A);
+    return std::make_shared<litepgo::energy::QuadraticEnergy>(A);
 }
 
 void expect_weighted_sum(const Energy& sum, const std::vector<WeightedEnergy>& terms, const Vec& x, HessianKind kind) {
@@ -58,14 +50,14 @@ TEST(WeightedEnergySum, EqualsTheWeightedSumOfItsTerms) {
     const Vec x = Vec::LinSpaced(5, -0.8, 0.6);
     expect_weighted_sum(sum, terms, x, HessianKind::Exact);
     expect_weighted_sum(sum, terms, x, HessianKind::Projected);
-    litepgo::testing::expect_derivatives_match(sum, x);
+    expect_derivatives_match(sum, x);
 }
 
 TEST(WeightedEnergySum, PatternIsTheUnionOfTheTerms) {
     const WeightedEnergySum sum({{std::make_shared<DoubleWellChain>(5), 1.0}, {coupling(5, 0, 4), 1.0}});
     // Tridiagonal (5 + 2 * 4 entries) plus the (0, 4) and (4, 0) coupling.
     EXPECT_EQ(sum.hessian_pattern().nonZeros(), 15);
-    EXPECT_TRUE(litepgo::testing::stores(sum.hessian_pattern(), 4, 0));
+    EXPECT_TRUE(stores(sum.hessian_pattern(), 4, 0));
 }
 
 TEST(WeightedEnergySum, PatternIsFixedOnlyIfEveryTermsIs) {
@@ -87,7 +79,7 @@ TEST(WeightedEnergySum, AllowsNegativeWeights) {
     const WeightedEnergySum sum(terms);
     const Vec x = Vec::LinSpaced(4, -0.9, 0.7);
     expect_weighted_sum(sum, terms, x, HessianKind::Exact);
-    litepgo::testing::expect_derivatives_match(sum, x);
+    expect_derivatives_match(sum, x);
 }
 
 TEST(WeightedEnergySum, InfeasibleTermThrowsThroughTheSumWhateverItsWeight) {
@@ -107,7 +99,7 @@ TEST(WeightedEnergySum, SharedAndNestedTerms) {
     const WeightedEnergySum outer({{inner, 0.5}, {chain, 1.0}});
     const Vec x = Vec::LinSpaced(4, -1.0, 1.0);
     EXPECT_NEAR(outer.eval_value(x), 2.5 * chain->eval_value(x), 1e-12);
-    litepgo::testing::expect_derivatives_match(outer, x);
+    expect_derivatives_match(outer, x);
 }
 
 TEST(WeightedEnergySum, RejectsInvalidTerms) {
@@ -143,3 +135,5 @@ TEST(WeightedEnergySum, DetectsATermUpdatedElsewhere) {
     EXPECT_TRUE(sum.update_pattern(x));
     EXPECT_NO_THROW(sum.eval_hessian(x));
 }
+
+} // namespace litepgo::energy::test

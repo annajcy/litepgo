@@ -22,14 +22,14 @@ NB_MODULE(_core, m) {
     });
 
     nb::module_ io = m.def_submodule("io");
-    litepgo::bindings::bind_io(io);
+    litepgo::io::binding::bind(io);
 
     nb::module_ linalg = m.def_submodule("linalg");
-    litepgo::bindings::bind_linalg(linalg);
+    litepgo::linalg::binding::bind(linalg);
 
     nb::module_ energy = m.def_submodule("energy");
-    litepgo::bindings::bind_energy(energy);
+    litepgo::energy::binding::bind(energy);
 
     nb::module_ solver = m.def_submodule("solver");
-    litepgo::bindings::bind_solver(solver);
+    litepgo::solver::binding::bind(solver);
 }
