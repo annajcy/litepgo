@@ -5,7 +5,7 @@
 
 #include <vector>
 
-namespace litepgo::linalg {
+namespace litepgo::dof {
 
 // The principal submatrix of A on a DofReduction's free DOFs, refreshed in place.
 //
@@ -21,7 +21,7 @@ namespace litepgo::linalg {
 class ReducedMatrix {
   public:
     // A must be compressed and reduction.num_dofs() square.
-    ReducedMatrix(const dof::DofReduction& reduction, const SpMat& A);
+    ReducedMatrix(const DofReduction& reduction, const SpMat& A);
 
     const SpMat& matrix() const {
         return matrix_;
@@ -46,4 +46,4 @@ class ReducedMatrix {
     SpMat matrix_;
 };
 
-} // namespace litepgo::linalg
+} // namespace litepgo::dof

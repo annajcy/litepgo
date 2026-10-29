@@ -1,6 +1,6 @@
 #include "litepgo/solver/newton.hpp"
 
-#include "litepgo/linalg/reduced_matrix.hpp"
+#include "litepgo/dof/reduced_matrix.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -84,7 +84,7 @@ class LinearSystem {
   private:
     const dof::DofReduction& fixed_;
     linalg::SparseSolver& solver_;
-    std::optional<linalg::ReducedMatrix> matrix_;
+    std::optional<dof::ReducedMatrix> matrix_;
 };
 
 // Accepts a trial energy that decreases, or that stays within floating-point noise

@@ -1,7 +1,7 @@
 #include "litepgo/dof/dof_reduction.hpp"
 
 #include "litepgo/core/memory.hpp"
-#include "litepgo/linalg/reduced_matrix.hpp"
+#include "litepgo/dof/reduced_matrix.hpp"
 
 #include <algorithm>
 #include <stdexcept>
@@ -74,7 +74,7 @@ void DofReduction::expand(const ConstVecRef& reduced, VecRef full) const {
 }
 
 SpMat DofReduction::reduce(const SpMat& A) const {
-    return linalg::ReducedMatrix(*this, A).matrix();
+    return ReducedMatrix(*this, A).matrix();
 }
 
 } // namespace litepgo::dof

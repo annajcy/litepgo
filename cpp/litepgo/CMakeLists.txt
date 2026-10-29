@@ -22,9 +22,9 @@ add_library(litepgo STATIC
     fem/basis/3d/hex_hermite_basis.cpp
     fem/basis/3d/tet_p1_basis.cpp
     dof/dof_reduction.cpp
+    dof/reduced_matrix.cpp
     linalg/sparse_solver/eigen_ldlt.cpp
     linalg/sparse_solver/eigen_sparse_lu.cpp
-    linalg/reduced_matrix.cpp
     linalg/sparse_pattern.cpp
     linalg/sparse_solver/sparse_solver.cpp
     solver/newton.cpp)

@@ -1,13 +1,13 @@
-#include "litepgo/linalg/reduced_matrix.hpp"
+#include "litepgo/dof/reduced_matrix.hpp"
 
 #include <algorithm>
 #include <stdexcept>
 
-namespace litepgo::linalg {
+namespace litepgo::dof {
 
 namespace {
 
-void check_matrix(const dof::DofReduction& reduction, const SpMat& A) {
+void check_matrix(const DofReduction& reduction, const SpMat& A) {
     if (A.rows() != reduction.num_dofs() || A.cols() != reduction.num_dofs()) {
         throw std::invalid_argument("ReducedMatrix requires a num_dofs x num_dofs matrix");
     }
@@ -18,7 +18,7 @@ void check_matrix(const dof::DofReduction& reduction, const SpMat& A) {
 
 } // namespace
 
-ReducedMatrix::ReducedMatrix(const dof::DofReduction& reduction, const SpMat& A) {
+ReducedMatrix::ReducedMatrix(const DofReduction& reduction, const SpMat& A) {
     check_matrix(reduction, A);
     outer_indices_.assign(A.outerIndexPtr(), A.outerIndexPtr() + A.outerSize() + 1);
     inner_indices_.assign(A.innerIndexPtr(), A.innerIndexPtr() + A.nonZeros());
@@ -86,4 +86,4 @@ void ReducedMatrix::add_to_diagonal(double shift) {
     }
 }
 
-} // namespace litepgo::linalg
+} // namespace litepgo::dof

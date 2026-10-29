@@ -61,7 +61,7 @@ add_executable(litepgo_tests
     fem/local/surface_integration_gtest.cpp
     fem/material/volumetric/tet_p1_integration_gtest.cpp
     dof/dof_reduction_gtest.cpp
-    linalg/reduced_matrix_gtest.cpp
+    dof/reduced_matrix_gtest.cpp
     linalg/sparse_pattern_gtest.cpp
     linalg/sparse_solver/sparse_solver_gtest.cpp
     mesh/extract_surface_gtest.cpp
