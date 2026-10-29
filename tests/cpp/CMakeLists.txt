@@ -64,6 +64,7 @@ add_executable(litepgo_tests
     dof/reduced_matrix_gtest.cpp
     linalg/sparse_pattern_gtest.cpp
     linalg/sparse_solver/sparse_solver_gtest.cpp
+    linalg/sparse_solver/pardiso_threading_gtest.cpp
     mesh/extract_surface_gtest.cpp
     mesh/mesh_topology_gtest.cpp
     mesh/triangle_mid_edge_stencils_gtest.cpp

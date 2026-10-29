@@ -7,6 +7,10 @@
 #include "litepgo/linalg/sparse_solver/accelerate_ldlt.hpp"
 #include "litepgo/linalg/sparse_solver/accelerate_llt.hpp"
 #endif
+#if defined(LITEPGO_HAS_MKL)
+#include "litepgo/linalg/sparse_solver/pardiso_ldlt.hpp"
+#include "litepgo/linalg/sparse_solver/pardiso_llt.hpp"
+#endif
 
 #include <Eigen/Dense>
 #include <gtest/gtest.h>
@@ -119,6 +123,10 @@ using AllSolverTypes = ::testing::Types<litepgo::linalg::EigenLDLT, litepgo::lin
                                         ,
                                         litepgo::linalg::AccelerateLLT, litepgo::linalg::AccelerateLDLT
 #endif
+#if defined(LITEPGO_HAS_MKL)
+                                        ,
+                                        litepgo::linalg::PardisoLLT, litepgo::linalg::PardisoLDLT
+#endif
                                         >;
 TYPED_TEST_SUITE(AllSolvers, AllSolverTypes);
 
@@ -165,6 +173,10 @@ using IndefiniteSolverTypes = ::testing::Types<litepgo::linalg::EigenSparseLU
                                                ,
                                                litepgo::linalg::AccelerateLDLT
 #endif
+#if defined(LITEPGO_HAS_MKL)
+                                               ,
+                                               litepgo::linalg::PardisoLDLT
+#endif
                                                >;
 TYPED_TEST_SUITE(IndefiniteSolvers, IndefiniteSolverTypes);
 
@@ -175,9 +187,9 @@ TYPED_TEST(IndefiniteSolvers, SolvesSaddlePoint) {
     expect_solution(solver, A);
 }
 
-#if defined(LITEPGO_HAS_ACCELERATE)
-TEST(AccelerateLLT, FailsOnIndefiniteButKeepsTheAnalysis) {
-    litepgo::linalg::AccelerateLLT solver;
+// Cholesky backends reject an indefinite matrix but keep its analysis.
+template <class Solver> void expect_cholesky_fails_on_indefinite() {
+    Solver solver;
     const SpMat A = saddle_point(12);
     ASSERT_TRUE(solver.analyze(A));
     EXPECT_FALSE(solver.factorize(A));
@@ -189,12 +201,26 @@ TEST(AccelerateLLT, FailsOnIndefiniteButKeepsTheAnalysis) {
     ASSERT_TRUE(solver.factorize(shifted));
     expect_solution(solver, shifted);
 }
+
+#if defined(LITEPGO_HAS_ACCELERATE)
+TEST(AccelerateLLT, FailsOnIndefiniteButKeepsTheAnalysis) {
+    expect_cholesky_fails_on_indefinite<litepgo::linalg::AccelerateLLT>();
+}
+#endif
+
+#if defined(LITEPGO_HAS_MKL)
+TEST(PardisoLLT, FailsOnIndefiniteButKeepsTheAnalysis) {
+    expect_cholesky_fails_on_indefinite<litepgo::linalg::PardisoLLT>();
+}
 #endif
 
 TEST(AutoSparseSolver, AliasesThePlatformDefaults) {
 #if defined(LITEPGO_HAS_ACCELERATE)
     EXPECT_TRUE((std::is_same_v<litepgo::linalg::AutoSparseSolver, litepgo::linalg::AccelerateLLT>));
     EXPECT_TRUE((std::is_same_v<litepgo::linalg::AutoIndefiniteSparseSolver, litepgo::linalg::AccelerateLDLT>));
+#elif defined(LITEPGO_HAS_MKL)
+    EXPECT_TRUE((std::is_same_v<litepgo::linalg::AutoSparseSolver, litepgo::linalg::PardisoLLT>));
+    EXPECT_TRUE((std::is_same_v<litepgo::linalg::AutoIndefiniteSparseSolver, litepgo::linalg::PardisoLDLT>));
 #else
     EXPECT_TRUE((std::is_same_v<litepgo::linalg::AutoSparseSolver, litepgo::linalg::EigenLDLT>));
     EXPECT_TRUE((std::is_same_v<litepgo::linalg::AutoIndefiniteSparseSolver, litepgo::linalg::EigenSparseLU>));

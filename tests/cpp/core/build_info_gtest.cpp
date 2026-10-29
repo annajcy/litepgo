@@ -22,6 +22,10 @@ TEST(BuildInfo, ListsTheCompiledSparseBackends) {
     expected.push_back("AccelerateLLT");
     expected.push_back("AccelerateLDLT");
 #endif
+#if defined(LITEPGO_HAS_MKL)
+    expected.push_back("PardisoLLT");
+    expected.push_back("PardisoLDLT");
+#endif
     EXPECT_EQ(litepgo::build_info().sparse_backends, expected);
 }
 

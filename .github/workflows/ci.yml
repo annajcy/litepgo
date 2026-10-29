@@ -42,5 +42,11 @@ jobs:
           python-version: "3.12"
       - name: Create the virtual environment
         run: uv sync --locked
+      - name: Cache the oneMKL wheels (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: build/_cache
+          key: onemkl-2026.1.0
       - name: Configure, build, and test (GoogleTest and pytest)
         run: cmake --workflow --preset ${{ matrix.preset }}

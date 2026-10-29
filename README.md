@@ -6,7 +6,10 @@ FEM examples and the mathematical naming and derivative-layout conventions are i
 
 Requires Python 3.12, uv, CMake 3.28+, Ninja, and a C++20 compiler.
 
-Eigen 5.0.1, oneTBB 2023.1.0, nanobind 3.1.0, and GoogleTest are fetched at pinned versions; TBB is built as a shared library. On macOS the Accelerate framework provides an extra sparse LDLT backend (`LITEPGO_WITH_ACCELERATE`, on by default); elsewhere only Eigen's LDLT is built. `litepgo.build_info()` reports what a build contains.
+Eigen 5.0.1, oneTBB 2023.1.0, nanobind 3.1.0, and GoogleTest are fetched at pinned versions; TBB is built as a shared library. Eigen's LDLT and SparseLU are always built; the platform's sparse backends become the `AutoSparseSolver` and `AutoIndefiniteSparseSolver` defaults. `litepgo.build_info()` reports what a build contains.
+
+- macOS: Apple Accelerate's LLT and LDLT (`LITEPGO_WITH_ACCELERATE`, on by default).
+- x86-64 Linux: Intel oneMKL 2026.1 PARDISO's LLT and pivoted LDLT (`LITEPGO_WITH_MKL`, on by default). Configuring downloads the pinned `mkl` and `mkl-include` wheels from PyPI (about 225 MB) and unpacks them once into `build/_cache/` (`LITEPGO_MKL_CACHE_DIR`), shared by every preset; `-DLITEPGO_MKL_ROOT=/opt/intel/oneapi/mkl/2026.1` uses a local oneMKL 2026.1 install instead. MKL runs on its oneTBB threading layer over litepgo's own TBB runtime, so `tbb::task_arena` and `tbb::global_control` bound PARDISO like every other parallel loop; `MKL_NUM_THREADS` has no effect. Eigen's dense code does not use MKL.
 
 ## Build and test
 

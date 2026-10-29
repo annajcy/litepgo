@@ -1,6 +1,7 @@
 import sys
 
 import litepgo
+import litepgo.linalg.sparse_solver as la
 
 
 def test_native_module_loads():
@@ -14,3 +15,4 @@ def test_build_info_reports_dependencies():
     assert info["tbb_runtime_version"]
     assert info["sparse_backends"][0] == "EigenLDLT"
     assert ("AccelerateLDLT" in info["sparse_backends"]) == (sys.platform == "darwin")
+    assert ("PardisoLDLT" in info["sparse_backends"]) == hasattr(la, "PardisoLDLT")
