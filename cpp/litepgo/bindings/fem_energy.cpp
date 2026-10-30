@@ -3,10 +3,12 @@
 #include "litepgo/fem/field/shared_field.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/point_displacement_map.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/shell_fem_energy.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
+#include <nanobind/eigen/sparse.h>
 
 #include <nanobind/eigen/dense.h>
 #include <nanobind/stl/shared_ptr.h>
@@ -33,6 +35,16 @@ std::vector<SharedField3D> shared(const Fields& fields) {
     for (const auto& field : fields)
         result.emplace_back(field);
     return result;
+}
+
+template <class B> void bind_point_map(nb::module_& m, const char* name) {
+    m.def(
+        name,
+        [](const PointEmbedding& embedding, const dof::VertexDofMap& map, const Fields& fields) {
+            return build_point_displacement_map<B>(embedding, map, shared(fields));
+        },
+        "embedding"_a, "u_dof_map"_a, "X_fields"_a);
+    register_instance(m, "build_point_displacement_map", nb::make_tuple(nb::type<B>()), m.attr(name));
 }
 
 std::string class_name(nb::handle cls) {
@@ -71,6 +83,9 @@ template <class M> void bind_shell(nb::module_& m) {
 } // namespace
 
 void bind_energies(nb::module_& m) {
+    bind_point_map<TetP1Basis>(m, "_point_map_tet_p1");
+    bind_point_map<HexQ1Basis>(m, "_point_map_hex_q1");
+    bind_point_map<HexHermiteBasis>(m, "_point_map_hex_hermite");
     // Add an instantiation here to make it available as Template[args] in Python.
     bind_volumetric<NeoHookean, TetP1Basis, TetCentroidQuadrature>(m);
     bind_volumetric<NeoHookean, HexQ1Basis, GaussLegendre3D<2>>(m);
