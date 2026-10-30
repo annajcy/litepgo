@@ -191,8 +191,36 @@ zero closest-feature distances. Degenerate evaluated triangles are rejected.
 Native predicates and ACCD use double precision, without a formal floating-point robustness guarantee;
 extreme scales, grazing contact and nearly degenerate geometry remain numerical limitations.
 Closest-feature transitions are generally C1, not C2; exact Hessians are those of the selected branch.
+Native contact accepts a shared, read-only broadphase backend as its optional fourth argument:
+
+```cpp
+#include <litepgo/contact/sweep_and_prune.hpp>
+auto broad_phase = std::make_shared<litepgo::contact::SweepAndPrune>();
+litepgo::contact::IPCContactEnergy contact(surface, options, {}, broad_phase);
+```
+
+```python
+from litepgo.contact import IPCContactEnergy, SweepAndPrune
+broad_phase = SweepAndPrune()
+contact = IPCContactEnergy(surface, options, broad_phase=broad_phase)
+```
+
+Omitting the backend (or passing `nullptr`/`None`) selects `SweepAndPrune`; existing
+three-argument constructors still work. Energies retain shared ownership, so one backend
+can serve multiple energies and outlive the caller's reference. IPCTK's constructor is unchanged.
+Python exposes the built-in base/derived types for selection, not Python-defined backend overrides.
+
+C++ backends derive from `BroadPhase` and implement `detect(const BroadPhaseQuery&) const`.
+The query contains already inflated, outward-rounded static or swept `AABB`s and a
+`PairKindMask` for VF, EE and optional EF pairs. Return `BoxPair` indices into the input
+array, including every allowed overlapping pair. Missing pairs violate the collision-safety
+contract. Conservative extra pairs, arbitrary order and duplicates are accepted; native
+contact validates indices, filters kinds/AABB overlap/topology, and sorts/uniques primitive
+pairs before contact feature multiplicities are formed. Backend calls must be safe to share
+concurrently; query data cannot be retained. SAP validates bounds/kinds and uses per-call scratch.
+
 The broadphase is sweep-and-prune, not spatial hashing: it selects the widest scene axis, scans
-AABB overlaps in parallel, and sorts merged candidates deterministically. Swept bounds, inflation and
+AABB overlaps in parallel; contact sorts merged candidates deterministically. Swept bounds, inflation and
 outward rounding are preserved. It has quadratic worst-case behavior for heavily overlapping boxes. Native local contact
 evaluation, Hessian projection, gradient/Hessian assembly and surface CCD queries use TBB.
 Assembly owns disjoint output DOFs and sparse columns, gathering contributions in fixed pair order;

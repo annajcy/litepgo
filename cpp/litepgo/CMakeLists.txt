@@ -1,5 +1,6 @@
 add_library(litepgo STATIC
     contact/ipc_contact_energy.cpp
+    contact/sweep_and_prune.cpp
     dof/assembler.cpp
     mesh/extract_surface.cpp
     mesh/triangle_mid_edge_stencils.cpp

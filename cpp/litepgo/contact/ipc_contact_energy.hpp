@@ -1,5 +1,6 @@
 #pragma once
 
+#include "litepgo/contact/broad_phase.hpp"
 #include "litepgo/contact/contact_options.hpp"
 #include "litepgo/energy/dynamic_pattern_energy.hpp"
 #include "litepgo/mesh/mesh_data.hpp"
@@ -23,7 +24,9 @@ namespace litepgo::contact {
 // These are floating-point predicates/ACCD, not formally robust exact arithmetic.
 class IPCContactEnergy final : public energy::DynamicPatternEnergy {
   public:
-    IPCContactEnergy(const mesh::TriangleMesh& surface, IPCContactOptions options, std::vector<Plane> planes = {});
+    // Null selects SweepAndPrune; the energy shares ownership of an immutable backend.
+    IPCContactEnergy(const mesh::TriangleMesh& surface, IPCContactOptions options, std::vector<Plane> planes = {},
+                     std::shared_ptr<const BroadPhase> broad_phase = nullptr);
     ~IPCContactEnergy() override;
     int num_vertices() const {
         return num_dofs() / 3;

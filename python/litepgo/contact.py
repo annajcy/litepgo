@@ -3,14 +3,18 @@
 Energies act on vertex-major xyz positions, with unit stiffness. Call
 update_pattern(x) before Hessian assembly. Compose with AffineMappedEnergy and
 SurfaceDofMap for displacement DOFs. Native ACCD uses floating-point arithmetic;
-it does not provide formal floating-point robustness guarantees.
+it does not provide formal floating-point robustness guarantees. Native energies
+accept broad_phase=SweepAndPrune() (None selects the default) and retain shared
+ownership of that backend. Custom backends are implemented in C++, not Python.
 """
 from litepgo import _core
 
+BroadPhase = _core.contact.BroadPhase
+SweepAndPrune = _core.contact.SweepAndPrune
 Plane = _core.contact.Plane
 IPCContactOptions = _core.contact.IPCContactOptions
 IPCContactEnergy = _core.contact.IPCContactEnergy
-__all__ = ["Plane", "IPCContactOptions", "IPCContactEnergy"]
+__all__ = ["BroadPhase", "SweepAndPrune", "Plane", "IPCContactOptions", "IPCContactEnergy"]
 
 if hasattr(_core.contact, "IPCTKContactEnergy"):
     IPCTKContactOptions = _core.contact.IPCTKContactOptions

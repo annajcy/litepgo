@@ -139,3 +139,38 @@ def test_independent_native_matches_toolkit_original_sum():
     np.testing.assert_allclose(native.eval_hessian(x).toarray(), toolkit.eval_hessian(x).toarray(), rtol=1e-9, atol=1e-9)
     with pytest.raises(TypeError):
         contact.IPCContactEnergy(surface, contact.IPCTKContactOptions(dhat=1))
+
+
+def test_native_broad_phase_injection_and_lifetime():
+    import gc
+
+    surface = two_triangles(0.5)
+    options = contact.IPCContactOptions(dhat=1)
+    backend = contact.SweepAndPrune()
+    assert isinstance(backend, contact.BroadPhase)
+    with pytest.raises(TypeError):
+        contact.BroadPhase()
+    energies = [contact.IPCContactEnergy(surface, options),
+                contact.IPCContactEnergy(surface, options, [], backend),
+                contact.IPCContactEnergy(surface, options, broad_phase=backend),
+                contact.IPCContactEnergy(surface, options, broad_phase=None)]
+    del backend
+    gc.collect()
+    x = surface.positions.ravel()
+    dx = np.zeros_like(x)
+    dx[11] = -2
+    for barrier in energies:
+        barrier.update_pattern(x)
+        assert barrier.eval_value(x) == energies[0].eval_value(x)
+        np.testing.assert_array_equal(barrier.eval_gradient(x), energies[0].eval_gradient(x))
+        np.testing.assert_array_equal(barrier.eval_hessian(x).toarray(), energies[0].eval_hessian(x).toarray())
+        assert barrier.max_feasible_step(x, dx) == energies[0].max_feasible_step(x, dx)
+    del energies[1]
+    gc.collect()
+    assert energies[1].eval_value(x) == energies[0].eval_value(x)
+    with pytest.raises(TypeError):
+        contact.IPCContactEnergy(surface, options, broad_phase=object())
+    if hasattr(contact, "IPCTKContactEnergy"):
+        with pytest.raises(TypeError):
+            contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(dhat=1),
+                                       broad_phase=contact.SweepAndPrune())
