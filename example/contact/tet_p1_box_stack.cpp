@@ -20,6 +20,10 @@
 #include <utility>
 #include <vector>
 
+#ifdef LITEPGO_CONTACT_BENCHMARK
+#include "contact_benchmark.hpp"
+#endif
+
 int main(int argc, char** argv) {
     using namespace litepgo;
     const auto box = std::get<mesh::TetMesh>(mesh::read_veg(argc > 1 ? argv[1] : LITEPGO_ASSETS_DIR "/box-tet.veg"));
@@ -69,7 +73,15 @@ int main(int argc, char** argv) {
 
     // The lower box's bottom face is clamped; the upper box's top face is pulled down
     // by more than the gap, so the boxes press against each other.
-    const double tolerance = height * 1e-8, press = 0.2 * height, stiffness = 1;
+    const double tolerance = height * 1e-8, press = 0.2 * height;
+    double stiffness = 1;
+#ifdef LITEPGO_CONTACT_BENCHMARK
+    const int thread_count = argc > 3 ? std::stoi(argv[3]) : 1;
+    const int repetitions = argc > 4 ? std::stoi(argv[4]) : 5;
+    const double total_stiffness = argc > 5 ? std::stod(argv[5]) : 0;
+    if (thread_count < 1 || repetitions < 1 || !std::isfinite(total_stiffness) || total_stiffness < 0)
+        throw std::invalid_argument("Invalid benchmark threads, repetitions or total stiffness");
+#endif
     std::vector<int> clamped;
     std::vector<std::array<int, 3>> pulled_dofs;
     for (int v = 0; v < box_vertices; ++v) {
@@ -80,6 +92,10 @@ int main(int argc, char** argv) {
             pulled_dofs.push_back({3 * upper, 3 * upper + 1, 3 * upper + 2});
         }
     }
+#ifdef LITEPGO_CONTACT_BENCHMARK
+    if (total_stiffness > 0)
+        stiffness = total_stiffness / double(pulled_dofs.size());
+#endif
     Vec targets = Vec::Zero(3 * Eigen::Index(pulled_dofs.size()));
     for (Eigen::Index i = 0; i < Eigen::Index(pulled_dofs.size()); ++i)
         targets[3 * i + 1] = -press;
@@ -102,6 +118,11 @@ int main(int argc, char** argv) {
     solver::NewtonOptions options;
     options.gradient_tolerance = 1e-8;
     options.max_iterations = 200;
+#ifdef LITEPGO_CONTACT_BENCHMARK
+    return run_contact_benchmark(surface.mesh, surface_map, elastic, pulling, fixed, initial, options,
+                                 contact_options.dhat, kappa,
+                                 argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/contact_benchmark", thread_count, repetitions);
+#endif
     linalg::AutoSparseSolver solver;
     const auto result = solver::newton_solve(potential, fixed, initial, options, solver);
     const bool converged = result.status == solver::NewtonStatus::Converged;
