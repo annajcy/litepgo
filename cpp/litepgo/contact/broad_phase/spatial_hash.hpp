@@ -7,7 +7,7 @@ namespace litepgo::contact {
 
 // Sparse hash grid, with per-call scratch and no retained query state. Auto sizing
 // uses the median positive edge/face AABB extent. Unrepresentable coordinates or
-// more than 2^20 box-cell records fall back to SAP for the entire query.
+// more than 2^20 box-cell records throw overflow/length errors.
 class SpatialHash final : public BroadPhase {
   public:
     explicit SpatialHash(std::optional<double> cell_size = std::nullopt);

@@ -218,15 +218,19 @@ TEST(IPCTKContactEnergy, PlanesRepelVerticesAndRejectThoseBehind) {
 // simulation vertices 2, 1, 0, before an unrelated DOF u[9].
 TEST(IPCTKContactEnergy, ComposesWithASurfaceDofMap) {
     auto barrier = std::make_shared<IPCTKContactEnergy>(two_triangles(0.5), options(1.0));
-    const dof::SurfaceDofMap surface_map(barrier->rest_positions(), {-1, -1, -1, 2, 1, 0}, 10);
-    energy::AffineMappedEnergy mapped(barrier, surface_map.displacement_map(), surface_map.rest_positions());
+    SpMat W(18, 10);
+    for (int v = 0; v < 3; ++v)
+        for (int c = 0; c < 3; ++c)
+            W.insert(9 + 3 * v + c, 3 * (2 - v) + c) = 1;
+    const dof::SurfaceDofMap kinematics(barrier->rest_positions(), W);
+    energy::AffineMappedEnergy mapped(barrier, kinematics.displacement_map(), kinematics.rest_positions());
     EXPECT_FALSE(mapped.has_fixed_pattern());
 
     Vec u = Vec::Zero(10);
     u[9] = 7.0;  // drives nothing
     u[8] = -0.2; // lowers vertex 3
     u[3] = 0.1;  // moves vertex 4 in x
-    const Vec x = surface_map.positions(u);
+    const Vec x = kinematics.positions(u);
     EXPECT_EQ(mapped.eval_value(u), barrier->eval_value(x));
     const Vec g = barrier->eval_gradient(x);
     const Vec gradient = mapped.eval_gradient(u);
