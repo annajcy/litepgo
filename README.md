@@ -173,7 +173,7 @@ retain all four vertices, using `m = z*(2-z)` for `z < 1`, otherwise one, where
 projected Hessians clamp each local term's eigenvalues. Assembly order is fixed and deterministic.
 This is the unweighted original barrier, not the area-weighted/physical barrier or friction model.
 
-The native backend uses sweep-and-prune AABBs, including swept boxes for linear motion, and additive
+The native backend uses spatial-hash AABBs, including swept boxes for linear motion, and additive
 conservative advancement (ACCD). `IPCContactOptions.ccd_tolerance` is a **time increment** stopping
 tolerance: when another safe increment is smaller, return the last conservative bound.
 `ccd_max_iterations` bounds advancement per pair, also returning the last bound on exhaustion.
@@ -201,20 +201,19 @@ Closest-feature transitions are generally C1, not C2; exact Hessians are those o
 Native contact accepts a shared, read-only broadphase backend as its required third argument:
 
 ```cpp
-#include <litepgo/contact/broad_phase/sweep_and_prune.hpp>
-auto broad_phase = std::make_shared<litepgo::contact::SweepAndPrune>();
+#include <litepgo/contact/broad_phase/spatial_hash.hpp>
+auto broad_phase = std::make_shared<litepgo::contact::SpatialHash>();
 litepgo::contact::IPCContactEnergy contact(surface, options, broad_phase);
 ```
 
 ```python
-from litepgo.contact import IPCContactEnergy, SweepAndPrune
-broad_phase = SweepAndPrune()
+from litepgo.contact import IPCContactEnergy, SpatialHash
+broad_phase = SpatialHash()
 contact = IPCContactEnergy(surface, options, broad_phase=broad_phase)
 ```
 
 The native constructor is `(surface, options, broad_phase, planes = {})`.
-The backend is required: omission, `nullptr` and `None` are rejected. To retain SAP
-behavior, explicitly pass `SweepAndPrune`; move any plane list to the fourth argument. Energies retain shared ownership, so one backend
+The backend is required: omission, `nullptr` and `None` are rejected. Explicitly pass `SpatialHash`; move any plane list to the fourth argument. Energies retain shared ownership, so one backend
 can serve multiple energies and outlive the caller's reference. IPCTK's constructor is unchanged.
 Python exposes the built-in base/derived types for selection, not Python-defined backend overrides.
 
@@ -225,9 +224,9 @@ array, including every allowed overlapping pair. Missing pairs violate the colli
 contract. Conservative extra pairs, arbitrary order and duplicates are accepted; native
 contact validates indices, filters kinds/AABB overlap/topology, and sorts/uniques primitive
 pairs before contact feature multiplicities are formed. Backend calls must be safe to share
-concurrently; query data cannot be retained. SAP validates bounds/kinds and uses per-call scratch.
+concurrently; query data cannot be retained. SpatialHash validates bounds/kinds and uses per-call scratch.
 
-`SpatialHash()` is an alternative native backend (`SpatialHash(cell_size)` selects a
+`SpatialHash()` is the native backend (`SpatialHash(cell_size)` selects a
 finite positive width explicitly). Auto sizing uses the median positive maximum AABB
 extent among edges/faces, excluding points. It uses a sparse `unordered_map` with full
 signed int3 equality; each box covers every cell from `floor(lo/h)` through `floor(hi/h)`
@@ -235,21 +234,13 @@ inclusively. Records and bucket queries are parallel; map insertion is serial. T
 lowest shared cell owns each pair, preventing duplicate output without skipping overlaps.
 
 All input boxes are validated first. Nonfinite bounds, unrepresentable int64 cell
-coordinates, missing positive auto extent, or more than 2^20 box-cell records cause a
-whole-query SAP fallback. Invalid bounds/kinds still throw. There is **no pair-work
+coordinates, or more than 2^20 box-cell records throw an overflow or length error. Invalid bounds/kinds still throw. There is **no pair-work
 budget or pair-work-triggered fallback**. Long overlapping AABBs may be examined in
 many shared cells despite unique output; dense buckets remain quadratic. Shared
 backends are safe for concurrent calls because all query scratch is local.
 
-To benchmark SAP against SpatialHash without IPCTK solves:
-`python scripts/contact_benchmark.py --comparison spatial-hash --mesh PATH --threads 8
---total-stiffness 41 --repetitions 3 --output output/hash_case`.
-The executable accepts `spatial-hash` immediately after total stiffness.
-This mode writes full traces/displacements and their comparison, and skips the
-IPCTK-specific shared-state diagnostics. The default benchmark comparison remains IPCTK.
-
-The examples explicitly choose sweep-and-prune: it selects the widest scene axis, scans
-AABB overlaps in parallel; contact sorts merged candidates deterministically. Swept bounds, inflation and
+The benchmark compares native SpatialHash contact with IPCTK.
+The examples explicitly choose SpatialHash; contact sorts merged candidates deterministically. Swept bounds, inflation and
 outward rounding are preserved. It has quadratic worst-case behavior for heavily overlapping boxes. Native local contact
 evaluation, Hessian projection, gradient/Hessian assembly and surface CCD queries use TBB.
 Assembly owns disjoint output DOFs and sparse columns, gathering contributions in fixed pair order;
@@ -264,22 +255,92 @@ Migration: `BarrierContactEnergy` → `IPCTKContactEnergy`, `BarrierContactOptio
 `LITEPGO_WITH_IPC` → `LITEPGO_WITH_IPC_TOOLKIT`. To use the native implementation instead, choose the
 `IPCContactEnergy`/`IPCContactOptions` pair; the examples do this by default.
 
-`dof::SurfaceDofMap` (`litepgo/dof/surface_dof_map.hpp`) gives surface positions as an affine function of the
-simulation DOFs, `p(u) = X + W u`: built from a general sparse `W` (e.g. a surface embedded in elements), or by
-selecting each surface vertex's position DOFs from a simulation vertex (`-1` keeps a static vertex at rest).
+Migration: `SurfaceDofMap` → `SurfaceKinematics`, `surface_dof_map.hpp` → `surface_kinematics.hpp`
+(C++ namespace and Python module remain `dof`; no old-name alias).
+Surface kinematics accepts only `(rest_positions, W)`. For extracted boundaries,
+`extract_surface_with_vertices` preserves exact volume vertex IDs; use
+`dof::build_vertex_displacement_map(vertices, num_dofs, dofs_per_vertex = 3)`
+(`litepgo/dof/vertex_displacement_map.hpp`) to build exact value-slot weights.
+Negative/out-of-range IDs are rejected. Hermite uses width 24 and only value slots;
+this does not sample curved faces. Independent surfaces use the locator path below.
+
+`dof::SurfaceKinematics` (`litepgo/dof/surface_kinematics.hpp`) gives surface positions as an affine function of the
+simulation DOFs, `p(u) = X + W u`, built from a general sparse `W`; zero rows keep static vertices at rest.
 The barrier acts on `u` as `AffineMappedEnergy(barrier, map.displacement_map(), map.rest_positions())`, which
-pulls gradients and Hessians back as `W^T g` and `W^T H W`. `mesh::extract_surface_with_vertices(volume)` gives
-a volume mesh's boundary with the volume vertex of each surface vertex. `example/contact/tet_p1_box_stack.cpp`
+pulls gradients and Hessians back as `W^T g` and `W^T H W`. The contact examples preserve extracted vertex IDs to avoid inverse-solve roundoff
+introducing tiny nonzero weights and expanding the mapped Hessian pattern.
+`example/contact/tet_p1_box_stack.cpp`
 (and its Python mirror) presses two tet boxes together:
 
 ```cpp
-const mesh::ExtractedSurface surface = mesh::extract_surface_with_vertices(stack);
-auto barrier = std::make_shared<contact::IPCContactEnergy>(surface.mesh, contact::IPCContactOptions{.dhat = dhat},
-    std::make_shared<contact::SweepAndPrune>());
-const dof::SurfaceDofMap surface_map(surface.mesh.positions, surface.vertices, num_dofs);
-auto contact = std::make_shared<energy::AffineMappedEnergy>(barrier, surface_map.displacement_map(),
-                                                            surface_map.rest_positions());
+const auto extracted = mesh::extract_surface_with_vertices(stack);
+const auto& surface = extracted.mesh;
+const auto W = dof::build_vertex_displacement_map(extracted.vertices, num_dofs);
+auto barrier = std::make_shared<contact::IPCContactEnergy>(surface, contact::IPCContactOptions{.dhat = dhat},
+    std::make_shared<contact::SpatialHash>());
+const dof::SurfaceKinematics kinematics(surface.positions, W);
+auto contact = std::make_shared<energy::AffineMappedEnergy>(barrier, kinematics.displacement_map(),
+                                                            kinematics.rest_positions());
 energy::WeightedEnergySum potential({{elastic, 1}, {loads, 1}, {contact, kappa}});
 ```
 
 Python mirrors both backends as `litepgo.contact`; `IPCTKContactEnergy` and its options are exported only in toolkit-enabled builds. Friction and adaptive barrier stiffness are not implemented.
+
+`spatial::SpatialHash` (`litepgo/spatial/spatial_hash.hpp`) owns a snapshot of input
+AABBs, indexed in input order. Construct it with boxes and an optional positive cell
+size. `query(region)` returns unique IDs of boxes intersecting the inclusive region;
+use `{point, point}` for a point query. `overlapping_pairs(filter)` returns unique
+accepted pairs with `i < j`; the predicate receives original box IDs and must support
+concurrent calls. Const queries can run concurrently. Invalid bounds are rejected. Grid
+coordinate overflow throws `std::overflow_error`; excessive box-cell records (including query regions)
+throw `std::length_error`. No scanning fallback is performed. The contact spatial hash
+adapts primitive-kind filtering to this index. No element locator is provided.
+
+Rest-geometry point location is available as `fem::ElementLocator<GeometryBasis>`
+(`litepgo/fem/element_locator.hpp`), with TetP1 and HexQ1 geometry supported.
+The locator owns copies of the three-component interpolated X fields, builds a
+SpatialHash over their corner bounds, and returns `PointEmbedding.element_ids`
+and `PointEmbedding.xi`. The geometry basis is independent of the displacement
+basis: Q1 geometry can also be used with Hermite displacement DOFs.
+
+```python
+locator = fem.ElementLocator[fem.TetP1Basis](X_fields)
+surface = mesh.extract_surface(volume)
+embedding = locator.locate(surface.positions)
+# X_fields[embedding.element_ids[i]].eval_value(embedding.xi[i]) ~= surface.positions[i]
+```
+
+Queries accept finite `(n, 3)` points. Damped Newton inversion checks both physical
+residual and reference-domain containment. Bounds use a scale-dependent numerical
+padding; reference-domain tolerance is 1e-10. Shared-boundary points select the
+lowest successful element ID. Outside points, singular inverse maps, and failed
+inverse solves raise an error identifying the point; no projection or extrapolation
+is performed. Rebuild the locator when rest geometry changes. High-order curved
+geometry is not accepted; its conservative bounds require a separate implementation.
+This API locates points only; it does not construct surface displacement weights.
+
+Build the global point-displacement matrix from the embedding and a displacement
+basis (which may differ from the locator's geometry basis):
+
+```python
+W = fem.build_point_displacement_map[fem.HexHermiteBasis](embedding, u_dof_map, X_fields)
+kinematics = dof.SurfaceKinematics(surface.positions, W)
+```
+
+C++ uses `fem::build_point_displacement_map<UBasis>(embedding, u_dof_map, X_fields)`
+from `litepgo/fem/point_displacement_map.hpp`. Supported displacement bases are
+TetP1, HexQ1 and HexHermite. The result has `3 * number_of_points` rows in xyz order
+and `u_dof_map.num_dofs` columns (Python: SciPy CSC). Fields and the DOF map must
+use the same element order and rest geometry as the embedding. Each element's
+`BasisDofTransform` is built once; interpolation rows are pulled back to physical
+DOFs before assembly. Hermite retains the positive axis-aligned box restriction.
+Invalid IDs, nonfinite/out-of-domain xi, incompatible field counts and DOF layouts
+are rejected; empty point sets produce a zero-row matrix.
+
+Python uses the same exact boundary path:
+
+```python
+extracted = mesh.extract_surface_with_vertices(volume)
+W = dof.build_vertex_displacement_map(extracted.vertices, num_dofs, dofs_per_vertex=3)
+kinematics = dof.SurfaceKinematics(extracted.mesh.positions, W)
+```
