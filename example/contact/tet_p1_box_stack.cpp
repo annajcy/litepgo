@@ -1,4 +1,4 @@
-#include "litepgo/contact/barrier_contact_energy.hpp"
+#include "litepgo/contact/ipc_contact_energy.hpp"
 #include "litepgo/dof/surface_dof_map.hpp"
 #include "litepgo/energy/affine_mapped_energy.hpp"
 #include "litepgo/energy/vertex_pulling_energy.hpp"
@@ -37,8 +37,9 @@ int main(int argc, char** argv) {
     const double gap = 0.04 * height;
     Vec rest_positions(2 * box.positions.size());
     rest_positions << box.positions, box.positions;
+    // A small lateral offset avoids an exactly symmetric contact bifurcation.
     for (int v = box_vertices; v < 2 * box_vertices; ++v)
-        rest_positions[3 * v + 1] += height + gap;
+        rest_positions.segment<3>(3 * v) += Eigen::Vector3d(0.013 * height, height + gap, 0.017 * height);
     std::vector<mesh::TetTopology::Cell> cells;
     for (int body = 0; body < 2; ++body)
         for (int e = 0; e < box.topology.num_cells(); ++e) {
@@ -87,9 +88,9 @@ int main(int argc, char** argv) {
     // Contact acts on the boundary of both boxes, whose vertices move with their
     // volume displacement DOFs. The barrier's weight kappa is its stiffness.
     const mesh::ExtractedSurface surface = mesh::extract_surface_with_vertices(stack);
-    contact::BarrierContactOptions contact_options;
+    contact::IPCContactOptions contact_options;
     contact_options.dhat = 0.01 * height;
-    auto barrier = std::make_shared<contact::BarrierContactEnergy>(surface.mesh, contact_options);
+    auto barrier = std::make_shared<contact::IPCContactEnergy>(surface.mesh, contact_options);
     const dof::SurfaceDofMap surface_map(surface.mesh.positions, surface.vertices, num_dofs);
     auto contact = std::make_shared<energy::AffineMappedEnergy>(barrier, surface_map.displacement_map(),
                                                                 surface_map.rest_positions());

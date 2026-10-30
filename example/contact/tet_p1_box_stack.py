@@ -34,7 +34,8 @@ def main():
 
     # Two copies of the box, one body each, the upper one a small gap above the lower.
     gap = 0.04 * height
-    rest_nodes = np.vstack([box_nodes, box_nodes + [0.0, height + gap, 0.0]])
+    # A small lateral offset avoids an exactly symmetric contact bifurcation.
+    rest_nodes = np.vstack([box_nodes, box_nodes + [0.013 * height, height + gap, 0.017 * height]])
     rest_positions = rest_nodes.ravel()
     cells = np.vstack([box.cells, box.cells + box_vertices]).astype(np.int32)
     stack = mesh.TetMesh(rest_nodes, cells)
@@ -67,8 +68,8 @@ def main():
     # Contact acts on the boundary of both boxes, whose vertices move with their
     # volume displacement DOFs. The barrier's weight kappa is its stiffness.
     surface = mesh.extract_surface_with_vertices(stack)
-    contact_options = contact.BarrierContactOptions(dhat=0.01 * height)
-    barrier = contact.BarrierContactEnergy(surface.mesh, contact_options)
+    contact_options = contact.IPCContactOptions(dhat=0.01 * height)
+    barrier = contact.IPCContactEnergy(surface.mesh, contact_options)
     surface_map = dof.SurfaceDofMap(surface.mesh.positions, surface.vertices, num_dofs)
     contact_energy = energy.AffineMappedEnergy(
         barrier, surface_map.displacement_map, surface_map.rest_positions.ravel()

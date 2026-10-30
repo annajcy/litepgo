@@ -14,7 +14,7 @@ struct BuildInfo {
     std::string tbb_header_version;
     std::string tbb_runtime_version;
     std::vector<std::string> sparse_backends;
-    // The IPC Toolkit behind litepgo::contact; empty when contact is not built.
+    // Optional IPC Toolkit version; empty when the toolkit backend is not built.
     std::string ipc_toolkit_version;
 };
 

@@ -5,7 +5,7 @@ include(cmake/third-party/eigen.cmake)
 include(cmake/third-party/tbb.cmake)
 include(cmake/third-party/accelerate.cmake)
 include(cmake/third-party/mkl.cmake)
-if(LITEPGO_WITH_IPC)
+if(LITEPGO_WITH_IPC_TOOLKIT)
     include(cmake/third-party/ipc_toolkit.cmake)
 endif()
 

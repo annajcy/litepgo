@@ -9,9 +9,6 @@ import scipy.sparse as sp
 import litepgo
 from litepgo import _core, dof, energy, mesh
 
-if not litepgo.build_info()["ipc_toolkit_version"]:
-    pytest.skip("contact requires LITEPGO_WITH_IPC=ON", allow_module_level=True)
-
 from litepgo import contact  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
@@ -32,12 +29,12 @@ def central_gradient(f, x, step=1e-6):
 
 
 def test_build_info_reports_ipc_toolkit():
-    assert litepgo.build_info()["ipc_toolkit_version"] == "1.6.1"
+    assert hasattr(contact, "IPCTKContactEnergy") == bool(litepgo.build_info()["ipc_toolkit_version"])
 
 
 def test_barrier_mirrors_cpp():
     surface = two_triangles(0.5)
-    barrier = contact.BarrierContactEnergy(surface, contact.BarrierContactOptions(dhat=1.0))
+    barrier = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=1.0))
     assert isinstance(barrier, energy.Energy) and not barrier.has_fixed_pattern
     assert barrier.num_vertices == 6 and barrier.num_dofs == 18
     np.testing.assert_array_equal(barrier.rest_positions, surface.positions)
@@ -57,8 +54,8 @@ def test_barrier_mirrors_cpp():
 def test_barrier_rejects_infeasible_states():
     surface = two_triangles(0.5)
     with pytest.raises(ValueError):
-        contact.BarrierContactEnergy(surface, contact.BarrierContactOptions())  # dhat unset
-    thick = contact.BarrierContactEnergy(surface, contact.BarrierContactOptions(dhat=1.0, min_distance=0.6))
+        contact.IPCContactEnergy(surface, contact.IPCContactOptions())  # dhat unset
+    thick = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=1.0, min_distance=0.6))
     with pytest.raises(ValueError, match="min_distance"):
         thick.eval_value(surface.positions.ravel())
 
@@ -67,7 +64,7 @@ def test_planes_and_feasible_steps():
     surface = two_triangles(0.5)
     triangle = mesh.TriangleMesh(surface.positions[3:], np.array([[0, 1, 2]], dtype=np.int32))
     ground = contact.Plane(point=np.zeros(3), normal=np.array([0, 0, 1.0]))
-    barrier = contact.BarrierContactEnergy(triangle, contact.BarrierContactOptions(dhat=1.0), [ground])
+    barrier = contact.IPCContactEnergy(triangle, contact.IPCContactOptions(dhat=1.0), [ground])
     x = triangle.positions.ravel()
     assert barrier.num_active_pairs(x) == 1
     down = np.tile([0, 0, -1.0], 3)
@@ -76,7 +73,7 @@ def test_planes_and_feasible_steps():
 
 
 def test_barrier_composes_with_a_surface_dof_map():
-    barrier = contact.BarrierContactEnergy(two_triangles(0.5), contact.BarrierContactOptions(dhat=1.0))
+    barrier = contact.IPCContactEnergy(two_triangles(0.5), contact.IPCContactOptions(dhat=1.0))
     # A is a static obstacle; B's vertices take simulation vertices 0, 1, 2.
     surface_map = dof.SurfaceDofMap(barrier.rest_positions, np.array([-1, -1, -1, 0, 1, 2], dtype=np.int32), 9)
     np.testing.assert_array_equal(surface_map.displacement_map.toarray(), sp.eye(18, 9, k=-9).toarray())
@@ -124,3 +121,21 @@ def test_python_box_stack_matches_cpp(tmp_path):
     cpp_mesh, py_mesh = mesh.read_veg(cpp_out), mesh.read_veg(py_out)
     np.testing.assert_array_equal(py_mesh.cells, cpp_mesh.cells)
     np.testing.assert_allclose(py_mesh.positions, cpp_mesh.positions, rtol=0, atol=1e-10)
+
+
+@pytest.mark.skipif(not hasattr(contact, "IPCTKContactEnergy"), reason="toolkit backend disabled")
+def test_independent_native_matches_toolkit_original_sum():
+    # Compare independent implementations at generic closest features, including
+    # repeated lower-dimensional features. Projected Hessians need not match.
+    surface = two_triangles(0.5)
+    native = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=3, min_distance=0.1))
+    toolkit = contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(dhat=3, min_distance=0.1))
+    x = surface.positions.ravel().copy()
+    x[12:15] += [0.3, -0.2, 0.1]
+    for backend in (native, toolkit):
+        backend.update_pattern(x)
+    assert native.eval_value(x) == pytest.approx(toolkit.eval_value(x), rel=1e-12)
+    np.testing.assert_allclose(native.eval_gradient(x), toolkit.eval_gradient(x), rtol=1e-10, atol=1e-10)
+    np.testing.assert_allclose(native.eval_hessian(x).toarray(), toolkit.eval_hessian(x).toarray(), rtol=1e-9, atol=1e-9)
+    with pytest.raises(TypeError):
+        contact.IPCContactEnergy(surface, contact.IPCTKContactOptions(dhat=1))

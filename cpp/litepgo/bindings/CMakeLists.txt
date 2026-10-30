@@ -1,4 +1,4 @@
-nanobind_add_module(_core NB_STATIC module.cpp mesh.cpp dof.cpp linalg.cpp energy.cpp fem.cpp fem_local.cpp fem_energy.cpp solver.cpp)
+nanobind_add_module(_core NB_STATIC module.cpp contact.cpp mesh.cpp dof.cpp linalg.cpp energy.cpp fem.cpp fem_local.cpp fem_energy.cpp solver.cpp)
 target_link_libraries(_core PRIVATE litepgo::io litepgo::litepgo litepgo::warnings)
 
 # The build tree holds an importable package: _core is built into it, and
@@ -16,7 +16,6 @@ add_custom_target(litepgo_dev ALL
 if(LITEPGO_WITH_GMSH)
     target_link_libraries(_core PRIVATE litepgo::io_gmsh)
 endif()
-if(LITEPGO_WITH_IPC)
-    target_sources(_core PRIVATE contact.cpp)
-    target_link_libraries(_core PRIVATE litepgo::contact)
+if(LITEPGO_WITH_IPC_TOOLKIT)
+    target_link_libraries(_core PRIVATE litepgo::ipctk)
 endif()

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/core/types.hpp"
+#include "litepgo/contact/contact_options.hpp"
 #include "litepgo/energy/dynamic_pattern_energy.hpp"
 #include "litepgo/mesh/mesh_data.hpp"
 
@@ -9,25 +9,6 @@
 #include <vector>
 
 namespace litepgo::contact {
-
-// A static infinite plane through point with the given normal (nonzero, normalized
-// on construction). Vertices must stay on the side the normal points to.
-struct Plane {
-    Eigen::Vector3d point = Eigen::Vector3d::Zero();
-    Eigen::Vector3d normal = Eigen::Vector3d::UnitZ();
-};
-
-struct BarrierContactOptions {
-    // Required: the barrier acts on primitive pairs closer than min_distance + dhat.
-    double dhat = std::numeric_limits<double>::quiet_NaN();
-    // Distances must stay above it: a thickness, or 0 for touching primitives.
-    double min_distance = 0.0;
-    // Tight-Inclusion CCD's time-of-impact tolerance, and the iteration budget after
-    // which it returns its current conservative bound: a smaller budget can shorten
-    // steps, never make them unsafe. Nearly parallel edges in contact are its slowest case.
-    double ccd_tolerance = 1e-6;
-    long ccd_max_iterations = 100'000;
-};
 
 // IPC's clamped log barrier between the triangles of a surface and static planes
 // [Li et al. 2020], evaluated by IPC Toolkit. x holds the surface vertices'
@@ -51,15 +32,14 @@ struct BarrierContactOptions {
 // for each vertex at the same fraction (0.8) of its reach to min_distance from a plane.
 //
 // Pairs are evaluated in a fixed order, so results are deterministic.
-class BarrierContactEnergy final : public energy::DynamicPatternEnergy {
+class IPCTKContactEnergy final : public energy::DynamicPatternEnergy {
   public:
     // surface may contain several disconnected components; it must not be empty.
     // Its positions are the rest geometry, which IPC Toolkit uses for the edge-edge
     // mollifier threshold.
     // dhat must be finite and positive, min_distance finite and non-negative.
-    BarrierContactEnergy(const mesh::TriangleMesh& surface, BarrierContactOptions options,
-                         std::vector<Plane> planes = {});
-    ~BarrierContactEnergy() override;
+    IPCTKContactEnergy(const mesh::TriangleMesh& surface, IPCTKContactOptions options, std::vector<Plane> planes = {});
+    ~IPCTKContactEnergy() override;
 
     int num_vertices() const {
         return num_dofs() / 3;
@@ -68,7 +48,7 @@ class BarrierContactEnergy final : public energy::DynamicPatternEnergy {
     const Vec& rest_positions() const {
         return rest_positions_;
     }
-    const BarrierContactOptions& options() const {
+    const IPCTKContactOptions& options() const {
         return options_;
     }
 
@@ -85,7 +65,7 @@ class BarrierContactEnergy final : public energy::DynamicPatternEnergy {
     double feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const override;
 
     Vec rest_positions_;
-    BarrierContactOptions options_;
+    IPCTKContactOptions options_;
     std::unique_ptr<const Impl> impl_;
 };
 

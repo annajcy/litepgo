@@ -1,4 +1,4 @@
-#include "litepgo/contact/barrier_contact_energy.hpp"
+#include "litepgo/contact/ipctk_contact_energy.hpp"
 
 #include <Eigen/Geometry>
 #include <ipc/candidates/candidates.hpp>
@@ -22,16 +22,15 @@ namespace litepgo::contact {
 
 namespace {
 
-BarrierContactOptions checked_options(const BarrierContactOptions& options) {
+IPCTKContactOptions checked_options(const IPCTKContactOptions& options) {
     if (!std::isfinite(options.dhat) || options.dhat <= 0.0) {
-        throw std::invalid_argument("BarrierContactEnergy requires a finite positive dhat");
+        throw std::invalid_argument("IPCTKContactEnergy requires a finite positive dhat");
     }
     if (!std::isfinite(options.min_distance) || options.min_distance < 0.0) {
-        throw std::invalid_argument("BarrierContactEnergy requires a finite non-negative min_distance");
+        throw std::invalid_argument("IPCTKContactEnergy requires a finite non-negative min_distance");
     }
     if (!std::isfinite(options.ccd_tolerance) || options.ccd_tolerance <= 0.0 || options.ccd_max_iterations <= 0) {
-        throw std::invalid_argument(
-            "BarrierContactEnergy requires a finite positive CCD tolerance and iteration budget");
+        throw std::invalid_argument("IPCTKContactEnergy requires a finite positive CCD tolerance and iteration budget");
     }
     return options;
 }
@@ -39,7 +38,7 @@ BarrierContactOptions checked_options(const BarrierContactOptions& options) {
 int checked_num_dofs(const mesh::TriangleMesh& surface) {
     surface.validate();
     if (surface.topology.num_vertices() == 0) {
-        throw std::invalid_argument("BarrierContactEnergy requires a nonempty surface");
+        throw std::invalid_argument("IPCTKContactEnergy requires a nonempty surface");
     }
     return 3 * surface.topology.num_vertices();
 }
@@ -88,8 +87,7 @@ std::vector<Hyperplane> checked_planes(const std::vector<Plane>& planes) {
     for (const Plane& plane : planes) {
         const double length = plane.normal.norm();
         if (!plane.point.allFinite() || !std::isfinite(length) || length == 0.0) {
-            throw std::invalid_argument(
-                "BarrierContactEnergy planes require a finite point and a finite nonzero normal");
+            throw std::invalid_argument("IPCTKContactEnergy planes require a finite point and a finite nonzero normal");
         }
         result.emplace_back(plane.normal / length, plane.point);
     }
@@ -107,7 +105,7 @@ void add_block(SpMat& hessian, const ipc::MatrixMax12d& local, int a, int b, int
         const int* end = rows + hessian.outerIndexPtr()[column + 1];
         const int* first = std::lower_bound(begin, end, 3 * va);
         if (end - first < 3 || first[0] != 3 * va || first[2] != 3 * va + 2) {
-            throw std::logic_error("BarrierContactEnergy: an active contact pair is outside the current Hessian "
+            throw std::logic_error("IPCTKContactEnergy: an active contact pair is outside the current Hessian "
                                    "pattern; call update_pattern(x) before assembling a Hessian at x");
         }
         double* values = hessian.valuePtr() + (first - rows);
@@ -123,7 +121,7 @@ void add_block(SpMat& hessian, const ipc::MatrixMax12d& local, int a, int b, int
 // candidates within (dhat + min_distance) / 2, the inflation radius meant for two
 // inflated primitives, which drops vertices between half and all of that reach and
 // makes the barrier jump. Plane-vertex pairs and their CCD are handled here instead.
-struct BarrierContactEnergy::Impl {
+struct IPCTKContactEnergy::Impl {
     ipc::CollisionMesh mesh;
     std::vector<Hyperplane> planes;
     ipc::BarrierPotential barrier;
@@ -163,7 +161,7 @@ struct BarrierContactEnergy::Impl {
         for (const Hyperplane& plane : planes) {
             for (Eigen::Index v = 0; v < V.rows(); ++v) {
                 if (!(plane.signedDistance(V.row(v).transpose()) > min_distance)) {
-                    throw std::domain_error("BarrierContactEnergy: vertex " + std::to_string(v) +
+                    throw std::domain_error("IPCTKContactEnergy: vertex " + std::to_string(v) +
                                             " is not more than min_distance in front of a plane");
                 }
             }
@@ -180,8 +178,8 @@ struct BarrierContactEnergy::Impl {
     }
 };
 
-BarrierContactEnergy::BarrierContactEnergy(const mesh::TriangleMesh& surface, BarrierContactOptions options,
-                                           std::vector<Plane> planes)
+IPCTKContactEnergy::IPCTKContactEnergy(const mesh::TriangleMesh& surface, IPCTKContactOptions options,
+                                       std::vector<Plane> planes)
     : DynamicPatternEnergy(checked_num_dofs(surface),
                            SpMat(3 * surface.topology.num_vertices(), 3 * surface.topology.num_vertices())),
       rest_positions_(surface.positions), options_(checked_options(options)) {
@@ -192,26 +190,26 @@ BarrierContactEnergy::BarrierContactEnergy(const mesh::TriangleMesh& surface, Ba
         options_.min_distance});
 }
 
-BarrierContactEnergy::~BarrierContactEnergy() = default;
+IPCTKContactEnergy::~IPCTKContactEnergy() = default;
 
-int BarrierContactEnergy::num_active_pairs(const ConstVecRef& x) const {
+int IPCTKContactEnergy::num_active_pairs(const ConstVecRef& x) const {
     if (x.size() != num_dofs() || !x.allFinite()) {
-        throw std::invalid_argument("BarrierContactEnergy::num_active_pairs requires num_dofs finite entries");
+        throw std::invalid_argument("IPCTKContactEnergy::num_active_pairs requires num_dofs finite entries");
     }
     return static_cast<int>(impl_->collisions(vertex_rows(x)).size());
 }
 
-double BarrierContactEnergy::min_active_distance(const ConstVecRef& x) const {
+double IPCTKContactEnergy::min_active_distance(const ConstVecRef& x) const {
     if (x.size() != num_dofs() || !x.allFinite()) {
-        throw std::invalid_argument("BarrierContactEnergy::min_active_distance requires num_dofs finite entries");
+        throw std::invalid_argument("IPCTKContactEnergy::min_active_distance requires num_dofs finite entries");
     }
     const Eigen::MatrixXd V = vertex_rows(x);
     return std::sqrt(impl_->min_squared_distance(impl_->collisions(V), V));
 }
 
-SpMat BarrierContactEnergy::pattern_at(const ConstVecRef& x) const {
+SpMat IPCTKContactEnergy::pattern_at(const ConstVecRef& x) const {
     if (!x.allFinite()) {
-        throw std::invalid_argument("BarrierContactEnergy requires finite positions");
+        throw std::invalid_argument("IPCTKContactEnergy requires finite positions");
     }
     const ipc::NormalCollisions active = impl_->collisions(vertex_rows(x));
     std::vector<Triplet> entries;
@@ -234,10 +232,10 @@ SpMat BarrierContactEnergy::pattern_at(const ConstVecRef& x) const {
     return pattern;
 }
 
-double BarrierContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian,
-                                         energy::HessianKind kind) const {
+double IPCTKContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian,
+                                       energy::HessianKind kind) const {
     if (!x.allFinite()) {
-        throw std::invalid_argument("BarrierContactEnergy requires finite positions");
+        throw std::invalid_argument("IPCTKContactEnergy requires finite positions");
     }
     const Impl& impl = *impl_;
     const Eigen::MatrixXd V = vertex_rows(x);
@@ -257,7 +255,7 @@ double BarrierContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, Sp
         const ipc::NormalCollision& pair = active[i];
         const ipc::VectorMax12d positions = pair.dof(V, edges, faces);
         if (!(pair.compute_distance(positions) > min_squared)) {
-            throw std::domain_error("BarrierContactEnergy: a contact pair is within min_distance");
+            throw std::domain_error("IPCTKContactEnergy: a contact pair is within min_distance");
         }
         values[i] = impl.barrier(pair, positions);
         if (gradient) {
@@ -282,7 +280,7 @@ double BarrierContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, Sp
         value += values[i];
         if (gradient) {
             if (!gradients[i].allFinite()) {
-                throw std::domain_error("BarrierContactEnergy: non-finite contact gradient");
+                throw std::domain_error("IPCTKContactEnergy: non-finite contact gradient");
             }
             for (int a = 0; a < n; ++a) {
                 gradient->segment<3>(3 * ids[static_cast<std::size_t>(a)]) += gradients[i].segment<3>(3 * a);
@@ -290,7 +288,7 @@ double BarrierContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, Sp
         }
         if (hessian) {
             if (!hessians[i].allFinite()) {
-                throw std::domain_error("BarrierContactEnergy: non-finite contact Hessian");
+                throw std::domain_error("IPCTKContactEnergy: non-finite contact Hessian");
             }
             for (int a = 0; a < n; ++a) {
                 for (int b = 0; b < n; ++b) {
@@ -301,23 +299,23 @@ double BarrierContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, Sp
         }
     }
     if (!std::isfinite(value)) {
-        throw std::domain_error("BarrierContactEnergy: non-finite contact energy");
+        throw std::domain_error("IPCTKContactEnergy: non-finite contact energy");
     }
     return value;
 }
 
-double BarrierContactEnergy::feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const {
+double IPCTKContactEnergy::feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const {
     if (!x.allFinite() || !dx.allFinite()) {
-        throw std::invalid_argument("BarrierContactEnergy requires finite positions and position deltas");
+        throw std::invalid_argument("IPCTKContactEnergy requires finite positions and position deltas");
     }
     const Impl& impl = *impl_;
     const Eigen::MatrixXd V0 = vertex_rows(x);
     impl.check_planes(V0);
     if (!(impl.min_squared_distance(impl.collisions(V0), V0) > impl.min_distance * impl.min_distance)) {
-        throw std::domain_error("BarrierContactEnergy: a contact pair is within min_distance");
+        throw std::domain_error("IPCTKContactEnergy: a contact pair is within min_distance");
     }
     if (ipc::has_intersections(impl.mesh, V0)) {
-        throw std::domain_error("BarrierContactEnergy: the surface intersects itself");
+        throw std::domain_error("IPCTKContactEnergy: the surface intersects itself");
     }
     const Eigen::MatrixXd V1 = vertex_rows(x + dx);
     // The candidates' CCD, as in ipc::compute_collision_free_stepsize, except that
