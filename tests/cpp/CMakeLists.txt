@@ -62,6 +62,7 @@ add_executable(litepgo_tests
     fem/material/volumetric/tet_p1_integration_gtest.cpp
     dof/dof_reduction_gtest.cpp
     dof/reduced_matrix_gtest.cpp
+    dof/surface_dof_map_gtest.cpp
     linalg/sparse_pattern_gtest.cpp
     linalg/sparse_solver/sparse_solver_gtest.cpp
     linalg/sparse_solver/pardiso_threading_gtest.cpp
@@ -84,3 +85,12 @@ foreach(example tet_p1_plastic_twist hex_q1_plastic_twist hex_hermite_plastic_tw
     add_dependencies(litepgo_tests ${example})
     add_test(NAME FemPlasticTwist.${example} COMMAND $<TARGET_FILE:${example}>)
 endforeach()
+
+if(LITEPGO_WITH_IPC)
+    target_sources(litepgo_tests PRIVATE contact/barrier_contact_energy_gtest.cpp)
+    target_link_libraries(litepgo_tests PRIVATE litepgo::contact)
+
+    # Two boxes pressed together: a loaded static equilibrium held apart by contact.
+    add_dependencies(litepgo_tests tet_p1_box_stack)
+    add_test(NAME ContactEquilibrium.tet_p1_box_stack COMMAND $<TARGET_FILE:tet_p1_box_stack>)
+endif()

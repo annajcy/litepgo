@@ -14,7 +14,7 @@ constexpr std::array<std::array<int, 4>, 6> hex_faces{
     {{0, 3, 2, 1}, {4, 5, 6, 7}, {0, 1, 5, 4}, {3, 7, 6, 2}, {0, 4, 7, 3}, {1, 2, 6, 5}}};
 
 template <int K, std::size_t FaceSize, std::size_t NumFaces>
-TriangleMesh boundary(const MeshData<K>& mesh, const std::array<std::array<int, FaceSize>, NumFaces>& local_faces) {
+ExtractedSurface boundary(const MeshData<K>& mesh, const std::array<std::array<int, FaceSize>, NumFaces>& local_faces) {
     mesh.validate();
     using Face = std::array<int, FaceSize>;
     std::vector<Face> faces;
@@ -54,6 +54,7 @@ TriangleMesh boundary(const MeshData<K>& mesh, const std::array<std::array<int, 
             for (const int v : faces[f])
                 used[static_cast<std::size_t>(v)] = true;
     std::vector<int> new_index(used.size(), -1);
+    std::vector<int> original;
     int num_vertices = 0;
     Vec positions(3 * std::count(used.begin(), used.end(), true));
     for (int v = 0; v < mesh.topology.num_vertices(); ++v)
@@ -61,6 +62,7 @@ TriangleMesh boundary(const MeshData<K>& mesh, const std::array<std::array<int, 
             positions.segment<3>(3 * Eigen::Index(num_vertices)) =
                 mesh.positions.template segment<3>(3 * Eigen::Index(v));
             new_index[static_cast<std::size_t>(v)] = num_vertices++;
+            original.push_back(v);
         }
     std::vector<TriangleTopology::Cell> triangles;
     for (std::size_t f = 0; f < faces.size(); ++f) {
@@ -75,19 +77,31 @@ TriangleMesh boundary(const MeshData<K>& mesh, const std::array<std::array<int, 
     }
     TriangleMesh surface{std::move(positions), TriangleTopology(num_vertices, std::move(triangles))};
     surface.validate();
-    return surface;
+    return {std::move(surface), std::move(original)};
 }
 } // namespace
 
 TriangleMesh extract_surface(const TetMesh& mesh) {
-    return boundary(mesh, tet_faces);
+    return boundary(mesh, tet_faces).mesh;
 }
 
 TriangleMesh extract_surface(const HexMesh& mesh) {
-    return boundary(mesh, hex_faces);
+    return boundary(mesh, hex_faces).mesh;
 }
 
 TriangleMesh extract_surface(const VolumeMesh& mesh) {
     return std::visit([](const auto& data) { return extract_surface(data); }, mesh);
+}
+
+ExtractedSurface extract_surface_with_vertices(const TetMesh& mesh) {
+    return boundary(mesh, tet_faces);
+}
+
+ExtractedSurface extract_surface_with_vertices(const HexMesh& mesh) {
+    return boundary(mesh, hex_faces);
+}
+
+ExtractedSurface extract_surface_with_vertices(const VolumeMesh& mesh) {
+    return std::visit([](const auto& data) { return extract_surface_with_vertices(data); }, mesh);
 }
 } // namespace litepgo::mesh

@@ -28,6 +28,11 @@ namespace litepgo::linalg::binding {
 void bind(nanobind::module_& m);
 } // namespace litepgo::linalg::binding
 
+// Built only with LITEPGO_WITH_IPC (LITEPGO_HAS_CONTACT).
+namespace litepgo::contact::binding {
+void bind(nanobind::module_& m);
+} // namespace litepgo::contact::binding
+
 namespace litepgo::solver::binding {
 void bind(nanobind::module_& m);
 } // namespace litepgo::solver::binding

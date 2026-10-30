@@ -11,6 +11,8 @@ Eigen 5.0.1, oneTBB 2023.1.0, nanobind 3.1.0, and GoogleTest are fetched at pinn
 - macOS: Apple Accelerate's LLT and LDLT (`LITEPGO_WITH_ACCELERATE`, on by default).
 - x86-64 Linux: Intel oneMKL 2026.1 PARDISO's LLT and pivoted LDLT (`LITEPGO_WITH_MKL`, on by default). Configuring downloads the pinned `mkl` and `mkl-include` wheels from PyPI (about 225 MB) and unpacks them once into `build/_cache/` (`LITEPGO_MKL_CACHE_DIR`), shared by every preset; `-DLITEPGO_MKL_ROOT=/opt/intel/oneapi/mkl/2026.1` uses a local oneMKL 2026.1 install instead. MKL runs on its oneTBB threading layer over litepgo's own TBB runtime, so `tbb::task_arena` and `tbb::global_control` bound PARDISO like every other parallel loop; `MKL_NUM_THREADS` has no effect. Eigen's dense code does not use MKL.
 
+IPC barrier contact (`litepgo::contact`, `LITEPGO_WITH_IPC`, on by default) builds on IPC Toolkit 1.6.1, which reuses litepgo's Eigen and TBB. Configuring fetches it and its own dependencies (libigl, Tight-Inclusion, scalable-ccd, spdlog, TinyAD, abseil, robin-map, filib) once into `build/_cache/cpm/` (`LITEPGO_CPM_CACHE_DIR`), shared by every preset; `-DLITEPGO_WITH_IPC=OFF` skips all of it.
+
 ## Build and test
 
 ```bash
@@ -146,3 +148,33 @@ each pair writes byte-identical files. `solver.newton_solve(energy, fixed, x0, o
 solver=None)` likewise follows the C++ signature (`fixed` is a `dof.DofReduction`;
 the solver defaults to `AutoSparseSolver()`), and `solver.NewtonOptions()` starts from
 the C++ defaults, with a NaN tolerance that must be set before solving.
+
+## Contact
+
+`litepgo/contact/barrier_contact_energy.hpp` provides `contact::BarrierContactEnergy`, IPC's log barrier
+between the triangles of a surface (any number of bodies, self-contact included) and static `contact::Plane`s,
+evaluated by IPC Toolkit. It is an `energy::Energy` over the surface vertices' positions with unit stiffness, so
+the stiffness kappa is its weight in a `WeightedEnergySum`. Its Hessian pattern follows the active pairs
+(`DynamicPatternEnergy`), so the Newton solver re-analyzes the factorization when contact changes.
+`max_feasible_step` is IPC Toolkit's conservative CCD: Newton never steps into an intersection. A state is
+feasible when the surface is intersection-free and every pair is farther apart than `min_distance`; the
+initial state of a solve must be feasible.
+
+`dof::SurfaceDofMap` (`litepgo/dof/surface_dof_map.hpp`) gives surface positions as an affine function of the
+simulation DOFs, `p(u) = X + W u`: built from a general sparse `W` (e.g. a surface embedded in elements), or by
+selecting each surface vertex's position DOFs from a simulation vertex (`-1` keeps a static vertex at rest).
+The barrier acts on `u` as `AffineMappedEnergy(barrier, map.displacement_map(), map.rest_positions())`, which
+pulls gradients and Hessians back as `W^T g` and `W^T H W`. `mesh::extract_surface_with_vertices(volume)` gives
+a volume mesh's boundary with the volume vertex of each surface vertex. `example/contact/tet_p1_box_stack.cpp`
+(and its Python mirror) presses two tet boxes together:
+
+```cpp
+const mesh::ExtractedSurface surface = mesh::extract_surface_with_vertices(stack);
+auto barrier = std::make_shared<contact::BarrierContactEnergy>(surface.mesh, contact::BarrierContactOptions{.dhat = dhat});
+const dof::SurfaceDofMap surface_map(surface.mesh.positions, surface.vertices, num_dofs);
+auto contact = std::make_shared<energy::AffineMappedEnergy>(barrier, surface_map.displacement_map(),
+                                                            surface_map.rest_positions());
+energy::WeightedEnergySum potential({{elastic, 1}, {loads, 1}, {contact, kappa}});
+```
+
+Python mirrors it as `litepgo.contact`. Friction and adaptive barrier stiffness are not implemented.
