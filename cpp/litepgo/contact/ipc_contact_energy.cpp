@@ -1,6 +1,7 @@
 #include "litepgo/contact/ipc_contact_energy.hpp"
 #include "litepgo/contact/detail/broad_phase.hpp"
 #include "litepgo/contact/detail/distance.hpp"
+#include "litepgo/contact/sweep_and_prune.hpp"
 
 #include <Eigen/Eigenvalues>
 #include <Eigen/Geometry>
@@ -86,9 +87,12 @@ struct IPCContactEnergy::Impl {
     std::vector<Plane> planes;
     int nv;
     IPCContactOptions options;
+    std::shared_ptr<const BroadPhase> broad_phase_;
 
-    Impl(const mesh::TriangleMesh& surface, IPCContactOptions o, std::vector<Plane> input)
-        : planes(std::move(input)), nv(surface.topology.num_vertices()), options(o) {
+    Impl(const mesh::TriangleMesh& surface, IPCContactOptions o, std::vector<Plane> input,
+         std::shared_ptr<const BroadPhase> broad_phase)
+        : planes(std::move(input)), nv(surface.topology.num_vertices()), options(o),
+          broad_phase_(broad_phase ? std::move(broad_phase) : std::make_shared<SweepAndPrune>()) {
         std::set<std::array<int, 3>> unique;
         std::vector<bool> used(nv, false);
         for (int i = 0; i < surface.topology.num_cells(); ++i) {
@@ -140,7 +144,7 @@ struct IPCContactEnergy::Impl {
             }
     }
     Candidates candidates(const ConstVecRef& x, const Vec* dx, double inflation, bool intersections = false) const {
-        return broad_phase(x, dx, inflation, edges, faces, intersections);
+        return broad_phase(x, dx, inflation, edges, faces, intersections, *broad_phase_);
     }
     Ids edge_ids(const Ids& pair) const {
         auto a = edges[pair[0]], b = edges[pair[1]];
@@ -284,10 +288,10 @@ struct IPCContactEnergy::Impl {
 };
 
 IPCContactEnergy::IPCContactEnergy(const mesh::TriangleMesh& surface, IPCContactOptions options,
-                                   std::vector<Plane> planes)
+                                   std::vector<Plane> planes, std::shared_ptr<const BroadPhase> broad_phase)
     : DynamicPatternEnergy(checked_size(surface), SpMat(surface.positions.size(), surface.positions.size())),
       rest_positions_(surface.positions), options_(checked_options(options)),
-      impl_(std::make_unique<const Impl>(surface, options_, std::move(planes))) {}
+      impl_(std::make_unique<const Impl>(surface, options_, std::move(planes), std::move(broad_phase))) {}
 IPCContactEnergy::~IPCContactEnergy() = default;
 int IPCContactEnergy::num_active_pairs(const ConstVecRef& x) const {
     return static_cast<int>(impl_->active(x).size());

@@ -1,11 +1,14 @@
 #include "litepgo/bindings/bindings.hpp"
 #include "litepgo/contact/ipc_contact_energy.hpp"
+#include "litepgo/contact/sweep_and_prune.hpp"
 #ifdef LITEPGO_HAS_IPC_TOOLKIT
 #include "litepgo/contact/ipctk_contact_energy.hpp"
 #endif
 
 #include <nanobind/eigen/dense.h>
+#include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/vector.h>
+#include <type_traits>
 
 #include <limits>
 #include <vector>
@@ -30,11 +33,17 @@ void bind_backend(nb::module_& m, const char* energy_name, const char* options_n
         .def_rw("ccd_tolerance", &Options::ccd_tolerance)
         .def_rw("ccd_max_iterations", &Options::ccd_max_iterations);
 
-    nb::class_<ContactEnergy, energy::Energy>(m, energy_name)
-        .def(nb::init<const mesh::TriangleMesh&, Options, std::vector<Plane>>(), "surface"_a, "options"_a,
-             "planes"_a = std::vector<Plane>(),
-             "IPC barrier of a triangle surface and static planes, over the surface vertices' positions.")
-        .def_prop_ro("num_vertices", &ContactEnergy::num_vertices)
+    auto cls = nb::class_<ContactEnergy, energy::Energy>(m, energy_name);
+    if constexpr (std::is_same_v<ContactEnergy, IPCContactEnergy>) {
+        cls.def(nb::init<const mesh::TriangleMesh&, Options, std::vector<Plane>, std::shared_ptr<const BroadPhase>>(),
+                "surface"_a, "options"_a, "planes"_a = std::vector<Plane>(), "broad_phase"_a = nb::none(),
+                "Native IPC barrier; None selects SweepAndPrune. The energy retains its backend.");
+    } else {
+        cls.def(nb::init<const mesh::TriangleMesh&, Options, std::vector<Plane>>(), "surface"_a, "options"_a,
+                "planes"_a = std::vector<Plane>(),
+                "IPC barrier of a triangle surface and static planes, over the surface vertices' positions.");
+    }
+    cls.def_prop_ro("num_vertices", &ContactEnergy::num_vertices)
         .def_prop_ro(
             "rest_positions",
             [](const ContactEnergy& energy) -> Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor> {
@@ -59,6 +68,9 @@ void bind(nb::module_& m) {
             "point"_a, "normal"_a, "A static plane; vertices stay on the side the normal points to.")
         .def_rw("point", &Plane::point)
         .def_rw("normal", &Plane::normal);
+
+    nb::class_<BroadPhase>(m, "BroadPhase");
+    nb::class_<SweepAndPrune, BroadPhase>(m, "SweepAndPrune").def(nb::init<>());
 
     bind_backend<IPCContactEnergy, IPCContactOptions>(m, "IPCContactEnergy", "IPCContactOptions");
 #ifdef LITEPGO_HAS_IPC_TOOLKIT
