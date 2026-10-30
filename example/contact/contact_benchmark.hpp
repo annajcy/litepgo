@@ -11,7 +11,7 @@
 
 // Compiled from the example itself so geometry, material and loading cannot drift.
 inline int run_contact_benchmark(const litepgo::mesh::TriangleMesh& surface,
-                                 const litepgo::dof::SurfaceDofMap& kinematics,
+                                 const litepgo::dof::SurfaceKinematics& kinematics,
                                  const std::shared_ptr<litepgo::energy::Energy>& elastic,
                                  const std::shared_ptr<litepgo::energy::Energy>& pulling,
                                  const litepgo::dof::DofReduction& fixed, const litepgo::Vec& initial,

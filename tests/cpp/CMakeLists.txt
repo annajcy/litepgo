@@ -1,5 +1,6 @@
 # Test files mirror cpp/litepgo: tests/cpp/<dir>/<name>_gtest.cpp covers cpp/litepgo/<dir>/.
 add_executable(litepgo_tests
+    dof/vertex_displacement_map_gtest.cpp
     spatial/spatial_hash_gtest.cpp
     dof/assembler_gtest.cpp
     energy/mesh_energy_gtest.cpp
@@ -63,7 +64,7 @@ add_executable(litepgo_tests
     fem/material/volumetric/tet_p1_integration_gtest.cpp
     dof/dof_reduction_gtest.cpp
     dof/reduced_matrix_gtest.cpp
-    dof/surface_dof_map_gtest.cpp
+    dof/surface_kinematics_gtest.cpp
     linalg/sparse_pattern_gtest.cpp
     linalg/sparse_solver/sparse_solver_gtest.cpp
     linalg/sparse_solver/pardiso_threading_gtest.cpp

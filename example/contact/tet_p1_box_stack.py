@@ -69,9 +69,10 @@ def main():
     # volume displacement DOFs. The barrier's weight kappa is its stiffness.
     extracted = mesh.extract_surface_with_vertices(stack)
     surface = extracted.mesh
+    W = dof.build_vertex_displacement_map(extracted.vertices, num_dofs)
     contact_options = contact.IPCContactOptions(dhat=0.01 * height)
     barrier = contact.IPCContactEnergy(surface, contact_options, contact.SpatialHash())
-    kinematics = dof.SurfaceDofMap(surface.positions, extracted.vertices, num_dofs)
+    kinematics = dof.SurfaceKinematics(surface.positions, W)
     contact_energy = energy.AffineMappedEnergy(
         barrier, kinematics.displacement_map, kinematics.rest_positions.ravel()
     )

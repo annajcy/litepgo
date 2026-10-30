@@ -86,23 +86,12 @@ def test_dof_maps_mirror_cpp():
         dof.StencilDofMap(4, [[0, 0, 1]], 2)
 
 
-def test_surface_dof_map_selects_or_takes_a_general_map():
+def test_surface_kinematics_general_map():
     rest = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0.0]])
-    selected = dof.SurfaceDofMap(rest, [4, 1, -1], 18)
-    assert (selected.num_vertices, selected.num_dofs) == (3, 18)
-    np.testing.assert_array_equal(selected.rest_positions, rest)
-    u = np.arange(1.0, 19.0)
-    expected = np.zeros(9)
-    expected[:3], expected[3:6] = u[12:15], u[3:6]
-    np.testing.assert_array_equal(selected.displacements(u), expected)
-    np.testing.assert_array_equal(selected.positions(u), rest.ravel() + expected)
-    hermite = dof.SurfaceDofMap(rest, np.array([2, 0, 1], dtype=np.int32), 72, dofs_per_vertex=24)
-    np.testing.assert_array_equal(hermite.displacements(np.arange(72.0)), [48, 49, 50, 0, 1, 2, 24, 25, 26])
-
     W = sp.random(9, 5, density=0.5, format="csc", random_state=0)
-    general = dof.SurfaceDofMap(rest, W)
+    general = dof.SurfaceKinematics(rest, W)
     assert isinstance(general.displacement_map, sp.csc_matrix)
     np.testing.assert_array_equal(general.displacement_map.toarray(), W.toarray())
     np.testing.assert_allclose(general.displacements(np.ones(5)), W @ np.ones(5))
     with pytest.raises(ValueError):
-        dof.SurfaceDofMap(rest, [0, 1, 6], 18)
+        dof.SurfaceKinematics(rest, sp.eye(6))

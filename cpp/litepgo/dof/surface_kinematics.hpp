@@ -2,7 +2,6 @@
 
 #include "litepgo/core/types.hpp"
 
-#include <vector>
 
 namespace litepgo::dof {
 
@@ -15,16 +14,11 @@ namespace litepgo::dof {
 // An energy B of surface positions, such as contact, acts on u as
 // energy::AffineMappedEnergy(B, map.displacement_map(), map.rest_positions()),
 // which pulls gradients and Hessians back as W^T g and W^T H W.
-class SurfaceDofMap {
+class SurfaceKinematics {
   public:
     // rest_positions holds three finite coordinates per surface vertex;
     // displacement_map has finite entries and 3 * num_vertices rows.
-    SurfaceDofMap(Vec rest_positions, SpMat displacement_map);
-
-    // Surface vertex i displaces with simulation vertex vertices[i], whose position
-    // DOFs are the first three of its dofs_per_vertex DOFs (VertexDofMap's layout,
-    // e.g. 3 for P1 and Q1, 24 for Hex Hermite's value slot); -1 keeps vertex i at rest.
-    SurfaceDofMap(Vec rest_positions, const std::vector<int>& vertices, int num_dofs, int dofs_per_vertex = 3);
+    SurfaceKinematics(Vec rest_positions, SpMat displacement_map);
 
     int num_vertices() const {
         return static_cast<int>(rest_positions_.size() / 3);

@@ -7,6 +7,8 @@ VertexDofMap = _native.VertexDofMap
 StencilDofMap = _native.StencilDofMap
 ElementDofMap = _native.ElementDofMap
 ConstantDofMap = _native.ConstantDofMap
-SurfaceDofMap = _native.SurfaceDofMap
+SurfaceKinematics = _native.SurfaceKinematics
 
-__all__ = ["DofReduction", "VertexDofMap", "StencilDofMap", "ElementDofMap", "ConstantDofMap", "SurfaceDofMap"]
+build_vertex_displacement_map = _native.build_vertex_displacement_map
+
+__all__ = ["build_vertex_displacement_map", "DofReduction", "VertexDofMap", "StencilDofMap", "ElementDofMap", "ConstantDofMap", "SurfaceKinematics"]

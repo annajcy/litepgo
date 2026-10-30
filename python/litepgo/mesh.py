@@ -14,8 +14,6 @@ TetMesh = _native.TetMesh
 HexMesh = _native.HexMesh
 TriangleMidEdgeStencils = _native.TriangleMidEdgeStencils
 extract_surface = _native.extract_surface
-ExtractedSurface = _native.ExtractedSurface
-extract_surface_with_vertices = _native.extract_surface_with_vertices
 make_triangle_mid_edge_stencils = _native.make_triangle_mid_edge_stencils
 read_obj = _native.read_obj
 write_obj = _native.write_obj
@@ -25,7 +23,10 @@ read_msh = _native.read_msh
 write_msh = _native.write_msh
 has_gmsh = _native.has_gmsh
 
-__all__ = [
+ExtractedSurface = _native.ExtractedSurface
+extract_surface_with_vertices = _native.extract_surface_with_vertices
+
+__all__ = ["ExtractedSurface", "extract_surface_with_vertices",
     "TriangleTopology",
     "TetTopology",
     "QuadTopology",
@@ -35,8 +36,6 @@ __all__ = [
     "HexMesh",
     "TriangleMidEdgeStencils",
     "extract_surface",
-    "ExtractedSurface",
-    "extract_surface_with_vertices",
     "make_triangle_mid_edge_stencils",
     "read_obj",
     "write_obj",
