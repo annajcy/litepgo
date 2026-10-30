@@ -97,3 +97,7 @@ if(LITEPGO_WITH_IPC_TOOLKIT)
     target_sources(litepgo_tests PRIVATE contact/ipctk_contact_energy_gtest.cpp)
     target_link_libraries(litepgo_tests PRIVATE litepgo::ipctk)
 endif()
+
+add_dependencies(litepgo_tests spatial_query point_embedding)
+add_test(NAME SpatialQueryExample COMMAND $<TARGET_FILE:spatial_query>)
+add_test(NAME PointEmbeddingExample COMMAND $<TARGET_FILE:point_embedding>)

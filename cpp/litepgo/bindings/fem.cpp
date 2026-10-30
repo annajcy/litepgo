@@ -189,6 +189,14 @@ void bind(nb::module_& m) {
         .def_ro("sqrt_det_a_bar", &TriangleMidEdgeRestData::sqrt_det_a_bar);
 
     nb::class_<PointEmbedding>(m, "PointEmbedding")
+        .def(
+            "__init__",
+            [](PointEmbedding* self, const Eigen::VectorXi& ids, const Eigen::MatrixXd& xi) {
+                if (xi.cols() != 3 || ids.size() != xi.rows() || !xi.allFinite() || (ids.array() < 0).any())
+                    throw std::invalid_argument("PointEmbedding requires nonnegative element_ids and finite (n, 3) xi");
+                new (self) PointEmbedding{ids, xi};
+            },
+            "element_ids"_a, "xi"_a)
         .def_ro("element_ids", &PointEmbedding::element_ids)
         .def_ro("xi", &PointEmbedding::xi);
     bind_locator<TetP1Basis>(m, "ElementLocatorTetP1");
