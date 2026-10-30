@@ -34,7 +34,7 @@ def test_build_info_reports_ipc_toolkit():
 
 def test_barrier_mirrors_cpp():
     surface = two_triangles(0.5)
-    barrier = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=1.0))
+    barrier = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=1.0), contact.SweepAndPrune())
     assert isinstance(barrier, energy.Energy) and not barrier.has_fixed_pattern
     assert barrier.num_vertices == 6 and barrier.num_dofs == 18
     np.testing.assert_array_equal(barrier.rest_positions, surface.positions)
@@ -54,8 +54,8 @@ def test_barrier_mirrors_cpp():
 def test_barrier_rejects_infeasible_states():
     surface = two_triangles(0.5)
     with pytest.raises(ValueError):
-        contact.IPCContactEnergy(surface, contact.IPCContactOptions())  # dhat unset
-    thick = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=1.0, min_distance=0.6))
+        contact.IPCContactEnergy(surface, contact.IPCContactOptions(), contact.SweepAndPrune())  # dhat unset
+    thick = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=1.0, min_distance=0.6), contact.SweepAndPrune())
     with pytest.raises(ValueError, match="min_distance"):
         thick.eval_value(surface.positions.ravel())
 
@@ -64,7 +64,7 @@ def test_planes_and_feasible_steps():
     surface = two_triangles(0.5)
     triangle = mesh.TriangleMesh(surface.positions[3:], np.array([[0, 1, 2]], dtype=np.int32))
     ground = contact.Plane(point=np.zeros(3), normal=np.array([0, 0, 1.0]))
-    barrier = contact.IPCContactEnergy(triangle, contact.IPCContactOptions(dhat=1.0), [ground])
+    barrier = contact.IPCContactEnergy(triangle, contact.IPCContactOptions(dhat=1.0), contact.SweepAndPrune(), [ground])
     x = triangle.positions.ravel()
     assert barrier.num_active_pairs(x) == 1
     down = np.tile([0, 0, -1.0], 3)
@@ -73,7 +73,7 @@ def test_planes_and_feasible_steps():
 
 
 def test_barrier_composes_with_a_surface_dof_map():
-    barrier = contact.IPCContactEnergy(two_triangles(0.5), contact.IPCContactOptions(dhat=1.0))
+    barrier = contact.IPCContactEnergy(two_triangles(0.5), contact.IPCContactOptions(dhat=1.0), contact.SweepAndPrune())
     # A is a static obstacle; B's vertices take simulation vertices 0, 1, 2.
     surface_map = dof.SurfaceDofMap(barrier.rest_positions, np.array([-1, -1, -1, 0, 1, 2], dtype=np.int32), 9)
     np.testing.assert_array_equal(surface_map.displacement_map.toarray(), sp.eye(18, 9, k=-9).toarray())
@@ -128,7 +128,7 @@ def test_independent_native_matches_toolkit_original_sum():
     # Compare independent implementations at generic closest features, including
     # repeated lower-dimensional features. Projected Hessians need not match.
     surface = two_triangles(0.5)
-    native = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=3, min_distance=0.1))
+    native = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=3, min_distance=0.1), contact.SweepAndPrune())
     toolkit = contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(dhat=3, min_distance=0.1))
     x = surface.positions.ravel().copy()
     x[12:15] += [0.3, -0.2, 0.1]
@@ -138,7 +138,7 @@ def test_independent_native_matches_toolkit_original_sum():
     np.testing.assert_allclose(native.eval_gradient(x), toolkit.eval_gradient(x), rtol=1e-10, atol=1e-10)
     np.testing.assert_allclose(native.eval_hessian(x).toarray(), toolkit.eval_hessian(x).toarray(), rtol=1e-9, atol=1e-9)
     with pytest.raises(TypeError):
-        contact.IPCContactEnergy(surface, contact.IPCTKContactOptions(dhat=1))
+        contact.IPCContactEnergy(surface, contact.IPCTKContactOptions(dhat=1), contact.SweepAndPrune())
 
 
 def test_native_broad_phase_injection_and_lifetime():
@@ -146,14 +146,19 @@ def test_native_broad_phase_injection_and_lifetime():
 
     surface = two_triangles(0.5)
     options = contact.IPCContactOptions(dhat=1)
+    with pytest.raises(TypeError):
+        contact.IPCContactEnergy(surface, options)
+    with pytest.raises((TypeError, ValueError)):
+        contact.IPCContactEnergy(surface, options, None)
+    with pytest.raises(TypeError):
+        contact.IPCContactEnergy(surface, options, [])
     backend = contact.SweepAndPrune()
     assert isinstance(backend, contact.BroadPhase)
     with pytest.raises(TypeError):
         contact.BroadPhase()
-    energies = [contact.IPCContactEnergy(surface, options),
-                contact.IPCContactEnergy(surface, options, [], backend),
-                contact.IPCContactEnergy(surface, options, broad_phase=backend),
-                contact.IPCContactEnergy(surface, options, broad_phase=None)]
+    energies = [contact.IPCContactEnergy(surface, options, contact.SweepAndPrune()),
+                contact.IPCContactEnergy(surface, options, backend, []),
+                contact.IPCContactEnergy(surface, options, broad_phase=backend)]
     del backend
     gc.collect()
     x = surface.positions.ravel()
@@ -186,7 +191,7 @@ def test_native_broad_phase_injection_and_lifetime():
 ])
 def test_analytic_features_and_mollifier_match_toolkit(positions):
     surface = mesh.TriangleMesh(np.array(positions, dtype=float), np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32))
-    native = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=0.7, min_distance=0.05))
+    native = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=0.7, min_distance=0.05), contact.SweepAndPrune())
     toolkit = contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(dhat=0.7, min_distance=0.05))
     x = surface.positions.ravel()
     for barrier in (native, toolkit):

@@ -1,3 +1,4 @@
+#include "litepgo/contact/broad_phase/sweep_and_prune.hpp"
 #include "litepgo/contact/detail/distance.hpp"
 #include "litepgo/contact/detail/distance_derivatives.hpp"
 #include "litepgo/contact/ipc_contact_energy.hpp"
@@ -14,6 +15,7 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <type_traits>
 #include <vector>
 
 namespace litepgo::contact::test {
@@ -48,22 +50,30 @@ Vec translate_b(Vec x, const Eigen::Vector3d& delta) {
 } // namespace
 
 TEST(IPCContactEnergy, RejectsInvalidConfiguration) {
+    static_assert(!std::is_constructible_v<IPCContactEnergy, const mesh::TriangleMesh&, IPCContactOptions>);
+    static_assert(
+        !std::is_constructible_v<IPCContactEnergy, const mesh::TriangleMesh&, IPCContactOptions, std::vector<Plane>>);
     const mesh::TriangleMesh surface = two_triangles(0.5);
-    EXPECT_THROW(IPCContactEnergy(surface, IPCContactOptions{}), std::invalid_argument); // dhat unset
-    EXPECT_THROW(IPCContactEnergy(surface, options(0.0)), std::invalid_argument);
-    EXPECT_THROW(IPCContactEnergy(surface, options(1.0, -1.0)), std::invalid_argument);
+    EXPECT_THROW(IPCContactEnergy(surface, options(1), nullptr), std::invalid_argument);
+    EXPECT_THROW(IPCContactEnergy(surface, IPCContactOptions{}, std::make_shared<SweepAndPrune>()),
+                 std::invalid_argument); // dhat unset
+    EXPECT_THROW(IPCContactEnergy(surface, options(0.0), std::make_shared<SweepAndPrune>()), std::invalid_argument);
+    EXPECT_THROW(IPCContactEnergy(surface, options(1.0, -1.0), std::make_shared<SweepAndPrune>()),
+                 std::invalid_argument);
     IPCContactOptions no_ccd_budget = options(1.0);
     no_ccd_budget.ccd_max_iterations = 0;
-    EXPECT_THROW(IPCContactEnergy(surface, no_ccd_budget), std::invalid_argument);
-    EXPECT_THROW(IPCContactEnergy(surface, options(1.0), {Plane{Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero()}}),
+    EXPECT_THROW(IPCContactEnergy(surface, no_ccd_budget, std::make_shared<SweepAndPrune>()), std::invalid_argument);
+    EXPECT_THROW(IPCContactEnergy(surface, options(1.0), std::make_shared<SweepAndPrune>(),
+                                  {Plane{Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero()}}),
                  std::invalid_argument);
-    EXPECT_THROW(IPCContactEnergy(mesh::TriangleMesh{Vec(), mesh::TriangleTopology(0, {})}, options(1.0)),
+    EXPECT_THROW(IPCContactEnergy(mesh::TriangleMesh{Vec(), mesh::TriangleTopology(0, {})}, options(1.0),
+                                  std::make_shared<SweepAndPrune>()),
                  std::invalid_argument);
 }
 
 TEST(IPCContactEnergy, VanishesBeyondDhat) {
     const mesh::TriangleMesh surface = two_triangles(1.5);
-    IPCContactEnergy energy(surface, options(1.0));
+    IPCContactEnergy energy(surface, options(1.0), std::make_shared<SweepAndPrune>());
     EXPECT_EQ(energy.num_dofs(), 18);
     EXPECT_FALSE(energy.has_fixed_pattern());
     EXPECT_EQ(energy.num_active_pairs(surface.positions), 0);
@@ -76,7 +86,7 @@ TEST(IPCContactEnergy, VanishesBeyondDhat) {
 
 TEST(IPCContactEnergy, ReportsTheActivePairAndItsDistance) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
-    IPCContactEnergy energy(surface, options(1.0));
+    IPCContactEnergy energy(surface, options(1.0), std::make_shared<SweepAndPrune>());
     EXPECT_EQ(energy.num_active_pairs(surface.positions), 1);
     EXPECT_NEAR(energy.min_active_distance(surface.positions), 0.5, 1e-14);
 
@@ -92,7 +102,7 @@ TEST(IPCContactEnergy, ReportsTheActivePairAndItsDistance) {
 
 TEST(IPCContactEnergy, PatternFollowsTheActiveSet) {
     const mesh::TriangleMesh surface = two_triangles(1.5);
-    IPCContactEnergy energy(surface, options(1.0));
+    IPCContactEnergy energy(surface, options(1.0), std::make_shared<SweepAndPrune>());
     const Vec near = translate_b(surface.positions, Eigen::Vector3d(0, 0, -1));
 
     // The empty pattern cannot hold the active pair.
@@ -111,7 +121,7 @@ TEST(IPCContactEnergy, DerivativesMatchFiniteDifferences) {
     // A single vertex-face pair, then several pairs of every edge and vertex kind.
     for (const double dhat : {1.0, 3.0}) {
         const mesh::TriangleMesh surface = two_triangles(0.5);
-        IPCContactEnergy energy(surface, options(dhat));
+        IPCContactEnergy energy(surface, options(dhat), std::make_shared<SweepAndPrune>());
         // Tilt B so that no pair is degenerate.
         Vec x = surface.positions;
         x.segment<3>(12) += Eigen::Vector3d(0.3, -0.2, 0.1);
@@ -123,7 +133,7 @@ TEST(IPCContactEnergy, DerivativesMatchFiniteDifferences) {
 
 TEST(IPCContactEnergy, ProjectedHessianIsPositiveSemidefinite) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
-    IPCContactEnergy energy(surface, options(3.0));
+    IPCContactEnergy energy(surface, options(3.0), std::make_shared<SweepAndPrune>());
     energy.update_pattern(surface.positions);
     const Eigen::MatrixXd exact = Eigen::MatrixXd(energy.eval_hessian(surface.positions));
     const Eigen::MatrixXd projected =
@@ -136,7 +146,7 @@ TEST(IPCContactEnergy, ProjectedHessianIsPositiveSemidefinite) {
 
 TEST(IPCContactEnergy, EvaluationIsDeterministic) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
-    IPCContactEnergy energy(surface, options(3.0));
+    IPCContactEnergy energy(surface, options(3.0), std::make_shared<SweepAndPrune>());
     energy.update_pattern(surface.positions);
     Vec gradient;
     SpMat hessian = energy.hessian_pattern();
@@ -152,7 +162,7 @@ TEST(IPCContactEnergy, EvaluationIsDeterministic) {
 
 TEST(IPCContactEnergy, FeasibleStepStopsBeforeImpact) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
-    IPCContactEnergy energy(surface, options(1.0));
+    IPCContactEnergy energy(surface, options(1.0), std::make_shared<SweepAndPrune>());
     const Vec x = surface.positions;
 
     // Dropping B by 2 would pass vertex 3 through A at t = 0.25.
@@ -170,7 +180,7 @@ TEST(IPCContactEnergy, FeasibleStepStopsBeforeImpact) {
 
 TEST(IPCContactEnergy, FeasibleStepKeepsMinDistance) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
-    IPCContactEnergy energy(surface, options(1.0, 0.2));
+    IPCContactEnergy energy(surface, options(1.0, 0.2), std::make_shared<SweepAndPrune>());
     const Vec down = translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -2));
     const double alpha = energy.max_feasible_step(surface.positions, down);
     EXPECT_GT(alpha, 0.0);
@@ -179,13 +189,13 @@ TEST(IPCContactEnergy, FeasibleStepKeepsMinDistance) {
 
 TEST(IPCContactEnergy, RejectsInfeasibleStates) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
-    IPCContactEnergy thick(surface, options(1.0, 0.6));
+    IPCContactEnergy thick(surface, options(1.0, 0.6), std::make_shared<SweepAndPrune>());
     EXPECT_THROW(thick.eval_value(surface.positions), std::domain_error);
     EXPECT_THROW(thick.max_feasible_step(surface.positions, Vec::Zero(18)), std::domain_error);
 
     // B's vertex 3 pokes through A, but sits 0.5 below it: eval does not see the
     // intersection, max_feasible_step does.
-    IPCContactEnergy energy(surface, options(1.0));
+    IPCContactEnergy energy(surface, options(1.0), std::make_shared<SweepAndPrune>());
     const Vec crossing = translate_b(surface.positions, Eigen::Vector3d(0, 0, -1));
     EXPECT_NO_THROW(energy.eval_value(crossing));
     EXPECT_THROW(energy.max_feasible_step(crossing, Vec::Zero(18)), std::domain_error);
@@ -195,7 +205,8 @@ TEST(IPCContactEnergy, PlanesRepelVerticesAndRejectThoseBehind) {
     // B alone above the ground z = 0: vertex 3 at height 0.5 is the only active one.
     Vec positions = two_triangles(0.5).positions.tail(9);
     const mesh::TriangleMesh triangle{positions, mesh::TriangleTopology(3, {{0, 1, 2}})};
-    IPCContactEnergy energy(triangle, options(1.0), {Plane{Eigen::Vector3d::Zero(), Eigen::Vector3d(0, 0, 2)}});
+    IPCContactEnergy energy(triangle, options(1.0), std::make_shared<SweepAndPrune>(),
+                            {Plane{Eigen::Vector3d::Zero(), Eigen::Vector3d(0, 0, 2)}});
     EXPECT_EQ(energy.num_active_pairs(positions), 1);
     EXPECT_NEAR(energy.min_active_distance(positions), 0.5, 1e-14);
     EXPECT_LT(energy.eval_gradient(positions)[2], 0.0);
@@ -207,7 +218,7 @@ TEST(IPCContactEnergy, PlanesRepelVerticesAndRejectThoseBehind) {
     EXPECT_GT(alpha, 0.0);
     EXPECT_LT(alpha, 0.5);
     const Plane ground{Eigen::Vector3d::Zero(), Eigen::Vector3d::UnitZ()};
-    const IPCContactEnergy thick(triangle, options(1.0, 0.2), {ground});
+    const IPCContactEnergy thick(triangle, options(1.0, 0.2), std::make_shared<SweepAndPrune>(), {ground});
     const double thick_alpha = thick.max_feasible_step(positions, down);
     EXPECT_GT(thick_alpha, 0.0);
     EXPECT_GT(thick.min_active_distance(positions + thick_alpha * down), 0.2);
@@ -221,7 +232,8 @@ TEST(IPCContactEnergy, PlanesRepelVerticesAndRejectThoseBehind) {
 // from a SurfaceDofMap. Triangle A is a static obstacle; B's vertices 3, 4, 5 take
 // simulation vertices 2, 1, 0, before an unrelated DOF u[9].
 TEST(IPCContactEnergy, ComposesWithASurfaceDofMap) {
-    auto barrier = std::make_shared<IPCContactEnergy>(two_triangles(0.5), options(1.0));
+    auto barrier =
+        std::make_shared<IPCContactEnergy>(two_triangles(0.5), options(1.0), std::make_shared<SweepAndPrune>());
     const dof::SurfaceDofMap surface_map(barrier->rest_positions(), {-1, -1, -1, 2, 1, 0}, 10);
     energy::AffineMappedEnergy mapped(barrier, surface_map.displacement_map(), surface_map.rest_positions());
     EXPECT_FALSE(mapped.has_fixed_pattern());
@@ -252,7 +264,7 @@ TEST(IPCContactEnergy, ComposesWithASurfaceDofMap) {
 TEST(IPCContactEnergy, OriginalSquaredBarrierAndThickness) {
     for (double thickness : {0.0, 0.2}) {
         auto surface = two_triangles(0.5);
-        IPCContactEnergy e(surface, options(1, thickness));
+        IPCContactEnergy e(surface, options(1, thickness), std::make_shared<SweepAndPrune>());
         double s = 0.25 - thickness * thickness, h = 1 + 2 * thickness;
         EXPECT_NEAR(e.eval_value(surface.positions), -(s - h) * (s - h) * std::log(s / h), 1e-13);
         e.update_pattern(surface.positions);
@@ -265,16 +277,16 @@ TEST(IPCContactEnergy, OriginalSquaredBarrierAndThickness) {
 TEST(IPCContactEnergy, RejectsDegenerateDuplicateAndUnusedGeometry) {
     auto surface = two_triangles(0.5);
     surface.positions.segment<3>(3) = surface.positions.segment<3>(0);
-    EXPECT_THROW(IPCContactEnergy(surface, options(1)), std::invalid_argument);
+    EXPECT_THROW(IPCContactEnergy(surface, options(1), std::make_shared<SweepAndPrune>()), std::invalid_argument);
     auto valid = two_triangles(0.5);
     mesh::TriangleMesh duplicate{valid.positions, mesh::TriangleTopology(6, {{0, 1, 2}, {2, 1, 0}, {3, 4, 5}})};
-    EXPECT_THROW(IPCContactEnergy(duplicate, options(1)), std::invalid_argument);
+    EXPECT_THROW(IPCContactEnergy(duplicate, options(1), std::make_shared<SweepAndPrune>()), std::invalid_argument);
     mesh::TriangleMesh unused{valid.positions, mesh::TriangleTopology(6, {{0, 1, 2}})};
-    EXPECT_THROW(IPCContactEnergy(unused, options(1)), std::invalid_argument);
+    EXPECT_THROW(IPCContactEnergy(unused, options(1), std::make_shared<SweepAndPrune>()), std::invalid_argument);
     auto bad = options(1);
     bad.dhat = std::numeric_limits<double>::max();
-    EXPECT_THROW(IPCContactEnergy(valid, bad), std::invalid_argument);
-    IPCContactEnergy e(valid, options(1));
+    EXPECT_THROW(IPCContactEnergy(valid, bad, std::make_shared<SweepAndPrune>()), std::invalid_argument);
+    IPCContactEnergy e(valid, options(1), std::make_shared<SweepAndPrune>());
     Vec x = valid.positions;
     x[0] = std::numeric_limits<double>::quiet_NaN();
     EXPECT_THROW(e.eval_value(x), std::invalid_argument);
@@ -290,21 +302,21 @@ TEST(IPCContactEnergy, ACCDBudgetToleranceAndFastCrossing) {
             auto o = options(1, 0.1);
             o.ccd_max_iterations = budget;
             o.ccd_tolerance = tolerance;
-            IPCContactEnergy e(surface, o);
+            IPCContactEnergy e(surface, o, std::make_shared<SweepAndPrune>());
             double t = e.max_feasible_step(surface.positions, dx);
             EXPECT_GT(t, 0);
             EXPECT_LT(t, 0.002);
             EXPECT_GT(e.min_active_distance(surface.positions + t * dx), 0.1);
             EXPECT_EQ(t, e.max_feasible_step(surface.positions, dx));
         }
-    IPCContactEnergy e(surface, options(1));
+    IPCContactEnergy e(surface, options(1), std::make_shared<SweepAndPrune>());
     Vec common = Vec::Zero(18);
     for (int i = 0; i < 6; ++i)
         common.segment<3>(3 * i) = Eigen::Vector3d(100, -40, 3);
     EXPECT_EQ(e.max_feasible_step(surface.positions, common), 1);
     // End exactly on the plane must also shorten the step.
     mesh::TriangleMesh tri{surface.positions.tail(9), mesh::TriangleTopology(3, {{0, 1, 2}})};
-    IPCContactEnergy plane(tri, options(1), {Plane{}});
+    IPCContactEnergy plane(tri, options(1), std::make_shared<SweepAndPrune>(), {Plane{}});
     Vec down = Vec::Zero(9);
     for (int i = 0; i < 3; ++i)
         down[3 * i + 2] = -0.5;
@@ -315,7 +327,7 @@ TEST(IPCContactEnergy, NearParallelMollifierDerivatives) {
     Vec x(18);
     x << -1, 0, 0, 1, 0, 0, 0, -4, -2, -0.7, -0.004, 0.2, 0.8, 0.008, 0.2, 0, 4, 2;
     mesh::TriangleMesh surface{x, mesh::TriangleTopology(6, {{0, 1, 2}, {3, 4, 5}})};
-    IPCContactEnergy e(surface, options(0.5));
+    IPCContactEnergy e(surface, options(0.5), std::make_shared<SweepAndPrune>());
     e.update_pattern(x);
     energy::test::expect_derivatives_match(e, x, 2e-5);
     EXPECT_TRUE(e.eval_gradient(x).allFinite());
@@ -343,7 +355,7 @@ TEST(IPCContactEnergy, MatchesBruteForceOriginalCandidateSum) {
         SCOPED_TRACE(shift);
         Vec x = translate_b(rest, Eigen::Vector3d(shift, 0.13, 0.07));
         x[13] += 0.173;
-        IPCContactEnergy e(surface, options(3, 0.1));
+        IPCContactEnergy e(surface, options(3, 0.1), std::make_shared<SweepAndPrune>());
         auto barrier = [](double d2) {
             double s = d2 - 0.01, h = 9.6;
             return s < h ? -(s - h) * (s - h) * std::log(s / h) : 0;
@@ -418,13 +430,13 @@ TEST(IPCContactEnergy, CoplanarOverlapAndEdgeCrossing) {
     Vec x(18);
     x << -2, -2, 0, 2, -2, 0, 0, 2, 0, -0.3, 0, 0, 0.3, 0, 0, 0, 0.5, 0;
     mesh::TriangleMesh surface{x, mesh::TriangleTopology(6, {{0, 1, 2}, {3, 4, 5}})};
-    IPCContactEnergy overlap(surface, options(0.1));
+    IPCContactEnergy overlap(surface, options(0.1), std::make_shared<SweepAndPrune>());
     EXPECT_THROW(overlap.max_feasible_step(x, Vec::Zero(18)), std::domain_error);
     // Perpendicular edges sweep through one another while all vertices remain
     // separated. No endpoint-only CCD check can detect this motion.
     x << -1, 0, 0, 1, 0, 0, 0, -3, -1, 0, -1, 1, 0, 1, 1, 3, 0, 2;
     surface.positions = x;
-    IPCContactEnergy e(surface, options(0.2));
+    IPCContactEnergy e(surface, options(0.2), std::make_shared<SweepAndPrune>());
     Vec dx = translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -2));
     double t = e.max_feasible_step(x, dx);
     EXPECT_GT(t, 0);
@@ -455,7 +467,8 @@ TEST(IPCContactEnergy, BitwiseDeterministicAcrossThreadCounts) {
             faces.push_back({6 * c + 3, 6 * c + 4, 6 * c + 5});
         }
         mesh::TriangleMesh surface{x, mesh::TriangleTopology(6 * copies, faces)};
-        IPCContactEnergy e(surface, options(3, 0.05), {Plane{Eigen::Vector3d(0, 0, -3), Eigen::Vector3d::UnitZ()}});
+        IPCContactEnergy e(surface, options(3, 0.05), std::make_shared<SweepAndPrune>(),
+                           {Plane{Eigen::Vector3d(0, 0, -3), Eigen::Vector3d::UnitZ()}});
         ASSERT_GT(e.num_active_pairs(x), copies);
         for (auto kind : {energy::HessianKind::Exact, energy::HessianKind::Projected}) {
             double value, value_only, step;
@@ -504,7 +517,7 @@ TEST(IPCContactEnergy, OutputAssemblyClearsInactiveColumnsAndReusesSupersetPatte
     const Vec far = translate_b(surface.positions, Eigen::Vector3d(0, 0, 10));
     for (int threads : {1, 4, 8}) {
         tbb::global_control limit(tbb::global_control::max_allowed_parallelism, threads);
-        IPCContactEnergy e(surface, options(1));
+        IPCContactEnergy e(surface, options(1), std::make_shared<SweepAndPrune>());
         e.update_pattern(surface.positions);
         for (auto kind : {energy::HessianKind::Exact, energy::HessianKind::Projected}) {
             Vec expected_g;
@@ -532,7 +545,7 @@ TEST(IPCContactEnergy, ParallelErrorsPropagateAndAllowRecovery) {
     for (int threads : {1, 4, 8}) {
         tbb::global_control limit(tbb::global_control::max_allowed_parallelism, threads);
         auto surface = two_triangles(0.5);
-        IPCContactEnergy e(surface, options(3, 0.1));
+        IPCContactEnergy e(surface, options(3, 0.1), std::make_shared<SweepAndPrune>());
         Vec bad = translate_b(surface.positions, Eigen::Vector3d(0, 0, -0.45));
         e.update_pattern(bad);
         // These fail inside the parallel potential evaluation, not input validation.
@@ -543,7 +556,7 @@ TEST(IPCContactEnergy, ParallelErrorsPropagateAndAllowRecovery) {
         // Finite swept bounds, but the CCD speed norm overflows inside a worker.
         Vec huge = translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -1e160));
         EXPECT_THROW(e.max_feasible_step(surface.positions, huge), std::domain_error);
-        IPCContactEnergy empty(surface, options(3));
+        IPCContactEnergy empty(surface, options(3), std::make_shared<SweepAndPrune>());
         EXPECT_THROW(empty.eval_hessian(surface.positions), std::logic_error);
         e.update_pattern(surface.positions);
         EXPECT_TRUE(e.eval_gradient(surface.positions).allFinite());
@@ -559,7 +572,7 @@ TEST(IPCContactEnergy, RequestedDerivativeOrdersAgree) {
         std::vector<Plane> planes;
         if (fixture == 2)
             planes.push_back({Eigen::Vector3d(0, 0, -0.2), Eigen::Vector3d::UnitZ()});
-        IPCContactEnergy e(surface, options(0.7, 0.05), planes);
+        IPCContactEnergy e(surface, options(0.7, 0.05), std::make_shared<SweepAndPrune>(), planes);
         const Vec x = surface.positions;
         e.update_pattern(x);
         Vec g;

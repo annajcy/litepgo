@@ -1,6 +1,6 @@
 #include "litepgo/bindings/bindings.hpp"
-#include "litepgo/contact/ipc_contact_energy.hpp"
 #include "litepgo/contact/broad_phase/sweep_and_prune.hpp"
+#include "litepgo/contact/ipc_contact_energy.hpp"
 #ifdef LITEPGO_HAS_IPC_TOOLKIT
 #include "litepgo/contact/ipctk_contact_energy.hpp"
 #endif
@@ -35,9 +35,9 @@ void bind_backend(nb::module_& m, const char* energy_name, const char* options_n
 
     auto cls = nb::class_<ContactEnergy, energy::Energy>(m, energy_name);
     if constexpr (std::is_same_v<ContactEnergy, IPCContactEnergy>) {
-        cls.def(nb::init<const mesh::TriangleMesh&, Options, std::vector<Plane>, std::shared_ptr<const BroadPhase>>(),
-                "surface"_a, "options"_a, "planes"_a = std::vector<Plane>(), "broad_phase"_a = nb::none(),
-                "Native IPC barrier; None selects SweepAndPrune. The energy retains its backend.");
+        cls.def(nb::init<const mesh::TriangleMesh&, Options, std::shared_ptr<const BroadPhase>, std::vector<Plane>>(),
+                "surface"_a, "options"_a, "broad_phase"_a, "planes"_a = std::vector<Plane>(),
+                "Native IPC barrier; a non-null broad phase is required and retained.");
     } else {
         cls.def(nb::init<const mesh::TriangleMesh&, Options, std::vector<Plane>>(), "surface"_a, "options"_a,
                 "planes"_a = std::vector<Plane>(),

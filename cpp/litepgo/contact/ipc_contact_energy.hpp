@@ -24,9 +24,9 @@ namespace litepgo::contact {
 // These are floating-point predicates/ACCD, not formally robust exact arithmetic.
 class IPCContactEnergy final : public energy::DynamicPatternEnergy {
   public:
-    // Null selects SweepAndPrune; the energy shares ownership of an immutable backend.
-    IPCContactEnergy(const mesh::TriangleMesh& surface, IPCContactOptions options, std::vector<Plane> planes = {},
-                     std::shared_ptr<const BroadPhase> broad_phase = nullptr);
+    // A non-null backend is required; the energy shares ownership of it.
+    IPCContactEnergy(const mesh::TriangleMesh& surface, IPCContactOptions options,
+                     std::shared_ptr<const BroadPhase> broad_phase, std::vector<Plane> planes = {});
     ~IPCContactEnergy() override;
     int num_vertices() const {
         return num_dofs() / 3;

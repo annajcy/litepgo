@@ -2,7 +2,6 @@
 #include "litepgo/contact/broad_phase/detail/candidates.hpp"
 #include "litepgo/contact/detail/distance.hpp"
 #include "litepgo/contact/detail/distance_derivatives.hpp"
-#include "litepgo/contact/broad_phase/sweep_and_prune.hpp"
 
 #include <Eigen/Eigenvalues>
 #include <Eigen/Geometry>
@@ -93,7 +92,9 @@ struct IPCContactEnergy::Impl {
     Impl(const mesh::TriangleMesh& surface, IPCContactOptions o, std::vector<Plane> input,
          std::shared_ptr<const BroadPhase> broad_phase)
         : planes(std::move(input)), nv(surface.topology.num_vertices()), options(o),
-          broad_phase_(broad_phase ? std::move(broad_phase) : std::make_shared<SweepAndPrune>()) {
+          broad_phase_(std::move(broad_phase)) {
+        if (!broad_phase_)
+            throw std::invalid_argument("IPCContactEnergy requires a non-null broad phase");
         std::set<std::array<int, 3>> unique;
         std::vector<bool> used(nv, false);
         for (int i = 0; i < surface.topology.num_cells(); ++i) {
@@ -338,7 +339,7 @@ struct IPCContactEnergy::Impl {
 };
 
 IPCContactEnergy::IPCContactEnergy(const mesh::TriangleMesh& surface, IPCContactOptions options,
-                                   std::vector<Plane> planes, std::shared_ptr<const BroadPhase> broad_phase)
+                                   std::shared_ptr<const BroadPhase> broad_phase, std::vector<Plane> planes)
     : DynamicPatternEnergy(checked_size(surface), SpMat(surface.positions.size(), surface.positions.size())),
       rest_positions_(surface.positions), options_(checked_options(options)),
       impl_(std::make_unique<const Impl>(surface, options_, std::move(planes), std::move(broad_phase))) {}

@@ -1,3 +1,4 @@
+#include "litepgo/contact/broad_phase/sweep_and_prune.hpp"
 #include "litepgo/contact/ipc_contact_energy.hpp"
 #include "litepgo/dof/surface_dof_map.hpp"
 #include "litepgo/energy/affine_mapped_energy.hpp"
@@ -106,7 +107,8 @@ int main(int argc, char** argv) {
     const mesh::ExtractedSurface surface = mesh::extract_surface_with_vertices(stack);
     contact::IPCContactOptions contact_options;
     contact_options.dhat = 0.01 * height;
-    auto barrier = std::make_shared<contact::IPCContactEnergy>(surface.mesh, contact_options);
+    auto barrier = std::make_shared<contact::IPCContactEnergy>(surface.mesh, contact_options,
+                                                               std::make_shared<contact::SweepAndPrune>());
     const dof::SurfaceDofMap surface_map(surface.mesh.positions, surface.vertices, num_dofs);
     auto contact = std::make_shared<energy::AffineMappedEnergy>(barrier, surface_map.displacement_map(),
                                                                 surface_map.rest_positions());

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "litepgo/contact/broad_phase/sweep_and_prune.hpp"
+
 #include "litepgo/contact/ipctk_contact_energy.hpp"
 #include "litepgo/core/build_info.hpp"
 #include <oneapi/tbb/global_control.h>
@@ -41,6 +43,7 @@ inline int run_contact_benchmark(
 #else
     meta << "solver=EigenLDLT\n";
 #endif
+    const std::shared_ptr<const contact::BroadPhase> sap = std::make_shared<contact::SweepAndPrune>();
     contact::IPCContactOptions native_options;
     native_options.dhat = dhat;
     contact::IPCTKContactOptions toolkit_options;
@@ -64,7 +67,7 @@ inline int run_contact_benchmark(
             std::shared_ptr<contact::IPCTKContactEnergy> toolkit;
             std::shared_ptr<energy::Energy> barrier;
             if (backend == 0)
-                barrier = native = std::make_shared<contact::IPCContactEnergy>(surface, native_options);
+                barrier = native = std::make_shared<contact::IPCContactEnergy>(surface, native_options, sap);
             else
                 barrier = toolkit = std::make_shared<contact::IPCTKContactEnergy>(surface, toolkit_options);
             auto mapped = std::make_shared<energy::AffineMappedEnergy>(
@@ -107,7 +110,7 @@ inline int run_contact_benchmark(
     comparison << "max_abs,rms,native_norm,ipctk_norm\n" << delta.cwiseAbs().maxCoeff() << ','
                << delta.norm() / std::sqrt(double(delta.size())) << ',' << solutions[0].norm() << ','
                << solutions[1].norm() << '\n';
-    contact::IPCContactEnergy native(surface, native_options);
+    contact::IPCContactEnergy native(surface, native_options, sap);
     contact::IPCTKContactEnergy toolkit(surface, toolkit_options);
     auto shared = file("shared_states.csv");
     shared << "state,hessian_kind,native_energy,ipctk_energy,energy_abs,gradient_max_abs,gradient_rms,gradient_relative_l2,hessian_max_abs,hessian_rms,hessian_relative_frobenius,native_gradient_norm,native_hessian_norm,native_pairs,ipctk_pairs\n";

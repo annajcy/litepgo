@@ -4,7 +4,7 @@ Energies act on vertex-major xyz positions, with unit stiffness. Call
 update_pattern(x) before Hessian assembly. Compose with AffineMappedEnergy and
 SurfaceDofMap for displacement DOFs. Native ACCD uses floating-point arithmetic;
 it does not provide formal floating-point robustness guarantees. Native energies
-accept broad_phase=SweepAndPrune() (None selects the default) and retain shared
+require an explicit broad_phase=SweepAndPrune() and retain shared
 ownership of that backend. Custom backends are implemented in C++, not Python.
 """
 from litepgo import _core
