@@ -198,12 +198,12 @@ native library to IPC Toolkit and does not change the optional IPCTK backend.
 Native predicates and ACCD use double precision, without a formal floating-point robustness guarantee;
 extreme scales, grazing contact and nearly degenerate geometry remain numerical limitations.
 Closest-feature transitions are generally C1, not C2; exact Hessians are those of the selected branch.
-Native contact accepts a shared, read-only broadphase backend as its optional fourth argument:
+Native contact accepts a shared, read-only broadphase backend as its required third argument:
 
 ```cpp
 #include <litepgo/contact/broad_phase/sweep_and_prune.hpp>
 auto broad_phase = std::make_shared<litepgo::contact::SweepAndPrune>();
-litepgo::contact::IPCContactEnergy contact(surface, options, {}, broad_phase);
+litepgo::contact::IPCContactEnergy contact(surface, options, broad_phase);
 ```
 
 ```python
@@ -212,8 +212,9 @@ broad_phase = SweepAndPrune()
 contact = IPCContactEnergy(surface, options, broad_phase=broad_phase)
 ```
 
-Omitting the backend (or passing `nullptr`/`None`) selects `SweepAndPrune`; existing
-three-argument constructors still work. Energies retain shared ownership, so one backend
+The native constructor is `(surface, options, broad_phase, planes = {})`.
+The backend is required: omission, `nullptr` and `None` are rejected. To retain SAP
+behavior, explicitly pass `SweepAndPrune`; move any plane list to the fourth argument. Energies retain shared ownership, so one backend
 can serve multiple energies and outlive the caller's reference. IPCTK's constructor is unchanged.
 Python exposes the built-in base/derived types for selection, not Python-defined backend overrides.
 
@@ -252,7 +253,8 @@ a volume mesh's boundary with the volume vertex of each surface vertex. `example
 
 ```cpp
 const mesh::ExtractedSurface surface = mesh::extract_surface_with_vertices(stack);
-auto barrier = std::make_shared<contact::IPCContactEnergy>(surface.mesh, contact::IPCContactOptions{.dhat = dhat});
+auto barrier = std::make_shared<contact::IPCContactEnergy>(surface.mesh, contact::IPCContactOptions{.dhat = dhat},
+    std::make_shared<contact::SweepAndPrune>());
 const dof::SurfaceDofMap surface_map(surface.mesh.positions, surface.vertices, num_dofs);
 auto contact = std::make_shared<energy::AffineMappedEnergy>(barrier, surface_map.displacement_map(),
                                                             surface_map.rest_positions());

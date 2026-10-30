@@ -233,7 +233,7 @@ TEST(ContactBroadPhase, PublicSAPRespectsEveryMaskAndOriginalIndices) {
 TEST(ContactBroadPhase, InjectedBackendNormalizesCandidatesAndOwnsLifetime) {
     const auto mesh = surface();
     const IPCContactOptions options{1.0};
-    IPCContactEnergy reference(mesh, options);
+    IPCContactEnergy reference(mesh, options, std::make_shared<SweepAndPrune>());
     const Vec x = mesh.positions;
     reference.update_pattern(x);
     const Vec g = reference.eval_gradient(x);
@@ -243,7 +243,7 @@ TEST(ContactBroadPhase, InjectedBackendNormalizesCandidatesAndOwnsLifetime) {
     std::shared_ptr<const BroadPhase> sap = std::make_shared<SweepAndPrune>();
     std::shared_ptr<const BroadPhase> noisy = std::make_shared<NoisyBroadPhase>();
     for (const auto& backend : {sap, noisy}) {
-        IPCContactEnergy energy(mesh, options, {}, backend);
+        IPCContactEnergy energy(mesh, options, backend, {});
         energy.update_pattern(x);
         EXPECT_EQ(energy.eval_value(x), reference.eval_value(x));
         const Vec actual_g = energy.eval_gradient(x);
@@ -256,18 +256,18 @@ TEST(ContactBroadPhase, InjectedBackendNormalizesCandidatesAndOwnsLifetime) {
         EXPECT_EQ(energy.max_feasible_step(x, dx), reference.max_feasible_step(x, dx));
     }
     std::weak_ptr<const BroadPhase> weak = noisy;
-    auto retained = std::make_unique<IPCContactEnergy>(mesh, options, std::vector<Plane>{}, noisy);
+    auto retained = std::make_unique<IPCContactEnergy>(mesh, options, noisy, std::vector<Plane>{});
     noisy.reset();
     EXPECT_FALSE(weak.expired());
     EXPECT_EQ(retained->eval_value(x), reference.eval_value(x));
     retained.reset();
     EXPECT_TRUE(weak.expired());
-    IPCContactEnergy invalid(mesh, options, {}, std::make_shared<InvalidBroadPhase>());
+    IPCContactEnergy invalid(mesh, options, std::make_shared<InvalidBroadPhase>(), {});
     EXPECT_THROW(invalid.eval_value(x), std::invalid_argument);
     EXPECT_THROW(invalid.update_pattern(x), std::invalid_argument);
     EXPECT_THROW(invalid.max_feasible_step(x, dx), std::invalid_argument);
     auto solve = [&] {
-        IPCContactEnergy energy(mesh, options, {}, sap);
+        IPCContactEnergy energy(mesh, options, sap, {});
         return energy.eval_value(x);
     };
     auto first = std::async(std::launch::async, solve), second = std::async(std::launch::async, solve);
@@ -278,7 +278,7 @@ TEST(ContactBroadPhase, InjectedBackendNormalizesCandidatesAndOwnsLifetime) {
 TEST(ContactBroadPhase, ContactSuppliesStaticIntersectionAndSweptQueries) {
     const auto mesh = surface();
     auto backend = std::make_shared<RecordingBroadPhase>();
-    IPCContactEnergy energy(mesh, IPCContactOptions{1.0, 0.1}, {}, backend);
+    IPCContactEnergy energy(mesh, IPCContactOptions{1.0, 0.1}, backend, {});
     const Vec x = mesh.positions;
     energy.eval_value(x);
     ASSERT_EQ(backend->queries.size(), 1);
