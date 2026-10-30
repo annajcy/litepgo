@@ -4,6 +4,7 @@
 #include "litepgo/dof/dof_reduction.hpp"
 #include "litepgo/dof/element_dof_map.hpp"
 #include "litepgo/dof/stencil_dof_map.hpp"
+#include "litepgo/dof/surface_dof_map.hpp"
 #include "litepgo/dof/vertex_dof_map.hpp"
 
 #include <nanobind/eigen/dense.h>
@@ -71,6 +72,38 @@ void bind(nb::module_& m) {
             "A"_a, "Principal submatrix of a scipy.sparse matrix on the free DOFs.")
         .def("expand", &DofReduction::expand, "reduced"_a, "full"_a.noconvert(),
              "Write reduced into the free entries of full, a contiguous writable float64 array.");
+
+    using Positions = Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>;
+    nb::class_<SurfaceDofMap>(m, "SurfaceDofMap")
+        .def(
+            "__init__",
+            [](SurfaceDofMap* self, const Positions& rest_positions, const linalg::binding::SparseArgument& W) {
+                new (self) SurfaceDofMap(rest_positions.reshaped<Eigen::RowMajor>(), W.matrix);
+            },
+            "rest_positions"_a, "displacement_map"_a,
+            "p(u) = rest_positions + W u, from (n, 3) rest positions and a sparse (3n, num_dofs) W.")
+        .def(
+            "__init__",
+            [](SurfaceDofMap* self, const Positions& rest_positions, const std::vector<int>& vertices, int num_dofs,
+               int dofs_per_vertex) {
+                new (self)
+                    SurfaceDofMap(rest_positions.reshaped<Eigen::RowMajor>(), vertices, num_dofs, dofs_per_vertex);
+            },
+            "rest_positions"_a, "vertices"_a, "num_dofs"_a, "dofs_per_vertex"_a = 3,
+            "Surface vertex i moves with simulation vertex vertices[i] (its first three DOFs); -1 keeps it at rest.")
+        .def_prop_ro("num_vertices", &SurfaceDofMap::num_vertices)
+        .def_prop_ro("num_dofs", &SurfaceDofMap::num_dofs)
+        .def_prop_ro(
+            "rest_positions",
+            [](const SurfaceDofMap& map) -> Positions {
+                return map.rest_positions().reshaped<Eigen::RowMajor>(map.num_vertices(), 3);
+            },
+            "One row per surface vertex (a copy).")
+        .def_prop_ro(
+            "displacement_map", [](const SurfaceDofMap& map) { return map.displacement_map(); },
+            "W as a scipy.sparse.csc_matrix (a copy).")
+        .def("displacements", &SurfaceDofMap::displacements, "u"_a, "W u, flat.")
+        .def("positions", &SurfaceDofMap::positions, "u"_a, "rest positions + W u, flat (vertex-major xyz).");
 
     auto vertex =
         bind_map<VertexDofMap>(m, "VertexDofMap").def_prop_ro("dofs_per_vertex", &VertexDofMap::dofs_per_vertex);

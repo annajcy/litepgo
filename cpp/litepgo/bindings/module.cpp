@@ -20,6 +20,7 @@ NB_MODULE(_core, m) {
         result["tbb_header_version"] = info.tbb_header_version;
         result["tbb_runtime_version"] = info.tbb_runtime_version;
         result["sparse_backends"] = info.sparse_backends;
+        result["ipc_toolkit_version"] = info.ipc_toolkit_version;
         return result;
     });
 
@@ -31,4 +32,8 @@ NB_MODULE(_core, m) {
         nb::module_ submodule = m.def_submodule(name);
         bind(submodule);
     }
+#if defined(LITEPGO_HAS_CONTACT)
+    nb::module_ contact = m.def_submodule("contact");
+    litepgo::contact::binding::bind(contact);
+#endif
 }

@@ -7,5 +7,6 @@ VertexDofMap = _native.VertexDofMap
 StencilDofMap = _native.StencilDofMap
 ElementDofMap = _native.ElementDofMap
 ConstantDofMap = _native.ConstantDofMap
+SurfaceDofMap = _native.SurfaceDofMap
 
-__all__ = ["DofReduction", "VertexDofMap", "StencilDofMap", "ElementDofMap", "ConstantDofMap"]
+__all__ = ["DofReduction", "VertexDofMap", "StencilDofMap", "ElementDofMap", "ConstantDofMap", "SurfaceDofMap"]

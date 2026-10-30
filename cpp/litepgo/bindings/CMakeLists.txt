@@ -16,3 +16,7 @@ add_custom_target(litepgo_dev ALL
 if(LITEPGO_WITH_GMSH)
     target_link_libraries(_core PRIVATE litepgo::io_gmsh)
 endif()
+if(LITEPGO_WITH_IPC)
+    target_sources(_core PRIVATE contact.cpp)
+    target_link_libraries(_core PRIVATE litepgo::contact)
+endif()

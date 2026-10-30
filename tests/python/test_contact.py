@@ -1,0 +1,126 @@
+import subprocess
+import sys
+from pathlib import Path
+
+import numpy as np
+import pytest
+import scipy.sparse as sp
+
+import litepgo
+from litepgo import _core, dof, energy, mesh
+
+if not litepgo.build_info()["ipc_toolkit_version"]:
+    pytest.skip("contact requires LITEPGO_WITH_IPC=ON", allow_module_level=True)
+
+from litepgo import contact  # noqa: E402
+
+REPO = Path(__file__).resolve().parents[2]
+# The extension lives in build/<preset>/python/litepgo; the examples in build/<preset>/example/contact.
+EXAMPLES = Path(_core.__file__).parents[2] / "example" / "contact"
+
+
+def two_triangles(height):
+    """Triangle A in z = 0 and triangle B pointing vertex 3 down at (2, 2, height)."""
+    positions = np.array(
+        [[0, 0, 0], [10, 0, 0], [0, 10, 0], [2, 2, height], [6, 2, height + 4], [2, 6, height + 4.0]]
+    )
+    return mesh.TriangleMesh(positions, np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32))
+
+
+def central_gradient(f, x, step=1e-6):
+    return np.array([(f(x + step * e) - f(x - step * e)) / (2 * step) for e in np.eye(len(x))])
+
+
+def test_build_info_reports_ipc_toolkit():
+    assert litepgo.build_info()["ipc_toolkit_version"] == "1.6.1"
+
+
+def test_barrier_mirrors_cpp():
+    surface = two_triangles(0.5)
+    barrier = contact.BarrierContactEnergy(surface, contact.BarrierContactOptions(dhat=1.0))
+    assert isinstance(barrier, energy.Energy) and not barrier.has_fixed_pattern
+    assert barrier.num_vertices == 6 and barrier.num_dofs == 18
+    np.testing.assert_array_equal(barrier.rest_positions, surface.positions)
+    assert barrier.options.dhat == 1.0 and barrier.options.min_distance == 0.0
+
+    x = surface.positions.ravel()
+    assert barrier.num_active_pairs(x) == 1
+    assert barrier.min_active_distance(x) == pytest.approx(0.5, abs=1e-14)
+    assert barrier.eval_value(x) > 0
+    np.testing.assert_allclose(barrier.eval_gradient(x), central_gradient(barrier.eval_value, x), atol=1e-6)
+
+    assert barrier.update_pattern(x)
+    assert barrier.eval_hessian(x).nnz == 144
+    assert np.linalg.eigvalsh(barrier.eval_projected_hessian(x).toarray()).min() > -1e-10
+
+
+def test_barrier_rejects_infeasible_states():
+    surface = two_triangles(0.5)
+    with pytest.raises(ValueError):
+        contact.BarrierContactEnergy(surface, contact.BarrierContactOptions())  # dhat unset
+    thick = contact.BarrierContactEnergy(surface, contact.BarrierContactOptions(dhat=1.0, min_distance=0.6))
+    with pytest.raises(ValueError, match="min_distance"):
+        thick.eval_value(surface.positions.ravel())
+
+
+def test_planes_and_feasible_steps():
+    surface = two_triangles(0.5)
+    triangle = mesh.TriangleMesh(surface.positions[3:], np.array([[0, 1, 2]], dtype=np.int32))
+    ground = contact.Plane(point=np.zeros(3), normal=np.array([0, 0, 1.0]))
+    barrier = contact.BarrierContactEnergy(triangle, contact.BarrierContactOptions(dhat=1.0), [ground])
+    x = triangle.positions.ravel()
+    assert barrier.num_active_pairs(x) == 1
+    down = np.tile([0, 0, -1.0], 3)
+    assert 0 < barrier.max_feasible_step(x, down) < 0.5
+    assert barrier.max_feasible_step(x, -down) == 1.0
+
+
+def test_barrier_composes_with_a_surface_dof_map():
+    barrier = contact.BarrierContactEnergy(two_triangles(0.5), contact.BarrierContactOptions(dhat=1.0))
+    # A is a static obstacle; B's vertices take simulation vertices 0, 1, 2.
+    surface_map = dof.SurfaceDofMap(barrier.rest_positions, np.array([-1, -1, -1, 0, 1, 2], dtype=np.int32), 9)
+    np.testing.assert_array_equal(surface_map.displacement_map.toarray(), sp.eye(18, 9, k=-9).toarray())
+    mapped = energy.AffineMappedEnergy(barrier, surface_map.displacement_map, surface_map.rest_positions.ravel())
+    u = np.zeros(9)
+    u[2] = -0.2
+    x = barrier.rest_positions.ravel().copy()
+    x[11] -= 0.2
+    assert mapped.eval_value(u) == barrier.eval_value(x)
+    np.testing.assert_array_equal(mapped.eval_gradient(u), barrier.eval_gradient(x)[9:])
+
+
+def test_extract_surface_with_vertices():
+    data = mesh.read_veg(REPO / "assets/box-tet.veg")
+    surface = mesh.extract_surface_with_vertices(data)
+    np.testing.assert_array_equal(surface.mesh.positions, data.positions[surface.vertices])
+    np.testing.assert_array_equal(surface.mesh.cells, mesh.extract_surface(data).cells)
+    assert np.all(np.diff(surface.vertices) > 0)
+
+
+def parse_results(stdout):
+    values = dict(item.split("=") for item in stdout.strip().split(", "))
+    exact = ("converged", "iterations", "active pairs")
+    return {key: int(value) if key in exact else float(value) for key, value in values.items()}
+
+
+def test_python_box_stack_matches_cpp(tmp_path):
+    executable = EXAMPLES / "tet_p1_box_stack"
+    if not executable.exists():
+        pytest.skip(f"{executable} is not built")
+    script = REPO / "example" / "contact" / "tet_p1_box_stack.py"
+    asset = REPO / "assets/box-tet.veg"
+    cpp_out, py_out = tmp_path / "cpp.veg", tmp_path / "py.veg"
+    cpp = subprocess.run([executable, asset, cpp_out], check=True, capture_output=True, text=True)
+    py = subprocess.run([sys.executable, script, asset, py_out], check=True, capture_output=True, text=True)
+    cpp_results, py_results = parse_results(cpp.stdout), parse_results(py.stdout)
+    assert py_results.keys() == cpp_results.keys()
+    for key, value in cpp_results.items():
+        if key in ("converged", "iterations", "active pairs"):
+            assert py_results[key] == value, key
+        elif key == "free residual":
+            assert value < 1e-8 and py_results[key] < 1e-8
+        else:
+            assert py_results[key] == pytest.approx(value, rel=1e-5), key
+    cpp_mesh, py_mesh = mesh.read_veg(cpp_out), mesh.read_veg(py_out)
+    np.testing.assert_array_equal(py_mesh.cells, cpp_mesh.cells)
+    np.testing.assert_allclose(py_mesh.positions, cpp_mesh.positions, rtol=0, atol=1e-10)

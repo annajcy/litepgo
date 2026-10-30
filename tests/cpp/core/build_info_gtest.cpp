@@ -29,4 +29,12 @@ TEST(BuildInfo, ListsTheCompiledSparseBackends) {
     EXPECT_EQ(litepgo::build_info().sparse_backends, expected);
 }
 
+TEST(BuildInfo, ReportsTheContactBackend) {
+#if defined(LITEPGO_IPC_TOOLKIT_VERSION)
+    EXPECT_EQ(litepgo::build_info().ipc_toolkit_version, "1.6.1");
+#else
+    EXPECT_TRUE(litepgo::build_info().ipc_toolkit_version.empty());
+#endif
+}
+
 } // namespace litepgo::test

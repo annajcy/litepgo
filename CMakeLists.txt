@@ -20,6 +20,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_
 else()
     set(LITEPGO_WITH_MKL OFF)
 endif()
+option(LITEPGO_WITH_IPC "Build the IPC contact module (litepgo::contact) on IPC Toolkit" ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -41,6 +42,9 @@ include(cmake/litepgo_dependencies.cmake)
 
 add_subdirectory(cpp/litepgo)
 add_subdirectory(example/fem EXCLUDE_FROM_ALL)
+if(LITEPGO_WITH_IPC)
+    add_subdirectory(example/contact EXCLUDE_FROM_ALL)
+endif()
 
 if(LITEPGO_BUILD_TESTS)
     enable_testing()

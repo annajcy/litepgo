@@ -23,6 +23,7 @@ add_library(litepgo STATIC
     fem/basis/3d/tet_p1_basis.cpp
     dof/dof_reduction.cpp
     dof/reduced_matrix.cpp
+    dof/surface_dof_map.cpp
     linalg/sparse_solver/eigen_ldlt.cpp
     linalg/sparse_solver/eigen_sparse_lu.cpp
     linalg/sparse_pattern.cpp
@@ -55,6 +56,16 @@ if(LITEPGO_WITH_GMSH)
     add_library(litepgo::io_gmsh ALIAS litepgo_io_gmsh)
     target_link_libraries(litepgo_io_gmsh PUBLIC litepgo::io PRIVATE Gmsh::Gmsh)
     target_compile_definitions(litepgo_io_gmsh PUBLIC LITEPGO_HAS_GMSH=1)
+endif()
+
+if(LITEPGO_WITH_IPC)
+    add_library(litepgo_contact STATIC contact/barrier_contact_energy.cpp)
+    add_library(litepgo::contact ALIAS litepgo_contact)
+    # IPC Toolkit types stay out of litepgo's headers, so consumers never see them.
+    target_link_libraries(litepgo_contact PUBLIC litepgo::litepgo PRIVATE ipc::toolkit litepgo::warnings)
+    target_compile_definitions(litepgo_contact PUBLIC LITEPGO_HAS_CONTACT=1)
+    # build_info() is inline, so every target sees the same definition.
+    target_compile_definitions(litepgo PUBLIC LITEPGO_IPC_TOOLKIT_VERSION="${LITEPGO_IPC_TOOLKIT_VERSION}")
 endif()
 
 if(LITEPGO_BUILD_PYTHON)
