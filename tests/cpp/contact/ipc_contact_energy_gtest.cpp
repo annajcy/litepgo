@@ -502,6 +502,35 @@ TEST(IPCContactEnergy, BitwiseDeterministicAcrossThreadCounts) {
     }
 }
 
+TEST(IPCContactEnergy, OutputAssemblyClearsInactiveColumnsAndReusesSupersetPattern) {
+    const auto surface = two_triangles(0.5);
+    const Vec far = translate_b(surface.positions, Eigen::Vector3d(0, 0, 10));
+    for (int threads : {1, 4, 8}) {
+        tbb::global_control limit(tbb::global_control::max_allowed_parallelism, threads);
+        IPCContactEnergy e(surface, options(1));
+        e.update_pattern(surface.positions);
+        for (auto kind : {energy::HessianKind::Exact, energy::HessianKind::Projected}) {
+            Vec expected_g;
+            SpMat expected_h = e.hessian_pattern();
+            const double expected_value = e.eval(surface.positions, &expected_g, &expected_h, kind);
+            Vec g = Vec::Constant(18, 123);
+            SpMat h = expected_h;
+            // Keep the larger pattern as the active set disappears, then returns.
+            EXPECT_EQ(e.eval(far, &g, &h, kind), 0);
+            EXPECT_TRUE(g.isZero(0));
+            EXPECT_TRUE(Eigen::Map<const Vec>(h.valuePtr(), h.nonZeros()).isZero(0));
+            EXPECT_EQ(e.eval(surface.positions, &g, &h, kind), expected_value);
+            EXPECT_EQ(std::memcmp(g.data(), expected_g.data(), g.size() * sizeof(double)), 0);
+            EXPECT_EQ(std::memcmp(h.valuePtr(), expected_h.valuePtr(), h.nonZeros() * sizeof(double)), 0);
+        }
+        e.update_pattern(far);
+        ASSERT_EQ(e.hessian_pattern().nonZeros(), 0);
+        EXPECT_THROW(e.eval_hessian(surface.positions), std::logic_error);
+        e.update_pattern(surface.positions);
+        EXPECT_TRUE(e.eval_hessian(surface.positions).toDense().allFinite());
+    }
+}
+
 TEST(IPCContactEnergy, ParallelErrorsPropagateAndAllowRecovery) {
     for (int threads : {1, 4, 8}) {
         tbb::global_control limit(tbb::global_control::max_allowed_parallelism, threads);

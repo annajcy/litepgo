@@ -192,8 +192,10 @@ Native predicates and ACCD use double precision, without a formal floating-point
 extreme scales, grazing contact and nearly degenerate geometry remain numerical limitations.
 Closest-feature transitions are generally C1, not C2; exact Hessians are those of the selected branch.
 The broadphase has quadratic worst-case behavior for heavily overlapping boxes. Native local contact
-evaluation, Hessian projection and surface CCD queries use TBB; fixed-order buffers followed by serial
-assembly/minimum preserve numerical results across thread counts. Broadphase and active-set construction
+evaluation, Hessian projection, gradient/Hessian assembly and surface CCD queries use TBB.
+Assembly owns disjoint output DOFs and sparse columns, gathering contributions in fixed pair order;
+scalar energy and CCD minimum reductions remain serial. Results are bitwise deterministic across thread counts.
+A per-call vertex/pair incidence list uses O(vertices + active pairs) extra memory. Broadphase and active-set construction
 remain serial. No acceleration-cache state is retained between evaluations.
 The formulation follows [IPC (2020)](https://cims.nyu.edu/gcl/papers/2020-IPC.pdf) and
 [Codimensional IPC / ACCD (2021)](https://arxiv.org/abs/2012.04457).

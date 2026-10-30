@@ -9,6 +9,7 @@
 #include <numeric>
 #include <set>
 #include <stdexcept>
+#include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <tuple>
 #include <utility>
@@ -89,23 +90,6 @@ bool shared(const Ids& a, int na, const Ids& b, int nb) {
             if (a[i] == b[j])
                 return true;
     return false;
-}
-void add_local(SpMat& h, const Eigen::MatrixXd& local, const Pair& p) {
-    for (int b = 0; b < p.count(); ++b)
-        for (int c = 0; c < 3; ++c) {
-            const int col = 3 * p.ids[b] + c;
-            const int* begin = h.innerIndexPtr() + h.outerIndexPtr()[col];
-            const int* end = h.innerIndexPtr() + h.outerIndexPtr()[col + 1];
-            for (int a = 0; a < p.count(); ++a) {
-                const int row = 3 * p.ids[a];
-                const int* first = std::lower_bound(begin, end, row);
-                if (end - first < 3 || first[0] != row || first[1] != row + 1 || first[2] != row + 2)
-                    throw std::logic_error(
-                        "IPCContactEnergy: active pair outside Hessian pattern; call update_pattern(x)");
-                for (int r = 0; r < 3; ++r)
-                    h.valuePtr()[first - h.innerIndexPtr() + r] += local(3 * a + r, 3 * b + c);
-            }
-        }
 }
 } // namespace
 
@@ -416,10 +400,6 @@ double IPCContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat*
     impl_->check_planes(x);
     auto pairs = impl_->active(x);
     double value = 0;
-    if (gradient)
-        gradient->setZero();
-    if (hessian)
-        std::fill_n(hessian->valuePtr(), hessian->nonZeros(), 0.0);
     // Each task owns one slot; only the fixed-order assembly below reduces values.
     std::vector<double> values(pairs.size());
     std::vector<Jet> derivatives(gradient || hessian ? pairs.size() : 0);
@@ -453,14 +433,62 @@ double IPCContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat*
         }
         derivatives[index] = result;
     });
-    for (std::size_t index = 0; index < pairs.size(); ++index) {
-        const auto& pair = pairs[index];
-        value += values[index];
-        if (gradient)
+    for (double local_value : values)
+        value += local_value;
+    if (gradient || hessian) {
+        if (hessian && hessian->nonZeros() == 0 && !pairs.empty())
+            throw std::logic_error("IPCContactEnergy: active pair outside Hessian pattern; call update_pattern(x)");
+        struct Contribution {
+            std::size_t pair;
+            int vertex;
+        };
+        // Per-call CSR incidence preserves pair order without a position-dependent cache.
+        std::vector<std::size_t> offsets(num_vertices() + 1, 0);
+        for (const auto& pair : pairs)
             for (int i = 0; i < pair.count(); ++i)
-                gradient->segment<3>(3 * pair.ids[i]) += derivatives[index].gradient.segment<3>(3 * i);
-        if (hessian)
-            add_local(*hessian, derivatives[index].hessian.topLeftCorner(3 * pair.count(), 3 * pair.count()), pair);
+                ++offsets[pair.ids[i] + 1];
+        std::partial_sum(offsets.begin(), offsets.end(), offsets.begin());
+        auto next = offsets;
+        std::vector<Contribution> contributions(offsets.back());
+        for (std::size_t index = 0; index < pairs.size(); ++index)
+            for (int i = 0; i < pairs[index].count(); ++i)
+                contributions[next[pairs[index].ids[i]]++] = {index, i};
+        // Like dof::Assembler, each task owns complete CSC columns and gradient DOFs.
+        tbb::parallel_for(tbb::blocked_range<int>(0, num_vertices(), 32), [&](const auto& range) {
+            if (hessian && hessian->nonZeros() != 0) {
+                const auto* outer = hessian->outerIndexPtr();
+                std::fill_n(hessian->valuePtr() + outer[3 * range.begin()],
+                            outer[3 * range.end()] - outer[3 * range.begin()], 0.0);
+            }
+            for (int v = range.begin(); v < range.end(); ++v) {
+                V g = V::Zero();
+                for (std::size_t entry = offsets[v]; entry < offsets[v + 1]; ++entry) {
+                    const auto [index, b] = contributions[entry];
+                    const auto& pair = pairs[index];
+                    const auto& local = derivatives[index];
+                    if (gradient)
+                        g += local.gradient.segment<3>(3 * b);
+                    if (hessian)
+                        for (int c = 0; c < 3; ++c) {
+                            const int col = 3 * v + c;
+                            const int* begin = hessian->innerIndexPtr() + hessian->outerIndexPtr()[col];
+                            const int* end = hessian->innerIndexPtr() + hessian->outerIndexPtr()[col + 1];
+                            for (int a = 0; a < pair.count(); ++a) {
+                                const int row = 3 * pair.ids[a];
+                                const int* first = std::lower_bound(begin, end, row);
+                                if (end - first < 3 || first[0] != row || first[1] != row + 1 || first[2] != row + 2)
+                                    throw std::logic_error("IPCContactEnergy: active pair outside Hessian pattern; "
+                                                           "call update_pattern(x)");
+                                for (int r = 0; r < 3; ++r)
+                                    hessian->valuePtr()[first - hessian->innerIndexPtr() + r] +=
+                                        local.hessian(3 * a + r, 3 * b + c);
+                            }
+                        }
+                }
+                if (gradient)
+                    gradient->segment<3>(3 * v) = g;
+            }
+        });
     }
     if (!std::isfinite(value) || (gradient && !gradient->allFinite()))
         throw std::domain_error("IPCContactEnergy: non-finite assembly");
