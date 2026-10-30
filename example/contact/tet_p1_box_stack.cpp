@@ -80,6 +80,9 @@ int main(int argc, char** argv) {
     const int thread_count = argc > 3 ? std::stoi(argv[3]) : 1;
     const int repetitions = argc > 4 ? std::stoi(argv[4]) : 5;
     const double total_stiffness = argc > 5 ? std::stod(argv[5]) : 0;
+    const std::string comparison = argc > 6 ? argv[6] : "ipctk";
+    if (comparison != "ipctk" && comparison != "spatial-hash")
+        throw std::invalid_argument("Comparison must be ipctk or spatial-hash");
     if (thread_count < 1 || repetitions < 1 || !std::isfinite(total_stiffness) || total_stiffness < 0)
         throw std::invalid_argument("Invalid benchmark threads, repetitions or total stiffness");
 #endif
@@ -123,7 +126,8 @@ int main(int argc, char** argv) {
 #ifdef LITEPGO_CONTACT_BENCHMARK
     return run_contact_benchmark(surface.mesh, surface_map, elastic, pulling, fixed, initial, options,
                                  contact_options.dhat, kappa,
-                                 argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/contact_benchmark", thread_count, repetitions);
+                                 argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/contact_benchmark", thread_count,
+                                 repetitions, comparison == "spatial-hash");
 #endif
     linalg::AutoSparseSolver solver;
     const auto result = solver::newton_solve(potential, fixed, initial, options, solver);
