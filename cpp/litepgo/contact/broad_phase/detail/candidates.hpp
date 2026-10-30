@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/contact/broad_phase.hpp"
+#include "litepgo/contact/broad_phase/broad_phase.hpp"
 #include "litepgo/core/types.hpp"
 #include <algorithm>
 #include <array>

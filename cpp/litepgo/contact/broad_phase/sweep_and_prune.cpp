@@ -1,4 +1,4 @@
-#include "litepgo/contact/sweep_and_prune.hpp"
+#include "litepgo/contact/broad_phase/sweep_and_prune.hpp"
 
 #include <algorithm>
 #include <cmath>

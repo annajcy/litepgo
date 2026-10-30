@@ -86,7 +86,7 @@ foreach(example tet_p1_plastic_twist hex_q1_plastic_twist hex_hermite_plastic_tw
     add_test(NAME FemPlasticTwist.${example} COMMAND $<TARGET_FILE:${example}>)
 endforeach()
 
-target_sources(litepgo_tests PRIVATE contact/ipc_contact_energy_gtest.cpp contact/broad_phase_gtest.cpp)
+target_sources(litepgo_tests PRIVATE contact/ipc_contact_energy_gtest.cpp contact/broad_phase/broad_phase_gtest.cpp)
 add_dependencies(litepgo_tests tet_p1_box_stack)
 add_test(NAME ContactEquilibrium.tet_p1_box_stack COMMAND $<TARGET_FILE:tet_p1_box_stack>)
 if(LITEPGO_WITH_IPC_TOOLKIT)

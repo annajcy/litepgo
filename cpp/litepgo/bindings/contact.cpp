@@ -1,6 +1,6 @@
 #include "litepgo/bindings/bindings.hpp"
 #include "litepgo/contact/ipc_contact_energy.hpp"
-#include "litepgo/contact/sweep_and_prune.hpp"
+#include "litepgo/contact/broad_phase/sweep_and_prune.hpp"
 #ifdef LITEPGO_HAS_IPC_TOOLKIT
 #include "litepgo/contact/ipctk_contact_energy.hpp"
 #endif
