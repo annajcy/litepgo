@@ -1,5 +1,5 @@
-#include "litepgo/contact/detail/broad_phase.hpp"
-#include "litepgo/contact/sweep_and_prune.hpp"
+#include "litepgo/contact/broad_phase/detail/candidates.hpp"
+#include "litepgo/contact/broad_phase/sweep_and_prune.hpp"
 
 #include "litepgo/contact/ipc_contact_energy.hpp"
 #include <cstring>

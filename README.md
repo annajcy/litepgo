@@ -194,7 +194,7 @@ Closest-feature transitions are generally C1, not C2; exact Hessians are those o
 Native contact accepts a shared, read-only broadphase backend as its optional fourth argument:
 
 ```cpp
-#include <litepgo/contact/sweep_and_prune.hpp>
+#include <litepgo/contact/broad_phase/sweep_and_prune.hpp>
 auto broad_phase = std::make_shared<litepgo::contact::SweepAndPrune>();
 litepgo::contact::IPCContactEnergy contact(surface, options, {}, broad_phase);
 ```
