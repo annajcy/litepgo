@@ -344,3 +344,31 @@ extracted = mesh.extract_surface_with_vertices(volume)
 W = dof.build_vertex_displacement_map(extracted.vertices, num_dofs, dofs_per_vertex=3)
 kinematics = dof.SurfaceKinematics(extracted.mesh.positions, W)
 ```
+
+Python exposes the general spatial index separately from `contact.SpatialHash`:
+
+```python
+from litepgo import spatial
+boxes = [spatial.AABB([0, 0, 0], [1, 1, 1]), spatial.AABB([.5, .5, .5], [2, 2, 2])]
+index = spatial.SpatialHash(boxes, cell_size=1)
+ids = index.query(spatial.AABB([.75, .75, .75], [.75, .75, .75]))
+pairs = index.overlapping_pairs()  # Optional filter(i, j).
+```
+
+Input boxes are copied. IDs refer to their original order; output order is unspecified.
+Native detection releases the GIL. Python pair filters run serially afterward, with
+exceptions propagated; they do not prune native candidate enumeration.
+`fem.PointEmbedding(element_ids, xi)` copies nonnegative integer IDs and finite `(n, 3)`
+coordinates with matching row counts. The displacement-map builder validates element
+bounds and reference-domain membership against the actual model.
+
+Paired C++/Python examples:
+- `example/spatial/spatial_query.cpp` / `.py`: point, region and filtered pair queries.
+- `example/fem/point_embedding.cpp` / `.py`: locator, explicit embedding, W and direct
+  interpolation comparisons for TetP1, HexQ1 and HexHermite (Q1 rest geometry).
+
+Build with `cmake --build build/release --target spatial_query point_embedding`.
+Run the executables under `build/release/example/{spatial,fem}/`, or the Python files
+with the configured environment. Both include numerical self-checks. The contact
+example retains its exact extracted-vertex path; these examples do not sample
+Hermite boundary surfaces.

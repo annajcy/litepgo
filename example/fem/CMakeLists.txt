@@ -17,3 +17,6 @@ foreach(target hex_q1_mesh_energy tet_p1_mesh_energy shell_stvk_mesh_energy hex_
 endforeach()
 
 add_subdirectory(plastic_twist)
+
+add_executable(point_embedding point_embedding.cpp)
+target_link_libraries(point_embedding PRIVATE litepgo::litepgo litepgo::warnings)

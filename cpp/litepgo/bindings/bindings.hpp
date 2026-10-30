@@ -35,3 +35,7 @@ void bind(nanobind::module_& m);
 namespace litepgo::solver::binding {
 void bind(nanobind::module_& m);
 } // namespace litepgo::solver::binding
+
+namespace litepgo::spatial::binding {
+void bind(nanobind::module_& m);
+}
