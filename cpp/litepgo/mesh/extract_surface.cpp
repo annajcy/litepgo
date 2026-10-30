@@ -96,11 +96,9 @@ TriangleMesh extract_surface(const VolumeMesh& mesh) {
 ExtractedSurface extract_surface_with_vertices(const TetMesh& mesh) {
     return boundary(mesh, tet_faces);
 }
-
 ExtractedSurface extract_surface_with_vertices(const HexMesh& mesh) {
     return boundary(mesh, hex_faces);
 }
-
 ExtractedSurface extract_surface_with_vertices(const VolumeMesh& mesh) {
     return std::visit([](const auto& data) { return extract_surface_with_vertices(data); }, mesh);
 }

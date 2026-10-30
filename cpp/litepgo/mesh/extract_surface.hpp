@@ -1,6 +1,5 @@
 #pragma once
 #include "litepgo/mesh/mesh_data.hpp"
-
 #include <vector>
 
 namespace litepgo::mesh {
@@ -13,8 +12,7 @@ TriangleMesh extract_surface(const TetMesh& mesh);
 TriangleMesh extract_surface(const HexMesh& mesh);
 TriangleMesh extract_surface(const VolumeMesh& mesh);
 
-// The same surface, with the volume vertex each surface vertex came from:
-// vertices[i] is the original index of surface vertex i, so it is increasing.
+// Original volume vertex ID for each boundary vertex, in increasing order.
 struct ExtractedSurface {
     TriangleMesh mesh;
     std::vector<int> vertices;

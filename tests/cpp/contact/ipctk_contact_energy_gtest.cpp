@@ -1,7 +1,7 @@
 #include "litepgo/contact/ipctk_contact_energy.hpp"
 
 #include "../testing/finite_difference.hpp"
-#include "litepgo/dof/surface_dof_map.hpp"
+#include "litepgo/dof/surface_kinematics.hpp"
 #include "litepgo/energy/affine_mapped_energy.hpp"
 
 #include <Eigen/Eigenvalues>
@@ -214,15 +214,15 @@ TEST(IPCTKContactEnergy, PlanesRepelVerticesAndRejectThoseBehind) {
 }
 
 // Displacement DOFs u drive the surface through E(u) = B(X + W u), with X and W
-// from a SurfaceDofMap. Triangle A is a static obstacle; B's vertices 3, 4, 5 take
+// from a SurfaceKinematics. Triangle A is a static obstacle; B's vertices 3, 4, 5 take
 // simulation vertices 2, 1, 0, before an unrelated DOF u[9].
-TEST(IPCTKContactEnergy, ComposesWithASurfaceDofMap) {
+TEST(IPCTKContactEnergy, ComposesWithASurfaceKinematics) {
     auto barrier = std::make_shared<IPCTKContactEnergy>(two_triangles(0.5), options(1.0));
     SpMat W(18, 10);
     for (int v = 0; v < 3; ++v)
         for (int c = 0; c < 3; ++c)
             W.insert(9 + 3 * v + c, 3 * (2 - v) + c) = 1;
-    const dof::SurfaceDofMap kinematics(barrier->rest_positions(), W);
+    const dof::SurfaceKinematics kinematics(barrier->rest_positions(), W);
     energy::AffineMappedEnergy mapped(barrier, kinematics.displacement_map(), kinematics.rest_positions());
     EXPECT_FALSE(mapped.has_fixed_pattern());
 

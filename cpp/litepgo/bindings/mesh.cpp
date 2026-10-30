@@ -111,16 +111,12 @@ void bind(nb::module_& m) {
 
     nb::class_<ExtractedSurface>(m, "ExtractedSurface")
         .def_ro("mesh", &ExtractedSurface::mesh)
-        .def_prop_ro(
-            "vertices",
-            [](const ExtractedSurface& surface) {
-                return Eigen::VectorXi(Eigen::Map<const Eigen::VectorXi>(
-                    surface.vertices.data(), static_cast<Eigen::Index>(surface.vertices.size())));
-            },
-            "The volume vertex of each surface vertex, increasing (a copy).");
+        .def_prop_ro("vertices", [](const ExtractedSurface& surface) {
+            return Eigen::VectorXi(Eigen::Map<const Eigen::VectorXi>(surface.vertices.data(), surface.vertices.size()));
+        });
     m.def(
         "extract_surface_with_vertices", [](const VolumeMesh& mesh) { return extract_surface_with_vertices(mesh); },
-        "mesh"_a, "extract_surface(mesh), with the volume vertex each surface vertex came from.");
+        "mesh"_a);
 
     nb::class_<TriangleMidEdgeStencils>(m, "TriangleMidEdgeStencils")
         .def_ro("vertices", &TriangleMidEdgeStencils::vertices,

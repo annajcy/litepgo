@@ -1,6 +1,7 @@
 #include "litepgo/contact/broad_phase/spatial_hash.hpp"
 #include "litepgo/contact/ipc_contact_energy.hpp"
-#include "litepgo/dof/surface_dof_map.hpp"
+#include "litepgo/dof/surface_kinematics.hpp"
+#include "litepgo/dof/vertex_displacement_map.hpp"
 #include "litepgo/energy/affine_mapped_energy.hpp"
 #include "litepgo/energy/vertex_pulling_energy.hpp"
 #include "litepgo/energy/weighted_energy_sum.hpp"
@@ -106,11 +107,12 @@ int main(int argc, char** argv) {
     // volume displacement DOFs. The barrier's weight kappa is its stiffness.
     const auto extracted = mesh::extract_surface_with_vertices(stack);
     const auto& surface = extracted.mesh;
+    const SpMat W = dof::build_vertex_displacement_map(extracted.vertices, num_dofs);
     contact::IPCContactOptions contact_options;
     contact_options.dhat = 0.01 * height;
     auto barrier =
         std::make_shared<contact::IPCContactEnergy>(surface, contact_options, std::make_shared<contact::SpatialHash>());
-    const dof::SurfaceDofMap kinematics(surface.positions, extracted.vertices, num_dofs);
+    const dof::SurfaceKinematics kinematics(surface.positions, W);
     auto contact = std::make_shared<energy::AffineMappedEnergy>(barrier, kinematics.displacement_map(),
                                                                 kinematics.rest_positions());
     const double kappa = 1e3;

@@ -72,10 +72,10 @@ def test_planes_and_feasible_steps():
     assert barrier.max_feasible_step(x, -down) == 1.0
 
 
-def test_barrier_composes_with_a_surface_dof_map():
+def test_barrier_composes_with_a_surface_kinematics():
     barrier = contact.IPCContactEnergy(two_triangles(0.5), contact.IPCContactOptions(dhat=1.0), contact.SpatialHash())
     # A is a static obstacle; B's vertices take simulation vertices 0, 1, 2.
-    kinematics = dof.SurfaceDofMap(barrier.rest_positions, sp.eye(18, 9, k=-9, format="csc"))
+    kinematics = dof.SurfaceKinematics(barrier.rest_positions, sp.eye(18, 9, k=-9, format="csc"))
     np.testing.assert_array_equal(kinematics.displacement_map.toarray(), sp.eye(18, 9, k=-9).toarray())
     mapped = energy.AffineMappedEnergy(barrier, kinematics.displacement_map, kinematics.rest_positions.ravel())
     u = np.zeros(9)

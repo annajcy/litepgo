@@ -31,7 +31,7 @@ add_library(litepgo STATIC
     fem/basis/3d/tet_p1_basis.cpp
     dof/dof_reduction.cpp
     dof/reduced_matrix.cpp
-    dof/surface_dof_map.cpp
+    dof/surface_kinematics.cpp
     linalg/sparse_solver/eigen_ldlt.cpp
     linalg/sparse_solver/eigen_sparse_lu.cpp
     linalg/sparse_pattern.cpp

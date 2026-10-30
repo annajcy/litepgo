@@ -2,7 +2,7 @@
 
 Energies act on vertex-major xyz positions, with unit stiffness. Call
 update_pattern(x) before Hessian assembly. Compose with AffineMappedEnergy and
-SurfaceDofMap for displacement DOFs. Native ACCD uses floating-point arithmetic;
+SurfaceKinematics for displacement DOFs. Native ACCD uses floating-point arithmetic;
 it does not provide formal floating-point robustness guarantees. Native energies
 require an explicit broad_phase=SpatialHash() and retain shared
 ownership of that backend. Custom backends are implemented in C++, not Python.

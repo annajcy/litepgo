@@ -77,18 +77,18 @@ TEST(ExtractSurface, TwoHexesShareAnInteriorFace) {
     EXPECT_NEAR(enclosed_volume(surface), 16, 1e-13);
 }
 
-TEST(ExtractSurface, ReportsTheOriginalVertexOfEachSurfaceVertex) {
+TEST(ExtractSurface, DropsInteriorVertices) {
     // Vertex 1 lies inside: four tets around it leave the outer tet's faces as the surface.
     Vec positions(15);
     positions << 0, 0, 0, 0.25, 0.25, 0.25, 1, 0, 0, 0, 1, 0, 0, 0, 1;
     const TetMesh mesh{positions, TetTopology(5, {{1, 2, 3, 4}, {0, 1, 3, 4}, {0, 2, 1, 4}, {0, 2, 3, 1}})};
-    const ExtractedSurface surface = extract_surface_with_vertices(VolumeMesh(mesh));
-    EXPECT_EQ(surface.vertices, (std::vector<int>{0, 2, 3, 4}));
-    ASSERT_EQ(surface.mesh.topology.num_vertices(), 4);
+    const TriangleMesh surface = extract_surface(VolumeMesh(mesh));
+    const std::vector<int> vertices{0, 2, 3, 4};
+    ASSERT_EQ(surface.topology.num_vertices(), 4);
     for (int i = 0; i < 4; ++i)
-        EXPECT_EQ(surface.mesh.positions.segment<3>(3 * i), positions.segment<3>(3 * surface.vertices[i]));
-    EXPECT_EQ(surface.mesh.positions, litepgo::mesh::extract_surface(mesh).positions);
-    EXPECT_TRUE(closed_and_consistent(surface.mesh));
+        EXPECT_EQ(surface.positions.segment<3>(3 * i), positions.segment<3>(3 * vertices[i]));
+    EXPECT_EQ(surface.positions, litepgo::mesh::extract_surface(mesh).positions);
+    EXPECT_TRUE(closed_and_consistent(surface));
 }
 
 TEST(ExtractSurface, RejectsFaceSharedByThreeCells) {
