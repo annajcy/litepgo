@@ -141,7 +141,8 @@ def test_independent_native_matches_toolkit_original_sum():
         contact.IPCContactEnergy(surface, contact.IPCTKContactOptions(dhat=1), contact.SweepAndPrune())
 
 
-def test_native_broad_phase_injection_and_lifetime():
+@pytest.mark.parametrize("backend_factory", [contact.SweepAndPrune, contact.SpatialHash, lambda: contact.SpatialHash(cell_size=0.5)])
+def test_native_broad_phase_injection_and_lifetime(backend_factory):
     import gc
 
     surface = two_triangles(0.5)
@@ -152,7 +153,7 @@ def test_native_broad_phase_injection_and_lifetime():
         contact.IPCContactEnergy(surface, options, None)
     with pytest.raises(TypeError):
         contact.IPCContactEnergy(surface, options, [])
-    backend = contact.SweepAndPrune()
+    backend = backend_factory()
     assert isinstance(backend, contact.BroadPhase)
     with pytest.raises(TypeError):
         contact.BroadPhase()
@@ -199,3 +200,9 @@ def test_analytic_features_and_mollifier_match_toolkit(positions):
     assert native.eval_value(x) == pytest.approx(toolkit.eval_value(x), rel=1e-11, abs=1e-12)
     np.testing.assert_allclose(native.eval_gradient(x), toolkit.eval_gradient(x), rtol=1e-8, atol=1e-9)
     np.testing.assert_allclose(native.eval_hessian(x).toarray(), toolkit.eval_hessian(x).toarray(), rtol=1e-7, atol=1e-8)
+
+
+@pytest.mark.parametrize("cell_size", [0, -1, float("inf"), float("nan")])
+def test_spatial_hash_rejects_invalid_cell_size(cell_size):
+    with pytest.raises(ValueError):
+        contact.SpatialHash(cell_size)

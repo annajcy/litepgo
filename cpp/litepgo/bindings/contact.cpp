@@ -1,4 +1,5 @@
 #include "litepgo/bindings/bindings.hpp"
+#include "litepgo/contact/broad_phase/spatial_hash.hpp"
 #include "litepgo/contact/broad_phase/sweep_and_prune.hpp"
 #include "litepgo/contact/ipc_contact_energy.hpp"
 #ifdef LITEPGO_HAS_IPC_TOOLKIT
@@ -6,6 +7,7 @@
 #endif
 
 #include <nanobind/eigen/dense.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/vector.h>
 #include <type_traits>
@@ -71,6 +73,9 @@ void bind(nb::module_& m) {
 
     nb::class_<BroadPhase>(m, "BroadPhase");
     nb::class_<SweepAndPrune, BroadPhase>(m, "SweepAndPrune").def(nb::init<>());
+
+    nb::class_<SpatialHash, BroadPhase>(m, "SpatialHash")
+        .def(nb::init<std::optional<double>>(), "cell_size"_a = nb::none());
 
     bind_backend<IPCContactEnergy, IPCContactOptions>(m, "IPCContactEnergy", "IPCContactOptions");
 #ifdef LITEPGO_HAS_IPC_TOOLKIT

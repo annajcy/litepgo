@@ -227,7 +227,21 @@ contact validates indices, filters kinds/AABB overlap/topology, and sorts/unique
 pairs before contact feature multiplicities are formed. Backend calls must be safe to share
 concurrently; query data cannot be retained. SAP validates bounds/kinds and uses per-call scratch.
 
-The broadphase is sweep-and-prune, not spatial hashing: it selects the widest scene axis, scans
+`SpatialHash()` is an alternative native backend (`SpatialHash(cell_size)` selects a
+finite positive width explicitly). Auto sizing uses the median positive maximum AABB
+extent among edges/faces, excluding points. It uses a sparse `unordered_map` with full
+signed int3 equality; each box covers every cell from `floor(lo/h)` through `floor(hi/h)`
+inclusively. Records and bucket queries are parallel; map insertion is serial. The
+lowest shared cell owns each pair, preventing duplicate output without skipping overlaps.
+
+All input boxes are validated first. Nonfinite bounds, unrepresentable int64 cell
+coordinates, missing positive auto extent, or more than 2^20 box-cell records cause a
+whole-query SAP fallback. Invalid bounds/kinds still throw. There is **no pair-work
+budget or pair-work-triggered fallback**. Long overlapping AABBs may be examined in
+many shared cells despite unique output; dense buckets remain quadratic. Shared
+backends are safe for concurrent calls because all query scratch is local.
+
+The examples explicitly choose sweep-and-prune: it selects the widest scene axis, scans
 AABB overlaps in parallel; contact sorts merged candidates deterministically. Swept bounds, inflation and
 outward rounding are preserved. It has quadratic worst-case behavior for heavily overlapping boxes. Native local contact
 evaluation, Hessian projection, gradient/Hessian assembly and surface CCD queries use TBB.
