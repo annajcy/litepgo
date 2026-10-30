@@ -188,6 +188,13 @@ intersection query. `max_feasible_step` additionally checks initial edge-face in
 from feasible states. Shared-vertex primitives are excluded. Coplanar overlaps are detected through
 zero closest-feature distances. Degenerate evaluated triangles are rejected.
 
+Native distance gradients/Hessians use a minimal vendored subset of IPC Toolkit 1.6.1
+analytical routines (MIT; see `cpp/litepgo/contact/detail/ipc_derivatives/README.md`
+and its original LICENSE). Feature selection and scalar distances remain native.
+Barrier and mollifier derivatives use explicit chain/product rules, including mixed
+terms; gradient-only evaluation does not compute Hessians. This does not link the
+native library to IPC Toolkit and does not change the optional IPCTK backend.
+
 Native predicates and ACCD use double precision, without a formal floating-point robustness guarantee;
 extreme scales, grazing contact and nearly degenerate geometry remain numerical limitations.
 Closest-feature transitions are generally C1, not C2; exact Hessians are those of the selected branch.

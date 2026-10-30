@@ -1,0 +1,116 @@
+// Derived from IPC Toolkit 1.6.1. Copyright (c) 2020–2025 Zachary Ferguson.
+// SPDX-License-Identifier: MIT — see LICENSE and README.md in this directory.
+#pragma once
+#include <Eigen/Core>
+namespace litepgo::contact::detail::ipc_derivatives {
+using Vector6 = Eigen::Matrix<double, 6, 1>;
+using Matrix6 = Eigen::Matrix<double, 6, 6>;
+Vector6 point_point_distance_gradient(const Eigen::Vector3d& p0, const Eigen::Vector3d& p1);
+Matrix6 point_point_distance_hessian(const Eigen::Vector3d& p0, const Eigen::Vector3d& p1);
+void point_line_distance_gradient_3D(
+        double v01,
+        double v02,
+        double v03,
+        double v11,
+        double v12,
+        double v13,
+        double v21,
+        double v22,
+        double v23,
+        double g[9]);
+void point_line_distance_hessian_3D(
+        double v01,
+        double v02,
+        double v03,
+        double v11,
+        double v12,
+        double v13,
+        double v21,
+        double v22,
+        double v23,
+        double H[81]);
+void point_plane_distance_gradient(
+        double v01,
+        double v02,
+        double v03,
+        double v11,
+        double v12,
+        double v13,
+        double v21,
+        double v22,
+        double v23,
+        double v31,
+        double v32,
+        double v33,
+        double g[12]);
+void point_plane_distance_hessian(
+        double v01,
+        double v02,
+        double v03,
+        double v11,
+        double v12,
+        double v13,
+        double v21,
+        double v22,
+        double v23,
+        double v31,
+        double v32,
+        double v33,
+        double H[144]);
+void line_line_distance_gradient(
+        double v01,
+        double v02,
+        double v03,
+        double v11,
+        double v12,
+        double v13,
+        double v21,
+        double v22,
+        double v23,
+        double v31,
+        double v32,
+        double v33,
+        double g[12]);
+void line_line_distance_hessian(
+        double v01,
+        double v02,
+        double v03,
+        double v11,
+        double v12,
+        double v13,
+        double v21,
+        double v22,
+        double v23,
+        double v31,
+        double v32,
+        double v33,
+        double H[144]);
+void edge_edge_cross_squarednorm_gradient(
+        double v01,
+        double v02,
+        double v03,
+        double v11,
+        double v12,
+        double v13,
+        double v21,
+        double v22,
+        double v23,
+        double v31,
+        double v32,
+        double v33,
+        double g[12]);
+void edge_edge_cross_squarednorm_hessian(
+        double v01,
+        double v02,
+        double v03,
+        double v11,
+        double v12,
+        double v13,
+        double v21,
+        double v22,
+        double v23,
+        double v31,
+        double v32,
+        double v33,
+        double H[144]);
+}

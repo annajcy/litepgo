@@ -7,52 +7,6 @@
 
 namespace litepgo::contact::detail {
 
-// A local second-order scalar: analytic chain rules, at most four xyz vertices.
-struct Jet {
-    double value = 0;
-    Eigen::Matrix<double, 12, 1> gradient = Eigen::Matrix<double, 12, 1>::Zero();
-    Eigen::Matrix<double, 12, 12> hessian = Eigen::Matrix<double, 12, 12>::Zero();
-    Jet() = default;
-    Jet(double v) : value(v) {}
-};
-inline Jet operator+(const Jet& a, const Jet& b) {
-    Jet r(a.value + b.value);
-    r.gradient = a.gradient + b.gradient;
-    r.hessian = a.hessian + b.hessian;
-    return r;
-}
-inline Jet operator-(const Jet& a, const Jet& b) {
-    Jet r(a.value - b.value);
-    r.gradient = a.gradient - b.gradient;
-    r.hessian = a.hessian - b.hessian;
-    return r;
-}
-inline Jet operator*(const Jet& a, const Jet& b) {
-    Jet r(a.value * b.value);
-    r.gradient = a.gradient * b.value + b.gradient * a.value;
-    r.hessian = a.hessian * b.value + b.hessian * a.value + a.gradient * b.gradient.transpose() +
-                b.gradient * a.gradient.transpose();
-    return r;
-}
-inline Jet compose(const Jet& a, double value, double first, double second) {
-    Jet r(value);
-    r.gradient = first * a.gradient;
-    r.hessian = first * a.hessian + second * a.gradient * a.gradient.transpose();
-    return r;
-}
-inline Jet operator/(const Jet& a, const Jet& b) {
-    const double inv = 1 / b.value;
-    return a * compose(b, inv, -inv * inv, 2 * inv * inv * inv);
-}
-inline Jet log(const Jet& a) {
-    return compose(a, std::log(a.value), 1 / a.value, -1 / (a.value * a.value));
-}
-inline double scalar(double x) {
-    return x;
-}
-inline double scalar(const Jet& x) {
-    return x.value;
-}
 template <class S> using V3 = std::array<S, 3>;
 template <class S> V3<S> sub(const V3<S>& a, const V3<S>& b) {
     return {a[0] - b[0], a[1] - b[1], a[2] - b[2]};
