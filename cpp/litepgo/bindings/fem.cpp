@@ -16,6 +16,7 @@
 #include "litepgo/fem/quadrature/2d/triangle_centroid_quadrature.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
+#include "litepgo/fem/sample_boundary.hpp"
 #include <nanobind/stl/vector.h>
 
 #include <nanobind/eigen/dense.h>
@@ -202,6 +203,11 @@ void bind(nb::module_& m) {
     bind_locator<TetP1Basis>(m, "ElementLocatorTetP1");
     bind_locator<HexQ1Basis>(m, "ElementLocatorHexQ1");
 
+    nb::class_<SampledBoundary>(m, "SampledBoundary")
+        .def_ro("mesh", &SampledBoundary::mesh)
+        .def_ro("embedding", &SampledBoundary::embedding);
+    m.def("_sample_boundary_hex_q1", &sample_boundary<HexQ1Basis>, "topology"_a, "X_fields"_a, "subdivisions"_a);
+    register_instance(m, "sample_boundary", nb::make_tuple(nb::type<HexQ1Basis>()), m.attr("_sample_boundary_hex_q1"));
     bind_local(m);
     bind_energies(m);
 }

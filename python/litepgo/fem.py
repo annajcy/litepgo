@@ -67,6 +67,9 @@ GaussLegendre3D = _templates["GaussLegendre3D"]
 
 build_point_displacement_map = _templates["build_point_displacement_map"]
 
+sample_boundary = _templates["sample_boundary"]
+SampledBoundary = _native.SampledBoundary
+
 ElementLocator = _templates["ElementLocator"]
 PointEmbedding = _native.PointEmbedding
 
@@ -103,6 +106,8 @@ VolumetricFemEnergy = _templates["VolumetricFemEnergy"]
 ShellFemEnergy = _templates["ShellFemEnergy"]
 
 __all__ = [
+    "sample_boundary",
+    "SampledBoundary",
     "build_point_displacement_map",
     "ElementLocator",
     "PointEmbedding",

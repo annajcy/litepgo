@@ -1,4 +1,5 @@
 #include "litepgo/mesh/extract_surface.hpp"
+#include "litepgo/mesh/detail/hex_faces.hpp"
 
 #include <algorithm>
 #include <array>
@@ -10,8 +11,6 @@ namespace litepgo::mesh {
 namespace {
 // Local faces wound outward for a positively oriented cell.
 constexpr std::array<std::array<int, 3>, 4> tet_faces{{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}};
-constexpr std::array<std::array<int, 4>, 6> hex_faces{
-    {{0, 3, 2, 1}, {4, 5, 6, 7}, {0, 1, 5, 4}, {3, 7, 6, 2}, {0, 4, 7, 3}, {1, 2, 6, 5}}};
 
 template <int K, std::size_t FaceSize, std::size_t NumFaces>
 ExtractedSurface boundary(const MeshData<K>& mesh, const std::array<std::array<int, FaceSize>, NumFaces>& local_faces) {
@@ -86,7 +85,7 @@ TriangleMesh extract_surface(const TetMesh& mesh) {
 }
 
 TriangleMesh extract_surface(const HexMesh& mesh) {
-    return boundary(mesh, hex_faces).mesh;
+    return boundary(mesh, detail::hex_faces).mesh;
 }
 
 TriangleMesh extract_surface(const VolumeMesh& mesh) {
@@ -97,7 +96,7 @@ ExtractedSurface extract_surface_with_vertices(const TetMesh& mesh) {
     return boundary(mesh, tet_faces);
 }
 ExtractedSurface extract_surface_with_vertices(const HexMesh& mesh) {
-    return boundary(mesh, hex_faces);
+    return boundary(mesh, detail::hex_faces);
 }
 ExtractedSurface extract_surface_with_vertices(const VolumeMesh& mesh) {
     return std::visit([](const auto& data) { return extract_surface_with_vertices(data); }, mesh);
