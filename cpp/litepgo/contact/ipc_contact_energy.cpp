@@ -1,4 +1,5 @@
 #include "litepgo/contact/ipc_contact_energy.hpp"
+#include "litepgo/contact/detail/broad_phase.hpp"
 #include "litepgo/contact/detail/distance.hpp"
 
 #include <Eigen/Eigenvalues>
@@ -32,14 +33,6 @@ struct Pair {
         return std::tuple{plane, epsilon > 0, feature.n, feature.line_line, ids};
     }
 };
-struct Box {
-    V lo, hi;
-    int kind, id;
-}; // vertex=0, edge=1, face=2
-struct Candidates {
-    std::vector<Ids> vf, ee, ef;
-};
-
 int checked_size(const mesh::TriangleMesh& surface) {
     surface.validate();
     if (surface.topology.num_vertices() == 0 || surface.topology.num_cells() == 0 ||
@@ -83,13 +76,6 @@ Pair reduced(const Ids& ids, Feature f) {
         std::sort(p.ids.begin() + 1, p.ids.end());
     p.feature.ids = {0, 1, 2, 3};
     return p;
-}
-bool shared(const Ids& a, int na, const Ids& b, int nb) {
-    for (int i = 0; i < na; ++i)
-        for (int j = 0; j < nb; ++j)
-            if (a[i] == b[j])
-                return true;
-    return false;
 }
 } // namespace
 
@@ -153,78 +139,8 @@ struct IPCContactEnergy::Impl {
                     throw std::domain_error("IPCContactEnergy: plane distance must exceed min_distance");
             }
     }
-    // Sweep along x, testing the other axes only for overlapping intervals.
-    // Swept boxes enclose the entire linear trajectory, not just its endpoints.
     Candidates candidates(const ConstVecRef& x, const Vec* dx, double inflation, bool intersections = false) const {
-        std::vector<Box> boxes;
-        boxes.reserve(nv + edges.size() + faces.size());
-        auto add = [&](Ids ids, int n, int kind, int id) {
-            Box b{V::Constant(std::numeric_limits<double>::infinity()),
-                  V::Constant(-std::numeric_limits<double>::infinity()), kind, id};
-            for (int i = 0; i < n; ++i) {
-                V p = x.segment<3>(3 * ids[i]);
-                b.lo = b.lo.cwiseMin(p);
-                b.hi = b.hi.cwiseMax(p);
-                if (dx) {
-                    p += dx->segment<3>(3 * ids[i]);
-                    b.lo = b.lo.cwiseMin(p);
-                    b.hi = b.hi.cwiseMax(p);
-                }
-            }
-            b.lo.array() -= inflation;
-            b.hi.array() += inflation;
-            if (!b.lo.allFinite() || !b.hi.allFinite())
-                throw std::domain_error("IPCContactEnergy: unrepresentable bounding box");
-            // Outward one-ULP rounding avoids dropping touching boxes after inflation.
-            for (int k = 0; k < 3; ++k) {
-                b.lo[k] = std::nextafter(b.lo[k], -INFINITY);
-                b.hi[k] = std::nextafter(b.hi[k], INFINITY);
-            }
-            boxes.push_back(b);
-        };
-        for (int v = 0; v < nv; ++v)
-            add({v, -1, -1, -1}, 1, 0, v);
-        for (int e = 0; e < static_cast<int>(edges.size()); ++e)
-            add({edges[e][0], edges[e][1], -1, -1}, 2, 1, e);
-        for (int f = 0; f < static_cast<int>(faces.size()); ++f)
-            add({faces[f][0], faces[f][1], faces[f][2], -1}, 3, 2, f);
-        std::sort(boxes.begin(), boxes.end(), [](const Box& a, const Box& b) {
-            return std::tuple{a.lo[0], a.kind, a.id} < std::tuple{b.lo[0], b.kind, b.id};
-        });
-        Candidates result;
-        for (std::size_t i = 0; i < boxes.size(); ++i)
-            for (std::size_t j = i + 1; j < boxes.size() && boxes[j].lo[0] <= boxes[i].hi[0]; ++j) {
-                const Box* a = &boxes[i];
-                const Box* b = &boxes[j];
-                if (a->kind > b->kind)
-                    std::swap(a, b);
-                if (!((a->kind == 0 && b->kind == 2) || (a->kind == 1 && b->kind == 1) ||
-                      (intersections && a->kind == 1 && b->kind == 2)))
-                    continue;
-                if ((a->lo.array() > b->hi.array()).any() || (b->lo.array() > a->hi.array()).any())
-                    continue;
-                if (a->kind == 0) {
-                    auto f = faces[b->id];
-                    if (a->id == f[0] || a->id == f[1] || a->id == f[2])
-                        continue;
-                    result.vf.push_back({a->id, f[0], f[1], f[2]});
-                } else if (b->kind == 1) {
-                    int ai = std::min(a->id, b->id), bi = std::max(a->id, b->id);
-                    auto e = edges[ai], f = edges[bi];
-                    if (shared({e[0], e[1], -1, -1}, 2, {f[0], f[1], -1, -1}, 2))
-                        continue;
-                    result.ee.push_back({ai, bi, -1, -1});
-                } else {
-                    auto e = edges[a->id];
-                    auto f = faces[b->id];
-                    if (shared({e[0], e[1], -1, -1}, 2, {f[0], f[1], f[2], -1}, 3))
-                        continue;
-                    result.ef.push_back({a->id, b->id, -1, -1});
-                }
-            }
-        for (auto* list : {&result.vf, &result.ee, &result.ef})
-            std::sort(list->begin(), list->end());
-        return result;
+        return broad_phase(x, dx, inflation, edges, faces, intersections);
     }
     Ids edge_ids(const Ids& pair) const {
         auto a = edges[pair[0]], b = edges[pair[1]];
