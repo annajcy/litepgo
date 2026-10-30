@@ -32,10 +32,8 @@ parser.add_argument("--mesh", type=Path, default=ROOT / "assets/box-tet.veg")
 parser.add_argument("--output", type=Path, default=ROOT / "output/contact_benchmark")
 parser.add_argument("--total-stiffness", type=float, default=0)
 parser.add_argument("--skip-build", action="store_true")
-parser.add_argument("--comparison", choices=("ipctk", "spatial-hash"), default="ipctk",
-                    help="Compare native SAP with IPCTK (default) or native SpatialHash")
 args = parser.parse_args()
-other_backend = "spatial_hash" if args.comparison == "spatial-hash" else "ipctk"
+other_backend = "ipctk"
 if args.threads < 1 or args.repetitions < 1 or not math.isfinite(args.total_stiffness) or args.total_stiffness < 0:
     parser.error("threads/repetitions must be positive and total stiffness finite/nonnegative")
 BUILD = Path(args.build).resolve()
@@ -73,11 +71,11 @@ metadata = {
                                    ROOT / "example/contact/contact_benchmark.hpp",
                                    ROOT / "cpp/litepgo/contact/ipc_contact_energy.cpp",
                                    ROOT / "cpp/litepgo/contact/ipctk_contact_energy.cpp",
-                                   ROOT / "cpp/litepgo/contact/broad_phase/sweep_and_prune.cpp",
+                                   ROOT / "cpp/litepgo/spatial/spatial_hash.hpp",
                                    ROOT / "cpp/litepgo/contact/broad_phase/spatial_hash.cpp"]},
     "thread_environment": {key: ENV[key] for key in ("VECLIB_MAXIMUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS")},
     "build_directory": str(BUILD),
-    "comparison": args.comparison,
+    "comparison": "ipctk",
     "threads": args.threads, "repetitions": args.repetitions, "total_stiffness": args.total_stiffness,
     "protocol": "one warmup per backend, then measured pairs with alternating backend order; steady_clock around newton_solve only",
 }
@@ -88,7 +86,7 @@ if sys.platform == "darwin":
 (OUT / "environment.json").write_text(json.dumps(metadata, indent=2) + "\n")
 (OUT / "CMakeCache.txt").write_bytes((BUILD / "CMakeCache.txt").read_bytes())
 with (OUT / "run.log").open("w") as log:
-    completed = subprocess.run([str(executable), str(mesh), str(OUT), str(args.threads), str(args.repetitions), str(args.total_stiffness), args.comparison],
+    completed = subprocess.run([str(executable), str(mesh), str(OUT), str(args.threads), str(args.repetitions), str(args.total_stiffness)],
                                cwd=ROOT, env=ENV, stdout=log, stderr=subprocess.STDOUT)
 results = rows("runs.csv")
 assert len(results) == 2 * (args.repetitions + 1), "Expected one warmup and requested measured runs per backend"
@@ -111,20 +109,6 @@ difference = [a - b for a, b in zip(*x)]
 comparison = rows("displacement_comparison.csv")[0]
 assert math.isclose(max(abs(v) for v in difference), float(comparison["max_abs"]), rel_tol=1e-12, abs_tol=1e-30)
 assert math.isclose(math.sqrt(sum(v*v for v in difference) / len(difference)), float(comparison["rms"]), rel_tol=1e-12, abs_tol=1e-30)
-if args.comparison == "spatial-hash":
-    # Compare every saved field, not merely the reconstructed max/RMS differences.
-    for round_index in range(args.repetitions + 1):
-        pair = [next(r for r in results if r["backend"] == backend and int(r["round"]) == round_index)
-                for backend in ("native", other_backend)]
-        assert {k: v for k, v in pair[0].items() if k not in ("backend", "seconds")} == {
-            k: v for k, v in pair[1].items() if k not in ("backend", "seconds")}, ("run mismatch", round_index)
-        assert (OUT / f"native_{round_index}_displacement.csv").read_bytes() == (
-            OUT / f"{other_backend}_{round_index}_displacement.csv").read_bytes(), ("displacement mismatch", round_index)
-    traces = rows("iterations.csv")
-    paths = [[{k: v for k, v in r.items() if k != "backend"} for r in traces if r["backend"] == backend]
-             for backend in ("native", other_backend)]
-    assert paths[0] == paths[1], "SAP/hash iteration trace mismatch"
-    summary["sap_hash_all_non_timing_exact"] = True
 summary["displacement_comparison"] = comparison
 summary[f"native_over_{other_backend}_median_time"] = summary["native"]["seconds_median"] / summary[other_backend]["seconds_median"]
 (OUT / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")

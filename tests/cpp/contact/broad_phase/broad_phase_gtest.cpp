@@ -1,6 +1,5 @@
 #include "litepgo/contact/broad_phase/detail/candidates.hpp"
 #include "litepgo/contact/broad_phase/spatial_hash.hpp"
-#include "litepgo/contact/broad_phase/sweep_and_prune.hpp"
 
 #include "litepgo/contact/ipc_contact_energy.hpp"
 #include <cstring>
@@ -72,9 +71,8 @@ void compare(const Vec& x, const Vec* dx, double inflation, const Edges& edges, 
     for (int threads : {1, 4, 8}) {
         SCOPED_TRACE(threads);
         const tbb::global_control control(tbb::global_control::max_allowed_parallelism, threads);
-        const SweepAndPrune sap;
         const SpatialHash automatic, fixed(10.0);
-        for (const BroadPhase* backend : std::array<const BroadPhase*, 3>{&sap, &automatic, &fixed}) {
+        for (const BroadPhase* backend : std::array<const BroadPhase*, 2>{&automatic, &fixed}) {
             const auto actual = detail::broad_phase(x, dx, inflation, edges, faces, intersections, *backend);
             EXPECT_EQ(actual.vf, expected.vf);
             EXPECT_EQ(actual.ee, expected.ee);
@@ -122,14 +120,14 @@ TEST(ContactBroadPhase, RetainsTouchingRoundedAndSweptPairs) {
     x << 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0.25, 1, 0.25, 0.25, 2;
     Vec dx = Vec::Zero(15);
     dx[11] = -2; // Crosses the face, though neither endpoint touches it.
-    auto swept = detail::broad_phase(x, &dx, 0, edges, faces, true, SweepAndPrune{});
+    auto swept = detail::broad_phase(x, &dx, 0, edges, faces, true, SpatialHash{});
     EXPECT_NE(std::find(swept.vf.begin(), swept.vf.end(), std::array{3, 0, 1, 2}), swept.vf.end());
     EXPECT_NE(std::find(swept.ef.begin(), swept.ef.end(), std::array{3, 0, -1, -1}), swept.ef.end());
     compare(x, &dx, 0, edges, faces, true);
     for (double height : {0.0, std::nextafter(0.0, 1.0), 0.125, std::nextafter(0.125, 1.0)}) {
         x[11] = x[14] = height;
         const double inflation = height < 0.1 ? 0 : 0.0625;
-        const auto candidates = detail::broad_phase(x, nullptr, inflation, edges, faces, true, SweepAndPrune{});
+        const auto candidates = detail::broad_phase(x, nullptr, inflation, edges, faces, true, SpatialHash{});
         EXPECT_NE(std::find(candidates.vf.begin(), candidates.vf.end(), std::array{3, 0, 1, 2}), candidates.vf.end());
         compare(x, nullptr, inflation, edges, faces, true);
     }
@@ -139,10 +137,10 @@ TEST(ContactBroadPhase, EmptyAndUnrepresentableBounds) {
     compare(Vec(), nullptr, 0, {}, {}, true);
     Vec x = Vec::Constant(3, std::numeric_limits<double>::max());
     Vec dx = x;
-    EXPECT_THROW(detail::broad_phase(x, &dx, 0, {}, {}, false, SweepAndPrune{}), std::domain_error);
-    EXPECT_THROW(detail::broad_phase(x, nullptr, std::numeric_limits<double>::max(), {}, {}, false, SweepAndPrune{}),
+    EXPECT_THROW(detail::broad_phase(x, &dx, 0, {}, {}, false, SpatialHash{}), std::domain_error);
+    EXPECT_THROW(detail::broad_phase(x, nullptr, std::numeric_limits<double>::max(), {}, {}, false, SpatialHash{}),
                  std::domain_error);
-    compare(x, nullptr, 0, {}, {}, true); // Outward rounding may reach infinity.
+    EXPECT_THROW(detail::broad_phase(x, nullptr, 0, {}, {}, true, SpatialHash{}), std::overflow_error);
 }
 
 namespace {
@@ -175,7 +173,7 @@ class RecordingBroadPhase final : public BroadPhase {
             std::lock_guard lock(mutex);
             queries.emplace_back(std::vector<AABB>(q.boxes.begin(), q.boxes.end()), q.allowed_pairs);
         }
-        return SweepAndPrune{}.detect(q);
+        return SpatialHash{}.detect(q);
     }
 };
 mesh::TriangleMesh surface() {
@@ -185,14 +183,14 @@ mesh::TriangleMesh surface() {
 }
 } // namespace
 
-TEST(ContactBroadPhase, PublicSAPRespectsEveryMaskAndOriginalIndices) {
+TEST(ContactBroadPhase, PublicSpatialHashRespectsEveryMaskAndOriginalIndices) {
     using K = PrimitiveKind;
     std::vector<AABB> boxes;
     for (int i = 0; i < 90; ++i) {
         const double x = double((i * 17) % 31);
         boxes.push_back({Eigen::Vector3d(x, 0, 0), Eigen::Vector3d(x + 1, 1, 1), static_cast<K>(i % 3)});
     }
-    const SweepAndPrune sap;
+    const SpatialHash backend_default;
     for (int bits = 0; bits < 8; ++bits) {
         const PairKindMask mask{bool(bits & 1), bool(bits & 2), bool(bits & 4)};
         std::vector<BoxPair> expected;
@@ -209,7 +207,7 @@ TEST(ContactBroadPhase, PublicSAPRespectsEveryMaskAndOriginalIndices) {
             }
         for (int threads : {1, 4, 8}) {
             const tbb::global_control control(tbb::global_control::max_allowed_parallelism, threads);
-            auto actual = sap.detect({boxes, mask});
+            auto actual = backend_default.detect({boxes, mask});
             for (auto& pair : actual)
                 if (pair[0] > pair[1])
                     std::swap(pair[0], pair[1]);
@@ -222,33 +220,31 @@ TEST(ContactBroadPhase, PublicSAPRespectsEveryMaskAndOriginalIndices) {
         std::vector<AABB> infinite{
             {Eigen::Vector3d::Constant(endpoint), Eigen::Vector3d::Constant(endpoint), K::Vertex},
             {Eigen::Vector3d::Constant(endpoint), Eigen::Vector3d::Constant(endpoint), K::Face}};
-        const auto pairs = sap.detect({infinite, {true, false, false}});
-        ASSERT_EQ(pairs.size(), 1);
-        EXPECT_NE(pairs[0][0], pairs[0][1]);
+        EXPECT_THROW(backend_default.detect({infinite, {true, false, false}}), std::overflow_error);
     }
     boxes[0].lo[0] = NAN;
-    EXPECT_THROW(sap.detect({boxes, {true, true, true}}), std::invalid_argument);
+    EXPECT_THROW(backend_default.detect({boxes, {true, true, true}}), std::invalid_argument);
     boxes[0].lo[0] = boxes[0].hi[0] + 1;
-    EXPECT_THROW(sap.detect({boxes, {true, true, true}}), std::invalid_argument);
+    EXPECT_THROW(backend_default.detect({boxes, {true, true, true}}), std::invalid_argument);
     boxes[0].lo[0] = 0;
     boxes[0].kind = static_cast<K>(42);
-    EXPECT_THROW(sap.detect({boxes, {true, true, true}}), std::invalid_argument);
+    EXPECT_THROW(backend_default.detect({boxes, {true, true, true}}), std::invalid_argument);
 }
 
 TEST(ContactBroadPhase, InjectedBackendNormalizesCandidatesAndOwnsLifetime) {
     const auto mesh = surface();
     const IPCContactOptions options{1.0};
-    IPCContactEnergy reference(mesh, options, std::make_shared<SweepAndPrune>());
+    IPCContactEnergy reference(mesh, options, std::make_shared<SpatialHash>());
     const Vec x = mesh.positions;
     reference.update_pattern(x);
     const Vec g = reference.eval_gradient(x);
     const SpMat h = reference.eval_hessian(x);
     Vec dx = Vec::Zero(x.size());
     dx.segment<3>(9) << 0, 0, -2;
-    std::shared_ptr<const BroadPhase> sap = std::make_shared<SweepAndPrune>();
+    std::shared_ptr<const BroadPhase> backend_default = std::make_shared<SpatialHash>();
     std::shared_ptr<const BroadPhase> noisy = std::make_shared<NoisyBroadPhase>();
-    std::shared_ptr<const BroadPhase> hash = std::make_shared<SpatialHash>();
-    for (const auto& backend : {sap, noisy, hash}) {
+    std::shared_ptr<const BroadPhase> hash = std::make_shared<SpatialHash>(0.5);
+    for (const auto& backend : {backend_default, noisy, hash}) {
         IPCContactEnergy energy(mesh, options, backend, {});
         energy.update_pattern(x);
         EXPECT_EQ(energy.eval_value(x), reference.eval_value(x));
@@ -273,7 +269,7 @@ TEST(ContactBroadPhase, InjectedBackendNormalizesCandidatesAndOwnsLifetime) {
     EXPECT_THROW(invalid.update_pattern(x), std::invalid_argument);
     EXPECT_THROW(invalid.max_feasible_step(x, dx), std::invalid_argument);
     auto solve = [&] {
-        IPCContactEnergy energy(mesh, options, sap, {});
+        IPCContactEnergy energy(mesh, options, backend_default, {});
         return energy.eval_value(x);
     };
     auto first = std::async(std::launch::async, solve), second = std::async(std::launch::async, solve);
@@ -366,7 +362,7 @@ TEST(SpatialHash, MatchesBruteForceWithNegativeBoundaryDegenerateAndSweptBoxes) 
     EXPECT_EQ(a.get(), box_oracle(q));
     EXPECT_EQ(b.get(), box_oracle(q));
 }
-TEST(SpatialHash, SafeWholeQueryFallbackAndCompleteValidation) {
+TEST(SpatialHash, RejectsUnrepresentableGridsAndValidatesCompleteInput) {
     using V = Eigen::Vector3d;
     using K = PrimitiveKind;
     for (double h : std::array<double, 4>{0, -1, INFINITY, NAN})
@@ -382,12 +378,14 @@ TEST(SpatialHash, SafeWholeQueryFallbackAndCompleteValidation) {
         {{V::Zero(), V::Constant(10000), K::Face}, {V::Zero(), V::Zero(), K::Vertex}},    // Product budget.
         {{V::Zero(), V::Zero(), K::Face}, {V::Zero(), V::Zero(), K::Vertex}}              // No positive auto extent.
     };
-    for (const auto& boxes : cases) {
-        const BroadPhaseQuery q{boxes, {true, true, true}};
-        for (auto h :
-             std::array<std::optional<double>, 3>{std::nullopt, 1.0, std::numeric_limits<double>::denorm_min()})
-            EXPECT_EQ(canonical(SpatialHash(h).detect(q)), box_oracle(q));
-    }
+    EXPECT_THROW(SpatialHash(1).detect({cases[0], {true, true, true}}), std::overflow_error);
+    EXPECT_EQ(canonical(SpatialHash(1).detect({cases[1], {true, true, true}})),
+              box_oracle({cases[1], {true, true, true}}));
+    EXPECT_THROW(SpatialHash(1).detect({cases[2], {true, true, true}}), std::overflow_error);
+    for (int i : {3, 4, 5})
+        EXPECT_THROW(SpatialHash(1).detect({cases[i], {true, true, true}}), std::length_error);
+    EXPECT_EQ(canonical(SpatialHash{}.detect({cases[6], {true, true, true}})),
+              box_oracle({cases[6], {true, true, true}}));
     for (const auto& first : cases) {
         auto boxes = first;
         boxes.push_back({V::Constant(NAN), V::Zero(), K::Vertex});

@@ -67,12 +67,13 @@ def main():
 
     # Contact acts on the boundary of both boxes, whose vertices move with their
     # volume displacement DOFs. The barrier's weight kappa is its stiffness.
-    surface = mesh.extract_surface_with_vertices(stack)
+    extracted = mesh.extract_surface_with_vertices(stack)
+    surface = extracted.mesh
     contact_options = contact.IPCContactOptions(dhat=0.01 * height)
-    barrier = contact.IPCContactEnergy(surface.mesh, contact_options, contact.SweepAndPrune())
-    surface_map = dof.SurfaceDofMap(surface.mesh.positions, surface.vertices, num_dofs)
+    barrier = contact.IPCContactEnergy(surface, contact_options, contact.SpatialHash())
+    kinematics = dof.SurfaceDofMap(surface.positions, extracted.vertices, num_dofs)
     contact_energy = energy.AffineMappedEnergy(
-        barrier, surface_map.displacement_map, surface_map.rest_positions.ravel()
+        barrier, kinematics.displacement_map, kinematics.rest_positions.ravel()
     )
     kappa = 1e3
 
@@ -87,7 +88,7 @@ def main():
     converged = result.status == solver.NewtonStatus.Converged
 
     # The boxes touch, within dhat, without crossing.
-    surface_positions = surface_map.positions(result.x)
+    surface_positions = kinematics.positions(result.x)
     pairs = barrier.num_active_pairs(surface_positions)
     distance = barrier.min_active_distance(surface_positions)
     touching = pairs > 0 and 0 < distance < contact_options.dhat

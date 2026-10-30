@@ -1,8 +1,7 @@
 #pragma once
 
-#include "litepgo/contact/broad_phase/sweep_and_prune.hpp"
-
 #include "litepgo/contact/broad_phase/spatial_hash.hpp"
+
 #include "litepgo/contact/ipctk_contact_energy.hpp"
 #include "litepgo/core/build_info.hpp"
 #include <chrono>
@@ -12,13 +11,12 @@
 
 // Compiled from the example itself so geometry, material and loading cannot drift.
 inline int run_contact_benchmark(const litepgo::mesh::TriangleMesh& surface,
-                                 const litepgo::dof::SurfaceDofMap& surface_map,
+                                 const litepgo::dof::SurfaceDofMap& kinematics,
                                  const std::shared_ptr<litepgo::energy::Energy>& elastic,
                                  const std::shared_ptr<litepgo::energy::Energy>& pulling,
                                  const litepgo::dof::DofReduction& fixed, const litepgo::Vec& initial,
                                  const litepgo::solver::NewtonOptions& options, double dhat, double kappa,
-                                 const std::filesystem::path& output, int thread_count = 1, int repetitions = 5,
-                                 bool compare_broad_phases = false) {
+                                 const std::filesystem::path& output, int thread_count = 1, int repetitions = 5) {
     using namespace litepgo;
     if (std::string(LITEPGO_BENCHMARK_BUILD_TYPE) != "Release")
         throw std::runtime_error("Benchmark requires a Release build");
@@ -45,13 +43,12 @@ inline int run_contact_benchmark(const litepgo::mesh::TriangleMesh& surface,
 #else
     meta << "solver=EigenLDLT\n";
 #endif
-    const std::shared_ptr<const contact::BroadPhase> sap = std::make_shared<contact::SweepAndPrune>();
     const std::shared_ptr<const contact::BroadPhase> spatial_hash = std::make_shared<contact::SpatialHash>();
     contact::IPCContactOptions native_options;
     native_options.dhat = dhat;
     contact::IPCTKContactOptions toolkit_options;
     toolkit_options.dhat = dhat;
-    meta << "comparison=" << (compare_broad_phases ? "native_sap_vs_spatial_hash" : "native_vs_ipctk") << "\n";
+    meta << "comparison=" << "native_vs_ipctk" << "\n";
     meta << "min_distance=" << native_options.min_distance << "\nccd_tolerance=" << native_options.ccd_tolerance
          << "\nccd_max_iterations=" << native_options.ccd_max_iterations
          << "\nhessian=Projected\nline_search_shrink=" << options.line_search_shrink
@@ -68,17 +65,16 @@ inline int run_contact_benchmark(const litepgo::mesh::TriangleMesh& surface,
     for (int round = 0; round <= repetitions; ++round) {
         for (int order = 0; order < 2; ++order) {
             const int backend = (order + round) % 2;
-            const std::string name = backend == 0 ? "native" : (compare_broad_phases ? "spatial_hash" : "ipctk");
+            const std::string name = backend == 0 ? "native" : "ipctk";
             std::shared_ptr<contact::IPCContactEnergy> native;
             std::shared_ptr<contact::IPCTKContactEnergy> toolkit;
             std::shared_ptr<energy::Energy> barrier;
-            if (backend == 0 || compare_broad_phases)
-                barrier = native = std::make_shared<contact::IPCContactEnergy>(surface, native_options,
-                                                                               backend == 0 ? sap : spatial_hash);
+            if (backend == 0)
+                barrier = native = std::make_shared<contact::IPCContactEnergy>(surface, native_options, spatial_hash);
             else
                 barrier = toolkit = std::make_shared<contact::IPCTKContactEnergy>(surface, toolkit_options);
-            auto mapped = std::make_shared<energy::AffineMappedEnergy>(barrier, surface_map.displacement_map(),
-                                                                       surface_map.rest_positions());
+            auto mapped = std::make_shared<energy::AffineMappedEnergy>(barrier, kinematics.displacement_map(),
+                                                                       kinematics.rest_positions());
             energy::WeightedEnergySum potential({{elastic, 1}, {pulling, 1}, {mapped, kappa}});
             linalg::AutoSparseSolver solver;
             std::vector<solver::NewtonStep> steps;
@@ -89,7 +85,7 @@ inline int run_contact_benchmark(const litepgo::mesh::TriangleMesh& surface,
             const auto start = std::chrono::steady_clock::now();
             const auto result = solver::newton_solve(potential, fixed, initial, options, solver, capture);
             const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
-            const Vec positions = surface_map.positions(result.x);
+            const Vec positions = kinematics.positions(result.x);
             const int pairs = native ? native->num_active_pairs(positions) : toolkit->num_active_pairs(positions);
             const double distance =
                 native ? native->min_active_distance(positions) : toolkit->min_active_distance(positions);
@@ -117,12 +113,10 @@ inline int run_contact_benchmark(const litepgo::mesh::TriangleMesh& surface,
     }
     auto comparison = file("displacement_comparison.csv");
     const Vec delta = solutions[0] - solutions[1];
-    comparison << "max_abs,rms,native_norm," << (compare_broad_phases ? "spatial_hash_norm\n" : "ipctk_norm\n")
+    comparison << "max_abs,rms,native_norm," << "ipctk_norm\n"
                << delta.cwiseAbs().maxCoeff() << ',' << delta.norm() / std::sqrt(double(delta.size())) << ','
                << solutions[0].norm() << ',' << solutions[1].norm() << '\n';
-    if (compare_broad_phases)
-        return valid ? 0 : 1; // Full traces and displacements compare the two native paths.
-    contact::IPCContactEnergy native(surface, native_options, sap);
+    contact::IPCContactEnergy native(surface, native_options, spatial_hash);
     contact::IPCTKContactEnergy toolkit(surface, toolkit_options);
     auto shared = file("shared_states.csv");
     shared << "state,hessian_kind,native_energy,ipctk_energy,energy_abs,gradient_max_abs,gradient_rms,gradient_"
@@ -132,9 +126,9 @@ inline int run_contact_benchmark(const litepgo::mesh::TriangleMesh& surface,
     const std::array<const char*, 4> names{"initial", "native_final", "ipctk_final", "midpoint"};
     auto ccd = file("shared_ccd.csv");
     ccd << "state,native_step,ipctk_step\n";
-    const Vec direction = surface_map.positions(2 * solutions[0]) - surface_map.positions(initial);
+    const Vec direction = kinematics.positions(2 * solutions[0]) - kinematics.positions(initial);
     for (std::size_t i = 0; i < states.size(); ++i) {
-        const Vec positions = surface_map.positions(states[i]);
+        const Vec positions = kinematics.positions(states[i]);
         ccd << names[i] << ',' << native.max_feasible_step(positions, direction) << ','
             << toolkit.max_feasible_step(positions, direction) << '\n';
         native.update_pattern(positions);

@@ -1,6 +1,5 @@
 #include "litepgo/bindings/bindings.hpp"
 #include "litepgo/contact/broad_phase/spatial_hash.hpp"
-#include "litepgo/contact/broad_phase/sweep_and_prune.hpp"
 #include "litepgo/contact/ipc_contact_energy.hpp"
 #ifdef LITEPGO_HAS_IPC_TOOLKIT
 #include "litepgo/contact/ipctk_contact_energy.hpp"
@@ -72,7 +71,6 @@ void bind(nb::module_& m) {
         .def_rw("normal", &Plane::normal);
 
     nb::class_<BroadPhase>(m, "BroadPhase");
-    nb::class_<SweepAndPrune, BroadPhase>(m, "SweepAndPrune").def(nb::init<>());
 
     nb::class_<SpatialHash, BroadPhase>(m, "SpatialHash")
         .def(nb::init<std::optional<double>>(), "cell_size"_a = nb::none());

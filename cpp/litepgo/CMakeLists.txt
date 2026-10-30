@@ -6,7 +6,6 @@ add_library(litepgo STATIC
     contact/detail/ipc_derivatives/point_plane.cpp
     contact/detail/ipc_derivatives/line_line.cpp
     contact/detail/ipc_derivatives/edge_edge_mollifier.cpp
-    contact/broad_phase/sweep_and_prune.cpp
     contact/broad_phase/spatial_hash.cpp
     dof/assembler.cpp
     mesh/extract_surface.cpp

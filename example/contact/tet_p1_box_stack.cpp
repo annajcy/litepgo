@@ -1,4 +1,4 @@
-#include "litepgo/contact/broad_phase/sweep_and_prune.hpp"
+#include "litepgo/contact/broad_phase/spatial_hash.hpp"
 #include "litepgo/contact/ipc_contact_energy.hpp"
 #include "litepgo/dof/surface_dof_map.hpp"
 #include "litepgo/energy/affine_mapped_energy.hpp"
@@ -80,9 +80,6 @@ int main(int argc, char** argv) {
     const int thread_count = argc > 3 ? std::stoi(argv[3]) : 1;
     const int repetitions = argc > 4 ? std::stoi(argv[4]) : 5;
     const double total_stiffness = argc > 5 ? std::stod(argv[5]) : 0;
-    const std::string comparison = argc > 6 ? argv[6] : "ipctk";
-    if (comparison != "ipctk" && comparison != "spatial-hash")
-        throw std::invalid_argument("Comparison must be ipctk or spatial-hash");
     if (thread_count < 1 || repetitions < 1 || !std::isfinite(total_stiffness) || total_stiffness < 0)
         throw std::invalid_argument("Invalid benchmark threads, repetitions or total stiffness");
 #endif
@@ -107,14 +104,15 @@ int main(int argc, char** argv) {
 
     // Contact acts on the boundary of both boxes, whose vertices move with their
     // volume displacement DOFs. The barrier's weight kappa is its stiffness.
-    const mesh::ExtractedSurface surface = mesh::extract_surface_with_vertices(stack);
+    const auto extracted = mesh::extract_surface_with_vertices(stack);
+    const auto& surface = extracted.mesh;
     contact::IPCContactOptions contact_options;
     contact_options.dhat = 0.01 * height;
-    auto barrier = std::make_shared<contact::IPCContactEnergy>(surface.mesh, contact_options,
-                                                               std::make_shared<contact::SweepAndPrune>());
-    const dof::SurfaceDofMap surface_map(surface.mesh.positions, surface.vertices, num_dofs);
-    auto contact = std::make_shared<energy::AffineMappedEnergy>(barrier, surface_map.displacement_map(),
-                                                                surface_map.rest_positions());
+    auto barrier =
+        std::make_shared<contact::IPCContactEnergy>(surface, contact_options, std::make_shared<contact::SpatialHash>());
+    const dof::SurfaceDofMap kinematics(surface.positions, extracted.vertices, num_dofs);
+    auto contact = std::make_shared<energy::AffineMappedEnergy>(barrier, kinematics.displacement_map(),
+                                                                kinematics.rest_positions());
     const double kappa = 1e3;
 
     energy::WeightedEnergySum potential({{elastic, 1}, {pulling, 1}, {contact, kappa}});
@@ -124,17 +122,16 @@ int main(int argc, char** argv) {
     options.gradient_tolerance = 1e-8;
     options.max_iterations = 200;
 #ifdef LITEPGO_CONTACT_BENCHMARK
-    return run_contact_benchmark(surface.mesh, surface_map, elastic, pulling, fixed, initial, options,
-                                 contact_options.dhat, kappa,
-                                 argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/contact_benchmark", thread_count,
-                                 repetitions, comparison == "spatial-hash");
+    return run_contact_benchmark(surface, kinematics, elastic, pulling, fixed, initial, options, contact_options.dhat,
+                                 kappa, argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/contact_benchmark", thread_count,
+                                 repetitions);
 #endif
     linalg::AutoSparseSolver solver;
     const auto result = solver::newton_solve(potential, fixed, initial, options, solver);
     const bool converged = result.status == solver::NewtonStatus::Converged;
 
     // The boxes touch, within dhat, without crossing.
-    const Vec surface_positions = surface_map.positions(result.x);
+    const Vec surface_positions = kinematics.positions(result.x);
     const int pairs = barrier->num_active_pairs(surface_positions);
     const double distance = barrier->min_active_distance(surface_positions);
     const bool touching = pairs > 0 && distance > 0 && distance < contact_options.dhat;
