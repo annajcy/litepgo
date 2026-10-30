@@ -1,4 +1,5 @@
 add_library(litepgo STATIC
+    fem/sample_boundary.cpp
     contact/ipc_contact_energy.cpp
     contact/detail/distance_derivatives.cpp
     contact/detail/ipc_derivatives/point_point.cpp

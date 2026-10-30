@@ -1,5 +1,6 @@
 # Test files mirror cpp/litepgo: tests/cpp/<dir>/<name>_gtest.cpp covers cpp/litepgo/<dir>/.
 add_executable(litepgo_tests
+    fem/sample_boundary_gtest.cpp
     dof/vertex_displacement_map_gtest.cpp
     fem/point_displacement_map_gtest.cpp
     fem/element_locator_gtest.cpp

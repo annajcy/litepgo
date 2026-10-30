@@ -372,3 +372,33 @@ Run the executables under `build/release/example/{spatial,fem}/`, or the Python 
 with the configured environment. Both include numerical self-checks. The contact
 example retains its exact extracted-vertex path; these examples do not sample
 Hermite boundary surfaces.
+
+Uniform Hex Q1 boundary sampling is available independently of the displacement basis:
+
+```python
+sampled = fem.sample_boundary[fem.HexQ1Basis](topology, X_fields, subdivisions=4)
+W = fem.build_point_displacement_map[fem.HexHermiteBasis](
+    sampled.embedding, u_dof_map, X_fields
+)
+kinematics = dof.SurfaceKinematics(sampled.mesh.positions, W)
+```
+
+C++ uses `fem::sample_boundary<fem::HexQ1Basis>(topology, X_fields, subdivisions)`
+from `litepgo/fem/sample_boundary.hpp`. `SampledBoundary` contains `mesh` and
+`embedding`. Each boundary quad produces `2 * subdivisions^2` triangles. The
+reference coordinates are generated directly, without locator inversion. Shared
+edge/corner samples are welded using topology and integer interpolation weights,
+not coordinate proximity. Original boundary vertices appear first in increasing
+volume-vertex order; subdivision 1 exactly matches `extract_surface` connectivity,
+winding and vertex order. Hosts are chosen from the first boundary face encountered
+in element order. Adjacent fields must agree exactly at shared corner positions,
+and geometry must be conforming with positively oriented cells, as for extraction.
+The sampler does not certify global element injectivity. Invalid subdivisions,
+field counts, shared-corner disagreement, nonmanifold faces (more than two cells),
+and index overflow are rejected.
+
+Only Hex Q1 rest geometry is instantiated. Hermite displacement remains restricted
+to axis-aligned boxes by `BasisDofTransform`; it contributes derivative weights at
+edge/face samples, but not at original corners. The triangles approximate the
+curved deformed boundary; sampling adds contact vertices, not simulation DOFs.
+The existing Tet P1 contact examples continue using exact extracted vertex IDs.
