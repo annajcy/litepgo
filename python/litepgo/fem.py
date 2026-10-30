@@ -65,6 +65,11 @@ TetCentroidQuadrature = _native.TetCentroidQuadrature
 GaussLegendre2D = _templates["GaussLegendre2D"]
 GaussLegendre3D = _templates["GaussLegendre3D"]
 
+build_point_displacement_map = _templates["build_point_displacement_map"]
+
+ElementLocator = _templates["ElementLocator"]
+PointEmbedding = _native.PointEmbedding
+
 Field2D = _native.Field2D
 Field3D = _native.Field3D
 IdentityField2D = _native.IdentityField2D
@@ -98,6 +103,9 @@ VolumetricFemEnergy = _templates["VolumetricFemEnergy"]
 ShellFemEnergy = _templates["ShellFemEnergy"]
 
 __all__ = [
+    "build_point_displacement_map",
+    "ElementLocator",
+    "PointEmbedding",
     "Template",
     "TriangleP1Basis",
     "QuadHermiteBasis",

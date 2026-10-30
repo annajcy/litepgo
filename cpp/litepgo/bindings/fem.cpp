@@ -5,6 +5,7 @@
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
+#include "litepgo/fem/element_locator.hpp"
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
@@ -15,6 +16,7 @@
 #include "litepgo/fem/quadrature/2d/triangle_centroid_quadrature.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
+#include <nanobind/stl/vector.h>
 
 #include <nanobind/eigen/dense.h>
 #include <nanobind/stl/array.h>
@@ -137,6 +139,14 @@ template <class M> void bind_shell_material(nb::module_& m, const char* name) {
 }
 } // namespace
 
+template <class B> void bind_locator(nb::module_& m, const char* name) {
+    using Locator = ElementLocator<B>;
+    nb::class_<Locator>(m, name)
+        .def(nb::init<std::vector<InterpolatedField3D<B>>>(), "X_fields"_a)
+        .def("locate", &Locator::locate, "points"_a);
+    register_instance(m, "ElementLocator", nb::make_tuple(nb::type<B>()), nb::type<Locator>());
+}
+
 void bind(nb::module_& m) {
     m.doc() = "Finite elements (cpp/litepgo/fem). Template instantiations are in _templates.";
 
@@ -177,6 +187,12 @@ void bind(nb::module_& m) {
         .def_ro("a_bar", &TriangleMidEdgeRestData::a_bar)
         .def_ro("b_bar", &TriangleMidEdgeRestData::b_bar)
         .def_ro("sqrt_det_a_bar", &TriangleMidEdgeRestData::sqrt_det_a_bar);
+
+    nb::class_<PointEmbedding>(m, "PointEmbedding")
+        .def_ro("element_ids", &PointEmbedding::element_ids)
+        .def_ro("xi", &PointEmbedding::xi);
+    bind_locator<TetP1Basis>(m, "ElementLocatorTetP1");
+    bind_locator<HexQ1Basis>(m, "ElementLocatorHexQ1");
 
     bind_local(m);
     bind_energies(m);
