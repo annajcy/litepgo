@@ -241,6 +241,13 @@ budget or pair-work-triggered fallback**. Long overlapping AABBs may be examined
 many shared cells despite unique output; dense buckets remain quadratic. Shared
 backends are safe for concurrent calls because all query scratch is local.
 
+To benchmark SAP against SpatialHash without IPCTK solves:
+`python scripts/contact_benchmark.py --comparison spatial-hash --mesh PATH --threads 8
+--total-stiffness 41 --repetitions 3 --output output/hash_case`.
+The executable accepts `spatial-hash` immediately after total stiffness.
+This mode writes full traces/displacements and their comparison, and skips the
+IPCTK-specific shared-state diagnostics. The default benchmark comparison remains IPCTK.
+
 The examples explicitly choose sweep-and-prune: it selects the widest scene axis, scans
 AABB overlaps in parallel; contact sorts merged candidates deterministically. Swept bounds, inflation and
 outward rounding are preserved. It has quadratic worst-case behavior for heavily overlapping boxes. Native local contact
