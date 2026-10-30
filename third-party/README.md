@@ -3,6 +3,7 @@
 Tinyobjloader and optional Gmsh are fetched by CMake with pinned archive hashes;
 see `cmake/third-party/`. No local SDK is required.
 
+The native IPC backend has no IPC Toolkit dependency. When `LITEPGO_WITH_IPC_TOOLKIT=ON`,
 IPC Toolkit 1.6.1 (MIT) is fetched with a pinned archive hash; see
 `cmake/third-party/ipc_toolkit.cmake`. Its own dependencies (libigl,
 Tight-Inclusion, scalable-ccd, spdlog, TinyAD, abseil, robin-map, filib) are

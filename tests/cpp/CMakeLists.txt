@@ -86,11 +86,10 @@ foreach(example tet_p1_plastic_twist hex_q1_plastic_twist hex_hermite_plastic_tw
     add_test(NAME FemPlasticTwist.${example} COMMAND $<TARGET_FILE:${example}>)
 endforeach()
 
-if(LITEPGO_WITH_IPC)
-    target_sources(litepgo_tests PRIVATE contact/barrier_contact_energy_gtest.cpp)
-    target_link_libraries(litepgo_tests PRIVATE litepgo::contact)
-
-    # Two boxes pressed together: a loaded static equilibrium held apart by contact.
-    add_dependencies(litepgo_tests tet_p1_box_stack)
-    add_test(NAME ContactEquilibrium.tet_p1_box_stack COMMAND $<TARGET_FILE:tet_p1_box_stack>)
+target_sources(litepgo_tests PRIVATE contact/ipc_contact_energy_gtest.cpp)
+add_dependencies(litepgo_tests tet_p1_box_stack)
+add_test(NAME ContactEquilibrium.tet_p1_box_stack COMMAND $<TARGET_FILE:tet_p1_box_stack>)
+if(LITEPGO_WITH_IPC_TOOLKIT)
+    target_sources(litepgo_tests PRIVATE contact/ipctk_contact_energy_gtest.cpp)
+    target_link_libraries(litepgo_tests PRIVATE litepgo::ipctk)
 endif()

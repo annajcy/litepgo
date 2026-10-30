@@ -1,4 +1,5 @@
 add_library(litepgo STATIC
+    contact/ipc_contact_energy.cpp
     dof/assembler.cpp
     mesh/extract_surface.cpp
     mesh/triangle_mid_edge_stencils.cpp
@@ -58,12 +59,12 @@ if(LITEPGO_WITH_GMSH)
     target_compile_definitions(litepgo_io_gmsh PUBLIC LITEPGO_HAS_GMSH=1)
 endif()
 
-if(LITEPGO_WITH_IPC)
-    add_library(litepgo_contact STATIC contact/barrier_contact_energy.cpp)
-    add_library(litepgo::contact ALIAS litepgo_contact)
+if(LITEPGO_WITH_IPC_TOOLKIT)
+    add_library(litepgo_ipctk STATIC contact/ipctk_contact_energy.cpp)
+    add_library(litepgo::ipctk ALIAS litepgo_ipctk)
     # IPC Toolkit types stay out of litepgo's headers, so consumers never see them.
-    target_link_libraries(litepgo_contact PUBLIC litepgo::litepgo PRIVATE ipc::toolkit litepgo::warnings)
-    target_compile_definitions(litepgo_contact PUBLIC LITEPGO_HAS_CONTACT=1)
+    target_link_libraries(litepgo_ipctk PUBLIC litepgo::litepgo PRIVATE ipc::toolkit litepgo::warnings)
+    target_compile_definitions(litepgo_ipctk PUBLIC LITEPGO_HAS_IPC_TOOLKIT=1)
     # build_info() is inline, so every target sees the same definition.
     target_compile_definitions(litepgo PUBLIC LITEPGO_IPC_TOOLKIT_VERSION="${LITEPGO_IPC_TOOLKIT_VERSION}")
 endif()

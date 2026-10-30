@@ -1,4 +1,4 @@
-#include "litepgo/contact/barrier_contact_energy.hpp"
+#include "litepgo/contact/ipctk_contact_energy.hpp"
 
 #include "../testing/finite_difference.hpp"
 #include "litepgo/dof/surface_dof_map.hpp"
@@ -26,8 +26,8 @@ mesh::TriangleMesh two_triangles(double height) {
     return {positions, mesh::TriangleTopology(6, {{0, 1, 2}, {3, 4, 5}})};
 }
 
-BarrierContactOptions options(double dhat, double min_distance = 0.0) {
-    BarrierContactOptions result;
+IPCTKContactOptions options(double dhat, double min_distance = 0.0) {
+    IPCTKContactOptions result;
     result.dhat = dhat;
     result.min_distance = min_distance;
     return result;
@@ -43,23 +43,23 @@ Vec translate_b(Vec x, const Eigen::Vector3d& delta) {
 
 } // namespace
 
-TEST(BarrierContactEnergy, RejectsInvalidConfiguration) {
+TEST(IPCTKContactEnergy, RejectsInvalidConfiguration) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
-    EXPECT_THROW(BarrierContactEnergy(surface, BarrierContactOptions{}), std::invalid_argument); // dhat unset
-    EXPECT_THROW(BarrierContactEnergy(surface, options(0.0)), std::invalid_argument);
-    EXPECT_THROW(BarrierContactEnergy(surface, options(1.0, -1.0)), std::invalid_argument);
-    BarrierContactOptions no_ccd_budget = options(1.0);
+    EXPECT_THROW(IPCTKContactEnergy(surface, IPCTKContactOptions{}), std::invalid_argument); // dhat unset
+    EXPECT_THROW(IPCTKContactEnergy(surface, options(0.0)), std::invalid_argument);
+    EXPECT_THROW(IPCTKContactEnergy(surface, options(1.0, -1.0)), std::invalid_argument);
+    IPCTKContactOptions no_ccd_budget = options(1.0);
     no_ccd_budget.ccd_max_iterations = 0;
-    EXPECT_THROW(BarrierContactEnergy(surface, no_ccd_budget), std::invalid_argument);
-    EXPECT_THROW(BarrierContactEnergy(surface, options(1.0), {Plane{Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero()}}),
+    EXPECT_THROW(IPCTKContactEnergy(surface, no_ccd_budget), std::invalid_argument);
+    EXPECT_THROW(IPCTKContactEnergy(surface, options(1.0), {Plane{Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero()}}),
                  std::invalid_argument);
-    EXPECT_THROW(BarrierContactEnergy(mesh::TriangleMesh{Vec(), mesh::TriangleTopology(0, {})}, options(1.0)),
+    EXPECT_THROW(IPCTKContactEnergy(mesh::TriangleMesh{Vec(), mesh::TriangleTopology(0, {})}, options(1.0)),
                  std::invalid_argument);
 }
 
-TEST(BarrierContactEnergy, VanishesBeyondDhat) {
+TEST(IPCTKContactEnergy, VanishesBeyondDhat) {
     const mesh::TriangleMesh surface = two_triangles(1.5);
-    BarrierContactEnergy energy(surface, options(1.0));
+    IPCTKContactEnergy energy(surface, options(1.0));
     EXPECT_EQ(energy.num_dofs(), 18);
     EXPECT_FALSE(energy.has_fixed_pattern());
     EXPECT_EQ(energy.num_active_pairs(surface.positions), 0);
@@ -70,9 +70,9 @@ TEST(BarrierContactEnergy, VanishesBeyondDhat) {
     EXPECT_EQ(energy.eval_hessian(surface.positions).nonZeros(), 0);
 }
 
-TEST(BarrierContactEnergy, ReportsTheActivePairAndItsDistance) {
+TEST(IPCTKContactEnergy, ReportsTheActivePairAndItsDistance) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
-    BarrierContactEnergy energy(surface, options(1.0));
+    IPCTKContactEnergy energy(surface, options(1.0));
     EXPECT_EQ(energy.num_active_pairs(surface.positions), 1);
     EXPECT_NEAR(energy.min_active_distance(surface.positions), 0.5, 1e-14);
 
@@ -86,9 +86,9 @@ TEST(BarrierContactEnergy, ReportsTheActivePairAndItsDistance) {
                 0.0, 1e-12); // translation invariance
 }
 
-TEST(BarrierContactEnergy, PatternFollowsTheActiveSet) {
+TEST(IPCTKContactEnergy, PatternFollowsTheActiveSet) {
     const mesh::TriangleMesh surface = two_triangles(1.5);
-    BarrierContactEnergy energy(surface, options(1.0));
+    IPCTKContactEnergy energy(surface, options(1.0));
     const Vec near = translate_b(surface.positions, Eigen::Vector3d(0, 0, -1));
 
     // The empty pattern cannot hold the active pair.
@@ -103,11 +103,11 @@ TEST(BarrierContactEnergy, PatternFollowsTheActiveSet) {
     EXPECT_EQ(energy.hessian_pattern().nonZeros(), 0);
 }
 
-TEST(BarrierContactEnergy, DerivativesMatchFiniteDifferences) {
+TEST(IPCTKContactEnergy, DerivativesMatchFiniteDifferences) {
     // A single vertex-face pair, then several pairs of every edge and vertex kind.
     for (const double dhat : {1.0, 3.0}) {
         const mesh::TriangleMesh surface = two_triangles(0.5);
-        BarrierContactEnergy energy(surface, options(dhat));
+        IPCTKContactEnergy energy(surface, options(dhat));
         // Tilt B so that no pair is degenerate.
         Vec x = surface.positions;
         x.segment<3>(12) += Eigen::Vector3d(0.3, -0.2, 0.1);
@@ -117,9 +117,9 @@ TEST(BarrierContactEnergy, DerivativesMatchFiniteDifferences) {
     }
 }
 
-TEST(BarrierContactEnergy, ProjectedHessianIsPositiveSemidefinite) {
+TEST(IPCTKContactEnergy, ProjectedHessianIsPositiveSemidefinite) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
-    BarrierContactEnergy energy(surface, options(3.0));
+    IPCTKContactEnergy energy(surface, options(3.0));
     energy.update_pattern(surface.positions);
     const Eigen::MatrixXd exact = Eigen::MatrixXd(energy.eval_hessian(surface.positions));
     const Eigen::MatrixXd projected =
@@ -130,9 +130,9 @@ TEST(BarrierContactEnergy, ProjectedHessianIsPositiveSemidefinite) {
     EXPECT_GE(eigenvalues.minCoeff(), -1e-10 * eigenvalues.cwiseAbs().maxCoeff());
 }
 
-TEST(BarrierContactEnergy, EvaluationIsDeterministic) {
+TEST(IPCTKContactEnergy, EvaluationIsDeterministic) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
-    BarrierContactEnergy energy(surface, options(3.0));
+    IPCTKContactEnergy energy(surface, options(3.0));
     energy.update_pattern(surface.positions);
     Vec gradient;
     SpMat hessian = energy.hessian_pattern();
@@ -146,9 +146,9 @@ TEST(BarrierContactEnergy, EvaluationIsDeterministic) {
     }
 }
 
-TEST(BarrierContactEnergy, FeasibleStepStopsBeforeImpact) {
+TEST(IPCTKContactEnergy, FeasibleStepStopsBeforeImpact) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
-    BarrierContactEnergy energy(surface, options(1.0));
+    IPCTKContactEnergy energy(surface, options(1.0));
     const Vec x = surface.positions;
 
     // Dropping B by 2 would pass vertex 3 through A at t = 0.25.
@@ -164,34 +164,34 @@ TEST(BarrierContactEnergy, FeasibleStepStopsBeforeImpact) {
     EXPECT_EQ(energy.max_feasible_step(x, translate_b(Vec::Zero(18), Eigen::Vector3d(1, 1, 0))), 1.0);
 }
 
-TEST(BarrierContactEnergy, FeasibleStepKeepsMinDistance) {
+TEST(IPCTKContactEnergy, FeasibleStepKeepsMinDistance) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
-    BarrierContactEnergy energy(surface, options(1.0, 0.2));
+    IPCTKContactEnergy energy(surface, options(1.0, 0.2));
     const Vec down = translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -2));
     const double alpha = energy.max_feasible_step(surface.positions, down);
     EXPECT_GT(alpha, 0.0);
     EXPECT_GT(energy.min_active_distance(surface.positions + alpha * down), 0.2);
 }
 
-TEST(BarrierContactEnergy, RejectsInfeasibleStates) {
+TEST(IPCTKContactEnergy, RejectsInfeasibleStates) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
-    BarrierContactEnergy thick(surface, options(1.0, 0.6));
+    IPCTKContactEnergy thick(surface, options(1.0, 0.6));
     EXPECT_THROW(thick.eval_value(surface.positions), std::domain_error);
     EXPECT_THROW(thick.max_feasible_step(surface.positions, Vec::Zero(18)), std::domain_error);
 
     // B's vertex 3 pokes through A, but sits 0.5 below it: eval does not see the
     // intersection, max_feasible_step does.
-    BarrierContactEnergy energy(surface, options(1.0));
+    IPCTKContactEnergy energy(surface, options(1.0));
     const Vec crossing = translate_b(surface.positions, Eigen::Vector3d(0, 0, -1));
     EXPECT_NO_THROW(energy.eval_value(crossing));
     EXPECT_THROW(energy.max_feasible_step(crossing, Vec::Zero(18)), std::domain_error);
 }
 
-TEST(BarrierContactEnergy, PlanesRepelVerticesAndRejectThoseBehind) {
+TEST(IPCTKContactEnergy, PlanesRepelVerticesAndRejectThoseBehind) {
     // B alone above the ground z = 0: vertex 3 at height 0.5 is the only active one.
     Vec positions = two_triangles(0.5).positions.tail(9);
     const mesh::TriangleMesh triangle{positions, mesh::TriangleTopology(3, {{0, 1, 2}})};
-    BarrierContactEnergy energy(triangle, options(1.0), {Plane{Eigen::Vector3d::Zero(), Eigen::Vector3d(0, 0, 2)}});
+    IPCTKContactEnergy energy(triangle, options(1.0), {Plane{Eigen::Vector3d::Zero(), Eigen::Vector3d(0, 0, 2)}});
     EXPECT_EQ(energy.num_active_pairs(positions), 1);
     EXPECT_NEAR(energy.min_active_distance(positions), 0.5, 1e-14);
     EXPECT_LT(energy.eval_gradient(positions)[2], 0.0);
@@ -203,7 +203,7 @@ TEST(BarrierContactEnergy, PlanesRepelVerticesAndRejectThoseBehind) {
     EXPECT_GT(alpha, 0.0);
     EXPECT_LT(alpha, 0.5);
     const Plane ground{Eigen::Vector3d::Zero(), Eigen::Vector3d::UnitZ()};
-    const BarrierContactEnergy thick(triangle, options(1.0, 0.2), {ground});
+    const IPCTKContactEnergy thick(triangle, options(1.0, 0.2), {ground});
     const double thick_alpha = thick.max_feasible_step(positions, down);
     EXPECT_GT(thick_alpha, 0.0);
     EXPECT_GT(thick.min_active_distance(positions + thick_alpha * down), 0.2);
@@ -216,8 +216,8 @@ TEST(BarrierContactEnergy, PlanesRepelVerticesAndRejectThoseBehind) {
 // Displacement DOFs u drive the surface through E(u) = B(X + W u), with X and W
 // from a SurfaceDofMap. Triangle A is a static obstacle; B's vertices 3, 4, 5 take
 // simulation vertices 2, 1, 0, before an unrelated DOF u[9].
-TEST(BarrierContactEnergy, ComposesWithASurfaceDofMap) {
-    auto barrier = std::make_shared<BarrierContactEnergy>(two_triangles(0.5), options(1.0));
+TEST(IPCTKContactEnergy, ComposesWithASurfaceDofMap) {
+    auto barrier = std::make_shared<IPCTKContactEnergy>(two_triangles(0.5), options(1.0));
     const dof::SurfaceDofMap surface_map(barrier->rest_positions(), {-1, -1, -1, 2, 1, 0}, 10);
     energy::AffineMappedEnergy mapped(barrier, surface_map.displacement_map(), surface_map.rest_positions());
     EXPECT_FALSE(mapped.has_fixed_pattern());

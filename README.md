@@ -11,7 +11,10 @@ Eigen 5.0.1, oneTBB 2023.1.0, nanobind 3.1.0, and GoogleTest are fetched at pinn
 - macOS: Apple Accelerate's LLT and LDLT (`LITEPGO_WITH_ACCELERATE`, on by default).
 - x86-64 Linux: Intel oneMKL 2026.1 PARDISO's LLT and pivoted LDLT (`LITEPGO_WITH_MKL`, on by default). Configuring downloads the pinned `mkl` and `mkl-include` wheels from PyPI (about 225 MB) and unpacks them once into `build/_cache/` (`LITEPGO_MKL_CACHE_DIR`), shared by every preset; `-DLITEPGO_MKL_ROOT=/opt/intel/oneapi/mkl/2026.1` uses a local oneMKL 2026.1 install instead. MKL runs on its oneTBB threading layer over litepgo's own TBB runtime, so `tbb::task_arena` and `tbb::global_control` bound PARDISO like every other parallel loop; `MKL_NUM_THREADS` has no effect. Eigen's dense code does not use MKL.
 
-IPC barrier contact (`litepgo::contact`, `LITEPGO_WITH_IPC`, on by default) builds on IPC Toolkit 1.6.1, which reuses litepgo's Eigen and TBB. Configuring fetches it and its own dependencies (libigl, Tight-Inclusion, scalable-ccd, spdlog, TinyAD, abseil, robin-map, filib) once into `build/_cache/cpm/` (`LITEPGO_CPM_CACHE_DIR`), shared by every preset; `-DLITEPGO_WITH_IPC=OFF` skips all of it.
+Native IPC contact is always built into `litepgo::litepgo`, with no IPC Toolkit dependency.
+The optional `litepgo::ipctk` target (`LITEPGO_WITH_IPC_TOOLKIT`, on by default) retains the IPC Toolkit 1.6.1 backend.
+It reuses litepgo's Eigen and TBB and fetches its dependencies into `build/_cache/cpm/` (`LITEPGO_CPM_CACHE_DIR`).
+`-DLITEPGO_WITH_IPC_TOOLKIT=OFF` skips the toolkit and its dependencies; native C++ and Python contact remain available.
 
 ## Build and test
 
@@ -151,14 +154,54 @@ the C++ defaults, with a NaN tolerance that must be set before solving.
 
 ## Contact
 
-`litepgo/contact/barrier_contact_energy.hpp` provides `contact::BarrierContactEnergy`, IPC's log barrier
-between the triangles of a surface (any number of bodies, self-contact included) and static `contact::Plane`s,
-evaluated by IPC Toolkit. It is an `energy::Energy` over the surface vertices' positions with unit stiffness, so
-the stiffness kappa is its weight in a `WeightedEnergySum`. Its Hessian pattern follows the active pairs
-(`DynamicPatternEnergy`), so the Newton solver re-analyzes the factorization when contact changes.
-`max_feasible_step` is IPC Toolkit's conservative CCD: Newton never steps into an intersection. A state is
-feasible when the surface is intersection-free and every pair is farther apart than `min_distance`; the
-initial state of a solve must be feasible.
+`litepgo/contact/ipc_contact_energy.hpp` provides independent native `contact::IPCContactEnergy` and
+`contact::IPCContactOptions`. `litepgo/contact/ipctk_contact_energy.hpp` provides the retained toolkit backend,
+`contact::IPCTKContactEnergy` and `contact::IPCTKContactOptions`, linked with `litepgo::ipctk`.
+Both use `contact::Plane`, and are `energy::Energy` implementations over vertex-major xyz surface positions
+with unit stiffness. Set the stiffness as a weight in `WeightedEnergySum`. Call `update_pattern(x)` before
+Hessian assembly; the Newton solver handles the dynamic sparsity pattern automatically.
+
+Native contact implements the original squared-distance log barrier
+`b(s,h) = -(s-h)^2 log(s/h)` for `0 < s < h`, zero for `s >= h`, with
+`s = distance² - min_distance²` and `h = dhat * (dhat + 2*min_distance)`.
+It sums nonincident vertex-triangle and unordered edge-edge candidates, with closest-feature
+point-point, point-edge, point-triangle and edge-edge distances. Repeated closest-feature stencils are
+merged **with their multiplicities preserved**: this is an assembly optimization, not a change from the
+original candidate sum. Active-pair diagnostics count merged stencils. Edge pairs needing mollification
+retain all four vertices, using `m = z*(2-z)` for `z < 1`, otherwise one, where
+`z = |e0 × e1|² / (1e-3 |e0_rest|² |e1_rest|²)`. Derivatives include the distance and mollifier;
+projected Hessians clamp each local term's eigenvalues. Assembly order is fixed and deterministic.
+This is the unweighted original barrier, not the area-weighted/physical barrier or friction model.
+
+The native backend uses sweep-and-prune AABBs, including swept boxes for linear motion, and additive
+conservative advancement (ACCD). `IPCContactOptions.ccd_tolerance` is a **time increment** stopping
+tolerance: when another safe increment is smaller, return the last conservative bound.
+`ccd_max_iterations` bounds advancement per pair, also returning the last bound on exhaustion.
+The first positive conservative increment is allowed even below the tolerance; stalled arithmetic
+returns zero. Neither option switches off CCD. `IPCTKContactOptions` instead passes its tolerance and
+iteration budget to Tight-Inclusion CCD. Planes use analytic signed-distance steps with a 0.8 safety factor.
+
+Native input requires nonempty, nondegenerate triangles, unique faces, and no unused vertices.
+Options, finite positions, normalized plane normals and representable geometric quantities are validated.
+`eval` rejects active distances at or below `min_distance` and vertices behind planes; it is not a full
+intersection query. `max_feasible_step` additionally checks initial edge-face intersections. Start solves
+from feasible states. Shared-vertex primitives are excluded. Coplanar overlaps are detected through
+zero closest-feature distances. Degenerate evaluated triangles are rejected.
+
+Native predicates and ACCD use double precision, without a formal floating-point robustness guarantee;
+extreme scales, grazing contact and nearly degenerate geometry remain numerical limitations.
+Closest-feature transitions are generally C1, not C2; exact Hessians are those of the selected branch.
+The broadphase has quadratic worst-case behavior for heavily overlapping boxes. Native local contact
+evaluation, Hessian projection and surface CCD queries use TBB; fixed-order buffers followed by serial
+assembly/minimum preserve numerical results across thread counts. Broadphase and active-set construction
+remain serial. No acceleration-cache state is retained between evaluations.
+The formulation follows [IPC (2020)](https://cims.nyu.edu/gcl/papers/2020-IPC.pdf) and
+[Codimensional IPC / ACCD (2021)](https://arxiv.org/abs/2012.04457).
+
+Migration: `BarrierContactEnergy` → `IPCTKContactEnergy`, `BarrierContactOptions` → `IPCTKContactOptions`,
+`barrier_contact_energy.hpp` → `ipctk_contact_energy.hpp`, `litepgo::contact` → `litepgo::ipctk`, and
+`LITEPGO_WITH_IPC` → `LITEPGO_WITH_IPC_TOOLKIT`. To use the native implementation instead, choose the
+`IPCContactEnergy`/`IPCContactOptions` pair; the examples do this by default.
 
 `dof::SurfaceDofMap` (`litepgo/dof/surface_dof_map.hpp`) gives surface positions as an affine function of the
 simulation DOFs, `p(u) = X + W u`: built from a general sparse `W` (e.g. a surface embedded in elements), or by
@@ -170,11 +213,11 @@ a volume mesh's boundary with the volume vertex of each surface vertex. `example
 
 ```cpp
 const mesh::ExtractedSurface surface = mesh::extract_surface_with_vertices(stack);
-auto barrier = std::make_shared<contact::BarrierContactEnergy>(surface.mesh, contact::BarrierContactOptions{.dhat = dhat});
+auto barrier = std::make_shared<contact::IPCContactEnergy>(surface.mesh, contact::IPCContactOptions{.dhat = dhat});
 const dof::SurfaceDofMap surface_map(surface.mesh.positions, surface.vertices, num_dofs);
 auto contact = std::make_shared<energy::AffineMappedEnergy>(barrier, surface_map.displacement_map(),
                                                             surface_map.rest_positions());
 energy::WeightedEnergySum potential({{elastic, 1}, {loads, 1}, {contact, kappa}});
 ```
 
-Python mirrors it as `litepgo.contact`. Friction and adaptive barrier stiffness are not implemented.
+Python mirrors both backends as `litepgo.contact`; `IPCTKContactEnergy` and its options are exported only in toolkit-enabled builds. Friction and adaptive barrier stiffness are not implemented.

@@ -32,8 +32,6 @@ NB_MODULE(_core, m) {
         nb::module_ submodule = m.def_submodule(name);
         bind(submodule);
     }
-#if defined(LITEPGO_HAS_CONTACT)
     nb::module_ contact = m.def_submodule("contact");
     litepgo::contact::binding::bind(contact);
-#endif
 }
