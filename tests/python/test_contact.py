@@ -174,3 +174,23 @@ def test_native_broad_phase_injection_and_lifetime():
         with pytest.raises(TypeError):
             contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(dhat=1),
                                        broad_phase=contact.SweepAndPrune())
+
+
+@pytest.mark.skipif(not hasattr(contact, "IPCTKContactEnergy"), reason="toolkit backend disabled")
+@pytest.mark.parametrize("positions", [
+    [[0, 0, 0], [2, 0, 0], [0, 2, 0], [-0.2, -0.3, 0.4], [-1, -2, 1], [-2, -1, 1]],
+    [[0, 0, 0], [2, 0, 0], [0, 2, 0], [0.7, -0.2, 0.4], [2, -2, 1], [-2, -1, 1]],
+    [[0, 0, 0], [2, 0, 0], [0, 2, 0], [0.4, 0.3, 0.4], [2, 2, 1], [-1, 2, 1]],
+    [[-1, 0, 0], [1, 0, 0], [0, -4, -2], [-0.7, -0.004, 0.2], [0.8, 0.008, 0.2], [0, 4, 2]],
+    [[-1, 0, 0], [1, 0, 0], [0, -4, -2], [-0.7, 0, 0.2], [0.8, 0, 0.2], [0, 4, 2]],
+])
+def test_analytic_features_and_mollifier_match_toolkit(positions):
+    surface = mesh.TriangleMesh(np.array(positions, dtype=float), np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32))
+    native = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=0.7, min_distance=0.05))
+    toolkit = contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(dhat=0.7, min_distance=0.05))
+    x = surface.positions.ravel()
+    for barrier in (native, toolkit):
+        barrier.update_pattern(x)
+    assert native.eval_value(x) == pytest.approx(toolkit.eval_value(x), rel=1e-11, abs=1e-12)
+    np.testing.assert_allclose(native.eval_gradient(x), toolkit.eval_gradient(x), rtol=1e-8, atol=1e-9)
+    np.testing.assert_allclose(native.eval_hessian(x).toarray(), toolkit.eval_hessian(x).toarray(), rtol=1e-7, atol=1e-8)

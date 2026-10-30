@@ -1,4 +1,5 @@
 #include "litepgo/contact/detail/distance.hpp"
+#include "litepgo/contact/detail/distance_derivatives.hpp"
 #include "litepgo/contact/ipc_contact_energy.hpp"
 
 #include "../testing/finite_difference.hpp"
@@ -396,23 +397,19 @@ TEST(IPCContactDistance, KnownClosestFeaturesAndAnalyticDerivatives) {
     EXPECT_DOUBLE_EQ(distance(p, edge_edge(p)), 2);
     cases.emplace_back(p, edge_edge(p));
     for (auto [positions, feature] : cases) {
-        std::array<V3<Jet>, 4> jets{};
-        for (int i = 0; i < 12; ++i) {
-            jets[i / 3][i % 3].value = positions[i / 3][i % 3];
-            jets[i / 3][i % 3].gradient[i] = 1;
-        }
-        Jet result = distance(jets, feature);
+        LocalGradient gradient;
+        LocalHessian hessian;
+        distance_derivatives(positions, feature, gradient, &hessian);
         for (int i = 0; i < 12; ++i) {
             auto forward = positions, backward = positions;
             forward[i / 3][i % 3] += 1e-5;
             backward[i / 3][i % 3] -= 1e-5;
-            EXPECT_NEAR(result.gradient[i], (distance(forward, feature) - distance(backward, feature)) / 2e-5, 1e-8);
-            auto jf = jets, jb = jets;
-            jf[i / 3][i % 3].value += 1e-5;
-            jb[i / 3][i % 3].value -= 1e-5;
-            Eigen::Matrix<double, 12, 1> column =
-                (distance(jf, feature).gradient - distance(jb, feature).gradient) / 2e-5;
-            EXPECT_LE((result.hessian.col(i) - column).norm(), 1e-7);
+            EXPECT_NEAR(gradient[i], (distance(forward, feature) - distance(backward, feature)) / 2e-5, 1e-8);
+            LocalGradient gf, gb;
+            distance_derivatives(forward, feature, gf, nullptr);
+            distance_derivatives(backward, feature, gb, nullptr);
+            const LocalGradient column = (gf - gb) / 2e-5;
+            EXPECT_LE((hessian.col(i) - column).norm(), 1e-7);
         }
     }
 }
@@ -551,6 +548,29 @@ TEST(IPCContactEnergy, ParallelErrorsPropagateAndAllowRecovery) {
         e.update_pattern(surface.positions);
         EXPECT_TRUE(e.eval_gradient(surface.positions).allFinite());
         EXPECT_GT(e.max_feasible_step(surface.positions, translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -2))), 0);
+    }
+}
+
+TEST(IPCContactEnergy, RequestedDerivativeOrdersAgree) {
+    for (int fixture = 0; fixture < 3; ++fixture) {
+        auto surface = two_triangles(0.5);
+        if (fixture == 1)
+            surface.positions << -1, 0, 0, 1, 0, 0, 0, -4, -2, -0.7, -0.004, 0.2, 0.8, 0.008, 0.2, 0, 4, 2;
+        std::vector<Plane> planes;
+        if (fixture == 2)
+            planes.push_back({Eigen::Vector3d(0, 0, -0.2), Eigen::Vector3d::UnitZ()});
+        IPCContactEnergy e(surface, options(0.7, 0.05), planes);
+        const Vec x = surface.positions;
+        e.update_pattern(x);
+        Vec g;
+        SpMat h = e.hessian_pattern();
+        const double value = e.eval(x, &g, &h, energy::HessianKind::Exact);
+        const Vec g_only = e.eval_gradient(x);
+        const SpMat h_only = e.eval_hessian(x);
+        EXPECT_EQ(value, e.eval_value(x));
+        EXPECT_EQ(std::memcmp(g.data(), g_only.data(), sizeof(double) * g.size()), 0);
+        ASSERT_EQ(h.nonZeros(), h_only.nonZeros());
+        EXPECT_EQ(std::memcmp(h.valuePtr(), h_only.valuePtr(), sizeof(double) * h.nonZeros()), 0);
     }
 }
 

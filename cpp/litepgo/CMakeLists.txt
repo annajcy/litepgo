@@ -1,5 +1,11 @@
 add_library(litepgo STATIC
     contact/ipc_contact_energy.cpp
+    contact/detail/distance_derivatives.cpp
+    contact/detail/ipc_derivatives/point_point.cpp
+    contact/detail/ipc_derivatives/point_line.cpp
+    contact/detail/ipc_derivatives/point_plane.cpp
+    contact/detail/ipc_derivatives/line_line.cpp
+    contact/detail/ipc_derivatives/edge_edge_mollifier.cpp
     contact/broad_phase/sweep_and_prune.cpp
     dof/assembler.cpp
     mesh/extract_surface.cpp

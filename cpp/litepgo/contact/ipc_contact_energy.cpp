@@ -1,6 +1,7 @@
 #include "litepgo/contact/ipc_contact_energy.hpp"
 #include "litepgo/contact/broad_phase/detail/candidates.hpp"
 #include "litepgo/contact/detail/distance.hpp"
+#include "litepgo/contact/detail/distance_derivatives.hpp"
 #include "litepgo/contact/broad_phase/sweep_and_prune.hpp"
 
 #include <Eigen/Eigenvalues>
@@ -196,31 +197,80 @@ struct IPCContactEnergy::Impl {
         }
         return merged;
     }
-    template <class S> S squared_distance(const std::array<V3<S>, 4>& p, const Pair& pair) const {
+    double squared_distance(const Points& p, const Pair& pair) const {
         if (pair.plane < 0)
             return distance(p, pair.feature);
         const auto& plane = planes[pair.plane];
-        S d = 0;
+        double d = 0;
         for (int k = 0; k < 3; ++k)
-            d = d + S(plane.normal[k]) * (p[0][k] - S(plane.point[k]));
+            d += plane.normal[k] * (p[0][k] - plane.point[k]);
         return d * d;
     }
-    template <class S> S potential(const std::array<V3<S>, 4>& p, const Pair& pair) const {
+    double potential(const Points& p, const Pair& pair, LocalGradient* gradient = nullptr,
+                     LocalHessian* hessian = nullptr) const {
+        if (gradient)
+            gradient->setZero();
+        if (hessian)
+            hessian->setZero();
         const double h = options.dhat * (options.dhat + 2 * options.min_distance);
-        S d = squared_distance(p, pair) - S(options.min_distance * options.min_distance);
-        if (!(scalar(d) > 0) || !std::isfinite(scalar(d)))
+        const double d = squared_distance(p, pair) - options.min_distance * options.min_distance;
+        if (!(d > 0) || !std::isfinite(d))
             throw std::domain_error("IPCContactEnergy: contact distance must exceed min_distance");
-        if (scalar(d) >= h)
-            return S(0);
-        using std::log;
-        S b = S(-1) * (d - S(h)) * (d - S(h)) * log(d / S(h));
+        if (d >= h)
+            return 0;
+        const double log_d = std::log(d / h), delta = d - h;
+        const double b = -delta * delta * log_d;
+        double m = 1, z = 1;
         if (pair.epsilon > 0) {
-            auto n = cross(sub(p[1], p[0]), sub(p[3], p[2]));
-            S z = dot(n, n) / S(pair.epsilon);
-            if (scalar(z) < 1)
-                b = b * z * (S(2) - z);
+            const auto n = cross(sub(p[1], p[0]), sub(p[3], p[2]));
+            z = dot(n, n) / pair.epsilon;
+            if (z < 1)
+                m = z * (2 - z);
         }
-        return S(pair.weight) * b;
+        if (gradient || hessian) {
+            LocalGradient gd;
+            LocalHessian Hd;
+            if (pair.plane < 0) {
+                distance_derivatives(p, pair.feature, gd, hessian ? &Hd : nullptr);
+            } else {
+                const auto& plane = planes[pair.plane];
+                const double signed_distance = plane.normal.dot(Eigen::Map<const V>(p[0].data()) - plane.point);
+                gd.setZero();
+                gd.head<3>() = 2 * signed_distance * plane.normal;
+                if (hessian) {
+                    Hd.setZero();
+                    Hd.topLeftCorner<3, 3>() = 2 * plane.normal * plane.normal.transpose();
+                }
+            }
+            const double first = -2 * delta * log_d - delta * delta / d;
+            const LocalGradient gb = first * gd;
+            if (gradient)
+                *gradient = m * gb;
+            if (hessian) {
+                const double ratio = h / d;
+                const double second = (ratio + 2) * ratio - 2 * log_d - 3;
+                *hessian = m * (first * Hd + second * gd * gd.transpose());
+            }
+            if (z < 1) {
+                LocalGradient gc;
+                LocalHessian Hc;
+                cross_squarednorm_derivatives(p, gc, hessian ? &Hc : nullptr);
+                const double first_m = 2 * (1 - z) / pair.epsilon;
+                const LocalGradient gm = first_m * gc;
+                if (gradient)
+                    *gradient += b * gm;
+                if (hessian) {
+                    // Product rule includes both mixed outer products; the rest threshold is constant.
+                    *hessian += b * (first_m * Hc - (2 / pair.epsilon / pair.epsilon) * gc * gc.transpose()) +
+                                gm * gb.transpose() + gb * gm.transpose();
+                }
+            }
+            if (gradient)
+                *gradient *= pair.weight;
+            if (hessian)
+                *hessian *= pair.weight;
+        }
+        return pair.weight * b * m;
     }
     void check_intersections(const ConstVecRef& x, const Candidates& c) const {
         // Noncoplanar edge-face crossings may have positive VF and EE distances.
@@ -322,26 +372,18 @@ double IPCContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat*
     double value = 0;
     // Each task owns one slot; only the fixed-order assembly below reduces values.
     std::vector<double> values(pairs.size());
-    std::vector<Jet> derivatives(gradient || hessian ? pairs.size() : 0);
+    std::vector<LocalGradient> gradients(gradient ? pairs.size() : 0);
+    std::vector<LocalHessian> hessians(hessian ? pairs.size() : 0);
     tbb::parallel_for(std::size_t(0), pairs.size(), [&](std::size_t index) {
         const auto& pair = pairs[index];
         auto p = points(x, pair.ids);
-        if (!gradient && !hessian) {
-            values[index] = impl_->potential(p, pair);
-            return;
-        }
-        std::array<V3<Jet>, 4> jets{};
-        for (int i = 0; i < pair.count(); ++i)
-            for (int k = 0; k < 3; ++k) {
-                jets[i][k].value = p[i][k];
-                jets[i][k].gradient[3 * i + k] = 1;
-            }
-        Jet result = impl_->potential(jets, pair);
-        if (!result.gradient.allFinite() || !result.hessian.allFinite())
+        auto* g = gradient ? &gradients[index] : nullptr;
+        auto* H = hessian ? &hessians[index] : nullptr;
+        values[index] = impl_->potential(p, pair, g, H);
+        if ((g && !g->allFinite()) || (H && !H->allFinite()))
             throw std::domain_error("IPCContactEnergy: non-finite derivatives");
-        values[index] = result.value;
         if (hessian) {
-            Eigen::MatrixXd local = result.hessian.topLeftCorner(3 * pair.count(), 3 * pair.count());
+            Eigen::MatrixXd local = H->topLeftCorner(3 * pair.count(), 3 * pair.count());
             if (kind == energy::HessianKind::Projected) {
                 Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> solver(local);
                 if (solver.info() != Eigen::Success)
@@ -349,9 +391,8 @@ double IPCContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat*
                 local = solver.eigenvectors() * solver.eigenvalues().cwiseMax(0).asDiagonal() *
                         solver.eigenvectors().transpose();
             }
-            result.hessian.topLeftCorner(3 * pair.count(), 3 * pair.count()) = local;
+            H->topLeftCorner(3 * pair.count(), 3 * pair.count()) = local;
         }
-        derivatives[index] = result;
     });
     for (double local_value : values)
         value += local_value;
@@ -385,9 +426,8 @@ double IPCContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat*
                 for (std::size_t entry = offsets[v]; entry < offsets[v + 1]; ++entry) {
                     const auto [index, b] = contributions[entry];
                     const auto& pair = pairs[index];
-                    const auto& local = derivatives[index];
                     if (gradient)
-                        g += local.gradient.segment<3>(3 * b);
+                        g += gradients[index].segment<3>(3 * b);
                     if (hessian)
                         for (int c = 0; c < 3; ++c) {
                             const int col = 3 * v + c;
@@ -401,7 +441,7 @@ double IPCContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat*
                                                            "call update_pattern(x)");
                                 for (int r = 0; r < 3; ++r)
                                     hessian->valuePtr()[first - hessian->innerIndexPtr() + r] +=
-                                        local.hessian(3 * a + r, 3 * b + c);
+                                        hessians[index](3 * a + r, 3 * b + c);
                             }
                         }
                 }
