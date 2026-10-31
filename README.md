@@ -4,6 +4,10 @@ Minimal adaptation of libpgo.
 
 FEM examples and the mathematical naming and derivative-layout conventions are in [example/fem](example/fem/README.md).
 
+Standalone [energy and solver examples](example/solver/README.md) cover energy
+composition, constrained Newton equilibrium, and Gauss–Newton curve fitting in C++ and Python.
+For classical geometry processing, see [Laplacian smoothing and mesh editing](example/mesh/README.md).
+
 Requires Python 3.12, uv, CMake 3.28+, Ninja, and a C++20 compiler.
 
 Eigen 5.0.1, oneTBB 2023.1.0, nanobind 3.1.0, and GoogleTest are fetched at pinned versions; TBB is built as a shared library. Eigen's LDLT and SparseLU are always built; the platform's sparse backends become the `AutoSparseSolver` and `AutoIndefiniteSparseSolver` defaults. `litepgo.build_info()` reports what a build contains.
