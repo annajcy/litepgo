@@ -20,3 +20,7 @@ add_subdirectory(plastic_twist)
 
 add_executable(point_embedding point_embedding.cpp)
 target_link_libraries(point_embedding PRIVATE litepgo::litepgo litepgo::warnings)
+
+add_executable(material_fit material_fit.cpp)
+target_link_libraries(material_fit PRIVATE litepgo::io litepgo::litepgo litepgo::warnings)
+target_compile_definitions(material_fit PRIVATE LITEPGO_ASSETS_DIR="${PROJECT_SOURCE_DIR}/assets")

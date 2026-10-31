@@ -37,7 +37,8 @@ add_library(litepgo STATIC
     linalg/sparse_solver/eigen_sparse_lu.cpp
     linalg/sparse_pattern.cpp
     linalg/sparse_solver/sparse_solver.cpp
-    solver/newton.cpp)
+    solver/newton.cpp
+    solver/gauss_newton.cpp)
 add_library(litepgo::litepgo ALIAS litepgo)
 
 if(LITEPGO_WITH_ACCELERATE)

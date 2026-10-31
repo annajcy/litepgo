@@ -2,6 +2,7 @@
 #include "litepgo/dof/dof_reduction.hpp"
 #include "litepgo/energy/energy.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
+#include "litepgo/solver/gauss_newton.hpp"
 #include "litepgo/solver/newton.hpp"
 
 #include <nanobind/eigen/dense.h>
@@ -22,6 +23,53 @@ namespace litepgo::solver::binding {
 
 void bind(nb::module_& m) {
     m.doc() = "Nonlinear solvers (cpp/litepgo/solver)";
+
+    nb::enum_<GaussNewtonStatus>(m, "GaussNewtonStatus")
+        .value("Converged", GaussNewtonStatus::Converged)
+        .value("MaxIterations", GaussNewtonStatus::MaxIterations)
+        .value("StepTooSmall", GaussNewtonStatus::StepTooSmall);
+    nb::class_<GaussNewtonOptions>(m, "GaussNewtonOptions")
+        .def(
+            "__init__",
+            [](GaussNewtonOptions* self, double tolerance, int iterations, int trials, double damping) {
+                new (self) GaussNewtonOptions{tolerance, iterations, trials, damping};
+            },
+            "gradient_tolerance"_a = std::numeric_limits<double>::quiet_NaN(), "max_iterations"_a = 50,
+            "max_trial_steps"_a = 20, "initial_damping"_a = 1e-3)
+        .def_rw("gradient_tolerance", &GaussNewtonOptions::gradient_tolerance)
+        .def_rw("max_iterations", &GaussNewtonOptions::max_iterations)
+        .def_rw("max_trial_steps", &GaussNewtonOptions::max_trial_steps)
+        .def_rw("initial_damping", &GaussNewtonOptions::initial_damping);
+    nb::class_<GaussNewtonResult>(m, "GaussNewtonResult")
+        .def_ro("x", &GaussNewtonResult::x)
+        .def_ro("objective", &GaussNewtonResult::objective)
+        .def_ro("gradient_norm", &GaussNewtonResult::gradient_norm)
+        .def_ro("iterations", &GaussNewtonResult::iterations)
+        .def_ro("evaluations", &GaussNewtonResult::evaluations)
+        .def_ro("status", &GaussNewtonResult::status);
+    m.def(
+        "gauss_newton_solve",
+        [](nb::callable callback, const ConstVecRef& initial, const GaussNewtonOptions& options) {
+            ResidualFunction residual = [&](const ConstVecRef& x, Eigen::MatrixXd* J) -> Vec {
+                nb::gil_scoped_acquire acquire;
+                // Own the argument so callbacks may safely retain it.
+                nb::object value = callback(nb::cast(Vec(x)), J != nullptr);
+                if (value.is_none())
+                    throw std::domain_error("Residual is infeasible");
+                if (!J)
+                    return nb::cast<Vec>(value);
+                if (!nb::isinstance<nb::tuple>(value) || nb::len(value) != 2)
+                    throw nb::type_error("Expected (residual, Jacobian) when need_jacobian is True");
+                nb::tuple pair = nb::cast<nb::tuple>(value);
+                *J = nb::cast<Eigen::MatrixXd>(pair[1]);
+                return nb::cast<Vec>(pair[0]);
+            };
+            nb::gil_scoped_release release;
+            return gauss_newton_solve(residual, initial, options);
+        },
+        "residual"_a, "initial"_a, "options"_a,
+        "Minimize 0.5*||r||^2. residual(x, need_jacobian) returns (r, J) when requested, "
+        "otherwise r. Return None for an infeasible point; Python exceptions propagate. No finite differences.");
 
     nb::enum_<NewtonStatus>(m, "NewtonStatus")
         .value("Converged", NewtonStatus::Converged)
