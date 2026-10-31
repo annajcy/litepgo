@@ -608,3 +608,43 @@ which C1 Hermite displacement cannot follow, leaving residual stress.
 `tests/python/test_fem.py` checks these values and compares each C++ and Python pair
 to rounding: the C++ compiler may fuse the examples' `u_p` arithmetic into
 multiply-adds, so their output need not match bit for bit. CTest runs the C++ examples.
+
+## Material calibration (C++)
+
+Build `material_fit`, then run `build/debug/example/fem/material_fit`.
+This executable is also a CTest regression. It fixes the bundled tet bar's bottom
+face and prescribes the top face, leaving side and interior nodes free.
+Two experiments apply shear displacement 0.08 times the height and compression
+0.04 times the height. Reaction is the top-face sum of the elastic gradient in
+the loading direction. Synthetic observations use `(lambda, mu) = (2, 3)`, `Fp = I`.
+
+The fit starts at `(1, 1)` and optimizes log parameters. Each residual evaluation
+rebuilds the material snapshot and solves equilibrium from the same initial state.
+Residuals are divided by fixed observed force magnitudes. The public
+`solver::gauss_newton_solve` receives residuals and their analytic Jacobian;
+no finite differences are used. For Fp=I, the example assembles mixed derivatives
+from dP/dlambda = log(det F) F^-T and dP/dmu = F - F^-T, then solves
+K_ff du_f/dtheta = -B_f using the exact Hessian. Reaction derivatives are the
+loaded-face sum of B + K du/dtheta. Row scaling and theta's diagonal apply the
+normalization and log-parameter chain rule. Sensitivity equation residuals and
+the stiffness scaling identity (dR/dtheta) theta = R are checked.
+
+The solver uses augmented dense QR for damped Gauss-Newton steps, requesting
+Jacobian evaluations only at accepted states. Convergence uses ||J^T r||_inf;
+trial domain errors are rejected, while callback contract violations propagate.
+Only strictly positive material parameters are represented in this example.
+
+Exit status checks relative parameter error below `1e-4`, fitting residual below
+`1e-7`, and relative reaction error below `1e-4` at held-out compression `0.07`.
+Every equilibrium must converge with free-gradient tolerance `1e-10`; prescribed
+DOFs are checked for exact preservation. This noise-free synthetic regression
+validates the implementation, not real-world material identifiability.
+
+The Python mirror runs with `uv run --no-sync python example/fem/material_fit.py`.
+It uses the same native Gauss-Newton solver and analytic FEM sensitivities.
+Python `residual(x, need_jacobian)` returns `(r, J)` when the flag is true,
+otherwise just `r`. Return `None` to mark an infeasible point: trial points are
+rejected and a current-point failure raises `ValueError`. Python exceptions
+propagate unchanged, so programming errors are not silently treated as rejected
+steps. Callback inputs own their data and may be retained after the call.
+`GaussNewtonOptions`, `GaussNewtonStatus`, and `GaussNewtonResult` mirror C++.

@@ -87,3 +87,53 @@ def test_options():
     assert defaults.gradient_tolerance == 1e-8
     with pytest.raises(ValueError):
         newton_solve(QuadraticEnergy(spd(3)), free(3), np.ones(3), NewtonOptions())
+
+
+def test_gauss_newton_analytic_callback_and_owned_inputs():
+    from litepgo.solver import GaussNewtonOptions, GaussNewtonStatus, gauss_newton_solve
+
+    calls = []
+    A = np.array([[1., 0.], [0., 1.], [1., 0.]])
+    def residual(x, need_jacobian):
+        calls.append((x, x.copy(), need_jacobian))
+        r = A @ x - [1., 2., 3.]
+        return (r, A) if need_jacobian else r
+
+    result = gauss_newton_solve(residual, np.zeros(2), GaussNewtonOptions(gradient_tolerance=1e-8))
+    assert result.status == GaussNewtonStatus.Converged
+    np.testing.assert_allclose(result.x, [2., 2.], atol=1e-8)
+    assert result.objective == pytest.approx(1.)
+    assert result.gradient_norm <= 1e-8
+    assert result.evaluations == len(calls)
+    assert {need for _, _, need in calls} == {True, False}
+    for x, snapshot, _ in calls:
+        np.testing.assert_array_equal(x, snapshot)
+
+
+def test_gauss_newton_infeasible_trials_and_errors():
+    from litepgo.solver import GaussNewtonOptions, GaussNewtonStatus, gauss_newton_solve
+
+    rejected = []
+    def residual(x, need_jacobian):
+        if x[0] <= 0:
+            rejected.append(x[0])
+            return None
+        r = np.log(x)
+        return (r, np.array([[1 / x[0]]])) if need_jacobian else r
+
+    options = GaussNewtonOptions(gradient_tolerance=1e-9)
+    result = gauss_newton_solve(residual, np.array([10.]), options)
+    assert result.status == GaussNewtonStatus.Converged and rejected
+    np.testing.assert_allclose(result.x, [1.], atol=1e-8)
+    with pytest.raises(ValueError):
+        gauss_newton_solve(residual, np.array([-1.]), options)
+
+    def fail(x, need_jacobian):
+        raise KeyError("callback bug")
+    with pytest.raises(KeyError, match="callback bug"):
+        gauss_newton_solve(fail, np.ones(1), options)
+    with pytest.raises(TypeError, match="Expected"):
+        gauss_newton_solve(lambda x, need: x, np.ones(1), options)
+    with pytest.raises(RuntimeError, match="invalid residual or Jacobian"):
+        gauss_newton_solve(lambda x, need: (x, np.zeros((2, 2))), np.ones(1), options)
+    assert np.isnan(GaussNewtonOptions().gradient_tolerance)

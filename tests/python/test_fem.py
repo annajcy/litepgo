@@ -388,3 +388,18 @@ def test_basis_dof_transform_maps_physical_hermite_dofs():
     nodal = fem.BasisDofTransform[fem.HexQ1Basis](X_field)
     assert nodal.dofs_per_vertex == 3
     np.testing.assert_array_equal(nodal.to_coefficients(X_nodes), X_nodes)
+
+
+def test_material_fit_python_matches_cpp():
+    import re
+
+    script = ASSETS.parent / "example/fem/material_fit.py"
+    outputs = []
+    for command in ([str(EXAMPLES / "material_fit")], [sys.executable, str(script)]):
+        completed = subprocess.run(command, capture_output=True, text=True)
+        assert completed.returncode == 0, completed.stdout + completed.stderr
+        outputs.append(completed.stdout)
+    values = [np.array([float(x) for x in re.findall(r"[-+]?\d*\.?\d+(?:e[-+]?\d+)?", output)])
+              for output in outputs]
+    assert values[0].size == values[1].size == 8
+    np.testing.assert_allclose(values[0], values[1], rtol=1e-3, atol=1e-9)

@@ -1,5 +1,6 @@
 # Test files mirror cpp/litepgo: tests/cpp/<dir>/<name>_gtest.cpp covers cpp/litepgo/<dir>/.
 add_executable(litepgo_tests
+    solver/gauss_newton_gtest.cpp
     fem/sample_boundary_gtest.cpp
     dof/vertex_displacement_map_gtest.cpp
     fem/point_displacement_map_gtest.cpp
@@ -102,3 +103,6 @@ endif()
 add_dependencies(litepgo_tests spatial_query point_embedding)
 add_test(NAME SpatialQueryExample COMMAND $<TARGET_FILE:spatial_query>)
 add_test(NAME PointEmbeddingExample COMMAND $<TARGET_FILE:point_embedding>)
+
+add_dependencies(litepgo_tests material_fit)
+add_test(NAME MaterialFit COMMAND $<TARGET_FILE:material_fit>)
