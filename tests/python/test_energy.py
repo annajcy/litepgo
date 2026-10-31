@@ -157,3 +157,120 @@ def test_vertex_pulling_energy_matches_numpy():
         VertexPullingEnergy(7, np.array([[0, 1, 2], [2, 4, 5]], dtype=np.int32), targets, 2.0)
     with pytest.raises(ValueError):
         VertexPullingEnergy(7, dofs, targets[:1], 2.0)
+
+
+def test_mesh_energy_stencil_assembly_and_callback_lifetime():
+    from litepgo.dof import StencilDofMap
+    from litepgo.energy import MeshEnergy
+
+    retained = []
+    def local(e, x, want_g, want_h):
+        retained.append((x, x.copy()))
+        d = x[0] - x[1]
+        return (0.5 * (d @ d), np.concatenate([d, -d]) if want_g else None,
+                np.kron([[1., -1.], [-1., 1.]], np.eye(3)) if want_h else None)
+
+    mapping = StencilDofMap(3, [[0, 1], [1, 2]], 3)
+    assembled = MeshEnergy(mapping, local)
+    del mapping, local
+    gc.collect()
+    x = np.arange(9, dtype=float)
+    H = np.kron([[1., -1., 0.], [-1., 2., -1.], [0., -1., 1.]], np.eye(3))
+    assert assembled.eval_value(x) == pytest.approx(0.5 * x @ H @ x)
+    np.testing.assert_allclose(assembled.eval_gradient(x), H @ x)
+    np.testing.assert_allclose(assembled.eval_hessian(x).toarray(), H)
+    np.testing.assert_allclose(assembled.eval_projected_hessian(x).toarray(), H, atol=1e-14)
+    for owned, snapshot in retained:
+        np.testing.assert_array_equal(owned, snapshot)
+    assert assembled.max_feasible_step(x, x) == 1.
+
+
+def test_mesh_energy_callback_errors_and_step():
+    from litepgo.dof import StencilDofMap
+    from litepgo.energy import MeshEnergy
+
+    mapping = StencilDofMap(1, [[0]], 3)
+    x = np.ones(3)
+    def fail(*args):
+        raise ValueError('local callback failed')
+    with pytest.raises(ValueError, match='local callback failed'):
+        MeshEnergy(mapping, fail).eval_value(x)
+    with pytest.raises(ValueError, match='omitted'):
+        MeshEnergy(mapping, lambda *args: (0., None, None)).eval_gradient(x)
+    with pytest.raises(RuntimeError, match='invalid local gradient'):
+        MeshEnergy(mapping, lambda *args: (0., np.zeros(2), None)).eval_gradient(x)
+    with pytest.raises(RuntimeError, match='non-finite local energy'):
+        MeshEnergy(mapping, lambda *args: (float('nan'), None, None)).eval_value(x)
+    bounded = MeshEnergy(mapping, lambda *args: (0., None, None), lambda e, x, dx: 0.25)
+    assert bounded.max_feasible_step(x, x) == 0.25
+
+
+@pytest.mark.parametrize('batch_size', [1, 2, 256])
+def test_batched_mesh_energy_variable_stencils(batch_size):
+    from litepgo.dof import StencilDofMap
+    from litepgo.energy import MeshEnergy, BatchedMeshEnergy
+    mapping = StencilDofMap(4, [[0, 1], [1, 2, 3], [2, 3], [0]], 3)
+    seen = []
+    def local(e, x, g, h):
+        z = x.ravel()
+        return .5*(e+1)*(z@z), (e+1)*z if g else None, (e+1)*np.eye(z.size) if h else None
+    def batch(ids, x, g, h):
+        seen.append((ids.copy(), x, x.copy()))
+        z = x.reshape(len(ids), -1)
+        scale = ids + 1
+        return (.5*scale*np.sum(z*z, axis=1), scale[:, None]*z if g else None,
+                scale[:, None, None]*np.eye(z.shape[1])[None] if h else None)
+    expected, actual = MeshEnergy(mapping, local), BatchedMeshEnergy(mapping, batch, batch_size)
+    x = np.arange(12, dtype=float)
+    np.testing.assert_allclose(actual.eval_value(x), expected.eval_value(x))
+    np.testing.assert_allclose(actual.eval_gradient(x), expected.eval_gradient(x))
+    np.testing.assert_allclose(actual.eval_hessian(x).toarray(), expected.eval_hessian(x).toarray())
+    np.testing.assert_allclose(actual.eval_projected_hessian(x).toarray(), expected.eval_projected_hessian(x).toarray())
+    for ids, retained, copy in seen:
+        assert len(ids) <= batch_size
+        np.testing.assert_array_equal(retained, copy)
+    assert set(np.concatenate([entry[0] for entry in seen])) == {0, 1, 2, 3}
+    assert actual.max_feasible_step(x, x) == 1.
+
+
+def test_batched_mesh_energy_errors_steps_and_recovery():
+    from litepgo.dof import StencilDofMap
+    from litepgo.energy import BatchedMeshEnergy
+    mapping = StencilDofMap(2, [[0], [1]], 3)
+    x = np.ones(6)
+    def local(ids, x, g, h):
+        return np.zeros(len(ids)), np.zeros((len(ids), 3)) if g else None, np.broadcast_to(np.eye(3), (len(ids), 3, 3)) if h else None
+    with pytest.raises(ValueError):
+        BatchedMeshEnergy(mapping, local, batch_size=0)
+    with pytest.raises(RuntimeError, match='invalid batch outputs'):
+        BatchedMeshEnergy(mapping, lambda *args: (np.zeros(1), None, None)).eval_value(x)
+    with pytest.raises(ValueError, match='Missing batch gradients'):
+        BatchedMeshEnergy(mapping, lambda *args: (np.zeros(2), None, None)).eval_gradient(x)
+    def fail(*args):
+        raise KeyError('batch failure')
+    with pytest.raises(KeyError, match='batch failure'):
+        BatchedMeshEnergy(mapping, fail).eval_value(x)
+    bounded = BatchedMeshEnergy(mapping, local, step=lambda ids, x, dx: np.full(len(ids), .25))
+    assert bounded.max_feasible_step(x, x) == .25
+    with pytest.raises(RuntimeError, match='invalid batch steps'):
+        BatchedMeshEnergy(mapping, local, step=lambda ids, x, dx: np.full(len(ids), 2.)).max_feasible_step(x, x)
+    assert bounded.eval_value(x) == 0.
+
+
+def test_batched_mesh_energy_projection_empty_and_recovery():
+    from litepgo.dof import StencilDofMap
+    from litepgo.energy import BatchedMeshEnergy
+    fail = True
+    def batch(ids, x, g, h):
+        if fail:
+            raise ValueError('retry')
+        return np.zeros(len(ids)), np.zeros((len(ids), 1)) if g else None, np.array([[[-1.]], [[2.]]]) if h else None
+    obj = BatchedMeshEnergy(StencilDofMap(1, [[0], [0]], 1), batch)
+    with pytest.raises(ValueError, match='retry'):
+        obj.eval_hessian(np.zeros(1))
+    fail = False
+    np.testing.assert_allclose(obj.eval_hessian(np.zeros(1)).toarray(), [[1.]])
+    np.testing.assert_allclose(obj.eval_projected_hessian(np.zeros(1)).toarray(), [[2.]])
+    empty = BatchedMeshEnergy(StencilDofMap(1, [], 3), lambda *args: pytest.fail('empty batch invoked'))
+    assert empty.eval_value(np.zeros(3)) == 0.
+    np.testing.assert_array_equal(empty.eval_gradient(np.zeros(3)), np.zeros(3))

@@ -1,10 +1,15 @@
 #include "litepgo/energy/energy.hpp"
 #include "litepgo/bindings/bindings.hpp"
 #include "litepgo/bindings/sparse_matrix.hpp"
+#include "litepgo/dof/stencil_dof_map.hpp"
 #include "litepgo/energy/affine_mapped_energy.hpp"
+#include "litepgo/energy/batched_mesh_energy.hpp"
+#include "litepgo/energy/mesh_energy.hpp"
 #include "litepgo/energy/quadratic_energy.hpp"
 #include "litepgo/energy/vertex_pulling_energy.hpp"
 #include "litepgo/energy/weighted_energy_sum.hpp"
+#include <nanobind/stl/function.h>
+#include <nanobind/stl/tuple.h>
 
 #include <nanobind/eigen/dense.h>
 #include <nanobind/stl/optional.h>
@@ -73,6 +78,83 @@ void bind(nb::module_& m) {
             "One assembly returning (value, gradient or None, hessian or None); pass a HessianKind as hessian.")
         .def("max_feasible_step", &Energy::max_feasible_step, "x"_a, "dx"_a, nb::call_guard<nb::gil_scoped_release>(),
              "Largest alpha in [0, 1] keeping x + t dx feasible for all t in [0, alpha].");
+
+    using BatchResult = std::tuple<Vec, std::optional<BatchMatrix>, std::optional<BatchMatrix>>;
+    using BatchCallback = std::function<BatchResult(std::vector<int>, BatchMatrix, bool, bool)>;
+    using BatchStep = std::function<Vec(std::vector<int>, BatchMatrix, BatchMatrix)>;
+    nb::class_<BatchedMeshEnergy, Energy>(m, "BatchedMeshEnergy")
+        .def(
+            "__init__",
+            [](BatchedMeshEnergy* self, const dof::StencilDofMap& map, BatchCallback callback, int batch_size,
+               std::optional<BatchStep> step) {
+                if (!callback || (step && !*step))
+                    throw std::invalid_argument("Expected batch callbacks");
+                auto evaluate = [callback](std::span<const int> ids, const BatchMatrix& x, BatchMatrix* g,
+                                           BatchMatrix* h) {
+                    auto [values, gradients, hessians] =
+                        callback(std::vector<int>(ids.begin(), ids.end()), x, g != nullptr, h != nullptr);
+                    if (g) {
+                        if (!gradients)
+                            throw std::invalid_argument("Missing batch gradients");
+                        *g = std::move(*gradients);
+                    }
+                    if (h) {
+                        if (!hessians)
+                            throw std::invalid_argument("Missing batch Hessians");
+                        *h = std::move(*hessians);
+                    }
+                    return values;
+                };
+                BatchedMeshEnergy::Step bound;
+                if (step)
+                    bound = [step = *step](std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& dx) {
+                        return step(std::vector<int>(ids.begin(), ids.end()), x, dx);
+                    };
+                new (self) BatchedMeshEnergy(map, std::move(evaluate), batch_size, std::move(bound));
+            },
+            "map"_a, "eval_batch"_a, "batch_size"_a = 256, "step"_a = nb::none());
+
+    using LocalResult = std::tuple<double, std::optional<Vec>, std::optional<Eigen::MatrixXd>>;
+    using LocalCallback = std::function<LocalResult(int, Eigen::MatrixXd, bool, bool)>;
+    using StepCallback = std::function<double(int, Eigen::MatrixXd, Eigen::MatrixXd)>;
+    nb::class_<MeshEnergy, Energy>(m, "MeshEnergy")
+        .def(
+            "__init__",
+            [](MeshEnergy* self, const dof::StencilDofMap& map, LocalCallback callback,
+               std::optional<StepCallback> step) {
+                if (!callback || (step && !*step))
+                    throw std::invalid_argument("MeshEnergy requires callable callbacks");
+                auto local = [callback = std::move(callback)](int e, const Eigen::MatrixXd& x, Vec* g,
+                                                              Eigen::MatrixXd* h) {
+                    // Value arguments own their storage; Python may retain them safely.
+                    auto [value, gradient, hessian] = callback(e, x, g != nullptr, h != nullptr);
+                    if (g) {
+                        if (!gradient)
+                            throw std::invalid_argument("MeshEnergy callback omitted requested gradient");
+                        *g = std::move(*gradient);
+                    }
+                    if (h) {
+                        if (!hessian)
+                            throw std::invalid_argument("MeshEnergy callback omitted requested Hessian");
+                        *h = std::move(*hessian);
+                    }
+                    return value;
+                };
+                if (step) {
+                    new (self)
+                        MeshEnergy(map, std::move(local),
+                                   [step = std::move(*step)](int e, const Eigen::MatrixXd& x,
+                                                             const Eigen::MatrixXd& dx) { return step(e, x, dx); });
+                } else {
+                    new (self) MeshEnergy(map, std::move(local));
+                }
+            },
+            "map"_a, "eval_local"_a, "step"_a = nb::none(),
+            "Assemble fixed vertex stencils. eval_local(e, x_local, need_gradient, need_hessian) returns "
+            "(value, gradient or None, Hessian or None). x_local has one row per vertex; derivatives use "
+            "vertex-major scalar order. Callbacks may run on worker threads (with the GIL). "
+            "Optional step(e, x_local, dx_local) returns a safe bound in [0,1]; omit only for energies "
+            "feasible along every finite segment. Captured data must remain unchanged during evaluation.");
 
     nb::class_<QuadraticEnergy, Energy>(m, "QuadraticEnergy")
         .def(

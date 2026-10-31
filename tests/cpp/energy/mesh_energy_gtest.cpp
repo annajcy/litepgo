@@ -528,3 +528,31 @@ TEST(MeshEnergy, ParallelFeasibleStepMatchesSerialAndPropagatesErrors) {
 } // namespace
 
 } // namespace litepgo::energy::test
+
+#include "litepgo/energy/batched_mesh_energy.hpp"
+
+TEST(BatchedMeshEnergy, GroupsVariableStencilsAndAssembles) {
+    using namespace litepgo;
+    dof::StencilDofMap map(3, {{0, 1}, {1}, {1, 2}}, 3);
+    energy::BatchedMeshEnergy batched(
+        map,
+        [](std::span<const int> ids, const energy::BatchMatrix& x, energy::BatchMatrix* g, energy::BatchMatrix* h) {
+            EXPECT_LE(ids.size(), 2u);
+            if (g)
+                *g = x;
+            if (h) {
+                h->setZero(x.rows() * x.cols(), x.cols());
+                for (Eigen::Index b = 0; b < x.rows(); ++b)
+                    h->middleRows(b * x.cols(), x.cols()).setIdentity();
+            }
+            return Vec(0.5 * x.rowwise().squaredNorm());
+        },
+        2);
+    const Vec x = Vec::Ones(9);
+    Vec expected(9);
+    expected << 1, 1, 1, 3, 3, 3, 1, 1, 1;
+    EXPECT_DOUBLE_EQ(batched.eval_value(x), 7.5);
+    EXPECT_TRUE(batched.eval_gradient(x).isApprox(expected));
+    EXPECT_TRUE(Eigen::MatrixXd(batched.eval_hessian(x)).isApprox(Eigen::MatrixXd(expected.asDiagonal())));
+    EXPECT_THROW((energy::BatchedMeshEnergy(map, {}, 0)), std::invalid_argument);
+}
