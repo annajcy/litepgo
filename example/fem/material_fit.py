@@ -53,7 +53,7 @@ def main():
         Force = fem.VolumetricFemForceMaterialResponse[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
         force_response = Force(dof.ConstantDofMap(topology, 2), mapping, geometry, result.x,
                                [fem.IdentityField3D(np.eye(3).ravel())] * topology.num_cells)
-        B = force_energy.eval_jacobian(theta).toarray()
+        B = force_response.eval_jacobian(theta).toarray()
         K = elastic.eval_hessian(result.x)  # Python eval_hessian returns the exact Hessian.
         if not linear_solver.compute(fixed.reduce(K)):
             raise RuntimeError("Sensitivity factorization failed")
