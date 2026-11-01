@@ -126,3 +126,9 @@ add_test(NAME MeshResponseExample COMMAND $<TARGET_FILE:mesh_response>)
 
 add_dependencies(litepgo_tests shell_material_fit)
 add_test(NAME ShellMaterialFit COMMAND $<TARGET_FILE:shell_material_fit>)
+
+add_dependencies(litepgo_tests diagonal_fp_fit)
+add_test(NAME DiagonalFpFit COMMAND $<TARGET_FILE:diagonal_fp_fit>)
+
+add_dependencies(litepgo_tests shell_fp_fit)
+add_test(NAME ShellFpFit COMMAND $<TARGET_FILE:shell_fp_fit>)

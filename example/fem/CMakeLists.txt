@@ -28,3 +28,11 @@ target_compile_definitions(material_fit PRIVATE LITEPGO_ASSETS_DIR="${PROJECT_SO
 add_executable(shell_material_fit shell_material_fit.cpp)
 target_link_libraries(shell_material_fit PRIVATE litepgo::io litepgo::litepgo litepgo::warnings)
 target_compile_definitions(shell_material_fit PRIVATE LITEPGO_ASSETS_DIR="${PROJECT_SOURCE_DIR}/assets")
+
+add_executable(diagonal_fp_fit diagonal_fp_fit.cpp)
+target_link_libraries(diagonal_fp_fit PRIVATE litepgo::io litepgo::litepgo litepgo::warnings)
+target_compile_definitions(diagonal_fp_fit PRIVATE LITEPGO_ASSETS_DIR="${PROJECT_SOURCE_DIR}/assets")
+
+add_executable(shell_fp_fit shell_fp_fit.cpp)
+target_link_libraries(shell_fp_fit PRIVATE litepgo::io litepgo::litepgo litepgo::warnings)
+target_compile_definitions(shell_fp_fit PRIVATE LITEPGO_ASSETS_DIR="${PROJECT_SOURCE_DIR}/assets")
