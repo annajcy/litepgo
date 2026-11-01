@@ -1,24 +1,19 @@
-# Test files mirror cpp/litepgo: tests/cpp/<dir>/<name>_gtest.cpp covers cpp/litepgo/<dir>/.
-add_executable(litepgo_tests
+# Test executables link only the modules exercised by their source files.
+add_custom_target(litepgo_tests ALL)
+
+add_executable(litepgo_solver_tests
     solver/static_equilibrium_response_gtest.cpp
-    energy/response/mesh_response_gtest.cpp
     solver/gauss_newton_gtest.cpp
-    fem/sample_boundary_gtest.cpp
-    dof/vertex_displacement_map_gtest.cpp
-    fem/point_displacement_map_gtest.cpp
-    fem/element_locator_gtest.cpp
-    spatial/spatial_hash_gtest.cpp
-    dof/energy_assembler_gtest.cpp
-    dof/response_assembler_gtest.cpp
+    solver/newton_gtest.cpp
+)
+target_link_libraries(litepgo_solver_tests PRIVATE
+    litepgo::solver litepgo::fem litepgo::warnings GTest::gtest_main)
+add_dependencies(litepgo_tests litepgo_solver_tests)
+gtest_discover_tests(litepgo_solver_tests DISCOVERY_MODE PRE_TEST)
+
+add_executable(litepgo_energy_tests
+    energy/response/mesh_response_gtest.cpp
     energy/scalar/mesh_energy_gtest.cpp
-    ../example/fem/equilibrium/hex_q1_corner_pull_gtest.cpp
-    ../example/fem/equilibrium/hex_hermite_corner_pull_gtest.cpp
-    ../example/fem/equilibrium/tet_p1_corner_pull_gtest.cpp
-    ../example/fem/equilibrium/shell_saddle_pull_gtest.cpp
-    core/build_info_gtest.cpp
-    core/busy_scope_gtest.cpp
-    core/memory_gtest.cpp
-    core/types_gtest.cpp
     energy/scalar/affine_mapped_energy_gtest.cpp
     energy/scalar/dynamic_pattern_energy_gtest.cpp
     energy/scalar/energy_gtest.cpp
@@ -26,13 +21,21 @@ add_executable(litepgo_tests
     energy/scalar/quadratic_energy_gtest.cpp
     energy/scalar/vertex_pulling_energy_gtest.cpp
     energy/scalar/weighted_energy_sum_gtest.cpp
+)
+target_link_libraries(litepgo_energy_tests PRIVATE
+    litepgo::fem litepgo::warnings GTest::gtest_main)
+add_dependencies(litepgo_tests litepgo_energy_tests)
+gtest_discover_tests(litepgo_energy_tests DISCOVERY_MODE PRE_TEST)
+
+add_executable(litepgo_fem_tests
+    fem/sample_boundary_gtest.cpp
+    fem/point_displacement_map_gtest.cpp
+    fem/element_locator_gtest.cpp
     fem/basis/basis_gtest.cpp
     fem/basis/1d/cubic_hermite_basis_gtest.cpp
     fem/basis/2d/tensor_product_basis_2d_gtest.cpp
     fem/basis/2d/quad_hermite_basis_gtest.cpp
     fem/basis/2d/triangle_p1_basis_gtest.cpp
-    dof/element_dof_map_gtest.cpp
-    dof/constant_dof_map_gtest.cpp
     fem/field/field_gtest.cpp
     fem/field/identity_field_gtest.cpp
     fem/field/shared_field_gtest.cpp
@@ -73,24 +76,90 @@ add_executable(litepgo_tests
     fem/quadrature/3d/tet_centroid_quadrature_gtest.cpp
     fem/basis/3d/tensor_product_basis_3d_gtest.cpp
     fem/quadrature/3d/tensor_product_quadrature_3d_gtest.cpp
-    dof/vertex_dof_map_gtest.cpp
-    dof/stencil_dof_map_gtest.cpp
     fem/material/volumetric/volume_integration_gtest.cpp
     fem/local/surface_integration_gtest.cpp
     fem/material/volumetric/tet_p1_integration_gtest.cpp
+)
+target_link_libraries(litepgo_fem_tests PRIVATE
+    litepgo::fem litepgo::warnings GTest::gtest_main)
+add_dependencies(litepgo_tests litepgo_fem_tests)
+gtest_discover_tests(litepgo_fem_tests DISCOVERY_MODE PRE_TEST)
+
+add_executable(litepgo_dof_tests
+    dof/vertex_displacement_map_gtest.cpp
+    dof/energy_assembler_gtest.cpp
+    dof/response_assembler_gtest.cpp
+    dof/element_dof_map_gtest.cpp
+    dof/constant_dof_map_gtest.cpp
+    dof/vertex_dof_map_gtest.cpp
+    dof/stencil_dof_map_gtest.cpp
     dof/dof_reduction_gtest.cpp
     dof/reduced_matrix_gtest.cpp
     dof/surface_kinematics_gtest.cpp
+)
+target_link_libraries(litepgo_dof_tests PRIVATE
+    litepgo::fem litepgo::warnings GTest::gtest_main)
+add_dependencies(litepgo_tests litepgo_dof_tests)
+gtest_discover_tests(litepgo_dof_tests DISCOVERY_MODE PRE_TEST)
+
+add_executable(litepgo_spatial_tests
+    spatial/spatial_hash_gtest.cpp
+)
+target_link_libraries(litepgo_spatial_tests PRIVATE
+    litepgo::spatial litepgo::warnings GTest::gtest_main)
+add_dependencies(litepgo_tests litepgo_spatial_tests)
+gtest_discover_tests(litepgo_spatial_tests DISCOVERY_MODE PRE_TEST)
+
+add_executable(litepgo_examples_tests
+    ../example/fem/equilibrium/hex_q1_corner_pull_gtest.cpp
+    ../example/fem/equilibrium/hex_hermite_corner_pull_gtest.cpp
+    ../example/fem/equilibrium/tet_p1_corner_pull_gtest.cpp
+    ../example/fem/equilibrium/shell_saddle_pull_gtest.cpp
+)
+target_link_libraries(litepgo_examples_tests PRIVATE
+    litepgo::solver litepgo::fem litepgo::warnings GTest::gtest_main)
+add_dependencies(litepgo_tests litepgo_examples_tests)
+gtest_discover_tests(litepgo_examples_tests DISCOVERY_MODE PRE_TEST)
+
+add_executable(litepgo_core_tests
+    core/build_info_gtest.cpp
+    core/busy_scope_gtest.cpp
+    core/memory_gtest.cpp
+    core/types_gtest.cpp
+)
+target_link_libraries(litepgo_core_tests PRIVATE
+    litepgo::core litepgo::warnings GTest::gtest_main)
+add_dependencies(litepgo_tests litepgo_core_tests)
+gtest_discover_tests(litepgo_core_tests DISCOVERY_MODE PRE_TEST)
+
+add_executable(litepgo_linalg_tests
     linalg/sparse_pattern_gtest.cpp
     linalg/sparse_solver/sparse_solver_gtest.cpp
     linalg/sparse_solver/pardiso_threading_gtest.cpp
+)
+target_link_libraries(litepgo_linalg_tests PRIVATE
+    litepgo::linalg litepgo::warnings GTest::gtest_main)
+add_dependencies(litepgo_tests litepgo_linalg_tests)
+gtest_discover_tests(litepgo_linalg_tests DISCOVERY_MODE PRE_TEST)
+
+add_executable(litepgo_mesh_tests
     mesh/extract_surface_gtest.cpp
     mesh/mesh_topology_gtest.cpp
     mesh/triangle_mid_edge_stencils_gtest.cpp
-    solver/newton_gtest.cpp)
-target_link_libraries(litepgo_tests PRIVATE litepgo::litepgo litepgo::warnings GTest::gtest_main)
+)
+target_link_libraries(litepgo_mesh_tests PRIVATE
+    litepgo::mesh litepgo::warnings GTest::gtest_main)
+add_dependencies(litepgo_tests litepgo_mesh_tests)
+gtest_discover_tests(litepgo_mesh_tests DISCOVERY_MODE PRE_TEST)
 
-gtest_discover_tests(litepgo_tests DISCOVERY_MODE PRE_TEST)
+add_executable(litepgo_contact_tests
+    contact/ipc_contact_energy_gtest.cpp
+    contact/broad_phase/broad_phase_gtest.cpp
+)
+target_link_libraries(litepgo_contact_tests PRIVATE
+    litepgo::contact litepgo::warnings GTest::gtest_main)
+add_dependencies(litepgo_tests litepgo_contact_tests)
+gtest_discover_tests(litepgo_contact_tests DISCOVERY_MODE PRE_TEST)
 
 # Run the standalone examples as loaded static-equilibrium regression tests.
 foreach(example tet_p1_corner_pull hex_q1_corner_pull hex_hermite_corner_pull shell_saddle_pull)
@@ -104,12 +173,11 @@ foreach(example tet_p1_plastic_twist hex_q1_plastic_twist hex_hermite_plastic_tw
     add_test(NAME FemPlasticTwist.${example} COMMAND $<TARGET_FILE:${example}>)
 endforeach()
 
-target_sources(litepgo_tests PRIVATE contact/ipc_contact_energy_gtest.cpp contact/broad_phase/broad_phase_gtest.cpp)
 add_dependencies(litepgo_tests tet_p1_box_stack)
 add_test(NAME ContactEquilibrium.tet_p1_box_stack COMMAND $<TARGET_FILE:tet_p1_box_stack>)
 if(LITEPGO_WITH_IPC_TOOLKIT)
-    target_sources(litepgo_tests PRIVATE contact/ipctk_contact_energy_gtest.cpp)
-    target_link_libraries(litepgo_tests PRIVATE litepgo::ipctk)
+    target_sources(litepgo_contact_tests PRIVATE contact/ipctk_contact_energy_gtest.cpp)
+    target_link_libraries(litepgo_contact_tests PRIVATE litepgo::ipctk)
 endif()
 
 add_dependencies(litepgo_tests spatial_query point_embedding)

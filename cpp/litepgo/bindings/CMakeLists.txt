@@ -82,7 +82,7 @@ nanobind_add_module(_core NB_STATIC
     solver/static_equilibrium_response.cpp
     spatial/spatial_hash.cpp
 )
-target_link_libraries(_core PRIVATE litepgo::io litepgo::litepgo litepgo::warnings)
+target_link_libraries(_core PRIVATE litepgo::contact litepgo::solver litepgo::fem litepgo::io litepgo::warnings)
 
 # The build tree holds an importable package: _core is built into it, and
 # litepgo_dev links the Python sources beside it and registers it with the
