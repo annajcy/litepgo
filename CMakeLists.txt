@@ -45,6 +45,7 @@ add_subdirectory(example/fem EXCLUDE_FROM_ALL)
 add_subdirectory(example/contact EXCLUDE_FROM_ALL)
 add_subdirectory(example/spatial EXCLUDE_FROM_ALL)
 add_subdirectory(example/energy EXCLUDE_FROM_ALL)
+add_subdirectory(example/response EXCLUDE_FROM_ALL)
 add_subdirectory(example/solver EXCLUDE_FROM_ALL)
 add_subdirectory(example/mesh EXCLUDE_FROM_ALL)
 

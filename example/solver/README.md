@@ -7,7 +7,7 @@ prints its result, and checks it numerically. C++ checks remain enabled in Relea
 | --- | --- | --- |
 | [`energy_composition`](../energy/energy_composition.cpp) / [Python](../energy/energy_composition.py) | `QuadraticEnergy`, `VertexPullingEnergy`, `WeightedEnergySum`, and `AffineMappedEnergy`; value, gradient, sparse Hessian | Direct agreement with the quadratic formula and chain rule |
 | [`newton_chain`](newton_chain.cpp) / [Python](newton_chain.py) | `DofReduction`, Newton tolerance, iteration callback, and convergence status | Six scalar displacements evenly spaced from 1 to 3 |
-| [`gauss_newton_fit`](gauss_newton_fit.cpp) / [Python](gauss_newton_fit.py) | Dense nonlinear least squares with an analytic Jacobian; residual-only trial evaluations | Amplitude 2.5 and decay rate 0.8 |
+| [`gauss_newton_fit`](gauss_newton_fit.cpp) / [Python](gauss_newton_fit.py) | Sparse nonlinear least squares with an analytic Jacobian; residual-only trial evaluations | Amplitude 2.5 and decay rate 0.8 |
 
 From the repository root, after configuring the release preset:
 
@@ -41,3 +41,21 @@ parameters provide a self-check. Convergence is based on `||Jᵀ r||∞`, which 
 not imply a zero residual for general data. This example does not impose parameter
 bounds. For a larger application with equilibrium sensitivities, see
 [`material_fit`](../fem/material_fit.py).
+
+Gauss–Newton accepts a `Response` object, not a bare callable. Both curve-fit
+examples derive from `FixedPatternResponse`, pass a 9-by-2 structural pattern
+to the base constructor, and override `eval_values` analytically. The native solver updates the pattern at current iterates
+and requests only values at trial points. Python evaluators return `(r, J)` when
+requested and `r` otherwise; `None` indicates an infeasible point. A dense or
+SciPy sparse Jacobian is accepted, but nonzero derivatives outside the declared
+pattern are errors. The solver uses sparse damped normal equations and reuses symbolic analysis while the pattern stays unchanged.
+
+The linear system is `(J.transpose() * J + damping * I) * step = -J.transpose() * r`.
+The default backend is `AutoSparseSolver`: Accelerate when enabled, otherwise
+MKL/PARDISO when enabled, otherwise Eigen. C++ accepts a fourth `SparseSolver&`
+argument; Python accepts `solver=...`. Failed numeric factorizations increase
+damping without repeating symbolic analysis. Normal equations can amplify
+conditioning problems and introduce fill-in; scale parameters and residuals.
+
+For defining your own fixed/dynamic Energy or Response subclasses, see the
+[base API examples](../response/README.md), including matching Python implementations.

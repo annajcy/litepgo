@@ -2,7 +2,7 @@
 
 [`laplacian_optimization.cpp`](laplacian_optimization.cpp) and its
 [Python mirror](laplacian_optimization.py) solve two classical geometry-processing
-problems using `StencilDofMap`, `MeshEnergy` (C++) / `BatchedMeshEnergy` (Python), `DofReduction`, and Newton. They generate the
+problems using `StencilDofMap`, `MeshEnergy` (C++ and Python), `DofReduction`, and Newton. They generate the
 same 9 × 9 triangulated square, so no asset download is needed.
 
 ## Objectives
@@ -107,57 +107,39 @@ For ARAP, `d = x_i-x_j` and `p = p_i-p_j`. This is exactly the directed-neighbor
 sum with prefactor `1/4`; both endpoint rotations contribute. Editing squares the
 whole one-ring sum, retaining cross terms between neighbors.
 
-C++ examples construct `MeshEnergy(map, eval_local)` and keep the straightforward
-single-term formulas. Python examples use `BatchedMeshEnergy(map, eval_batch,
-batch_size=256)` and NumPy operations across each batch. Both assemble identical
-local terms through the existing assembler.
+Both C++ and Python use the same batch-only MeshEnergy protocol.
 
-## BatchedMeshEnergy API
+## MeshEnergy API
 
-C++ includes `litepgo/energy/batched_mesh_energy.hpp`:
+C++ includes `litepgo/energy/mesh_energy.hpp`:
 
 ```cpp
-BatchedMeshEnergy energy(map, eval_batch, 256);
-BatchedMeshEnergy bounded(map, eval_batch, 256, step_batch);
+MeshEnergy energy(map, eval_batch, 256);
+MeshEnergy bounded(map, eval_batch, 256, step_batch);
 ```
 
-`map` is a `StencilDofMap`. `eval_batch(ids, x, gradient*, hessian*)` returns a
-`Vec` of per-term values. `ids` is `std::span<const int>`; `x` is a row-major
-`BatchMatrix` with shape `B × m`. Requested gradient outputs have shape `B × m`;
-Hessians have shape `(B*m) × m`, one contiguous block of `m` rows per term.
-Pointers are independently nullable. Resize and overwrite requested outputs.
-C++ input references are valid only during the callback.
+The callback `eval_batch(ids, x, gradient*, hessian*)` returns a Vec of
+per-element energies. Inputs are row-major matrices with shape (B, n);
+gradients have shape (B, n), Hessians (B*n, n), stacked in element order.
+Requested outputs must be fully overwritten; either pointer can be null.
 
-Python:
+Python uses `MeshEnergy(map, eval_batch, batch_size=256, step=None)`.
+The callback `eval_batch(ids, x, need_gradient, need_hessian)` returns
+(values, gradients, hessians) with the same shapes as C++; unrequested
+derivatives may be None. Python inputs own their storage and may be retained.
+Reshape x explicitly inside the callback if a vertex/component layout is useful.
 
-```python
-potential = BatchedMeshEnergy(mapping, eval_batch, batch_size=256, step=None)
+Elements are grouped by DOF count. TBB concurrently evaluates batches, then
+EnergyAssembler assembles derivatives in deterministic element order. Callbacks
+must safely share captured state and must not depend on invocation order.
+Python callbacks acquire the GIL; parallel speedup depends on work that releases it.
+Projection is per element and writes back into each batch Hessian block.
+MeshEnergy reuses batch storage; EnergyAssembler reads non-owning strided views
+directly, without repacking derivatives into per-element matrices.
+Batch size 1 preserves all batch dimensions and uses the same execution path.
 
-def eval_batch(ids, x, need_gradient, need_hessian):
-    # ids: (B,), original term IDs
-    # x: (B,k,d), m = k*d
-    return values, gradients, hessians
-```
+Optional step(ids, x, dx) returns B finite bounds in [0,1]; the global bound
+is their minimum. Step callbacks can also run concurrently.
+Maps are snapshotted at construction. Batch size does not cap total assembly memory.
 
-Return shapes are `(B,)`, `(B,m)`, `(B,m,m)`; unrequested derivatives may be
-`None`. Noncontiguous and broadcast arrays are accepted. Inputs own their storage
-and may be retained. Every term returns its full energy including weights and
-constants. Derivative order is vertex-major, regardless of Eigen storage order.
-
-Construction groups stencils by length and splits groups into at most `batch_size`
-terms. IDs remain the original term IDs. Batches execute serially; assembly uses
-original term order, and projected Hessians are projected per term, not per batch.
-Malformed shapes, missing requested derivatives and nonfinite outputs raise errors.
-Callbacks must not mutate captured parameters during evaluation.
-
-Optional `step(ids, x, dx)` returns `(B,)` safe inclusive bounds in `[0,1]`;
-the C++ version takes two batch matrices and returns a `Vec`. The global bound
-is their minimum. Reject infeasible starting states. Omit the callback only when
-the energy is feasible along every finite segment.
-
-The initial implementation uses `MeshEnergy` internally to reuse validation,
-projection, and assembly. This retains per-term derivative buffers and performs
-an additional gather/copy pass; `batch_size` does not cap total assembly memory.
-There is no Hessian or factorization cache. The original Python `MeshEnergy`
-callback remains available for prototyping, but these examples use batched calls
-to avoid one Python invocation per term.
+The separate BatchedMeshEnergy class and scalar-element callback were removed.

@@ -175,7 +175,7 @@ using Q = litepgo::fem::TriangleCentroidQuadrature;
 
 `TriangleCentroidQuadrature` samples `(1/3,1/3)` with weight `1/2`, including the reference triangle's area, and integrates polynomials through degree 1 exactly. Multiply that weight by `norm(X_xi.cross(X_eta))` for the physical reference-area weight; the result is the triangle's area, without another factor of `1/2`. The square rules `GaussLegendre2D` use a different reference domain.
 
-The element callback chooses the geometric measure. For a three-component surface coordinate field, its 3-by-2 derivative supplies reference area `norm(X_xi.cross(X_eta))`; pass this times the quadrature weight to `LocalEnergy2D::accumulate`. `MeshEnergy` and the DOF assembler already accept these elements. The deformation field `DeformationGradientField3D` and the material energies `VolumetricMaterialLocalEnergyF3D`, `VolumetricMaterialLocalEnergyFp3D`, and `VolumetricMaterialLocalEnergyTheta3D` are 3D solid APIs. Triangle mid-edge Koiter shells use `ShellMaterialLocalEnergy2D<KoiterStVK>` as described below.
+The element callback chooses the geometric measure. For a three-component surface coordinate field, its 3-by-2 derivative supplies reference area `norm(X_xi.cross(X_eta))`; pass this times the quadrature weight to `LocalEnergy2D::accumulate`. `MeshEnergy` and the DOF assembler already accept these elements. The deformation field `DeformationGradientField3D` and the material energy `VolumetricMaterialLocalEnergyF3D` are 3D solid APIs. Triangle mid-edge Koiter shells use `ShellMaterialLocalEnergy2D<KoiterStVK>` as described below.
 
 Material input fields inherit `Field3D`. Only the selected active field needs usable coefficient derivatives and a positive DOF count; inactive fields may report zero DOFs and throw from unsupported derivatives. The active map must be affine in its coefficients. Custom affine parameter fields may have a coefficient count different from their number of output components.
 
@@ -222,7 +222,7 @@ The implementation obtains `eval_dgrad_xi_dcoeffs(xi)` from the displacement fie
 
 `F`, `Fp`, and `Fe = F * inverse(Fp)` are 3-by-3 total, plastic, and elastic deformation gradients. `theta` is a pointwise material parameter vector; Neo-Hookean uses `[lambda, mu]`. Its energy density per original rest volume is `W = det_Fp * psi`, with `psi` measured per plastic intermediate volume.
 
-Material APIs keep numerical `VolumetricMaterialInputs{F, Fp, theta}`. They do not sample fields or select quadrature. `eval_W` returns the density. `eval_dW_dF` and `eval_dW_dFp` return 3-by-3 matrices; their Hessians `eval_d2W_dF2` and `eval_d2W_dFp2` are 9-by-9 over column-major vectorization. `eval_dW_dtheta` and `eval_d2W_dtheta2` differentiate the pointwise parameter vector. Elastic derivative helpers use `eval_dpsi_dFe` and `eval_d2psi_dFe2`; inverse/determinant variables use `inv_Fp`, `inv_Fe_T`, `det_Fe`, `det_Fp`, and `log_det_Fe`. Directional changes use `delta_`; optimizer steps retain `dx` and `dx_local`.
+Material APIs keep numerical `VolumetricMaterialInputs{F, Fp, theta}`. They do not sample fields or select quadrature. `eval_W` returns the density. `eval_dW_dF` returns the 3-by-3 stress and `eval_d2W_dF2` the 9-by-9 tangent over column-major vectorization. `eval_d2W_dF_dtheta` differentiates stress with respect to the pointwise parameter vector for material force responses. Elastic derivative helpers use `eval_dpsi_dFe` and `eval_d2psi_dFe2`; inverse/determinant variables use `inv_Fp`, `inv_Fe_T`, `det_Fe`, `det_Fp`, and `log_det_Fe`. Directional changes use `delta_`; optimizer steps retain `dx` and `dx_local`.
 
 `VolumetricElement3D<Q>` in `fem/kinematics/volumetric_element.hpp` owns fixed
 reference geometry and integrates a supplied `LocalEnergy3D`. Its only template
@@ -269,13 +269,13 @@ The three solid examples use `VolumetricFemEnergy`, which owns separate vectors 
 
 `GaussLegendre3D<PointsPerAxis>` uses `PointsPerAxis^3` integration points on `[0,1]^3`; `<2>` therefore uses eight points.
 
-`VolumetricMaterialLocalEnergyF3D<Material>`, `VolumetricMaterialLocalEnergyFp3D<Material>`, and `VolumetricMaterialLocalEnergyTheta3D<Material>` select the active input by their class name. Each constructor accepts `(F_field, Fp_field, theta_field)` as three `const Field3D&` inputs. The abstract `VolumetricMaterialLocalEnergy3D<Material>` base shares input validation, density evaluation and coefficient pullbacks; each concrete class chooses its active field and calls the matching material gradient and Hessian. There is no runtime activity enum. A material only needs to implement `eval_W` and the derivative pair used by the selected class.
+`VolumetricMaterialLocalEnergyF3D<Material>` differentiates with respect to the F field's coefficients, holding Fp and theta fixed. Its constructor accepts `(F_field, Fp_field, theta_field)` as three `const Field3D&` inputs. The abstract `VolumetricMaterialLocalEnergy3D<Material>` base supplies density evaluation and coefficient pullbacks. A material implements `eval_W`, `eval_dW_dF` and `eval_d2W_dF2`. Pure Fp/parameter energy derivatives and their LocalEnergy wrappers are not exposed; parameter fitting uses the material force response.
 
-All three input fields must outlive the energy, and temporary input fields are rejected. A copied energy borrows the same fields, so subsequent field updates are visible. A composed `F` field activates displacement coefficients; direct `F` or `Fp` coefficients can use a nine-component `IdentityField3D`. Non-positive active DOF counts are rejected at construction.
+All three input fields must outlive the energy, and temporary input fields are rejected. A copied energy borrows the same fields, so subsequent field updates are visible. A composed `F` field activates displacement coefficients; direct `F` coefficients can use a nine-component `IdentityField3D`. Non-positive active DOF counts are rejected at construction.
 
 `local_energy.eval_feasible_step(xi, delta_coeffs)` maps the coefficient direction
-through the active field's `eval_dvalue_dcoeffs`, places the increment in `F`, `Fp`,
-or `theta`, and calls `Material::eval_feasible_step(inputs, delta_inputs)`. Inactive
+through the F field's `eval_dvalue_dcoeffs`, places the increment in `F`,
+and calls `Material::eval_feasible_step(inputs, delta_inputs)`. Inactive
 input increments are zero. This method is available for materials that supply the
 pointwise step API; other materials can still use the existing value and derivative
 APIs. Direction coefficients use the same packing as gradients and Hessians.
@@ -328,7 +328,7 @@ $$
 g=D^T\operatorname{vec}(W_{,y}),\qquad H=D^TW_{,yy}D.
 $$
 
-Names distinguish pointwise `dW_du_local`, `d2W_du_local2` from integrated `dE_du_local`, `d2E_du_local2`. `dW_dtheta` and `dW_dtheta_local` have different denominators. The generic `MeshEnergy` boundary returns `dE_dx_local` and `d2E_dx_local2` for exactly the gathered unknowns.
+Names distinguish pointwise `dW_du_local`, `d2W_du_local2` from integrated `dE_du_local`, `d2E_du_local2`. The generic `MeshEnergy` boundary returns `dE_dx_local` and `d2E_dx_local2` for exactly the gathered unknowns.
 
 ## Triangle mid-edge stencil DOFs
 
@@ -348,7 +348,7 @@ const litepgo::fem::InterpolatedField2D<litepgo::fem::TriangleP1Basis> u_field(u
 
 For each triangle `f`, `stencils.vertices[f]` starts with its three vertices in connectivity order. Edge `k` joins local face vertices `(k+1)%3` and `(k+2)%3`. Opposite vertices across edges `0,1,2` are appended in that order, with shared opposite vertices included only once. A face therefore has 3 to 6 stencil vertices. `stencils.opposite[f][k]` is the neighbor's opposite vertex row in the gathered matrix; `-1` denotes a boundary edge and is never a global DOF. The builder rejects duplicate faces, inconsistent shared-edge directions, and edges with more than two incident faces. It does not choose a boundary curvature rule or validate geometry.
 
-For the existing triangle mid-edge material model, use `ShellFemEnergy<Material>`. For a custom model, use `MeshEnergy(map, eval_face, step_face)` directly. Its callback receives the full stencil matrix, including neighbors, and returns only the central face's integrated energy. For `n` stencil vertices, requested outputs must overwrite all `3*n` gradient entries and the full `3*n`-by-`3*n` Hessian, including zero entries. `MeshEnergy` includes all stencil couplings in its fixed sparse pattern. Capture reference stencil positions and opposite-row metadata by value or through owned shared data. A shell callback must provide its own geometric feasibility step. Curvature reconstruction and Koiter energy remain separate from this DOF map.
+For the existing triangle mid-edge material model, use `ShellFemEnergy<Material>`. For a custom model, use `MeshEnergy(map, eval_batch, 256, step_batch)` directly. Its batch callback receives flattened stencil rows (B, 3*n), including neighbors, and returns one integrated central-face energy per row. Gradients are (B, 3*n), Hessians (B*3*n, 3*n). Callbacks may run concurrently. For `n` stencil vertices, requested outputs must overwrite all `3*n` gradient entries and the full `3*n`-by-`3*n` Hessian, including zero entries. `MeshEnergy` includes all stencil couplings in its fixed sparse pattern. Capture reference stencil positions and opposite-row metadata by value or through owned shared data. A shell callback must provide its own geometric feasibility step. Curvature reconstruction and Koiter energy remain separate from this DOF map.
 
 ## Triangle mid-edge kinematics
 
@@ -482,12 +482,12 @@ Use explicit `2D` / `3D` names for dimension-specific types. The dimensionless n
 | `fem/material/{shell_material_inputs,koiter_stvk}.*` | Same filenames under `fem/material/shell/` |
 | `fem/local/volumetric_material_local_energy.hpp` or `fem/local/volumetric/volumetric_material_local_energy.hpp` | `fem/material/volumetric/volumetric_material_local_energy.hpp` |
 | `fem/local/shell_material_local_energy.hpp` or `fem/local/shell/shell_material_local_energy.hpp` | `fem/material/shell/shell_material_local_energy.hpp` |
-| `MaterialLocalEnergy3D` and `MaterialLocalEnergyF3D/Fp3D/Theta3D` | `VolumetricMaterialLocalEnergy3D` and `VolumetricMaterialLocalEnergyF3D/Fp3D/Theta3D` |
-| `MaterialLocalEnergy3D<Material>(F, Fp, theta, active)` or `make_material_local_energy<Material, Active>` | `VolumetricMaterialLocalEnergyF3D`, `VolumetricMaterialLocalEnergyFp3D`, or `VolumetricMaterialLocalEnergyTheta3D`, with named `Field3D` inputs |
+| `MaterialLocalEnergy3D` and `MaterialLocalEnergyF3D/Fp3D/Theta3D` | `VolumetricMaterialLocalEnergy3D` and `VolumetricMaterialLocalEnergyF3D`; Fp/Theta energy wrappers were removed |
+| `MaterialLocalEnergy3D<Material>(F, Fp, theta, active)` or `make_material_local_energy<Material, Active>` | `VolumetricMaterialLocalEnergyF3D`, with named `Field3D` inputs; parameter fitting uses `VolumetricFemForceMaterialResponse` |
 | Volume integration helper | `VolumetricElement3D<Q>::eval(local_energy, ...)`; custom loops can still use `local_energy.accumulate` |
 | `B::evaluate(xi)` and `Basis::Sample` | `B::eval_N(xi)`, `B::eval_dN_dxi(xi)`, `B::eval_d2N_dxi2(xi)` |
 | `RestPointData::position`, `jacobian`, `inverse_jacobian`, `jacobian_determinant` | Field3D values, coordinate Jacobians, their inverses, and their determinants |
-| Material `gradient_F`, `hessian_F` and corresponding `Fp`/`theta` names | `eval_dW_dF`, `eval_d2W_dF2` and corresponding names |
+| Material `gradient_F`, `hessian_F` and corresponding `Fp`/`theta` names | `eval_dW_dF`, `eval_d2W_dF2`; pure Fp/theta derivatives were removed |
 
 Custom solid-material inputs inherit `Field3D` and implement the value and affine coefficient protocol above. Material local energies borrow their three input fields; composed deformation fields in turn borrow displacement and coordinate fields. All referenced objects must remain alive during evaluation. Scope remains one active affine coefficient block with fixed rest geometry; coordinate optimization, mixed active-block Hessians, and `dF_dxi` are not implemented.
 
@@ -532,7 +532,7 @@ tolerance returns a nonzero exit code.
 CTest runs all four executables as equilibrium regressions; the existing unit tests
 retain the analytical stretch and derivative checks.
 
-Tests cover row/column packing, coefficient and physical finite differences, warped coordinate mappings, different displacement/coordinate bases, direct and derived deformation inputs, all active material inputs, shared/element/global DOF assembly, coefficient ownership, coefficient-transform validation, unsupported capabilities, and pointwise evaluation counts. Basis and interpolated-field tests also verify that unrequested quantities are not evaluated. Feasible-segment tests cover polynomial degree reduction, interior and repeated determinant roots, material parameter bounds, and physical Hermite directions. Constrained Newton relaxation is exercised by both tet and shell tests.
+Tests cover row/column packing, coefficient and physical finite differences, warped coordinate mappings, different displacement/coordinate bases, direct and derived deformation inputs, active displacement and passive material/plastic fields, shared/element/global DOF assembly, coefficient ownership, coefficient-transform validation, unsupported capabilities, and pointwise evaluation counts. Basis and interpolated-field tests also verify that unrequested quantities are not evaluated. Feasible-segment tests cover polynomial degree reduction, interior and repeated determinant roots, material parameter bounds, and physical Hermite directions. Constrained Newton relaxation is exercised by both tet and shell tests.
 
 Element tests compare energy, both derivatives, and feasible steps against explicit quadrature integration for Tet P1, warped Hex Q1, and Hermite displacement with Q1 geometry. They also check directional finite differences, fixed integration weights, live material fields, independent output requests, construction-time geometry validation, non-material local energies with arbitrary DOF counts, and numerical overflow.
 
@@ -621,7 +621,7 @@ the loading direction. Synthetic observations use `(lambda, mu) = (2, 3)`, `Fp =
 The fit starts at `(1, 1)` and optimizes log parameters. Each residual evaluation
 rebuilds the material snapshot and solves equilibrium from the same initial state.
 Residuals are divided by fixed observed force magnitudes. The public
-`solver::gauss_newton_solve` receives residuals and their analytic Jacobian;
+`solver::gauss_newton_solve` receives a `FixedPatternResponse` residual object;
 no finite differences are used. For Fp=I, the example assembles mixed derivatives
 from dP/dlambda = log(det F) F^-T and dP/dmu = F - F^-T, then solves
 K_ff du_f/dtheta = -B_f using the exact Hessian. Reaction derivatives are the
@@ -629,7 +629,7 @@ loaded-face sum of B + K du/dtheta. Row scaling and theta's diagonal apply the
 normalization and log-parameter chain rule. Sensitivity equation residuals and
 the stiffness scaling identity (dR/dtheta) theta = R are checked.
 
-The solver uses augmented dense QR for damped Gauss-Newton steps, requesting
+The solver uses sparse damped normal equations for damped Gauss-Newton steps, requesting
 Jacobian evaluations only at accepted states. Convergence uses ||J^T r||_inf;
 trial domain errors are rejected, while callback contract violations propagate.
 Only strictly positive material parameters are represented in this example.
@@ -642,9 +642,199 @@ validates the implementation, not real-world material identifiability.
 
 The Python mirror runs with `uv run --no-sync python example/fem/material_fit.py`.
 It uses the same native Gauss-Newton solver and analytic FEM sensitivities.
-Python `residual(x, need_jacobian)` returns `(r, J)` when the flag is true,
+The Python response evaluator `residual(x, need_jacobian)` returns `(r, J)` when the flag is true,
 otherwise just `r`. Return `None` to mark an infeasible point: trial points are
 rejected and a current-point failure raises `ValueError`. Python exceptions
 propagate unchanged, so programming errors are not silently treated as rejected
 steps. Callback inputs own their data and may be retained after the call.
 `GaussNewtonOptions`, `GaussNewtonStatus`, and `GaussNewtonResult` mirror C++.
+
+Gauss-Newton now accepts only a `Response` object in C++ and Python. Derive from
+`FixedPatternResponse(pattern)` and override `eval_values`; the pattern
+must include every potentially nonzero derivative, even entries currently zero.
+C++ evaluators write into the supplied sparse Jacobian without changing its
+structure. Python evaluators may return dense or sparse Jacobians; declared
+structural zeros are retained. `num_inputs` and `num_outputs` come from the
+pattern's columns and rows. Standalone derivative calls require `update_pattern`
+first; the solver manages this automatically at current iterates. Responses
+return vectors, and the solver interprets those vectors as residuals targeting
+zero. Jacobians remain sparse through the normal-equation solve; symbolic analysis is reused until the normal-matrix pattern changes.
+
+### Local force responses
+
+`LocalResponseT<2/3>` mirrors `LocalEnergyT<2/3>` with `num_inputs()`,
+`num_outputs()`, `eval_value(xi)`, `has_jacobian()` and `eval_jacobian(xi)`.
+Jacobians have output rows and input columns. `has_jacobian()` defaults to false;
+unsupported derivative requests throw. Coefficients live in fields; `xi` is a
+reference coordinate, not the optimization vector.
+
+Both accumulation entry points are retained:
+
+- `accumulate(xi, weight, value, J)` adds into initialized, correctly sized,
+  non-aliasing buffers without resizing, validating coordinates, weight and results.
+- `accumulate_for_integration(...)` defaults to `accumulate`. Material responses
+  override it to skip redundant finite scans. The integrator guarantees finite
+  coordinates/weights and checks completed outputs for dimensions and finiteness.
+  This fast path is for integrators, not unchecked standalone evaluation.
+
+`VolumetricMaterialForceLocalResponse3D<NeoHookean>(F, Fp, theta)` computes
+
+```
+r = D_F.T * vec(P)
+J = D_F.T * (d vec(P) / d theta) * D_theta
+```
+
+`D_F` and `D_theta` come from the respective fields' `eval_dvalue_dcoeffs`.
+F, Fp and D_F are held fixed while theta's coefficients vary. The output dimension
+is `F.num_dofs()`, and the input dimension is `theta.num_dofs()`. With
+`DeformationGradientField3D`, r is the positive nodal-force density; with an
+identity F field it is the nine stress components. Stress flattens by column;
+coefficient columns follow the fields' declared order (interpolated coefficients
+flatten by row). Shared/constant and interpolated parameter fields use the same
+implementation. No Hessian, equilibrium solve or plastic evolution derivative is
+included. Inputs must remain independent under theta variations.
+
+`VolumetricElement3D` now overloads `eval` for a `LocalResponse3D`. It applies
+quadrature weights and the reference geometry determinant exactly once:
+
+```cpp
+VolumetricMaterialForceLocalResponse3D<NeoHookean> local(F, Fp, theta);
+VolumetricElement3D<TetCentroidQuadrature> element(X);
+Eigen::MatrixXd B;
+Eigen::VectorXd force = element.eval(local, &B);
+```
+
+F, Fp and theta must outlive the C++ response; constructors reject temporary
+fields. Python bindings keep their fields alive:
+
+```python
+Local = fem.VolumetricMaterialForceLocalResponse3D[fem.NeoHookean]
+local = Local(F, Fp, theta)
+value = local.eval_value(xi)
+J = local.eval_jacobian(xi)
+weighted_value, weighted_J = local.accumulate(xi, weight, jacobian=True)
+force, B = element.eval(local, jacobian=True)
+```
+
+Python `accumulate` returns fresh weighted arrays, matching the LocalEnergy Python
+convention. Native C++ `accumulate` adds to caller-owned buffers. No mesh-level
+material-response wrapper is added by this local interface.
+
+### Mesh material-force response
+
+`VolumetricFemForceMaterialResponse<Material, UBasis, Q, XField, FpField>`
+connects the local force response, element integration and batched response
+assembly. It derives from `FixedPatternResponse`; the input vector contains
+material parameters, not displacements. Its constructor is
+
+```cpp
+Force(parameter_map, displacement_map, rest_position_fields,
+      displacement, Fp_fields, batch_size = 256);
+```
+
+Parameter maps must be `ConstantDofMap` or `ElementDofMap`, with
+`Material::num_parameters` entries per element. All maps/field arrays must describe
+the same elements in the same order. The API checks counts and dimensions; it
+cannot infer mesh identity. The displacement vector is copied. Fields are owned
+by value (Python fields share ownership); borrowed dependencies must remain alive
+and fields must remain unchanged. Rebuild the response when the prescribed state
+changes. Batch callbacks evaluate the native local response; TBB parallelizes
+batch evaluation and assembly. Geometry integration is cached, but constitutive values and
+Jacobians are evaluated afresh at each requested theta; no linear-material
+assumption is built into the wrapper.
+
+Python binds the same basis/quadrature combinations as `VolumetricFemEnergy`:
+TetP1 with TetCentroidQuadrature, and HexQ1/HexHermite with GaussLegendre3D[2]
+or GaussLegendre3D[4]. For example:
+
+```python
+Force = fem.VolumetricFemForceMaterialResponse[
+    fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
+force = Force(dof.ConstantDofMap(topology, 2), displacement_map,
+              rest_position_fields, displacement, Fp_fields, batch_size=256)
+g, B = force.eval(theta, need_jacobian=True)
+```
+
+`example/response/mesh_response.{cpp,py}` now fits this force response directly.
+`material_fit.{cpp,py}` also uses it for B at each solved equilibrium state, then
+retains the existing sensitivity solve to include the effect of equilibrium
+changes. B alone is the fixed-state partial derivative, not that total derivative.
+
+
+### C++ integration into batch output views
+
+`VolumetricElement3D::eval_into(local, gradient_view, hessian_view)` overwrites
+pre-sized, independently optional `StridedVecRef` / `StridedMatRef` outputs.
+They may reference padded matrix blocks; storage must remain alive and must not
+alias the local energy's inputs. Built-in volumetric materials implement
+`LocalEnergy::accumulate_into` to accumulate directly into these views.
+The default implementation preserves existing custom accumulation overrides
+through owning temporaries. The existing owning `eval` and `accumulate`
+interfaces remain available. Volumetric and shell mesh callbacks write batch
+outputs directly, and the assembler reads those same buffers.
+
+## Force response with plastic coefficients
+
+`NeoHookean::eval_d2W_dF_dFp(inputs)` returns the analytic 9-by-9 derivative
+of `vec(P)` with respect to `vec(Fp)` at fixed F and theta. Both vectors use
+column-major order (`i + 3*j`). It includes the derivative of `det(Fp)` in
+`W = det(Fp) * psi(F * inverse(Fp))`; it is generally neither symmetric nor
+simply the negative elastic tangent.
+
+`VolumetricFpForceLocalResponse3D<Material>(F, Fp, theta)` returns the same
+positive force density as the material-parameter response, with Jacobian
+
+```text
+value = D_F.T * vec(P)
+J = D_F.T * (d vec(P) / d vec(Fp)) * D_Fp
+```
+
+F, theta and D_F stay fixed. Fp may be any affine Field3D with nine components;
+its coefficient count need not be nine. All three fields must outlive the local
+response. `VolumetricElement3D::eval` and `eval_into` apply reference quadrature
+and geometry exactly as for material force responses.
+
+The mesh wrapper `VolumetricFemForceFpResponse<Material, UBasis, Q,
+XField, ThetaField>` takes `(parameter_map, displacement_map,
+rest_position_fields, displacement, theta_fields, batch_size=256)`.
+It uses nine column-major Fp entries per element (`ElementDofMap`) or a single
+shared block (`ConstantDofMap`). Displacement is copied; field ownership and
+borrowed-dependency rules match `VolumetricFemForceMaterialResponse`.
+The input Fp is spatially constant inside each element; theta fields may vary.
+Both mesh wrappers use the same batch/view/TBB path and `BasisDofTransform<UBasis>`
+as Energy. TetP1 and HexQ1 use three displacement DOFs per vertex; HexHermite uses
+24 physical DOFs per vertex and requires positive axis-aligned affine reference
+boxes, just as Energy does. The geometry field may use a different basis.
+For coefficient map `c = T u_e`, force and parameter Jacobian are pulled back as
+`g_u = T.T g_c` and `J_u = T.T J_c`. Only output rows are transformed; parameters
+remain in their original coordinates. `pullback_response_into` writes these
+results directly into batch views. Custom bases require a matching
+`BasisDofTransform` specialization, including this response pullback.
+
+```cpp
+#include "litepgo/fem/volumetric_fem_force_fp_response.hpp"
+
+using PlasticForce = fem::VolumetricFemForceFpResponse<
+    fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature,
+    fem::InterpolatedField3D<fem::TetP1Basis>, fem::IdentityField3D>;
+PlasticForce response(dof::ElementDofMap(topology, 9), displacement_map,
+                      geometry, displacement, theta_fields);
+Vec force = response.eval_value(plastic_coefficients);
+SpMat jacobian = response.eval_jacobian(plastic_coefficients);
+```
+
+```python
+PlasticForce = fem.VolumetricFemForceFpResponse[
+    fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
+response = PlasticForce(dof.ElementDofMap(topology, 9), displacement_map,
+                        geometry, displacement, theta=theta_fields)
+p = np.concatenate([Fp.ravel(order="F") for Fp in plastic_matrices])
+force, J = response.eval(p, need_jacobian=True)
+```
+
+Invalid or inverted plastic states raise the same errors as NeoHookean; a later
+valid evaluation is supported. This response neither solves equilibrium nor
+updates plastic history. Identification requires a residual such as
+`force - observed_force`; restrictions or regularization on Fp belong in that
+inverse problem. The tests include a one-parameter plastic-scale fit through
+Gauss–Newton, avoiding an assumption that all nine entries are identifiable.
