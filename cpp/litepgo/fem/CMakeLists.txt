@@ -16,5 +16,5 @@ add_library(litepgo_fem STATIC
 )
 add_library(litepgo::fem ALIAS litepgo_fem)
 target_link_libraries(litepgo_fem
-    PUBLIC litepgo::energy litepgo::dof litepgo::mesh litepgo::spatial litepgo::core
+    PUBLIC litepgo::energy litepgo::dof litepgo::mesh litepgo::spatial litepgo::common
     PRIVATE litepgo::warnings)

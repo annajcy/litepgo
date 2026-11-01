@@ -1,5 +1,5 @@
 #pragma once
-#include "litepgo/core/types.hpp"
+#include "litepgo/common/types.hpp"
 #include <atomic>
 #include <optional>
 

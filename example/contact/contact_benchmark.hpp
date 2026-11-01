@@ -3,7 +3,7 @@
 #include "litepgo/contact/broad_phase/spatial_hash.hpp"
 
 #include "litepgo/contact/ipctk_contact_energy.hpp"
-#include "litepgo/core/build_info.hpp"
+#include "litepgo/common/build_info.hpp"
 #include <chrono>
 #include <fstream>
 #include <iomanip>

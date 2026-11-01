@@ -41,15 +41,15 @@ Each module owns its source list in `cpp/litepgo/<module>/CMakeLists.txt`.
 
 | Target | Type | Direct litepgo module dependencies |
 | --- | --- | --- |
-| `litepgo::core` | Header-only | None |
-| `litepgo::spatial` | Header-only | core |
-| `litepgo::linalg` | Static | core; optional Accelerate/MKL backends |
-| `litepgo::mesh` | Static | core |
-| `litepgo::dof` | Static | core, linalg, mesh |
-| `litepgo::energy` | Static | core, dof, linalg |
-| `litepgo::fem` | Static | core, dof, energy, mesh, spatial |
-| `litepgo::solver` | Static | core, dof, energy, linalg |
-| `litepgo::contact` | Static | core, energy, mesh, spatial |
+| `litepgo::common` | Header-only | None |
+| `litepgo::spatial` | Header-only | common |
+| `litepgo::linalg` | Static | common; optional Accelerate/MKL backends |
+| `litepgo::mesh` | Static | common |
+| `litepgo::dof` | Static | common, linalg, mesh |
+| `litepgo::energy` | Static | common, dof, linalg |
+| `litepgo::fem` | Static | common, dof, energy, mesh, spatial |
+| `litepgo::solver` | Static | common, dof, energy, linalg |
+| `litepgo::contact` | Static | common, energy, mesh, spatial |
 | `litepgo::io` | Static | mesh |
 | `litepgo::io_gmsh` (optional) | Static | io |
 | `litepgo::ipctk` (optional) | Static | contact |
@@ -86,18 +86,27 @@ Edits to existing `.py` files take effect without a rebuild; adding or removing 
 
 ## clangd
 
-Configuring a preset links `compile_commands.json` at the repository root to that build's database (the last preset configured wins). It covers the core, tests, and bindings. `asan` leaves the link alone, since it has no bindings.
+Configuring a preset links `compile_commands.json` at the repository root to that build's database (the last preset configured wins). It covers the library, tests, and bindings. `asan` leaves the link alone, since it has no bindings.
 
 ## Namespaces
 
-Each directory under `cpp/litepgo` is a module with its own namespace:
-`litepgo::dof`, `energy`, `fem`, `linalg`, `mesh`, `solver`. Mesh file I/O
-(`mesh/io`) is part of `litepgo::mesh`. `core`
-(`Vec`, `SpMat`, ...) stays in the root `litepgo` namespace, so every module
-sees it unqualified; names from other modules are written `module::Name`.
+Domain modules have their own namespaces, such as `litepgo::dof`,
+`litepgo::energy`, `litepgo::fem`, `litepgo::linalg`, `litepgo::mesh` and
+`litepgo::solver`. Mesh file I/O (`mesh/io`) is part of `litepgo::mesh`.
+
+`common/` groups shared infrastructure; it does not define a public
+`litepgo::common` API. Fundamental types (`Vec`, `SpMat`, vector references),
+`BuildInfo` and `build_info()` stay in the root `litepgo` namespace.
+Internal helpers `BusyScope` and `overlaps()` live in `litepgo::detail`.
+The header paths are `litepgo/common/*.hpp`, and their CMake target is
+`litepgo::common`; the former `core/` paths and `litepgo::core` target are removed.
+
 Python bindings for module `m` live in `litepgo::m::binding` and fill the
-Python submodule `litepgo.m`; C++ tests for it are in `litepgo::m::test` (core:
-`litepgo::test`; example fixtures: `litepgo::example::test`).
+Python submodule `litepgo.m`. The common binding lives in
+`litepgo::common::binding` but exposes `build_info` on the native module root;
+the public Python call remains `litepgo.build_info()`.
+C++ tests use `litepgo::m::test`, except common tests (`litepgo::test`) and
+example fixtures (`litepgo::example::test`).
 
 ## Formatting
 
@@ -111,7 +120,7 @@ git ls-files '*.h' '*.hpp' '*.cpp' | xargs uv run --no-sync clang-format -i
 
 The `litepgo::io` CMake target provides `litepgo::mesh::read_obj/write_obj`
 and `read_veg/write_veg`. Include `litepgo/mesh/io/obj.hpp` or `veg.hpp`.
-The core library's `litepgo/mesh/extract_surface.hpp` provides `litepgo::mesh::extract_surface(mesh)`:
+The mesh module's `litepgo/mesh/extract_surface.hpp` provides `litepgo::mesh::extract_surface(mesh)`:
 the boundary of a conforming tet or hex mesh as outward-wound triangles (hex quads are split), keeping only
 boundary vertices in their original order. Write it with `write_obj` to view a
 volume mesh as a surface.

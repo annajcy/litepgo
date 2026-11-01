@@ -1,6 +1,6 @@
 #include "litepgo/dof/dof_reduction.hpp"
 
-#include "litepgo/core/memory.hpp"
+#include "litepgo/common/memory.hpp"
 #include "litepgo/dof/reduced_matrix.hpp"
 
 #include <algorithm>
@@ -47,7 +47,7 @@ void DofReduction::reduce(const ConstVecRef& full, VecRef reduced) const {
     if (full.size() != num_dofs_ || reduced.size() != num_free()) {
         throw std::invalid_argument("DofReduction::reduce vector sizes must be num_dofs and num_free");
     }
-    if (overlaps(full.data(), full.size(), reduced.data(), reduced.size())) {
+    if (::litepgo::detail::overlaps(full.data(), full.size(), reduced.data(), reduced.size())) {
         throw std::invalid_argument("DofReduction::reduce requires full and reduced not to overlap");
     }
     for (int i = 0; i < num_free(); ++i) {
@@ -65,7 +65,7 @@ void DofReduction::expand(const ConstVecRef& reduced, VecRef full) const {
     if (reduced.size() != num_free() || full.size() != num_dofs_) {
         throw std::invalid_argument("DofReduction::expand vector sizes must be num_free and num_dofs");
     }
-    if (overlaps(reduced.data(), reduced.size(), full.data(), full.size())) {
+    if (::litepgo::detail::overlaps(reduced.data(), reduced.size(), full.data(), full.size())) {
         throw std::invalid_argument("DofReduction::expand requires reduced and full not to overlap");
     }
     for (int i = 0; i < num_free(); ++i) {

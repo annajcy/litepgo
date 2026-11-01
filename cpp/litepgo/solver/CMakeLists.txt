@@ -5,5 +5,5 @@ add_library(litepgo_solver STATIC
 )
 add_library(litepgo::solver ALIAS litepgo_solver)
 target_link_libraries(litepgo_solver
-    PUBLIC litepgo::energy litepgo::dof litepgo::linalg litepgo::core
+    PUBLIC litepgo::energy litepgo::dof litepgo::linalg litepgo::common
     PRIVATE litepgo::warnings)

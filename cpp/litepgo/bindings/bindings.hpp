@@ -105,6 +105,6 @@ void bind_ipc_contact_energy(nanobind::module_& m);
 void bind_ipctk_contact_energy(nanobind::module_& m);
 } // namespace litepgo::contact::binding
 
-namespace litepgo::core::binding {
+namespace litepgo::common::binding {
 void bind_build_info(nanobind::module_& m);
 }

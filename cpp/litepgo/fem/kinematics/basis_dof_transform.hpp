@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/core/types.hpp"
+#include "litepgo/common/types.hpp"
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"

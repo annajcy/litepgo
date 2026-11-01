@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/core/types.hpp"
+#include "litepgo/common/types.hpp"
 #include "litepgo/dof/dof_reduction.hpp"
 
 #include <vector>

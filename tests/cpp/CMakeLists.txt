@@ -121,16 +121,16 @@ target_link_libraries(litepgo_examples_tests PRIVATE
 add_dependencies(litepgo_tests litepgo_examples_tests)
 gtest_discover_tests(litepgo_examples_tests DISCOVERY_MODE PRE_TEST)
 
-add_executable(litepgo_core_tests
-    core/build_info_gtest.cpp
-    core/busy_scope_gtest.cpp
-    core/memory_gtest.cpp
-    core/types_gtest.cpp
+add_executable(litepgo_common_tests
+    common/build_info_gtest.cpp
+    common/busy_scope_gtest.cpp
+    common/memory_gtest.cpp
+    common/types_gtest.cpp
 )
-target_link_libraries(litepgo_core_tests PRIVATE
-    litepgo::core litepgo::warnings GTest::gtest_main)
-add_dependencies(litepgo_tests litepgo_core_tests)
-gtest_discover_tests(litepgo_core_tests DISCOVERY_MODE PRE_TEST)
+target_link_libraries(litepgo_common_tests PRIVATE
+    litepgo::common litepgo::warnings GTest::gtest_main)
+add_dependencies(litepgo_tests litepgo_common_tests)
+gtest_discover_tests(litepgo_common_tests DISCOVERY_MODE PRE_TEST)
 
 add_executable(litepgo_linalg_tests
     linalg/sparse_pattern_gtest.cpp

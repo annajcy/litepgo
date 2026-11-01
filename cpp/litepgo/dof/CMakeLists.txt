@@ -7,5 +7,5 @@ add_library(litepgo_dof STATIC
 )
 add_library(litepgo::dof ALIAS litepgo_dof)
 target_link_libraries(litepgo_dof
-    PUBLIC litepgo::mesh litepgo::linalg litepgo::core
+    PUBLIC litepgo::mesh litepgo::linalg litepgo::common
     PRIVATE litepgo::warnings)

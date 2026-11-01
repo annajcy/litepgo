@@ -11,5 +11,5 @@ add_library(litepgo_energy STATIC
 )
 add_library(litepgo::energy ALIAS litepgo_energy)
 target_link_libraries(litepgo_energy
-    PUBLIC litepgo::dof litepgo::linalg litepgo::core
+    PUBLIC litepgo::dof litepgo::linalg litepgo::common
     PRIVATE litepgo::warnings)

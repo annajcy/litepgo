@@ -1,5 +1,5 @@
 #pragma once
-#include "litepgo/core/types.hpp"
+#include "litepgo/common/types.hpp"
 #include <limits>
 #include <stdexcept>
 #include <vector>

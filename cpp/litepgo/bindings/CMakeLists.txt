@@ -5,7 +5,7 @@ nanobind_add_module(_core NB_STATIC
     contact/contact_options.cpp
     contact/ipc_contact_energy.cpp
     contact/ipctk_contact_energy.cpp
-    core/build_info.cpp
+    common/build_info.cpp
     dof/constant_dof_map.cpp
     dof/dof_reduction.cpp
     dof/element_dof_map.cpp

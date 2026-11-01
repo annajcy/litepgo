@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/core/types.hpp"
+#include "litepgo/common/types.hpp"
 #include "litepgo/linalg/sparse_solver/sparse_solver.hpp"
 #include "litepgo/energy/response/response.hpp"
 #include <limits>
