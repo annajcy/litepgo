@@ -31,7 +31,7 @@ def main():
 
     # Plastic twist: u_p is the displacement a bar twisted past yield keeps once released, here a twist
     # about the vertical center axis growing linearly to 90 degrees at the top. Fp = I + du_p/dX, the
-    # gradient of X + u_p, is a rotation times a shear (det Fp = 1), not a rotation. Released, the bar
+    # gradient of X + u_p, contains shear as well as rotation. Released, the bar
     # takes the shape X + u_p stress-free; held at both ends, it cannot and keeps residual stress.
     lower = rest_nodes.min(axis=0)
     upper = rest_nodes.max(axis=0)
@@ -39,44 +39,54 @@ def main():
     height = upper[2] - lower[2]
     if not height > 0:
         raise RuntimeError("Example requires nonzero height")
-    r = rest_nodes - center
-    angle = np.pi / 2 * (rest_nodes[:, 2] - lower[2]) / height
-    c, s = np.cos(angle), np.sin(angle)
-    plastic_displacement = np.column_stack(
-        [c * r[:, 0] - s * r[:, 1] - r[:, 0], s * r[:, 0] + c * r[:, 1] - r[:, 1], np.zeros(topology.num_vertices)]
-    ).ravel()
-
-    # DeformationGradientField3D(u_p, X) borrows both fields and keeps them alive.
-    rest_position_map = dof.VertexDofMap(topology, 3)
-    XField = fem.InterpolatedField3D[fem.TetP1Basis]
-    rest_position_fields = [XField(rest_position_map.gather(e, rest_positions)) for e in range(topology.num_cells)]
-    plastic_fields = [XField(rest_position_map.gather(e, plastic_displacement)) for e in range(topology.num_cells)]
-    Fp_fields = [fem.DeformationGradientField3D(u_p, X) for u_p, X in zip(plastic_fields, rest_position_fields)]
-    theta_field = fem.IdentityField3D(np.array([2.0, 3.0]))
-    elastic = fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature](
-        rest_position_map, rest_position_fields, Fp_fields, [theta_field] * topology.num_cells
-    )
-
     tolerance = height * 1e-8
     bottom = np.flatnonzero(np.abs(rest_nodes[:, 2] - lower[2]) <= tolerance)
     top = np.flatnonzero(np.abs(rest_nodes[:, 2] - upper[2]) <= tolerance)
     output = args.output
     output.parent.mkdir(parents=True, exist_ok=True)
 
+    mesh.write_obj(output.parent / f"{output.stem}_rest.obj", mesh.extract_surface(rest_mesh))
+
     # free: clamp the bottom face; the bar twists. clamped: also hold the top face in place;
     # the bar cannot twist and keeps residual stress.
-    converged = True
     for clamp_top in (False, True):
         faces = [bottom, top] if clamp_top else [bottom]
         fixed_dofs = [3 * v + c for face in faces for v in face for c in range(3)]
-        fixed = dof.DofReduction(elastic.num_dofs, fixed_dofs)
-        initial = np.zeros(elastic.num_dofs)
+        fixed = dof.DofReduction(rest_positions.size, fixed_dofs)
+        initial = np.zeros(rest_positions.size)
         options = solver.NewtonOptions()
         options.gradient_tolerance = 1e-8
         options.max_iterations = 200
         sparse_solver = linalg.AutoSparseSolver()
-        result = solver.newton_solve(elastic, fixed, initial, options, sparse_solver)
-        converged = converged and result.status == solver.NewtonStatus.Converged
+        iterations = 0
+        for step in range(5):
+            r = rest_nodes - center
+            angle = (step / 4) * np.pi / 2 * (rest_nodes[:, 2] - lower[2]) / height
+            c, s = np.cos(angle), np.sin(angle)
+            plastic_displacement = np.column_stack(
+                [c * r[:, 0] - s * r[:, 1] - r[:, 0], s * r[:, 0] + c * r[:, 1] - r[:, 1], np.zeros(topology.num_vertices)]
+            ).ravel()
+
+            # DeformationGradientField3D(u_p, X) borrows both fields and keeps them alive.
+            rest_position_map = dof.VertexDofMap(topology, 3)
+            XField = fem.InterpolatedField3D[fem.TetP1Basis]
+            rest_position_fields = [XField(rest_position_map.gather(e, rest_positions)) for e in range(topology.num_cells)]
+            plastic_fields = [XField(rest_position_map.gather(e, plastic_displacement)) for e in range(topology.num_cells)]
+            Fp_fields = [fem.DeformationGradientField3D(u_p, X) for u_p, X in zip(plastic_fields, rest_position_fields)]
+            theta_field = fem.IdentityField3D(np.array([2.0, 3.0]))
+            elastic = fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature](
+                rest_position_map, rest_position_fields, Fp_fields, [theta_field] * topology.num_cells
+            )
+
+            result = solver.newton_solve(elastic, fixed, initial, options, sparse_solver)
+            if result.status != solver.NewtonStatus.Converged:
+                raise RuntimeError("Plastic twist did not reach equilibrium")
+            if np.max(np.abs(result.x[fixed_dofs])) > 1e-14:
+                raise RuntimeError("Clamp moved")
+            if step == 0 and np.linalg.norm(result.x) > 1e-12:
+                raise RuntimeError("Identity plastic field changed rest pose")
+            initial = result.x
+            iterations += result.iterations
         # The top face's twist about the axis, from its vertices' summed in-plane rotation.
         r_top = (rest_nodes[top] - center)[:, :2]
         x_top = r_top + result.x.reshape(-1, 3)[top, :2]
@@ -84,14 +94,15 @@ def main():
         dot = (r_top * x_top).sum()
         print(
             f"{'clamped' if clamp_top else 'free'}: "
-            f"converged={int(result.status == solver.NewtonStatus.Converged)}, iterations={result.iterations}, "
-            f"elastic={result.energy:.6g}, top twist={np.arctan2(cross, dot) * 180 / np.pi:.6g} deg"
+            f"converged={int(result.status == solver.NewtonStatus.Converged)}, iterations={iterations}, "
+            f"elastic={result.energy:.6g}, free residual={result.gradient_norm:.6g}, "
+            f"max displacement={np.abs(result.x).max():.6g}, top twist={np.arctan2(cross, dot) * 180 / np.pi:.6g} deg"
         )
         path = output.parent / f"{output.stem}{'_clamped' if clamp_top else '_free'}.veg"
         deformed = mesh.TetMesh((rest_positions + result.x).reshape(-1, 3), topology)
         mesh.write_veg(path, deformed)
         mesh.write_obj(path.with_suffix(".obj"), mesh.extract_surface(deformed))
-    return 0 if converged else 1
+    return 0
 
 
 if __name__ == "__main__":

@@ -2,10 +2,11 @@
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/kinematics/basis_dof_transform.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/point_displacement_map.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
+#include "litepgo/fem/sample_boundary.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
-#include "litepgo/mesh/extract_surface.hpp"
 #include "litepgo/mesh/io/obj.hpp"
 #include "litepgo/mesh/io/veg.hpp"
 #include "litepgo/solver/newton.hpp"
@@ -94,6 +95,10 @@ int main(int argc, char** argv) {
     if (!output.parent_path().empty())
         std::filesystem::create_directories(output.parent_path());
 
+    const auto surface = fem::sample_boundary(topology, rest_position_fields, 4);
+    const auto W = fem::build_point_displacement_map<fem::HexHermiteBasis>(surface.embedding, displacement_map,
+                                                                           rest_position_fields);
+
     // free: clamp the bottom face; the bar twists. clamped: also hold the top face in place;
     // the bar cannot twist and keeps residual stress. Clamping a face z = const fixes u and its
     // in-face derivatives u_X, u_Y, u_XY, which determine the displacement on the whole face.
@@ -124,6 +129,7 @@ int main(int argc, char** argv) {
         std::cout << (clamp_top ? "clamped" : "free")
                   << ": converged=" << (result.status == solver::NewtonStatus::Converged)
                   << ", iterations=" << result.iterations << ", elastic=" << result.energy
+                  << ", free residual=" << result.gradient_norm
                   << ", top twist=" << std::atan2(cross, dot) * 180 / std::numbers::pi << " deg\n";
         const auto path = output.parent_path() / (output.stem().string() + (clamp_top ? "_clamped" : "_free") + ".veg");
         Vec deformed_positions = rest_positions;
@@ -131,7 +137,10 @@ int main(int argc, char** argv) {
             deformed_positions.segment<3>(3 * Eigen::Index(v)) += result.x.segment<3>(24 * Eigen::Index(v));
         const mesh::HexMesh deformed{std::move(deformed_positions), topology};
         mesh::write_veg(path, deformed);
-        mesh::write_obj(std::filesystem::path(path).replace_extension(".obj"), mesh::extract_surface(deformed));
+        if (!converged)
+            throw std::runtime_error("Hermite equilibrium did not converge");
+        mesh::write_obj(std::filesystem::path(path).replace_extension(".obj"),
+                        mesh::TriangleMesh{surface.mesh.positions + W * result.x, surface.mesh.topology});
     }
     return converged ? 0 : 1;
 }
