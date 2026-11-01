@@ -53,6 +53,26 @@ template <class Exception> void expect_invalid(const ShellMaterialInputs& p) {
     EXPECT_THROW(KoiterStVK::eval_W(p), Exception);
     EXPECT_THROW(KoiterStVK::eval_dW_dab(p), Exception);
     EXPECT_THROW(KoiterStVK::eval_d2W_dab2(p), Exception);
+    EXPECT_THROW(KoiterStVK::eval_d2W_dab_dtheta(p), Exception);
+}
+
+TEST(KoiterStVK, ParameterMixedDerivativeMatchesFiniteDifferencesAndLinearity) {
+    auto p = inputs();
+    p.theta = Eigen::Vector2d(-0.5, 2);
+    const auto J = KoiterStVK::eval_d2W_dab_dtheta(p);
+    EXPECT_TRUE((J * p.theta).isApprox(KoiterStVK::eval_dW_dab(p), 1e-13));
+    for (int j = 0; j < 2; ++j) {
+        auto plus = p, minus = p;
+        plus.theta[j] += 1e-6;
+        minus.theta[j] -= 1e-6;
+        const Eigen::Matrix<double, 6, 1> fd = (KoiterStVK::eval_dW_dab(plus) - KoiterStVK::eval_dW_dab(minus)) / 2e-6;
+        EXPECT_LT((J.col(j) - fd).norm(), 1e-9);
+    }
+    p.theta *= 2;
+    EXPECT_TRUE(J.isApprox(KoiterStVK::eval_d2W_dab_dtheta(p), 1e-14));
+    p.a = p.a_bar;
+    p.b = p.b_bar;
+    EXPECT_TRUE(KoiterStVK::eval_d2W_dab_dtheta(p).isZero());
 }
 
 TEST(KoiterStVK, MatchesInvariantDensityAndSymmetricPackedFiniteDifferences) {

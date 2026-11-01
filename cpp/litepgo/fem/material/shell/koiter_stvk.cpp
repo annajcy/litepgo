@@ -17,7 +17,8 @@ Eigen::Matrix<double, 6, 1> eval_delta_ab(const ShellMaterialInputs& inputs) {
     return delta_ab;
 }
 
-Eigen::Matrix<double, 6, 6> eval_stiffness(const ShellMaterialInputs& inputs) {
+Eigen::Matrix<double, 6, 6> eval_stiffness(const ShellMaterialInputs& inputs,
+                                           Eigen::Matrix<double, 6, 2>* mixed = nullptr) {
     for (const auto* form : {&inputs.a, &inputs.b, &inputs.a_bar, &inputs.b_bar})
         if (!form->allFinite() || !form->isApprox(form->transpose(), 1e-12))
             throw std::invalid_argument("KoiterStVK requires finite symmetric fundamental forms");
@@ -39,12 +40,14 @@ Eigen::Matrix<double, 6, 6> eval_stiffness(const ShellMaterialInputs& inputs) {
     std::array<Eigen::Matrix2d, 3> G;
     for (std::size_t i = 0; i < E.size(); ++i)
         G[i] = inv_a_bar * E[i];
-    Eigen::Matrix3d C;
+    Eigen::Matrix3d C, C_lambda, C_mu;
     const double lambda_ps = inputs.theta[0], mu = inputs.theta[1];
     for (int i = 0; i < 3; ++i)
         for (int j = i; j < 3; ++j) {
             const auto& A = G[static_cast<std::size_t>(i)];
             const auto& B = G[static_cast<std::size_t>(j)];
+            C_lambda(i, j) = C_lambda(j, i) = A.trace() * B.trace();
+            C_mu(i, j) = C_mu(j, i) = 2 * (A * B).trace();
             C(i, j) = C(j, i) = lambda_ps * A.trace() * B.trace() + 2 * mu * (A * B).trace();
         }
     Eigen::Matrix<double, 6, 6> H = Eigen::Matrix<double, 6, 6>::Zero();
@@ -52,6 +55,16 @@ Eigen::Matrix<double, 6, 6> eval_stiffness(const ShellMaterialInputs& inputs) {
     H.bottomRightCorner<3, 3>() = ((inputs.thickness / 12) * inputs.thickness * inputs.thickness) * C;
     if (!H.allFinite())
         throw std::domain_error("KoiterStVK: non-finite material stiffness");
+    if (mixed) {
+        const auto delta = eval_delta_ab(inputs);
+        mixed->topRows<3>().col(0) = (inputs.thickness / 4) * (C_lambda * delta.head<3>());
+        mixed->topRows<3>().col(1) = (inputs.thickness / 4) * (C_mu * delta.head<3>());
+        const double bending = (inputs.thickness / 12) * inputs.thickness * inputs.thickness;
+        mixed->bottomRows<3>().col(0) = bending * (C_lambda * delta.tail<3>());
+        mixed->bottomRows<3>().col(1) = bending * (C_mu * delta.tail<3>());
+        if (!mixed->allFinite())
+            throw std::domain_error("KoiterStVK: non-finite material mixed derivative");
+    }
     return H;
 }
 
@@ -78,6 +91,12 @@ Eigen::Matrix<double, 6, 6> KoiterStVK::eval_d2W_dab2(const ShellMaterialInputs&
     const auto H = eval_stiffness(inputs);
     eval_delta_ab(inputs);
     return H;
+}
+
+Eigen::Matrix<double, 6, 2> KoiterStVK::eval_d2W_dab_dtheta(const ShellMaterialInputs& inputs) {
+    Eigen::Matrix<double, 6, 2> result;
+    eval_stiffness(inputs, &result);
+    return result;
 }
 
 } // namespace litepgo::fem

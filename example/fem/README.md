@@ -840,3 +840,47 @@ updates plastic history. Identification requires a residual such as
 `force - observed_force`; restrictions or regularization on Fp belong in that
 inverse problem. The tests include a one-parameter plastic-scale fit through
 Gauss–Newton, avoiding an assumption that all nine entries are identifiable.
+
+## Shell force response with material coefficients
+
+`ShellFemForceMaterialResponse<Material>` fixes reference geometry, displacement and
+thickness, then maps material parameters to the **positive displacement gradient**
+(the negative of physical internal force under the `f_int = -grad(E)` convention).
+For KoiterStVK, parameters are `[lambda_ps, mu]`, using plane-stress lambda, with
+`mu > 0` and `lambda_ps + mu > 0`. This is a parameter response at a fixed pose,
+not an equilibrium solve.
+
+```python
+from litepgo import dof, fem
+
+parameters = dof.ConstantDofMap(topology, 2)  # shared theta; ElementDofMap for per-face theta
+Response = fem.ShellFemForceMaterialResponse[fem.KoiterStVK]
+response = Response(parameters, stencil_map, rest_data, displacement, thickness)
+force, J = response.eval(theta, need_jacobian=True)
+```
+
+`stencil_map` is a `StencilDofMap` with three displacement DOFs per vertex.
+`rest_data` and `thickness` contain one entry per face, in map order; displacement
+is the global row-packed vertex vector. Per-face parameters flatten as
+`[lambda_ps_0, mu_0, lambda_ps_1, mu_1, ...]`. The response snapshots fixed inputs,
+caches current forms and their displacement derivatives, and uses `MeshResponse`
+to assemble rectangular Jacobians, including contributions on neighboring stencil
+vertices. Batches support different stencil sizes. Its sparsity pattern is fixed.
+The reference-area factor `0.5 * sqrt_det_a_bar` is applied once, as in `ShellFemEnergy`.
+Rebuild the response after changing reference geometry, displacement or thickness.
+
+`ShellMaterialForceLocalResponse2D<Material>(rest, u_local, thickness, theta_field)`
+is the pointwise version. It owns the fixed numerical geometry and borrows a
+`Field2D` for theta (Python keeps that field alive). It returns force **density per
+reference area** and differentiates with respect to the field's coefficients.
+Its `accumulate` takes the complete integration weight, just like `LocalResponse`.
+Only parameter-Jacobian requests require the field's coefficient derivative.
+The local interface accepts spatially varying parameter fields; the mesh response
+uses parameters constant on each face, so a single centroid evaluation is exact.
+
+With `B = d(ab)/du`, the formulas are `r = B.T @ dW/dab` and
+`J = B.T @ d2W/dab_dtheta @ dtheta/dcoefficients`. No geometric second derivative
+is needed because displacement is fixed. `KoiterStVK.eval_d2W_dab_dtheta` exposes
+the analytic 6-by-2 mixed derivative, with rows ordered
+`(a11,a12,a22,b11,b12,b22)` and columns `(lambda_ps,mu)`.
+Thickness is fixed in this API; thickness response is not implemented.
