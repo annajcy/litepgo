@@ -112,3 +112,9 @@ add_test(NAME PointEmbeddingExample COMMAND $<TARGET_FILE:point_embedding>)
 
 add_dependencies(litepgo_tests material_fit)
 add_test(NAME MaterialFit COMMAND $<TARGET_FILE:material_fit>)
+
+add_dependencies(litepgo_tests custom_energy custom_response)
+add_test(NAME EnergyApiExample COMMAND $<TARGET_FILE:custom_energy>)
+add_test(NAME ResponseApiExample COMMAND $<TARGET_FILE:custom_response>)
+add_dependencies(litepgo_tests mesh_response)
+add_test(NAME MeshResponseExample COMMAND $<TARGET_FILE:mesh_response>)
