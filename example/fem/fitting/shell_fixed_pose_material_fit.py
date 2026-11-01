@@ -1,6 +1,6 @@
 """Recover shared KoiterStVK parameters from forces at a prescribed shell pose.
 
-Python mirror of shell_material_fit.cpp. Geometry, displacement and thickness
+Python mirror of shell_fixed_pose_material_fit.cpp. Geometry, displacement and thickness
 stay fixed; no equilibrium solve, noise or regularization is involved.
 """
 
@@ -12,7 +12,7 @@ from litepgo import dof, energy, fem, mesh, solver
 
 
 def main():
-    sheet = mesh.read_obj(Path(__file__).resolve().parents[2] / "assets/shell.obj")
+    sheet = mesh.read_obj(Path(__file__).resolve().parents[3] / "assets/shell.obj")
     topology, nodes = sheet.topology, sheet.positions
     if topology.num_cells == 0:
         raise RuntimeError("Example requires a nonempty sheet")

@@ -1,4 +1,4 @@
-#include "../../cpp/testing/element_formula_energy.hpp"
+#include "../../../cpp/testing/element_formula_energy.hpp"
 
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
@@ -42,7 +42,7 @@ inline Vec hex_hermite_rest_positions() {
     return X_nodes.reshaped<Eigen::RowMajor>();
 }
 
-inline auto make_hex_hermite_mesh_energy(const Vec& rest_positions) {
+inline auto make_hex_hermite_corner_pull(const Vec& rest_positions) {
     const auto topology = hex_hermite_topology();
     const dof::VertexDofMap rest_position_map(topology, 3), displacement_map(topology, 24);
     using XField = fem::InterpolatedField3D<fem::HexQ1Basis>;
@@ -79,7 +79,7 @@ TEST(HexHermiteExample, ReproducesAffineDisplacementAndVolumeWeightedEnergy) {
     A << 0.1, 0.02, -0.03, 0.04, -0.05, 0.02, 0.01, 0.03, 0.08;
     const Eigen::Vector3d b(0.2, -0.1, 0.3);
     const Vec x = affine_dofs(X_nodes, A, b);
-    auto energy = make_hex_hermite_mesh_energy(X_nodes);
+    auto energy = make_hex_hermite_corner_pull(X_nodes);
     EXPECT_DOUBLE_EQ(energy.eval_value(Vec::Zero(x.size())), 0);
     EXPECT_NEAR(energy.eval_value(x),
                 18 * fem::NeoHookean::eval_W(
@@ -156,7 +156,7 @@ TEST(HexHermiteExample, SharedFacesHaveContinuousValuesAndPhysicalGradientsInAll
 
 TEST(HexHermiteExample, PhysicalDofGradientAndHessianMatchFiniteDifferences) {
     const Vec X_nodes = hex_hermite_rest_positions();
-    auto energy = make_hex_hermite_mesh_energy(X_nodes);
+    auto energy = make_hex_hermite_corner_pull(X_nodes);
     Vec x = affine_dofs(X_nodes, 0.1 * Eigen::Matrix3d::Identity());
     for (int j = 0; j < x.size(); ++j)
         x[j] += 0.005 * std::sin(0.7 * j + 0.3);
@@ -221,9 +221,9 @@ TEST(HexHermiteExample, RejectsUnsupportedGeometryAndIncorrectDofShapes) {
             X_nodes[3 * 6] += 0.1;
         if (which == 5)
             X_nodes[0] = std::numeric_limits<double>::quiet_NaN();
-        EXPECT_THROW(make_hex_hermite_mesh_energy(X_nodes), std::invalid_argument);
+        EXPECT_THROW(make_hex_hermite_corner_pull(X_nodes), std::invalid_argument);
     }
-    EXPECT_THROW(make_hex_hermite_mesh_energy(Vec::Zero(35)), std::invalid_argument);
+    EXPECT_THROW(make_hex_hermite_corner_pull(Vec::Zero(35)), std::invalid_argument);
     const dof::VertexDofMap map(hex_hermite_topology(), 3);
     Eigen::MatrixXd nodes = map.gather(0, hex_hermite_rest_positions());
     const fem::BasisDofTransform<fem::HexHermiteBasis> transform{fem::InterpolatedField3D<fem::HexQ1Basis>(nodes)};
@@ -239,7 +239,7 @@ TEST(HexHermiteExample, RejectsUnsupportedGeometryAndIncorrectDofShapes) {
 
 TEST(HexHermiteExample, FeasibleStepMapsPhysicalDerivativeDofsAndChecksAllQuadraturePoints) {
     const Vec X = hex_hermite_rest_positions(), zero = Vec::Zero(288);
-    auto energy = make_hex_hermite_mesh_energy(X);
+    auto energy = make_hex_hermite_corner_pull(X);
     EXPECT_EQ(energy.max_feasible_step(zero, zero), 1);
     EXPECT_EQ(energy.max_feasible_step(zero, affine_dofs(X, 0.1 * Eigen::Matrix3d::Identity())), 1);
     const Eigen::Matrix3d dF = Eigen::Vector3d(-4, -4, 0).asDiagonal();
@@ -306,7 +306,7 @@ TEST(HexHermiteExample, AcceptsHermiteReferenceFieldsRepresentingAffineBoxes) {
     fem::VolumetricFemEnergy<fem::NeoHookean, fem::HexHermiteBasis, fem::GaussLegendre3D<4>, XField,
                              fem::IdentityField3D, fem::IdentityField3D>
         energy(displacement_map, std::move(fields), {Fp, Fp}, {theta, theta});
-    auto reference = make_hex_hermite_mesh_energy(positions);
+    auto reference = make_hex_hermite_corner_pull(positions);
     const Vec u = affine_dofs(positions, 0.1 * Eigen::Matrix3d::Identity());
     EXPECT_NEAR(energy.eval_value(u), reference.eval_value(u), 1e-11);
     EXPECT_TRUE(energy.eval_gradient(u).isApprox(reference.eval_gradient(u), 1e-11));
@@ -319,7 +319,7 @@ TEST(HexHermiteExample, CachedKinematicsMatchesUncachedAcrossChangingDisplacemen
     const Vec positions = hex_hermite_rest_positions();
     const auto topology = hex_hermite_topology();
     const dof::VertexDofMap rest_map(topology, 3), map(topology, 24);
-    auto cached = make_hex_hermite_mesh_energy(positions);
+    auto cached = make_hex_hermite_corner_pull(positions);
     litepgo::testing::ElementFormulaEnergy uncached(
         map,
         [&](int e, const Eigen::MatrixXd& u, Vec* g, Eigen::MatrixXd* H) {

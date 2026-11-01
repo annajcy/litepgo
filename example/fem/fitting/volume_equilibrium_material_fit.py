@@ -1,4 +1,4 @@
-"""Python mirror of material_fit.cpp, using analytic equilibrium sensitivities."""
+"""Python mirror of volume_equilibrium_material_fit.cpp, using analytic equilibrium sensitivities."""
 
 from pathlib import Path
 
@@ -8,7 +8,7 @@ from litepgo import energy, dof, fem, mesh, solver
 
 
 def main():
-    rest = mesh.read_veg(Path(__file__).resolve().parents[2] / "assets/box-tet.veg")
+    rest = mesh.read_veg(Path(__file__).resolve().parents[3] / "assets/box-tet.veg")
     topology = rest.topology
     positions = rest.positions.ravel()
     mapping = dof.VertexDofMap(topology, 3)

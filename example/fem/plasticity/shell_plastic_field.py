@@ -10,7 +10,7 @@ from litepgo import dof, fem, linalg, mesh, solver
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", nargs="?", type=Path,
-                        default=Path(__file__).resolve().parents[2] / "output/python/shell_plastic_field")
+                        default=Path(__file__).resolve().parents[3] / "output/python/shell_plastic_field")
     args = parser.parse_args()
     nx, ny = 12, 4
     nodes = np.array([[4*i/nx, j/ny-.5, 0.] for i in range(nx+1) for j in range(ny+1)])

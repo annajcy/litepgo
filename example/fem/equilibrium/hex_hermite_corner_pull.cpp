@@ -84,7 +84,7 @@ int main(int argc, char** argv) {
     std::cout << "converged=" << converged << ", iterations=" << result.iterations << ", potential=" << result.energy
               << ", elastic=" << elastic->eval_value(result.x) << ", pulling=" << pulling->eval_value(result.x)
               << ", free residual=" << result.gradient_norm << ", max corner-anchor distance=" << corner_gap << '\n';
-    const std::filesystem::path output = argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/hex_hermite_mesh_energy.veg";
+    const std::filesystem::path output = argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/hex_hermite_corner_pull.veg";
     if (!output.parent_path().empty())
         std::filesystem::create_directories(output.parent_path());
     Vec deformed_positions = rest_positions;

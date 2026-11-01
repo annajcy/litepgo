@@ -174,7 +174,7 @@ def test_energy_rejects_bad_fields():
         Energy(rest_map, X, [np.eye(3)] * n, constant_fields(NEO_HOOKEAN_THETA, n))
 
 
-# example/fem/*.py mirror the C++ examples line by line. They solve with AutoSparseSolver, whose
+# example/fem/**/*.py mirror the C++ examples line by line. They solve with AutoSparseSolver, whose
 # threaded factorizations (PARDISO, Accelerate) need not repeat bit for bit, so the mirrors agree
 # to rounding: exact counts and connectivity, values to their printed digits, positions to 1e-10.
 
@@ -187,18 +187,18 @@ def parse_equilibrium(stdout):
 @pytest.mark.parametrize(
     "name,suffix",
     [
-        ("tet_p1_mesh_energy", ".veg"),
-        ("hex_q1_mesh_energy", ".veg"),
-        ("hex_hermite_mesh_energy", ".veg"),
-        ("shell_stvk_mesh_energy", ".obj"),
+        ("tet_p1_corner_pull", ".veg"),
+        ("hex_q1_corner_pull", ".veg"),
+        ("hex_hermite_corner_pull", ".veg"),
+        ("shell_saddle_pull", ".obj"),
     ],
 )
 def test_python_examples_match_cpp(tmp_path, name, suffix):
-    executable = EXAMPLES / name
+    executable = EXAMPLES / "equilibrium" / name
     if not executable.exists():
         pytest.skip(f"{executable} is not built")
-    script = Path(__file__).resolve().parents[2] / "example" / "fem" / f"{name}.py"
-    asset = ASSETS / {"tet_p1": "box-tet.veg", "shell_stvk": "shell.obj"}.get(name.rsplit("_mesh", 1)[0], "box-hex.veg")
+    script = Path(__file__).resolve().parents[2] / "example" / "fem" / "equilibrium" / f"{name}.py"
+    asset = ASSETS / {"tet_p1_corner_pull": "box-tet.veg", "shell_saddle_pull": "shell.obj"}.get(name, "box-hex.veg")
     cpp_out, py_out = tmp_path / f"cpp{suffix}", tmp_path / f"py{suffix}"
     cpp = subprocess.run([executable, asset, cpp_out], check=True, capture_output=True, text=True)
     py = subprocess.run([sys.executable, script, asset, py_out], check=True, capture_output=True, text=True)
@@ -219,7 +219,7 @@ def test_python_examples_match_cpp(tmp_path, name, suffix):
         np.testing.assert_allclose(py_mesh.positions, cpp_mesh.positions, rtol=0, atol=1e-10)
 
 
-# example/fem/plastic_twist: the plastic displacement u_p twists the bar by 90 degrees and Fp is
+# example/fem/plasticity: the plastic displacement u_p twists the bar by 90 degrees and Fp is
 # DeformationGradientField3D(u_p, X). u_p is interpolated in the displacement space (C1 Hermite for the
 # Hermite example), so the released bar takes the shape X + u_p stress-free. Clamped, it keeps residual
 # stress.
@@ -248,10 +248,10 @@ def parse_plastic_twist(stdout):
     ],
 )
 def test_plastic_twist_examples(tmp_path, name, asset):
-    executable = EXAMPLES / "plastic_twist" / name
+    executable = EXAMPLES / "plasticity" / name
     if not executable.exists():
         pytest.skip(f"{executable} is not built")
-    script = Path(__file__).resolve().parents[2] / "example" / "fem" / "plastic_twist" / f"{name}.py"
+    script = Path(__file__).resolve().parents[2] / "example" / "fem" / "plasticity" / f"{name}.py"
     cpp = subprocess.run([executable, ASSETS / asset, tmp_path / "cpp.veg"], check=True, capture_output=True, text=True)
     py = subprocess.run(
         [sys.executable, script, ASSETS / asset, tmp_path / "py.veg"], check=True, capture_output=True, text=True
@@ -401,12 +401,12 @@ def test_basis_dof_transform_maps_physical_hermite_dofs():
     np.testing.assert_array_equal(nodal.to_coefficients(X_nodes), X_nodes)
 
 
-def test_material_fit_python_matches_cpp():
+def test_volume_equilibrium_material_fit_python_matches_cpp():
     import re
 
-    script = ASSETS.parent / "example/fem/material_fit.py"
+    script = ASSETS.parent / "example/fem/fitting/volume_equilibrium_material_fit.py"
     outputs = []
-    for command in ([str(EXAMPLES / "material_fit")], [sys.executable, str(script)]):
+    for command in ([str(EXAMPLES / "fitting" / "volume_equilibrium_material_fit")], [sys.executable, str(script)]):
         completed = subprocess.run(command, capture_output=True, text=True)
         assert completed.returncode == 0, completed.stdout + completed.stderr
         outputs.append(completed.stdout)

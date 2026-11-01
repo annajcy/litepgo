@@ -150,7 +150,7 @@ int main() {
                    ? 0
                    : 1;
     } catch (const std::exception& error) {
-        std::cerr << "material_fit: " << error.what() << '\n';
+        std::cerr << "volume_equilibrium_material_fit: " << error.what() << '\n';
         return 1;
     }
 }

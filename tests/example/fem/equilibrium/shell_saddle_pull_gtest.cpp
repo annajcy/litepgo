@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "../../cpp/testing/finite_difference.hpp"
+#include "../../../cpp/testing/finite_difference.hpp"
 #include "litepgo/dof/dof_reduction.hpp"
 #include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
 #include "litepgo/solver/newton.hpp"
@@ -34,7 +34,7 @@ inline Vec shell_stvk_rest_positions() {
     return X_nodes.reshaped<Eigen::RowMajor>();
 }
 
-inline auto make_shell_stvk_mesh_energy(const Vec& X_nodes) {
+inline auto make_shell_saddle_pull(const Vec& X_nodes) {
     const auto topology = shell_stvk_topology();
     const auto stencils = mesh::make_triangle_mid_edge_stencils(topology);
     const dof::StencilDofMap map(topology.num_vertices(), stencils.vertices, 3);
@@ -69,7 +69,7 @@ void expect_safe_segment(const energy::Energy& energy, const Vec& u, const Vec& 
 
 TEST(ShellStVKExample, UniformStretchAndRigidMotionMatchReferenceAreaAndMaterialParameters) {
     const Vec X_nodes = shell_stvk_rest_positions();
-    auto energy = make_shell_stvk_mesh_energy(X_nodes);
+    auto energy = make_shell_saddle_pull(X_nodes);
     EXPECT_EQ(energy.num_dofs(), 18);
     EXPECT_DOUBLE_EQ(energy.eval_value(Vec::Zero(18)), 0);
     const double Y = 100, nu = 0.3;
@@ -87,7 +87,7 @@ TEST(ShellStVKExample, UniformStretchAndRigidMotionMatchReferenceAreaAndMaterial
 }
 
 TEST(ShellStVKExample, BentStateHasCorrectGradientHessianAndNeighborCouplings) {
-    auto energy = make_shell_stvk_mesh_energy(shell_stvk_rest_positions());
+    auto energy = make_shell_saddle_pull(shell_stvk_rest_positions());
     const Vec u = bent_displacements();
     EXPECT_GT(energy.eval_value(u), 0);
     energy::test::expect_derivatives_match(energy, u, 2e-6);
@@ -98,7 +98,7 @@ TEST(ShellStVKExample, BentStateHasCorrectGradientHessianAndNeighborCouplings) {
 
 TEST(ShellStVKExample, FeasibleStepPreventsInteriorCollapseEvenWhenEndpointIsFeasible) {
     const Vec X_nodes = shell_stvk_rest_positions();
-    auto energy = make_shell_stvk_mesh_energy(X_nodes);
+    auto energy = make_shell_saddle_pull(X_nodes);
     const Vec u = Vec::Zero(18), du = -2 * X_nodes;
     EXPECT_NO_THROW(energy.eval_value(u + du));
     EXPECT_THROW(energy.eval_value(u + 0.5 * du), std::domain_error);
@@ -115,7 +115,7 @@ TEST(ShellStVKExample, FeasibleStepPreventsInteriorCollapseEvenWhenEndpointIsFea
 }
 
 TEST(ShellStVKExample, FeasibleStepKeepsAdjacentNormalsFromCancelling) {
-    auto energy = make_shell_stvk_mesh_energy(shell_stvk_rest_positions());
+    auto energy = make_shell_saddle_pull(shell_stvk_rest_positions());
     Vec u = Vec::Zero(18), du = Vec::Zero(18);
     u.segment<3>(9) << -1, -1.5, 1;
     du.segment<3>(9) << -1, -0.5, -1;
@@ -129,7 +129,7 @@ TEST(ShellStVKExample, FeasibleStepKeepsAdjacentNormalsFromCancelling) {
 }
 
 TEST(ShellStVKExample, NewtonRelaxesBentPatchWhileKeepingCentralTriangleFixed) {
-    auto energy = make_shell_stvk_mesh_energy(shell_stvk_rest_positions());
+    auto energy = make_shell_saddle_pull(shell_stvk_rest_positions());
     const Vec u0 = bent_displacements();
     const double initial_energy = energy.eval_value(u0);
     const dof::DofReduction fixed(18, {0, 1, 2, 3, 4, 5, 6, 7, 8});
@@ -148,16 +148,16 @@ TEST(ShellStVKExample, NewtonRelaxesBentPatchWhileKeepingCentralTriangleFixed) {
 
 TEST(ShellStVKExample, OwnsReferenceDataAndRejectsInvalidRestAndTrialGeometry) {
     Vec X_nodes = shell_stvk_rest_positions();
-    auto energy = make_shell_stvk_mesh_energy(X_nodes);
+    auto energy = make_shell_saddle_pull(X_nodes);
     const Vec u = bent_displacements();
     const double W = energy.eval_value(u);
     X_nodes.setZero();
     EXPECT_DOUBLE_EQ(energy.eval_value(u), W);
-    EXPECT_THROW(make_shell_stvk_mesh_energy(Vec::Zero(17)), std::invalid_argument);
-    EXPECT_THROW(make_shell_stvk_mesh_energy(Vec::Zero(18)), std::domain_error);
+    EXPECT_THROW(make_shell_saddle_pull(Vec::Zero(17)), std::invalid_argument);
+    EXPECT_THROW(make_shell_saddle_pull(Vec::Zero(18)), std::domain_error);
     X_nodes = shell_stvk_rest_positions();
     X_nodes[0] = std::numeric_limits<double>::quiet_NaN();
-    EXPECT_THROW(make_shell_stvk_mesh_energy(X_nodes), std::invalid_argument);
+    EXPECT_THROW(make_shell_saddle_pull(X_nodes), std::invalid_argument);
     Vec collapsed = Vec::Zero(18);
     collapsed.segment<3>(3) = -shell_stvk_rest_positions().segment<3>(3);
     EXPECT_THROW(energy.eval_value(collapsed), std::domain_error);
