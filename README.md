@@ -17,7 +17,7 @@ Eigen 5.0.1, oneTBB 2023.1.0, nanobind 3.1.0, and GoogleTest are fetched at pinn
 - macOS: Apple Accelerate's LLT and LDLT (`LITEPGO_WITH_ACCELERATE`, on by default).
 - x86-64 Linux: Intel oneMKL 2026.1 PARDISO's LLT and pivoted LDLT (`LITEPGO_WITH_MKL`, on by default). Configuring downloads the pinned `mkl` and `mkl-include` wheels from PyPI (about 225 MB) and unpacks them once into `build/_cache/` (`LITEPGO_MKL_CACHE_DIR`), shared by every preset; `-DLITEPGO_MKL_ROOT=/opt/intel/oneapi/mkl/2026.1` uses a local oneMKL 2026.1 install instead. MKL runs on its oneTBB threading layer over litepgo's own TBB runtime, so `tbb::task_arena` and `tbb::global_control` bound PARDISO like every other parallel loop; `MKL_NUM_THREADS` has no effect. Eigen's dense code does not use MKL.
 
-Native IPC contact is always built into `litepgo::litepgo`, with no IPC Toolkit dependency.
+Native IPC contact is provided by `litepgo::contact` and included in the `litepgo::litepgo` aggregate, with no IPC Toolkit dependency.
 The optional `litepgo::ipctk` target (`LITEPGO_WITH_IPC_TOOLKIT`, on by default) retains the IPC Toolkit 1.6.1 backend.
 It reuses litepgo's Eigen and TBB and fetches its dependencies into `build/_cache/cpm/` (`LITEPGO_CPM_CACHE_DIR`).
 `-DLITEPGO_WITH_IPC_TOOLKIT=OFF` skips the toolkit and its dependencies; native C++ and Python contact remain available.
@@ -32,6 +32,46 @@ cmake --workflow --preset debug
 `uv sync` only creates `.venv` with the Python dependencies; it never builds litepgo. CMake builds the C++ library, the tests, and the nanobind extension. The extension is built against the active virtual environment (`$VIRTUAL_ENV`), else `.venv`.
 
 Presets: `debug`, `release`, `relwithdebinfo`, `asan`. Each builds in `build/<preset>/` and runs GoogleTest and pytest through CTest. `asan` skips the extension, since a sanitized module cannot load into a regular Python. Keep local overrides in the ignored `CMakeUserPresets.json`.
+
+## CMake modules
+
+Link the modules used by your source files; their public dependencies propagate
+include paths, C++20, Eigen/TBB settings and required libraries automatically.
+Each module owns its source list in `cpp/litepgo/<module>/CMakeLists.txt`.
+
+| Target | Type | Direct litepgo module dependencies |
+| --- | --- | --- |
+| `litepgo::core` | Header-only | None |
+| `litepgo::spatial` | Header-only | core |
+| `litepgo::linalg` | Static | core; optional Accelerate/MKL backends |
+| `litepgo::mesh` | Static | core |
+| `litepgo::dof` | Static | core, linalg, mesh |
+| `litepgo::energy` | Static | core, dof, linalg |
+| `litepgo::fem` | Static | core, dof, energy, mesh, spatial |
+| `litepgo::solver` | Static | core, dof, energy, linalg |
+| `litepgo::contact` | Static | core, energy, mesh, spatial |
+| `litepgo::io` | Static | mesh |
+| `litepgo::io_gmsh` (optional) | Static | io |
+| `litepgo::ipctk` (optional) | Static | contact |
+
+```cmake
+target_link_libraries(my_fem_app PRIVATE litepgo::fem litepgo::solver litepgo::io)
+# Existing consumers can keep the broad entry point:
+target_link_libraries(my_existing_app PRIVATE litepgo::litepgo)
+```
+
+`litepgo::litepgo` is now an INTERFACE aggregate of the nine base modules, not a
+single archive. It retains its previous scope: IO and IPC Toolkit are linked
+separately. No module links back to the aggregate; configuration rejects cycles
+between litepgo targets. Code that manually links `liblitepgo.a` must migrate to
+CMake targets (or explicitly link the module archives).
+
+Tests build as `litepgo_<module>_tests`, plus `litepgo_examples_tests` for shared
+example fixtures. `cmake --build build/release --target litepgo_tests` still builds
+all tests and their regression examples, but `litepgo_tests` is now a build target,
+not an executable. Run all cases with `ctest --test-dir build/release`, or one
+module executable such as `build/release/tests/cpp/litepgo_solver_tests`.
+The Python extension links the modules it exposes and keeps the same Python API.
 
 ## Using litepgo from Python
 
