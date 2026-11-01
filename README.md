@@ -2,6 +2,8 @@
 
 Minimal adaptation of libpgo.
 
+The [example catalog](example/README.md) groups runnable C++/Python cases by purpose.
+
 FEM examples and the mathematical naming and derivative-layout conventions are in [example/fem](example/fem/README.md).
 
 Standalone [energy and solver examples](example/solver/README.md) cover energy
@@ -150,9 +152,9 @@ of them. Material, basis and quadrature arguments are compiled in;
 binding files list the available instantiations. Indexing any other combination
 raises `TypeError` naming them. Add an instantiation in the corresponding file
 to bind another. Fields and energies cannot be subclassed in Python: they are
-evaluated per quadrature point inside parallel C++ loops. `example/fem/*.py` mirror
-the four C++ FEM examples line by line, and `tests/python/test_fem.py` checks that
-each pair writes byte-identical files. `solver.newton_solve(energy, fixed, x0, options,
+evaluated per quadrature point inside parallel C++ loops. `example/fem/**/*.py` mirror
+the C++ FEM examples line by line, and `tests/python/test_fem.py` checks that
+the forward pairs agree in connectivity and numerical output to the specified tolerances. `solver.newton_solve(energy, fixed, x0, options,
 solver=None)` likewise follows the C++ signature (`fixed` is a `dof.DofReduction`;
 the solver defaults to `AutoSparseSolver()`), and `solver.NewtonOptions()` starts from
 the C++ defaults, with a NaN tolerance that must be set before solving.
@@ -369,11 +371,11 @@ bounds and reference-domain membership against the actual model.
 
 Paired C++/Python examples:
 - `example/spatial/spatial_query.cpp` / `.py`: point, region and filtered pair queries.
-- `example/fem/point_embedding.cpp` / `.py`: locator, explicit embedding, W and direct
+- `example/fem/embedding/point_embedding.cpp` / `.py`: locator, explicit embedding, W and direct
   interpolation comparisons for TetP1, HexQ1 and HexHermite (Q1 rest geometry).
 
 Build with `cmake --build build/release --target spatial_query point_embedding`.
-Run the executables under `build/release/example/{spatial,fem}/`, or the Python files
+Run the executables under `build/release/example/spatial/` and `build/release/example/fem/embedding/`, or the Python files
 with the configured environment. Both include numerical self-checks. The contact
 example retains its exact extracted-vertex path; these examples do not sample
 Hermite boundary surfaces.

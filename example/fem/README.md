@@ -1,4 +1,33 @@
-# FEM with MeshEnergy
+# FEM examples
+
+C++ and Python pairs use the same basename. The CMake target is that basename;
+the executable is under `build/<preset>/example/fem/<group>/`.
+
+| Group | Cases | Purpose |
+| --- | --- | --- |
+| [equilibrium/](equilibrium/) | `tet_p1_corner_pull`, `hex_q1_corner_pull`, `hex_hermite_corner_pull`, `shell_saddle_pull` | Prescribe spring targets and solve elastic equilibrium |
+| [plasticity/](plasticity/) | `{tet_p1,hex_q1,hex_hermite}_plastic_twist`, `shell_plastic_field` | Relax a body with a prescribed plastic field |
+| [fitting/](fitting/) | `shell_fixed_pose_material_fit`, `{volume,shell}_fixed_pose_fp_fit` | Fit forces while displacement stays fixed |
+| [fitting/](fitting/) | `{volume,shell}_equilibrium_material_fit`, `{volume,shell}_equilibrium_fp_fit` | Re-solve equilibrium for each parameter trial |
+| [embedding/](embedding/) | `point_embedding` | Locate points and interpolate displacement DOFs |
+
+Fit names follow `<volume|shell>_<fixed_pose|equilibrium>_<material|fp>_fit`.
+`material` means constitutive parameters; `fp` means plastic stretches. Each case
+states its observations and parameterization below. No volume fixed-pose material
+fit example is currently provided.
+
+```sh
+cmake --build build/release --target volume_equilibrium_fp_fit
+build/release/example/fem/fitting/volume_equilibrium_fp_fit
+.venv/bin/python example/fem/fitting/volume_equilibrium_fp_fit.py
+```
+
+The former `*_mesh_energy` cases are now named for the corner/saddle pulling
+experiment. Fitting and point-embedding cases moved out of this directory's root;
+plastic twist cases moved into `plasticity/`. Use the paths and targets listed
+above; old executable paths in existing build directories may be stale.
+
+## FEM building blocks
 
 Each example is a standalone `.cpp` with setup and its solve directly in `main()`. The deformation examples use Newton static equilibrium; the material-fitting examples use Gauss–Newton. There are no example headers. Regression fixtures live in the test `.cpp` files.
 
@@ -499,17 +528,17 @@ Build and run each example from the repository root:
 
 ```sh
 cmake --preset debug
-cmake --build --preset debug --target hex_q1_mesh_energy tet_p1_mesh_energy hex_hermite_mesh_energy shell_stvk_mesh_energy litepgo_tests
-./build/debug/example/fem/hex_q1_mesh_energy
-./build/debug/example/fem/tet_p1_mesh_energy
-./build/debug/example/fem/hex_hermite_mesh_energy
-./build/debug/example/fem/shell_stvk_mesh_energy
+cmake --build --preset debug --target hex_q1_corner_pull tet_p1_corner_pull hex_hermite_corner_pull shell_saddle_pull litepgo_tests
+./build/debug/example/fem/equilibrium/hex_q1_corner_pull
+./build/debug/example/fem/equilibrium/tet_p1_corner_pull
+./build/debug/example/fem/equilibrium/hex_hermite_corner_pull
+./build/debug/example/fem/equilibrium/shell_saddle_pull
 ctest --preset debug --output-on-failure
 ```
 
-Hex Q1 uses two boxes with widths 1 and 2 sharing nodal displacement DOFs and integrates with `GaussLegendre3D<2>`. Tet P1 uses two tetrahedra with volumes 1/6 and 1/3 and `TetCentroidQuadrature`. Hex Hermite uses two boxes of sizes (1,2,3) and (2,2,3), sharing all physical derivative DOFs at their common face, and `GaussLegendre3D<4>`.
+The regression fixtures use two Hex Q1 boxes with widths 1 and 2 sharing nodal displacement DOFs and integrates with `GaussLegendre3D<2>`. Tet P1 uses two tetrahedra with volumes 1/6 and 1/3 and `TetCentroidQuadrature`. Hex Hermite uses two boxes of sizes (1,2,3) and (2,2,3), sharing all physical derivative DOFs at their common face, and `GaussLegendre3D<4>`.
 
-The shell StVK example is implemented entirely in `main()` in `shell_stvk_mesh_energy.cpp`. It uses six vertices and four triangles `{0,1,2}`, `{2,1,3}`, `{0,2,4}`, `{1,0,5}`, with reference areas `1,2,1/2,2`. Setup builds edge-neighbor stencils, a three-DOF-per-vertex `StencilDofMap`, and fixed `TriangleMidEdgeRestData`. This reference-data type is declared in `fem/kinematics/triangle_mid_edge_kinematics.hpp` and has no material dependency. `ShellFemEnergy<KoiterStVK>` owns the per-face reference data, thicknesses, and parameters. Each face callback integrates the constant density from `ShellMaterialLocalEnergy2D<KoiterStVK>` at the centroid with the reference face area. Thickness is `0.1`; `Y=100` and `nu=0.3` are converted to plane-stress Lamé parameters.
+The shell StVK example is implemented entirely in `main()` in `equilibrium/shell_saddle_pull.cpp` and loads `assets/shell.obj`. Its regression fixture uses six vertices and four triangles `{0,1,2}`, `{2,1,3}`, `{0,2,4}`, `{1,0,5}`, with reference areas `1,2,1/2,2`. Setup builds edge-neighbor stencils, a three-DOF-per-vertex `StencilDofMap`, and fixed `TriangleMidEdgeRestData`. This reference-data type is declared in `fem/kinematics/triangle_mid_edge_kinematics.hpp` and has no material dependency. `ShellFemEnergy<KoiterStVK>` owns the per-face reference data, thicknesses, and parameters. Each face callback integrates the constant density from `ShellMaterialLocalEnergy2D<KoiterStVK>` at the centroid with the reference face area. Thickness is `0.1`; `Y=100` and `nu=0.3` are converted to plane-stress Lamé parameters.
 
 All four executables minimize total potential `Pi(u) = E_elastic(u) + E_pulling(u)`
 from zero displacement. `VertexPullingEnergy` (`litepgo/energy/scalar/vertex_pulling_energy.hpp`)
@@ -548,8 +577,8 @@ and ignored by Git. Shell uses OBJ; the three volume examples use VEG.
 For example:
 
 ```sh
-build/debug/example/fem/tet_p1_mesh_energy assets/box-tet.veg /tmp/deformed.veg
-build/debug/example/fem/shell_stvk_mesh_energy assets/shell.obj /tmp/deformed.obj
+build/debug/example/fem/equilibrium/tet_p1_corner_pull assets/box-tet.veg /tmp/deformed.veg
+build/debug/example/fem/equilibrium/shell_saddle_pull assets/shell.obj /tmp/deformed.obj
 ```
 
 Each example also has a Python mirror beside it (`<name>.py`) that uses the same
@@ -558,7 +587,7 @@ line. It takes the same optional arguments (see `--help`) and writes to `output/
 by default:
 
 ```sh
-uv run --no-sync python example/fem/tet_p1_mesh_energy.py assets/box-tet.veg /tmp/deformed.veg
+uv run --no-sync python example/fem/equilibrium/tet_p1_corner_pull.py assets/box-tet.veg /tmp/deformed.veg
 ```
 
 `tests/python/test_fem.py` runs each pair and requires the same convergence,
@@ -573,7 +602,7 @@ output stores displaced corner positions, not derivative DOFs or the curved fiel
 
 ## Plastic twist
 
-`example/fem/plastic_twist/` holds three C++ examples and their line-by-line Python
+`example/fem/plasticity/` holds three twist examples and their Python
 mirrors (`tet_p1`, `hex_q1`, `hex_hermite`), with the same arguments as the examples
 above. Each gives a bar the permanent deformation left after twisting it past yield.
 The plastic displacement `u_p` is the twist a released bar keeps: about the vertical
@@ -615,7 +644,7 @@ multiply-adds, so their output need not match bit for bit. CTest runs the C++ ex
 
 ## Material calibration (C++)
 
-Build `material_fit`, then run `build/debug/example/fem/material_fit`.
+Build `volume_equilibrium_material_fit`, then run `build/debug/example/fem/fitting/volume_equilibrium_material_fit`.
 This executable is also a CTest regression. It fixes the bundled tet bar's bottom
 face and prescribes the top face, leaving side and interior nodes free.
 Two experiments apply shear displacement 0.08 times the height and compression
@@ -644,7 +673,7 @@ Every equilibrium must converge with free-gradient tolerance `1e-10`; prescribed
 DOFs are checked for exact preservation. This noise-free synthetic regression
 validates the implementation, not real-world material identifiability.
 
-The Python mirror runs with `uv run --no-sync python example/fem/material_fit.py`.
+The Python mirror runs with `uv run --no-sync python example/fem/fitting/volume_equilibrium_material_fit.py`.
 It uses the same native Gauss-Newton solver and analytic FEM sensitivities.
 The Python response evaluator `residual(x, need_jacobian)` returns `(r, J)` when the flag is true,
 otherwise just `r`. Return `None` to mark an infeasible point: trial points are
@@ -761,8 +790,8 @@ g, B = force.eval(theta, need_jacobian=True)
 ```
 
 `example/energy/response/mesh_response.{cpp,py}` now fits this force response directly.
-`material_fit.{cpp,py}` also uses it for B at each solved equilibrium state, then
-retains the existing sensitivity solve to include the effect of equilibrium
+`volume_equilibrium_material_fit.{cpp,py}` also uses it for B at each solved equilibrium state, then
+uses `StaticEquilibriumResponse` to include the effect of equilibrium
 changes. B alone is the fixed-state partial derivative, not that total derivative.
 
 
@@ -890,7 +919,7 @@ Thickness is fixed in this API; thickness response is not implemented.
 
 ## Shell material parameter fitting example
 
-`shell_material_fit.cpp` and `shell_material_fit.py` recover two globally shared
+`shell_fixed_pose_material_fit.cpp` and `shell_fixed_pose_material_fit.py` recover two globally shared
 KoiterStVK parameters from synthetic nodal forces at a fixed pose. Both load
 `assets/shell.obj`, construct the same mid-edge stencils as the shell equilibrium
 example, and prescribe anisotropic stretch, shear and saddle bending. Thickness
@@ -910,12 +939,12 @@ force residual and that singular-value ratio. It exits unsuccessfully if recover
 or convergence checks fail.
 
 ```sh
-cmake --build build/debug --target shell_material_fit -j 4
-./build/debug/example/fem/shell_material_fit
-PYTHONPATH=build/debug/python .venv/bin/python example/fem/shell_material_fit.py
+cmake --build build/debug --target shell_fixed_pose_material_fit -j 4
+./build/debug/example/fem/fitting/shell_fixed_pose_material_fit
+PYTHONPATH=build/debug/python .venv/bin/python example/fem/fitting/shell_fixed_pose_material_fit.py
 
-ctest --test-dir build/debug -R '^ShellMaterialFit$' --output-on-failure
-PYTHONPATH=build/debug/python .venv/bin/python -m pytest tests/python/test_shell_material_fit_example.py -q
+ctest --test-dir build/debug -R '^FemFit\.shell_fixed_pose_material_fit$' --output-on-failure
+PYTHONPATH=build/debug/python .venv/bin/python -m pytest tests/python/test_shell_fixed_pose_material_fit_example.py -q
 ```
 
 At fixed geometry, displacement and thickness, KoiterStVK force is linear in these
@@ -928,7 +957,7 @@ executables and checks parameter recovery and matching results.
 
 ## Diagonal plastic deformation fitting example
 
-`diagonal_fp_fit.cpp` and `diagonal_fp_fit.py` identify three **globally shared**
+`volume_fixed_pose_fp_fit.cpp` and `volume_fixed_pose_fp_fit.py` identify three **globally shared**
 positive plastic stretches from all nodal force components at one prescribed
 pose of `assets/box-tet.veg`. Reference geometry and NeoHookean parameters
 `theta = [2, 3]` stay fixed. Displacement is prescribed as
@@ -969,12 +998,12 @@ ambiguities; restricting the parameterization and checking its Jacobian avoids
 assuming that all nine entries can be recovered from one pose.
 
 ```sh
-cmake --build build/debug --target diagonal_fp_fit -j 4
-./build/debug/example/fem/diagonal_fp_fit
-PYTHONPATH=build/debug/python .venv/bin/python example/fem/diagonal_fp_fit.py
+cmake --build build/debug --target volume_fixed_pose_fp_fit -j 4
+./build/debug/example/fem/fitting/volume_fixed_pose_fp_fit
+PYTHONPATH=build/debug/python .venv/bin/python example/fem/fitting/volume_fixed_pose_fp_fit.py
 
-ctest --test-dir build/debug -R '^DiagonalFpFit$' --output-on-failure
-PYTHONPATH=build/debug/python .venv/bin/python -m pytest tests/python/test_diagonal_fp_fit_example.py -q
+ctest --test-dir build/debug -R '^FemFit\.volume_fixed_pose_fp_fit$' --output-on-failure
+PYTHONPATH=build/debug/python .venv/bin/python -m pytest tests/python/test_volume_fixed_pose_fp_fit_example.py -q
 ```
 
 Output includes true/initial/fitted stretches, convergence, iterations, parameter
@@ -1059,7 +1088,7 @@ thickness response is included.
 
 ## Fit shell plastic stretches at a prescribed pose
 
-[shell_fp_fit.cpp](shell_fp_fit.cpp) and [shell_fp_fit.py](shell_fp_fit.py)
+[shell_fixed_pose_fp_fit.cpp](fitting/shell_fixed_pose_fp_fit.cpp) and [shell_fixed_pose_fp_fit.py](fitting/shell_fixed_pose_fp_fit.py)
 recover two shared in-plane stretches on the flat xy sheet in `assets/shell.obj`:
 
 ```text
@@ -1099,12 +1128,12 @@ not a global uniqueness guarantee. Starting from identity recovers both target
 stretches in five iterations.
 
 ```sh
-cmake --build build/debug --target shell_fp_fit
-build/debug/example/fem/shell_fp_fit
-PYTHONPATH=build/debug/python .venv/bin/python example/fem/shell_fp_fit.py
+cmake --build build/debug --target shell_fixed_pose_fp_fit
+build/debug/example/fem/fitting/shell_fixed_pose_fp_fit
+PYTHONPATH=build/debug/python .venv/bin/python example/fem/fitting/shell_fixed_pose_fp_fit.py
 
-ctest --test-dir build/debug -R '^ShellFpFit$' --output-on-failure
-PYTHONPATH=build/debug/python .venv/bin/python -m pytest tests/python/test_shell_fp_fit_example.py -q
+ctest --test-dir build/debug -R '^FemFit\.shell_fixed_pose_fp_fit$' --output-on-failure
+PYTHONPATH=build/debug/python .venv/bin/python -m pytest tests/python/test_shell_fixed_pose_fp_fit_example.py -q
 ```
 
 The regression test compares the C++ and Python recovered stretches and
@@ -1123,8 +1152,8 @@ program before the corresponding final OBJ is written.
 
 ### Shell: differential in-plane growth
 
-[shell_plastic_field.cpp](shell_plastic_field.cpp) and
-[shell_plastic_field.py](shell_plastic_field.py) generate a 4-by-1 xy strip
+[shell_plastic_field.cpp](plasticity/shell_plastic_field.cpp) and
+[shell_plastic_field.py](plasticity/shell_plastic_field.py) generate a 4-by-1 xy strip
 (65 vertices, 96 triangles). The first two vertex columns are clamped, fixing
 position and strip direction. Thickness is 0.2 and Koiter parameters are (2,3).
 At each face centroid y, prescribe
@@ -1158,8 +1187,8 @@ loading step.
 
 ### Volume: plastic twist
 
-Reuse [tet_p1_plastic_twist.cpp](plastic_twist/tet_p1_plastic_twist.cpp) and
-[tet_p1_plastic_twist.py](plastic_twist/tet_p1_plastic_twist.py). The tetrahedral
+Reuse [tet_p1_plastic_twist.cpp](plasticity/tet_p1_plastic_twist.cpp) and
+[tet_p1_plastic_twist.py](plasticity/tet_p1_plastic_twist.py). The tetrahedral
 bar's nodal plastic displacement twists progressively to 90 degrees at its top;
 `DeformationGradientField3D` supplies its elementwise gradient Fp. It includes
 shear, not just rotation. With only the bottom fixed the bar relaxes to the
@@ -1173,10 +1202,10 @@ From the repository root:
 
 ```sh
 cmake --build build/debug --target shell_plastic_field tet_p1_plastic_twist
-build/debug/example/fem/shell_plastic_field output/shell_plastic_field
-PYTHONPATH=build/debug/python .venv/bin/python example/fem/shell_plastic_field.py output/python/shell_plastic_field
-build/debug/example/fem/plastic_twist/tet_p1_plastic_twist assets/box-tet.veg output/volumetric_plastic_field/twist.veg
-PYTHONPATH=build/debug/python .venv/bin/python example/fem/plastic_twist/tet_p1_plastic_twist.py assets/box-tet.veg output/python/volumetric_plastic_field/twist.veg
+build/debug/example/fem/plasticity/shell_plastic_field output/shell_plastic_field
+PYTHONPATH=build/debug/python .venv/bin/python example/fem/plasticity/shell_plastic_field.py output/python/shell_plastic_field
+build/debug/example/fem/plasticity/tet_p1_plastic_twist assets/box-tet.veg output/volumetric_plastic_field/twist.veg
+PYTHONPATH=build/debug/python .venv/bin/python example/fem/plasticity/tet_p1_plastic_twist.py assets/box-tet.veg output/python/volumetric_plastic_field/twist.veg
 ```
 
 Shell writes `rest.obj` and `equilibrium.obj`. Volume writes
@@ -1215,8 +1244,8 @@ Each boundary quad becomes 4-by-4 quads (32 triangles), with shared samples weld
 
 ```sh
 cmake --build build/debug --target hex_hermite_plastic_twist
-build/debug/example/fem/plastic_twist/hex_hermite_plastic_twist assets/box-hex.veg output/volumetric_plastic_field/hermite.veg
-PYTHONPATH=build/debug/python .venv/bin/python example/fem/plastic_twist/hex_hermite_plastic_twist.py assets/box-hex.veg output/python/volumetric_plastic_field/hermite.veg
+build/debug/example/fem/plasticity/hex_hermite_plastic_twist assets/box-hex.veg output/volumetric_plastic_field/hermite.veg
+PYTHONPATH=build/debug/python .venv/bin/python example/fem/plasticity/hex_hermite_plastic_twist.py assets/box-hex.veg output/python/volumetric_plastic_field/hermite.veg
 ```
 
 Outputs are `hermite_free.obj` and `hermite_clamped.obj`. The accompanying VEG
@@ -1245,7 +1274,7 @@ Fixed DOFs and their prescribed values must be independent of parameters.
 Derivatives apply to an isolated differentiable equilibrium branch; branch
 switches and singular equilibria are outside this contract. Callbacks and
 borrowed data must remain deterministic for the response lifetime.
-`material_fit.cpp` and `.py` use this response, then form reaction derivatives
+`volume_equilibrium_material_fit.cpp` and `.py` use this response, then form reaction derivatives
 as `B + K J`. The C++ regression compares both displacement and reaction
 sensitivities against independently re-solved central differences.
 
@@ -1267,13 +1296,13 @@ boundary values, and free-force residuals. Both displacement and reaction
 Jacobians are checked against independently re-solved central differences at
 steps 1e-3 and 1e-4. A held-out boundary load of 0.6 times the training load
 checks prediction after fitting. Geometry and thickness are not optimized;
-measurements contain no noise. The original `shell_material_fit` remains the
+measurements contain no noise. The original `shell_fixed_pose_material_fit` remains the
 fixed-pose force-calibration example.
 
 ```sh
 cmake --build build/release --target shell_equilibrium_material_fit -j 4
-./build/release/example/fem/shell_equilibrium_material_fit
-.venv/bin/python example/fem/shell_equilibrium_material_fit.py
+./build/release/example/fem/fitting/shell_equilibrium_material_fit
+.venv/bin/python example/fem/fitting/shell_equilibrium_material_fit.py
 .venv/bin/python -m pytest -q tests/python/test_shell_equilibrium_material_fit_example.py
 ```
 
@@ -1281,7 +1310,7 @@ cmake --build build/release --target shell_equilibrium_material_fit -j 4
 
 `volume_equilibrium_fp_fit.cpp` / `.py` and `shell_equilibrium_fp_fit.cpp` / `.py`
 recover shared positive diagonal plastic stretches through `StaticEquilibriumResponse`.
-These supplement the fixed-pose `diagonal_fp_fit` and `shell_fp_fit` examples.
+These supplement the fixed-pose `volume_fixed_pose_fp_fit` and `shell_fixed_pose_fp_fit` examples.
 Material parameters, geometry, and shell thickness stay fixed. This is plastic
 state identification, not a plastic evolution or yield model.
 
@@ -1321,10 +1350,10 @@ identifiability for these experiments, not global uniqueness of arbitrary Fp fie
 
 ```sh
 cmake --build build/release --target volume_equilibrium_fp_fit shell_equilibrium_fp_fit -j 4
-./build/release/example/fem/volume_equilibrium_fp_fit
-./build/release/example/fem/shell_equilibrium_fp_fit
-.venv/bin/python example/fem/volume_equilibrium_fp_fit.py
-.venv/bin/python example/fem/shell_equilibrium_fp_fit.py
+./build/release/example/fem/fitting/volume_equilibrium_fp_fit
+./build/release/example/fem/fitting/shell_equilibrium_fp_fit
+.venv/bin/python example/fem/fitting/volume_equilibrium_fp_fit.py
+.venv/bin/python example/fem/fitting/shell_equilibrium_fp_fit.py
 .venv/bin/python -m pytest -q tests/python/test_equilibrium_fp_fit_examples.py
-ctest --test-dir build/release -R '^(Volume|Shell)EquilibriumFpFit$' --output-on-failure
+ctest --test-dir build/release -R '^FemFit\.(volume|shell)_equilibrium_fp_fit$' --output-on-failure
 ```
