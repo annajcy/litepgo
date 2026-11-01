@@ -40,7 +40,7 @@ columns `exp(-b t)` and `-a t exp(-b t)`. The data are noiseless so the known
 parameters provide a self-check. Convergence is based on `||Jᵀ r||∞`, which does
 not imply a zero residual for general data. This example does not impose parameter
 bounds. For a larger application with equilibrium sensitivities, see
-[`material_fit`](../fem/material_fit.py).
+[`volume_equilibrium_material_fit`](../fem/fitting/volume_equilibrium_material_fit.py).
 
 Gauss–Newton accepts a `Response` object, not a bare callable. Both curve-fit
 examples derive from `FixedPatternResponse`, pass a 9-by-2 structural pattern

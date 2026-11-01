@@ -33,7 +33,7 @@ returns equilibrium displacement and its direct parameter Jacobian. make_energy(
 returns the total Energy; partial(p, u) returns its sparse gradient/parameter
 Jacobian at fixed u. Fixed DOFs and values must be parameter-independent.
 Each call starts from initial; sensitivities use the exact unshifted Hessian.
-Nonconverged equilibria raise ValueError. See example/fem/material_fit.py.
+Nonconverged equilibria raise ValueError. See example/fem/fitting/volume_equilibrium_material_fit.py.
 
 Vector responses and analytic sparse Jacobians.
 
