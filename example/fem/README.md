@@ -21,6 +21,8 @@ this class without user callbacks.
 
 Quadrature supplies reference coordinates `xi` and weights. A `Field3D` computes values and derivatives at `xi` through virtual functions. `DeformationGradientField3D` composes displacement and coordinate fields at one `xi`, returning column-flattened `F`. Materials consume numerical `F`, `Fp`, and `theta`. Local energies bind one active coefficient block and supply density and coefficient derivatives. `VolumetricElement3D` caches fixed reference geometry and integrates the supplied local energy; `MeshEnergy` gathers and assembles the element results.
 
+`VolumetricFemEnergy` uses `DeformationGradientKinematics3D<UBasis, Q>` from `fem/kinematics/deformation_gradient_kinematics.hpp` to cache `dF/dcoefficients` at each quadrature point. It supplies `F`, material derivatives, and feasible steps through indexed callbacks to `VolumetricElement3D`, which owns the quadrature loops, output initialization, and integrated-result checks. This cache owns its data and is not a `Field3D`; it performs no coordinate lookup. Rebuild it when reference geometry changes.
+
 ```mermaid
 flowchart TD
     Q["Quadrature: xi, weight"] --> E["VolumetricElement3D: reference cache + integration"]
@@ -43,7 +45,7 @@ flowchart TD
 | `fem/quadrature/` | Reference points and weights, grouped into `1d/`, `2d/`, and `3d/` |
 | `fem/field/` | `Field2D/3D`, `InterpolatedField2D/3D`, `IdentityField2D/3D`, and deformation-gradient fields |
 | `fem/kinematics/` | Triangle mid-edge forms and reference data, reference geometry caching, quadrature integration of supplied local energies, determinant bounds, and the Hex Hermite coefficient transform |
-| `fem/material/volumetric/` | Volumetric inputs, multiplicative kinematics, Neo-Hookean material, and the `VolumetricMaterialLocalEnergy3D` family |
+| `fem/material/volumetric/` | Volumetric inputs, multiplicative kinematics, Neo-Hookean material, and the `VolumetricMaterialLocalEnergyF3D` |
 | `fem/material/shell/` | Shell inputs, Koiter StVK material, `ShellMaterialLocalEnergy2D` |
 | `fem/local/` | Shared `LocalEnergy2D/3D` interfaces and derivative contractions |
 
@@ -199,7 +201,7 @@ $$
 =\left(\frac{\partial X}{\partial\xi}\right)^{-1}.
 $$
 
-`Field3D` assigns no geometric meaning to its values or derivatives. `DeformationGradientField3D` requests `X_field.eval_dvalue_dxi(xi)`, checks three components, a finite 3-by-3 derivative and a finite positive determinant, then computes and validates the inverse. For fixed reference geometry, `VolumetricElement3D` validates the Jacobian and determinant once at construction to compute volume weights; it does not compute or cache the inverse. Neither path needs `X_field.eval_value(xi)`. `coordinate_field()` exposes the coordinate field borrowed by the deformation field.
+`Field3D` assigns no geometric meaning to its values or derivatives. `DeformationGradientField3D` requests `X_field.eval_dvalue_dxi(xi)`, checks three components, a finite 3-by-3 derivative and a finite positive determinant, then computes and validates the inverse. For fixed reference geometry, `VolumetricElement3D` validates the Jacobian and determinant once at construction to compute volume weights; it does not compute or cache the inverse. Neither path needs `X_field.eval_value(xi)`.
 
 $$
 F=I+u_{,\xi}X_{,\xi}^{-1},\qquad
@@ -269,7 +271,7 @@ The three solid examples use `VolumetricFemEnergy`, which owns separate vectors 
 
 `GaussLegendre3D<PointsPerAxis>` uses `PointsPerAxis^3` integration points on `[0,1]^3`; `<2>` therefore uses eight points.
 
-`VolumetricMaterialLocalEnergyF3D<Material>` differentiates with respect to the F field's coefficients, holding Fp and theta fixed. Its constructor accepts `(F_field, Fp_field, theta_field)` as three `const Field3D&` inputs. The abstract `VolumetricMaterialLocalEnergy3D<Material>` base supplies density evaluation and coefficient pullbacks. A material implements `eval_W`, `eval_dW_dF` and `eval_d2W_dF2`. Pure Fp/parameter energy derivatives and their LocalEnergy wrappers are not exposed; parameter fitting uses the material force response.
+`VolumetricMaterialLocalEnergyF3D<Material>` differentiates with respect to the F field's coefficients, holding Fp and theta fixed. Its constructor accepts `(F_field, Fp_field, theta_field)` as three `const Field3D&` inputs. A material implements `eval_W`, `eval_dW_dF` and `eval_d2W_dF2`. Pure Fp/parameter energy derivatives and their LocalEnergy wrappers are not exposed; parameter fitting uses the material force response.
 
 All three input fields must outlive the energy, and temporary input fields are rejected. A copied energy borrows the same fields, so subsequent field updates are visible. A composed `F` field activates displacement coefficients; direct `F` coefficients can use a nine-component `IdentityField3D`. Non-positive active DOF counts are rejected at construction.
 
@@ -482,7 +484,7 @@ Use explicit `2D` / `3D` names for dimension-specific types. The dimensionless n
 | `fem/material/{shell_material_inputs,koiter_stvk}.*` | Same filenames under `fem/material/shell/` |
 | `fem/local/volumetric_material_local_energy.hpp` or `fem/local/volumetric/volumetric_material_local_energy.hpp` | `fem/material/volumetric/volumetric_material_local_energy.hpp` |
 | `fem/local/shell_material_local_energy.hpp` or `fem/local/shell/shell_material_local_energy.hpp` | `fem/material/shell/shell_material_local_energy.hpp` |
-| `MaterialLocalEnergy3D` and `MaterialLocalEnergyF3D/Fp3D/Theta3D` | `VolumetricMaterialLocalEnergy3D` and `VolumetricMaterialLocalEnergyF3D`; Fp/Theta energy wrappers were removed |
+| `MaterialLocalEnergy3D` and `MaterialLocalEnergyF3D/Fp3D/Theta3D` | `VolumetricMaterialLocalEnergyF3D`; Fp/Theta energy wrappers were removed |
 | `MaterialLocalEnergy3D<Material>(F, Fp, theta, active)` or `make_material_local_energy<Material, Active>` | `VolumetricMaterialLocalEnergyF3D`, with named `Field3D` inputs; parameter fitting uses `VolumetricFemForceMaterialResponse` |
 | Volume integration helper | `VolumetricElement3D<Q>::eval(local_energy, ...)`; custom loops can still use `local_energy.accumulate` |
 | `B::evaluate(xi)` and `Basis::Sample` | `B::eval_N(xi)`, `B::eval_dN_dxi(xi)`, `B::eval_d2N_dxi2(xi)` |
@@ -510,7 +512,7 @@ Hex Q1 uses two boxes with widths 1 and 2 sharing nodal displacement DOFs and in
 The shell StVK example is implemented entirely in `main()` in `shell_stvk_mesh_energy.cpp`. It uses six vertices and four triangles `{0,1,2}`, `{2,1,3}`, `{0,2,4}`, `{1,0,5}`, with reference areas `1,2,1/2,2`. Setup builds edge-neighbor stencils, a three-DOF-per-vertex `StencilDofMap`, and fixed `TriangleMidEdgeRestData`. This reference-data type is declared in `fem/kinematics/triangle_mid_edge_kinematics.hpp` and has no material dependency. `ShellFemEnergy<KoiterStVK>` owns the per-face reference data, thicknesses, and parameters. Each face callback integrates the constant density from `ShellMaterialLocalEnergy2D<KoiterStVK>` at the centroid with the reference face area. Thickness is `0.1`; `Y=100` and `nu=0.3` are converted to plane-stress Lamé parameters.
 
 All four executables minimize total potential `Pi(u) = E_elastic(u) + E_pulling(u)`
-from zero displacement. `VertexPullingEnergy` (`litepgo/energy/vertex_pulling_energy.hpp`)
+from zero displacement. `VertexPullingEnergy` (`litepgo/energy/scalar/vertex_pulling_energy.hpp`)
 adds zero-rest-length springs `k/2 |u_i - t_i|^2` that pull each bounding-box corner
 vertex toward an anchor, where `t_i` is the anchor minus the rest position.
 `WeightedEnergySum` combines it with the elastic energy. The springs remove all rigid
@@ -672,10 +674,11 @@ Both accumulation entry points are retained:
 
 - `accumulate(xi, weight, value, J)` adds into initialized, correctly sized,
   non-aliasing buffers without resizing, validating coordinates, weight and results.
-- `accumulate_for_integration(...)` defaults to `accumulate`. Material responses
-  override it to skip redundant finite scans. The integrator guarantees finite
-  coordinates/weights and checks completed outputs for dimensions and finiteness.
-  This fast path is for integrators, not unchecked standalone evaluation.
+- `accumulate_into(...)` is the single virtual accumulation hook, accepting strided
+  views. `accumulate(...)` wraps owning buffers as views without copying them.
+  Both paths retain coordinate, weight, dimension and finite-result checks.
+  Custom local classes override `accumulate_into`; the separate integration hook
+  and owning-buffer overrides have been removed.
 
 `VolumetricMaterialForceLocalResponse3D<NeoHookean>(F, Fp, theta)` computes
 
@@ -755,7 +758,7 @@ force = Force(dof.ConstantDofMap(topology, 2), displacement_map,
 g, B = force.eval(theta, need_jacobian=True)
 ```
 
-`example/response/mesh_response.{cpp,py}` now fits this force response directly.
+`example/energy/response/mesh_response.{cpp,py}` now fits this force response directly.
 `material_fit.{cpp,py}` also uses it for B at each solved equilibrium state, then
 retains the existing sensitivity solve to include the effect of equilibrium
 changes. B alone is the fixed-state partial derivative, not that total derivative.
@@ -768,8 +771,7 @@ pre-sized, independently optional `StridedVecRef` / `StridedMatRef` outputs.
 They may reference padded matrix blocks; storage must remain alive and must not
 alias the local energy's inputs. Built-in volumetric materials implement
 `LocalEnergy::accumulate_into` to accumulate directly into these views.
-The default implementation preserves existing custom accumulation overrides
-through owning temporaries. The existing owning `eval` and `accumulate`
+The default implementation accumulates the pointwise evaluation results into views. The existing owning `eval` and `accumulate`
 interfaces remain available. Volumetric and shell mesh callbacks write batch
 outputs directly, and the assembler reads those same buffers.
 
