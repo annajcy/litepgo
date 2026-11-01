@@ -33,7 +33,7 @@ struct QuadraticDeformationMaterial {
     }
 };
 
-TEST(VolumetricMaterialLocalEnergy3D, OverflowingDensityWeightAndAccumulationsThrowDomainError) {
+TEST(VolumetricMaterialLocalEnergyF3D, OverflowingDensityWeightAndAccumulationsThrowDomainError) {
     IdentityField3D F(Eigen::VectorXd::Constant(9, 1e155));
     const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped()), theta(Eigen::Vector2d(2, 3));
     const VolumetricMaterialLocalEnergyF3D<QuadraticDeformationMaterial> energy(F, Fp, theta);
@@ -75,7 +75,7 @@ struct ValueOnlyF final : ValueOnlyField {
         return Eigen::Matrix3d::Identity().reshaped();
     }
 };
-TEST(VolumetricMaterialLocalEnergy3D, DirectFieldsBindCorrectDerivativesAndBorrowNamedFields) {
+TEST(VolumetricMaterialLocalEnergyF3D, DirectFieldsBindCorrectDerivativesAndBorrowNamedFields) {
     Eigen::Matrix3d F = (Eigen::Matrix3d() << 1.2, 0.1, -0.03, 0.04, 0.9, 0.02, -0.01, 0.04, 1.1).finished();
     const Eigen::Matrix3d Fp = (Eigen::Matrix3d() << 0.95, -0.02, 0.05, 0.01, 1.1, -0.04, 0.03, 0.01, 1.05).finished();
     IdentityField3D F_field(F.reshaped());
@@ -96,7 +96,7 @@ TEST(VolumetricMaterialLocalEnergy3D, DirectFieldsBindCorrectDerivativesAndBorro
     const auto copy = energy;
     EXPECT_DOUBLE_EQ(copy.eval_value(xi), NeoHookean::eval_W({F, Fp, inputs.theta}));
 }
-TEST(VolumetricMaterialLocalEnergy3D, InactiveInputsNeedOnlyValuesAndActiveCapabilitiesAreCheckedAtBinding) {
+TEST(VolumetricMaterialLocalEnergyF3D, InactiveInputsNeedOnlyValuesAndActiveCapabilitiesAreCheckedAtBinding) {
     const ValueOnlyF readonly_F;
     const ValueOnlyParameters readonly_theta;
     const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
@@ -131,7 +131,7 @@ struct MappedDeformation final : Field3D {
         return derivative;
     }
 };
-TEST(VolumetricMaterialLocalEnergy3D, AnotherMaterialSupportsRectangularDeformationPullback) {
+TEST(VolumetricMaterialLocalEnergyF3D, AnotherMaterialSupportsRectangularDeformationPullback) {
     const IdentityField3D F(Eigen::Matrix3d::Identity().reshaped());
     const Eigen::Vector4d x(0.2, -0.3, 0.5, 0.8);
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
@@ -158,8 +158,8 @@ template <class Energy> void check_temporary_inputs_rejected() {
     static_assert(!std::is_constructible_v<Energy, const IdentityField3D&, const IdentityField3D&, IdentityField3D&&>);
 }
 
-TEST(VolumetricMaterialLocalEnergy3D, RejectsTemporaryFields) {
-    static_assert(std::is_abstract_v<VolumetricMaterialLocalEnergy3D<NeoHookean>>);
+TEST(VolumetricMaterialLocalEnergyF3D, RejectsTemporaryFields) {
+    static_assert(!std::is_abstract_v<VolumetricMaterialLocalEnergyF3D<NeoHookean>>);
     check_temporary_inputs_rejected<VolumetricMaterialLocalEnergyF3D<NeoHookean>>();
 }
 struct Counts {
@@ -184,7 +184,7 @@ template <class Value> struct CountingField final : Field3D {
         return Eigen::MatrixXd::Identity(data.size(), data.size());
     }
 };
-TEST(VolumetricMaterialLocalEnergy3D, AccumulationReusesInputValuesAndTheActiveDerivative) {
+TEST(VolumetricMaterialLocalEnergyF3D, AccumulationReusesInputValuesAndTheActiveDerivative) {
     const CountingField<Eigen::Matrix3d> F{1.1 * Eigen::Matrix3d::Identity()}, Fp{0.95 * Eigen::Matrix3d::Identity()};
     const CountingField<Eigen::VectorXd> theta{Eigen::Vector2d(2, 3)};
     const auto energy = litepgo::fem::VolumetricMaterialLocalEnergyF3D<NeoHookean>(F, Fp, theta);
@@ -218,7 +218,7 @@ TEST(VolumetricMaterialLocalEnergy3D, AccumulationReusesInputValuesAndTheActiveD
     EXPECT_THROW(energy.accumulate(xi, std::numeric_limits<double>::infinity(), &g, nullptr), std::invalid_argument);
     EXPECT_EQ(g, before);
 }
-TEST(VolumetricMaterialLocalEnergy3D, FeasibleStepMapsOnlyTheActiveCoefficientDirection) {
+TEST(VolumetricMaterialLocalEnergyF3D, FeasibleStepMapsOnlyTheActiveCoefficientDirection) {
     Eigen::Matrix3d A;
     A << 1.2, 0.2, 0, 0, 0.9, 0.1, 0.05, 0, 1.1;
     const IdentityField3D F(A.reshaped()), Fp(A.reshaped());
@@ -239,7 +239,7 @@ TEST(VolumetricMaterialLocalEnergy3D, FeasibleStepMapsOnlyTheActiveCoefficientDi
         std::invalid_argument);
 }
 
-TEST(VolumetricMaterialLocalEnergy3D, FeasibleStepUsesTheDeformationFieldAffineMapWithoutAnIdentityIncrement) {
+TEST(VolumetricMaterialLocalEnergyF3D, FeasibleStepUsesTheDeformationFieldAffineMapWithoutAnIdentityIncrement) {
     const auto X = coordinates(2);
     Eigen::MatrixXd u = Eigen::MatrixXd::Zero(8, 3), du(8, 3);
     const Eigen::Matrix3d dF = Eigen::Vector3d(-4, -4, 0).asDiagonal();
@@ -280,7 +280,7 @@ struct BadActiveField final : Field3D {
         return derivative;
     }
 };
-TEST(VolumetricMaterialLocalEnergy3D, RejectsInvalidActiveDerivativeShapesCountsAndNonFiniteEntries) {
+TEST(VolumetricMaterialLocalEnergyF3D, RejectsInvalidActiveDerivativeShapesCountsAndNonFiniteEntries) {
     const ValueOnlyParameters parameters;
     const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
     const auto bind = [&](const BadActiveField& F) {
@@ -300,7 +300,7 @@ TEST(VolumetricMaterialLocalEnergy3D, RejectsInvalidActiveDerivativeShapesCounts
     EXPECT_THROW(bind(bad), std::invalid_argument);
 }
 
-TEST(VolumetricMaterialLocalEnergy3D, OverflowingMappedFeasibleDirectionThrowsDomainError) {
+TEST(VolumetricMaterialLocalEnergyF3D, OverflowingMappedFeasibleDirectionThrowsDomainError) {
     BadActiveField F;
     F.derivative = 1e200 * Eigen::MatrixXd::Identity(9, 9);
     const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
@@ -312,7 +312,7 @@ TEST(VolumetricMaterialLocalEnergy3D, OverflowingMappedFeasibleDirectionThrowsDo
 
 } // namespace
 
-TEST(VolumetricMaterialLocalEnergy3D, RejectsInvalidFAndFpSizesBeforeReshaping) {
+TEST(VolumetricMaterialLocalEnergyF3D, RejectsInvalidFAndFpSizesBeforeReshaping) {
     const ValueOnlyParameters parameters;
     const auto Fp = litepgo::fem::IdentityField3D(Eigen::Matrix3d::Identity().reshaped());
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
@@ -344,7 +344,7 @@ struct InvalidParameterGradients {
         return HexQ1Basis::eval_d2N_dxi2(xi);
     }
 };
-TEST(VolumetricMaterialLocalEnergy3D, InactiveInterpolatedParametersDoNotRequireSpatialDerivatives) {
+TEST(VolumetricMaterialLocalEnergyF3D, InactiveInterpolatedParametersDoNotRequireSpatialDerivatives) {
     Eigen::Matrix<double, 8, 2> theta_local;
     theta_local.col(0).setConstant(2);
     theta_local.col(1).setConstant(3);

@@ -33,28 +33,19 @@ template <class Material, ForceInput Input> class VolumetricForceLocalResponse3D
     }
     Eigen::VectorXd eval_value(const Eigen::Vector3d& xi) const override {
         Eigen::VectorXd value = Eigen::VectorXd::Zero(num_outputs());
-        evaluate(xi, 1, &value, static_cast<Eigen::MatrixXd*>(nullptr), true);
+        evaluate(xi, 1, &value, static_cast<Eigen::MatrixXd*>(nullptr));
         return value;
     }
     Eigen::MatrixXd eval_jacobian(const Eigen::Vector3d& xi) const override {
         Eigen::MatrixXd J = Eigen::MatrixXd::Zero(num_outputs(), num_inputs());
-        evaluate(xi, 1, static_cast<Eigen::VectorXd*>(nullptr), &J, true);
+        evaluate(xi, 1, static_cast<Eigen::VectorXd*>(nullptr), &J);
         return J;
     }
-    void accumulate(const Eigen::Vector3d& xi, double weight, Eigen::VectorXd& value,
-                    Eigen::MatrixXd* jacobian = nullptr) const override {
-        if (!xi.allFinite() || !std::isfinite(weight))
-            throw std::invalid_argument("VolumetricForceLocalResponse3D: invalid coordinates or weight");
-        evaluate(xi, weight, &value, jacobian, true);
-    }
-    void accumulate_for_integration(const Eigen::Vector3d& xi, double weight, Eigen::VectorXd& value,
-                                    Eigen::MatrixXd* jacobian = nullptr) const override {
-        evaluate(xi, weight, &value, jacobian, false);
-    }
-
     void accumulate_into(const Eigen::Vector3d& xi, double weight, StridedVecRef value,
                          StridedMatRef* jacobian = nullptr) const override {
-        evaluate(xi, weight, &value, jacobian, false);
+        if (!xi.allFinite() || !std::isfinite(weight))
+            throw std::invalid_argument("VolumetricForceLocalResponse3D: invalid coordinates or weight");
+        evaluate(xi, weight, &value, jacobian);
     }
 
   private:
@@ -75,23 +66,22 @@ template <class Material, ForceInput Input> class VolumetricForceLocalResponse3D
             throw std::invalid_argument("VolumetricForceLocalResponse3D: invalid material inputs");
         return {F.reshaped(3, 3), Fp.reshaped(3, 3), theta};
     }
-    static Eigen::MatrixXd derivative(const Field3D& field, const Eigen::Vector3d& xi, int rows, bool check) {
+    static Eigen::MatrixXd derivative(const Field3D& field, const Eigen::Vector3d& xi, int rows) {
         Eigen::MatrixXd D = field.eval_dvalue_dcoeffs(xi);
-        if (D.rows() != rows || D.cols() != field.num_dofs() || (check && !D.allFinite()))
+        if (D.rows() != rows || D.cols() != field.num_dofs() || !D.allFinite())
             throw std::invalid_argument("VolumetricForceLocalResponse3D: invalid field derivative");
         return D;
     }
-    template <class V, class M>
-    void evaluate(const Eigen::Vector3d& xi, double weight, V* value, M* J, bool check) const {
+    template <class V, class M> void evaluate(const Eigen::Vector3d& xi, double weight, V* value, M* J) const {
         if ((value && value->size() != num_outputs()) ||
             (J && (J->rows() != num_outputs() || J->cols() != num_inputs())))
             throw std::invalid_argument("VolumetricForceLocalResponse3D: invalid output dimensions");
         const auto inputs = eval_inputs(xi);
-        const auto D_F = derivative(F_, xi, 9, check);
+        const auto D_F = derivative(F_, xi, 9);
         if (value)
             add_gradient_wrt_dofs(D_F, Material::eval_dW_dF(inputs), weight, *value, false);
         if (J) {
-            const auto D_input = derivative(active_field(), xi, input_components, check);
+            const auto D_input = derivative(active_field(), xi, input_components);
             const auto B = [&] {
                 if constexpr (Input == ForceInput::Plastic)
                     return Material::eval_d2W_dF_dFp(inputs);
@@ -103,7 +93,7 @@ template <class Material, ForceInput Input> class VolumetricForceLocalResponse3D
             const Eigen::MatrixXd dP = B * D_input;
             J->noalias() += weight * (D_F.transpose() * dP);
         }
-        if (check && ((value && !value->allFinite()) || (J && !J->allFinite())))
+        if ((value && !value->allFinite()) || (J && !J->allFinite()))
             throw std::domain_error("VolumetricForceLocalResponse3D: non-finite response");
     }
     const Field3D& F_;

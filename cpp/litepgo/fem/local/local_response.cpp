@@ -1,5 +1,6 @@
 #include "litepgo/fem/local/local_response.hpp"
 #include <cmath>
+#include <optional>
 #include <stdexcept>
 
 namespace litepgo::fem {
@@ -10,8 +11,8 @@ template <int Dim> Eigen::MatrixXd LocalResponseT<Dim>::eval_jacobian(const Coor
     throw std::logic_error("LocalResponseT does not support Jacobian evaluation");
 }
 template <int Dim>
-void LocalResponseT<Dim>::accumulate(const Coordinate& xi, double weight, Eigen::VectorXd& value,
-                                     Eigen::MatrixXd* jacobian) const {
+void LocalResponseT<Dim>::accumulate_into(const Coordinate& xi, double weight, StridedVecRef value,
+                                          StridedMatRef* jacobian) const {
     if (!xi.allFinite() || !std::isfinite(weight))
         throw std::invalid_argument("LocalResponseT: invalid coordinates or weight");
     if (jacobian && !has_jacobian())
@@ -36,23 +37,15 @@ void LocalResponseT<Dim>::accumulate(const Coordinate& xi, double weight, Eigen:
     if (!value.allFinite() || (jacobian && !jacobian->allFinite()))
         throw std::domain_error("LocalResponseT: non-finite accumulation");
 }
-template <int Dim>
-void LocalResponseT<Dim>::accumulate_into(const Coordinate& xi, double weight, StridedVecRef value,
-                                          StridedMatRef* jacobian) const {
-    const int m = num_outputs(), n = num_inputs();
-    if (m < 0 || n < 0 || value.size() != m || (jacobian && (jacobian->rows() != m || jacobian->cols() != n)))
-        throw std::invalid_argument("LocalResponseT::accumulate_into: invalid output dimensions");
-    Eigen::VectorXd v = value;
-    Eigen::MatrixXd J;
+template <int ParamDim>
+void LocalResponseT<ParamDim>::accumulate(const Coordinate& xi, double weight, Eigen::VectorXd& value,
+                                          Eigen::MatrixXd* jacobian) const {
+    std::optional<StridedMatRef> J;
     if (jacobian)
-        J = *jacobian;
-    accumulate_for_integration(xi, weight, v, jacobian ? &J : nullptr);
-    if (v.size() != m || (jacobian && (J.rows() != m || J.cols() != n)))
-        throw std::logic_error("LocalResponseT::accumulate_into: resized output");
-    value = v;
-    if (jacobian)
-        *jacobian = J;
+        J.emplace(*jacobian);
+    accumulate_into(xi, weight, StridedVecRef(value), J ? &*J : nullptr);
 }
+
 template class LocalResponseT<2>;
 template class LocalResponseT<3>;
 } // namespace litepgo::fem

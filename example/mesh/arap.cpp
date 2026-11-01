@@ -1,5 +1,5 @@
 #include "litepgo/dof/stencil_dof_map.hpp"
-#include "litepgo/energy/mesh_energy.hpp"
+#include "litepgo/energy/scalar/mesh_energy.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include "litepgo/mesh/io/obj.hpp"
 #include "litepgo/solver/newton.hpp"

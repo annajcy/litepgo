@@ -382,12 +382,12 @@ TEST(VolumetricElement3D, ChecksLocalCapabilitiesBeforeWritingOutputs) {
 
 struct InvalidAccumulation : QuadraticLocalEnergy {
     int mode = 0;
-    double accumulate(const Eigen::Vector3d&, double, Eigen::VectorXd* g, Eigen::MatrixXd* H) const override {
+    double accumulate_into(const Eigen::Vector3d&, double, StridedVecRef* g, StridedMatRef* H) const override {
         const double infinity = std::numeric_limits<double>::infinity();
         if (g)
-            g->setConstant(mode == 1 ? 3 : 2, mode == 3 ? infinity : 0);
+            g->setConstant(mode == 3 ? infinity : 0);
         if (H)
-            H->setConstant(2, mode == 2 ? 3 : 2, mode == 4 ? infinity : 0);
+            H->setConstant(mode == 4 ? infinity : 0);
         return mode == 0 ? std::numeric_limits<double>::max() : 0;
     }
 };
@@ -397,10 +397,6 @@ TEST(VolumetricElement3D, RejectsMalformedAndNonFiniteLocalAccumulationResults) 
     Eigen::VectorXd g;
     Eigen::MatrixXd H;
     EXPECT_THROW(element.eval(local), std::domain_error);
-    for (int mode : {1, 2}) {
-        local.mode = mode;
-        EXPECT_THROW(element.eval(local, &g, &H), std::logic_error);
-    }
     for (int mode : {3, 4}) {
         local.mode = mode;
         EXPECT_THROW(element.eval(local, &g, &H), std::domain_error);
@@ -477,6 +473,15 @@ TEST(VolumetricElementViews, IntegratesIntoPaddedStridedOutputsWithoutTouchingNe
     Vec expected_g;
     Eigen::MatrixXd expected_H;
     const double expected = element.eval(local, &expected_g, &expected_H);
+    Vec owned_g = Vec::Constant(1, -123);
+    Eigen::MatrixXd owned_H = Eigen::MatrixXd::Constant(2, 3, -123);
+    for (int mask = 0; mask < 4; ++mask) {
+        EXPECT_DOUBLE_EQ(element.eval(local, mask & 1 ? &owned_g : nullptr, mask & 2 ? &owned_H : nullptr), expected);
+        if (mask & 1)
+            EXPECT_TRUE(owned_g.isApprox(expected_g));
+        if (mask & 2)
+            EXPECT_TRUE(owned_H.isApprox(expected_H));
+    }
     Vec storage = Vec::Constant(22, -123);
     Eigen::Map<Vec, 0, Eigen::InnerStride<2>> mapped_g(storage.data() + 2, 9);
     StridedVecRef g(mapped_g);
@@ -521,6 +526,10 @@ TEST(VolumetricElementViews, ResponseWritesPaddedRectangularBatchBlocks) {
     const VolumetricMaterialForceLocalResponse3D<NeoHookean> local(F, Fp, theta);
     Eigen::MatrixXd expected_J;
     const Vec expected = element.eval(local, &expected_J);
+    Eigen::MatrixXd owned_J = Eigen::MatrixXd::Constant(2, 3, -123);
+    EXPECT_TRUE(element.eval(local, &owned_J).isApprox(expected));
+    EXPECT_TRUE(owned_J.isApprox(expected_J));
+    EXPECT_TRUE(element.eval(local).isApprox(expected));
     Eigen::MatrixXd values = Eigen::MatrixXd::Constant(2, 9, -123);
     StridedVecRef v(values.row(1).transpose());
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> storage =
@@ -541,4 +550,60 @@ TEST(VolumetricElementViews, ResponseWritesPaddedRectangularBatchBlocks) {
     StridedVecRef wrong(values.row(0).head(8).transpose());
     EXPECT_THROW(element.eval_into(local, wrong, &J), std::invalid_argument);
     EXPECT_TRUE(J.isApprox(expected_J));
+}
+
+TEST(VolumetricElementViews, IndexedCallbacksShareWeightsZeroingAndValidation) {
+    using namespace litepgo;
+    using namespace litepgo::fem;
+    Eigen::Matrix<double, 8, 3> nodes;
+    for (int i = 0; i < 8; ++i)
+        nodes.row(i) = HexQ1Basis::reference_node(i).transpose();
+    const InterpolatedField3D<HexQ1Basis> X(nodes);
+    const VolumetricElement3D<GaussLegendre3D<2>> element(X);
+    Eigen::Vector2d gradient = Eigen::Vector2d::Constant(123);
+    Eigen::Matrix2d hessian = Eigen::Matrix2d::Constant(123);
+    StridedVecRef g(gradient);
+    StridedMatRef H(hessian);
+    int visited = 0;
+    auto accumulate = [&](int q, const auto& point, StridedVecRef* dg, StridedMatRef* dH) {
+        EXPECT_EQ(q, visited++);
+        EXPECT_TRUE(point.xi.isApprox(GaussLegendre3D<2>::points().row(q).transpose()));
+        EXPECT_NEAR(point.w_dV, GaussLegendre3D<2>::weights()[q], 1e-14);
+        if (dg)
+            *dg += point.w_dV * point.xi.head(2);
+        if (dH)
+            *dH += 2 * point.w_dV * Eigen::Matrix2d::Identity();
+        return point.w_dV * (q + 1);
+    };
+    for (int mask = 0; mask < 4; ++mask) {
+        visited = 0;
+        EXPECT_NEAR(element.eval_into(2, accumulate, mask & 1 ? &g : nullptr, mask & 2 ? &H : nullptr), 4.5, 1e-14);
+        EXPECT_EQ(visited, 8);
+        if (mask & 1)
+            EXPECT_TRUE(gradient.isApprox(Eigen::Vector2d::Constant(0.5), 1e-14));
+        if (mask & 2)
+            EXPECT_TRUE(hessian.isApprox(2 * Eigen::Matrix2d::Identity(), 1e-14));
+    }
+    visited = 0;
+    EXPECT_THROW(element.eval_into(3, accumulate, &g, &H), std::invalid_argument);
+    EXPECT_EQ(visited, 0);
+    auto nonfinite = [](int, const auto&, StridedVecRef*, StridedMatRef*) {
+        return std::numeric_limits<double>::quiet_NaN();
+    };
+    EXPECT_THROW(element.eval_into(2, nonfinite, nullptr, nullptr), std::domain_error);
+    auto bad_gradient = [](int, const auto&, StridedVecRef* dg, StridedMatRef*) {
+        (*dg)[0] = std::numeric_limits<double>::infinity();
+        return 0.;
+    };
+    EXPECT_THROW(element.eval_into(2, bad_gradient, &g, nullptr), std::domain_error);
+    visited = 0;
+    EXPECT_NEAR(element.max_feasible_step([&](int q, const auto&) {
+        EXPECT_EQ(q, visited++);
+        return 0.95 - 0.1 * q;
+    }),
+                0.25, 1e-14);
+    EXPECT_EQ(visited, 8);
+    for (double bad : {-0.1, 1.1, std::numeric_limits<double>::quiet_NaN()}) {
+        EXPECT_THROW(element.max_feasible_step([&](int, const auto&) { return bad; }), std::logic_error);
+    }
 }

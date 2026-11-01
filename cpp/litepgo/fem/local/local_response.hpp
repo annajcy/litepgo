@@ -17,18 +17,11 @@ template <int ParamDim> class LocalResponseT {
 
     // Adds into initialized buffers without resizing. The caller supplies the
     // complete weight; outputs must not alias each other or the local inputs.
-    virtual void accumulate(const Coordinate& xi, double weight, Eigen::VectorXd& value,
-                            Eigen::MatrixXd* jacobian = nullptr) const;
-    // Integration into pre-sized strided outputs. Default preserves custom
-    // accumulation overrides; built-in materials write directly into views.
+    void accumulate(const Coordinate& xi, double weight, Eigen::VectorXd& value,
+                    Eigen::MatrixXd* jacobian = nullptr) const;
+    // Single implementation hook for owning buffers and strided views.
     virtual void accumulate_into(const Coordinate& xi, double weight, StridedVecRef value,
                                  StridedMatRef* jacobian = nullptr) const;
-    // Integrators supply finite coordinates/weights and validate final outputs.
-    // The default preserves all checks; subclasses may avoid redundant scans.
-    virtual void accumulate_for_integration(const Coordinate& xi, double weight, Eigen::VectorXd& value,
-                                            Eigen::MatrixXd* jacobian = nullptr) const {
-        accumulate(xi, weight, value, jacobian);
-    }
 };
 extern template class LocalResponseT<2>;
 extern template class LocalResponseT<3>;

@@ -320,21 +320,41 @@ TEST(HexHermiteExample, CachedKinematicsMatchesUncachedAcrossChangingDisplacemen
     const auto topology = hex_hermite_topology();
     const dof::VertexDofMap rest_map(topology, 3), map(topology, 24);
     auto cached = make_hex_hermite_mesh_energy(positions);
-    litepgo::testing::ElementFormulaEnergy uncached(map, [&](int e, const Eigen::MatrixXd& u, Vec* g, Eigen::MatrixXd* H) {
-        const fem::InterpolatedField3D<fem::HexQ1Basis> X(rest_map.gather(e, positions));
-        const fem::BasisDofTransform<fem::HexHermiteBasis> transform(X);
-        const fem::InterpolatedField3D<fem::HexHermiteBasis> displacement(transform.to_coefficients(u));
-        const fem::DeformationGradientField3D F(displacement, X);
-        const fem::IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped()), theta(Eigen::Vector2d(2, 3));
-        const fem::VolumetricMaterialLocalEnergyF3D<fem::NeoHookean> local(F, Fp, theta);
-        const double value = fem::VolumetricElement3D<fem::GaussLegendre3D<4>>(X).eval(local, g, H);
-        transform.pullback(g, H);
-        return value;
-    });
+    litepgo::testing::ElementFormulaEnergy uncached(
+        map,
+        [&](int e, const Eigen::MatrixXd& u, Vec* g, Eigen::MatrixXd* H) {
+            const fem::InterpolatedField3D<fem::HexQ1Basis> X(rest_map.gather(e, positions));
+            const fem::BasisDofTransform<fem::HexHermiteBasis> transform(X);
+            const fem::InterpolatedField3D<fem::HexHermiteBasis> displacement(transform.to_coefficients(u));
+            const fem::DeformationGradientField3D F(displacement, X);
+            const fem::IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped()), theta(Eigen::Vector2d(2, 3));
+            const fem::VolumetricMaterialLocalEnergyF3D<fem::NeoHookean> local(F, Fp, theta);
+            const double value = fem::VolumetricElement3D<fem::GaussLegendre3D<4>>(X).eval(local, g, H);
+            transform.pullback(g, H);
+            return value;
+        },
+        [&](int e, const Eigen::MatrixXd& u, const Eigen::MatrixXd& du) {
+            const fem::InterpolatedField3D<fem::HexQ1Basis> X(rest_map.gather(e, positions));
+            const fem::BasisDofTransform<fem::HexHermiteBasis> transform(X);
+            const fem::InterpolatedField3D<fem::HexHermiteBasis> displacement(transform.to_coefficients(u));
+            const fem::DeformationGradientField3D F(displacement, X);
+            const fem::IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped()), theta(Eigen::Vector2d(2, 3));
+            const fem::VolumetricMaterialLocalEnergyF3D<fem::NeoHookean> local(F, Fp, theta);
+            const Eigen::MatrixXd delta_coefficients = transform.to_coefficients(du);
+            const Vec delta = delta_coefficients.reshaped<Eigen::RowMajor>();
+            return fem::VolumetricElement3D<fem::GaussLegendre3D<4>>(X).max_feasible_step(local, delta);
+        });
     for (int pose : {0, 1, 2, 0}) {
         Vec u = affine_dofs(positions, 0.03 * pose * Eigen::Matrix3d::Identity());
         for (int j = 0; j < u.size(); ++j)
             u[j] += 0.002 * std::sin(j + pose);
+        // Distinct compression rates avoid clustered determinant roots in this equality check.
+        const Vec direction = affine_dofs(positions, Eigen::Vector3d(-4, -1, -0.5).asDiagonal());
+        const double step = cached.max_feasible_step(u, direction);
+        EXPECT_GT(step, 0);
+        EXPECT_LT(step, 1);
+        EXPECT_NEAR(step, uncached.max_feasible_step(u, direction), 1e-12);
+        EXPECT_TRUE(std::isfinite(cached.eval_value(u + step * direction)));
         EXPECT_NEAR(cached.eval_value(u), uncached.eval_value(u), 1e-11);
         EXPECT_TRUE(cached.eval_gradient(u).isApprox(uncached.eval_gradient(u), 1e-11));
         EXPECT_TRUE(Eigen::MatrixXd(cached.eval_hessian(u)).isApprox(Eigen::MatrixXd(uncached.eval_hessian(u)), 1e-11));

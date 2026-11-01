@@ -1,5 +1,5 @@
-#include "litepgo/energy/vertex_pulling_energy.hpp"
-#include "litepgo/energy/weighted_energy_sum.hpp"
+#include "litepgo/energy/scalar/vertex_pulling_energy.hpp"
+#include "litepgo/energy/scalar/weighted_energy_sum.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"

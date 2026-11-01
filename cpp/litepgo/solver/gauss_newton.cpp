@@ -7,13 +7,13 @@
 #include <stdexcept>
 
 namespace litepgo::solver {
-GaussNewtonResult gauss_newton_solve(response::Response& residual, const ConstVecRef& initial,
+GaussNewtonResult gauss_newton_solve(energy::Response& residual, const ConstVecRef& initial,
                                      const GaussNewtonOptions& options) {
     linalg::AutoSparseSolver linear_solver;
     return gauss_newton_solve(residual, initial, options, linear_solver);
 }
 
-GaussNewtonResult gauss_newton_solve(response::Response& residual, const ConstVecRef& initial,
+GaussNewtonResult gauss_newton_solve(energy::Response& residual, const ConstVecRef& initial,
                                      const GaussNewtonOptions& options, linalg::SparseSolver& linear_solver) {
     if (initial.size() != residual.num_inputs() || residual.num_outputs() == 0 || initial.size() == 0 ||
         !initial.allFinite() || !std::isfinite(options.gradient_tolerance) || options.gradient_tolerance <= 0 ||

@@ -1,4 +1,4 @@
-#include "litepgo/energy/quadratic_energy.hpp"
+#include "litepgo/energy/scalar/quadratic_energy.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include "litepgo/solver/newton.hpp"
 #include <iostream>

@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from litepgo.response import FixedPatternResponse
+from litepgo.energy import FixedPatternResponse
 from litepgo.solver import GaussNewtonOptions, GaussNewtonStatus, gauss_newton_solve
 
 

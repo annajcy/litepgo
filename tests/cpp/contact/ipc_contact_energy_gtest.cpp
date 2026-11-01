@@ -5,7 +5,7 @@
 
 #include "../testing/finite_difference.hpp"
 #include "litepgo/dof/surface_kinematics.hpp"
-#include "litepgo/energy/affine_mapped_energy.hpp"
+#include "litepgo/energy/scalar/affine_mapped_energy.hpp"
 
 #include <Eigen/Eigenvalues>
 #include <cstring>

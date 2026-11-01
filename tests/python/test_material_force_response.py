@@ -1,7 +1,7 @@
 import gc
 import numpy as np
 import pytest
-from litepgo import dof, fem, mesh, response, solver
+from litepgo import dof, fem, mesh, energy, solver
 
 Force = fem.VolumetricFemForceMaterialResponse[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
 Energy = fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
@@ -33,8 +33,9 @@ def test_shared_and_element_parameters_match_energy(batch_size):
     element = Force(dof.ElementDofMap(topology, 2), mapping, geometry, u, plastic, batch_size)
     theta = np.array([2., 3.])
     independent = np.array([2., 3., 5., .8])
-    assert isinstance(shared, response.Response)
+    assert isinstance(shared, energy.Response)
     assert isinstance(shared, fem.VolumetricFemForceMaterialResponse)
+    assert isinstance(shared, energy.MeshResponse)
     assert shared.has_fixed_pattern and shared.num_inputs == 2 and shared.num_outputs == 15
     force, J = shared.eval(theta, need_jacobian=True)
     per_force, E = element.eval(independent, need_jacobian=True)
@@ -62,7 +63,7 @@ def test_parameter_recovery_and_batch_consistency():
     r1 = Force(dof.ConstantDofMap(topology, 2), mapping, geometry, u, plastic, 1)
     r2 = Force(dof.ConstantDofMap(topology, 2), mapping, geometry, u, plastic, 3)
     np.testing.assert_array_equal(r1.eval_jacobian(theta).data, r2.eval_jacobian(theta).data)
-    class Residual(response.FixedPatternResponse):
+    class Residual(energy.FixedPatternResponse):
         def __init__(self):
             super().__init__(r2.jacobian_pattern)
         def eval_values(self, x, need):

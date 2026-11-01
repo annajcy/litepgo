@@ -1,7 +1,7 @@
 import gc
 import numpy as np
 import pytest
-from litepgo import dof, fem, mesh, response, solver
+from litepgo import dof, fem, mesh, energy, solver
 from test_material_force_response import problem, Energy
 
 Force = fem.VolumetricFemForceFpResponse[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
@@ -13,7 +13,7 @@ def test_fp_force_energy_jacobian_and_recovery(batch_size):
     theta = [fem.IdentityField3D(np.array([2., 3.])), fem.IdentityField3D(np.array([4., 2.]))]
     p = np.concatenate([field.eval_value(np.zeros(3)) for field in plastic])
     obj = Force(dof.ElementDofMap(topology, 9), mapping, geometry, u, theta=theta, batch_size=batch_size)
-    assert isinstance(obj, response.Response)
+    assert isinstance(obj, energy.MeshResponse)
     expected = Energy(mapping, geometry, plastic, theta).eval_gradient(u)
     value, J = obj.eval(p, need_jacobian=True)
     np.testing.assert_allclose(value, expected, atol=1e-13)
@@ -59,7 +59,7 @@ def test_fp_force_fits_a_constrained_plastic_scale():
     direction = np.eye(3).ravel(order="F")
     target = obj.eval_value(1.05*direction)
 
-    class ScaleResidual(response.FixedPatternResponse):
+    class ScaleResidual(energy.FixedPatternResponse):
         def __init__(self):
             import scipy.sparse
             super().__init__(scipy.sparse.csc_matrix(np.ones((15, 1))))

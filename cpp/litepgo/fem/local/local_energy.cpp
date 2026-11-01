@@ -1,6 +1,7 @@
 #include "litepgo/fem/local/local_energy.hpp"
 
 #include <cmath>
+#include <optional>
 #include <stdexcept>
 
 namespace litepgo::fem {
@@ -20,12 +21,15 @@ template <int ParamDim> Eigen::MatrixXd LocalEnergyT<ParamDim>::eval_hessian(con
 }
 
 template <int ParamDim>
-double LocalEnergyT<ParamDim>::accumulate(const Coordinate& xi, double weight, Eigen::VectorXd* gradient,
-                                          Eigen::MatrixXd* hessian) const {
+double LocalEnergyT<ParamDim>::accumulate_into(const Coordinate& xi, double weight, StridedVecRef* gradient,
+                                               StridedMatRef* hessian) const {
     if (!xi.allFinite() || !std::isfinite(weight))
         throw std::invalid_argument("LocalEnergyT::accumulate requires a finite weight");
     if ((gradient && !has_gradient()) || (hessian && !has_hessian()))
         throw std::logic_error("LocalEnergyT does not support the requested derivatives");
+    const int n = num_dofs();
+    if (n < 0 || (gradient && gradient->size() != n) || (hessian && (hessian->rows() != n || hessian->cols() != n)))
+        throw std::invalid_argument("LocalEnergyT: invalid output dimensions");
     const double result = weight * eval_value(xi);
     if (!std::isfinite(result))
         throw std::domain_error("LocalEnergyT::accumulate: non-finite weighted density");
@@ -49,25 +53,15 @@ double LocalEnergyT<ParamDim>::accumulate(const Coordinate& xi, double weight, E
 }
 
 template <int ParamDim>
-double LocalEnergyT<ParamDim>::accumulate_into(const Coordinate& xi, double weight, StridedVecRef* gradient,
-                                               StridedMatRef* hessian) const {
-    const int n = num_dofs();
-    if ((gradient && gradient->size() != n) || (hessian && (hessian->rows() != n || hessian->cols() != n)))
-        throw std::invalid_argument("LocalEnergyT::accumulate_into: invalid output dimensions");
-    Eigen::VectorXd g;
-    Eigen::MatrixXd H;
+double LocalEnergyT<ParamDim>::accumulate(const Coordinate& xi, double weight, Eigen::VectorXd* gradient,
+                                          Eigen::MatrixXd* hessian) const {
+    std::optional<StridedVecRef> g;
+    std::optional<StridedMatRef> H;
     if (gradient)
-        g = *gradient;
+        g.emplace(*gradient);
     if (hessian)
-        H = *hessian;
-    const double value = accumulate_for_integration(xi, weight, gradient ? &g : nullptr, hessian ? &H : nullptr);
-    if ((gradient && g.size() != n) || (hessian && (H.rows() != n || H.cols() != n)))
-        throw std::logic_error("LocalEnergyT::accumulate_into: resized output");
-    if (gradient)
-        *gradient = g;
-    if (hessian)
-        *hessian = H;
-    return value;
+        H.emplace(*hessian);
+    return accumulate_into(xi, weight, g ? &*g : nullptr, H ? &*H : nullptr);
 }
 
 template class LocalEnergyT<2>;

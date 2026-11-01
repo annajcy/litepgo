@@ -1,5 +1,5 @@
 #include "litepgo/dof/stencil_dof_map.hpp"
-#include "litepgo/energy/energy.hpp"
+#include "litepgo/energy/scalar/energy.hpp"
 #include "litepgo/fem/kinematics/triangle_mid_edge_kinematics.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 

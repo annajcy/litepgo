@@ -2,10 +2,10 @@ import numpy as np
 import pytest
 import scipy.sparse as sp
 
-from litepgo import response, solver
+from litepgo import energy, solver
 
 
-class Piecewise(response.DynamicPatternResponse):
+class Piecewise(energy.DynamicPatternResponse):
     def __init__(self):
         super().__init__(sp.eye(2, format="csc"))
         self.inputs = []
@@ -43,7 +43,7 @@ def test_pattern_growth_shrinkage_and_newton():
 
 
 def test_required_overrides_and_invalid_pattern():
-    base = response.DynamicPatternResponse(sp.eye(2))
+    base = energy.DynamicPatternResponse(sp.eye(2))
     with pytest.raises(RuntimeError, match="pattern_at"):
         base.update_pattern(np.ones(2))
     with pytest.raises(RuntimeError, match="eval_values"):
@@ -64,21 +64,33 @@ def test_required_overrides_and_invalid_pattern():
         Broken().update_pattern(np.ones(2))
 
 
-def test_sparse_column_merge_retains_zero_slots_and_rejects_outside_entries():
-    class SparseResponse(response.FixedPatternResponse):
-        def __init__(self):
-            super().__init__(sp.csc_matrix(([1., 1., 1.], ([1, 3, 5], [0, 0, 0])), shape=(7, 1)))
-            self.outside = 0.
+@pytest.mark.parametrize("kind", ["response", "energy"])
+def test_sparse_column_merge_retains_zero_slots_and_rejects_outside_entries(kind):
+    shape = (7, 1) if kind == "response" else (7, 7)
+    pattern = sp.csc_matrix(([1., 1., 1.], ([1, 3, 5], [0, 0, 0])), shape=shape)
+    outside = 0.
 
+    def derivative():
+        return sp.csc_matrix(([0., 2., outside, 4., 0.],
+                              ([0, 1, 2, 3, 6], [0, 0, 0, 0, 0])), shape=shape)
+
+    class SparseResponse(energy.FixedPatternResponse):
         def eval_values(self, x, need):
-            J = sp.csc_matrix(([0., 2., self.outside, 4., 0.],
-                               ([0, 1, 2, 3, 6], [0, 0, 0, 0, 0])), shape=(7, 1))
-            return (np.zeros(7), J) if need else np.zeros(7)
+            return (np.zeros(7), derivative()) if need else np.zeros(7)
 
-    r = SparseResponse()
-    J = r.eval_jacobian(np.zeros(1))
-    np.testing.assert_array_equal(J.indices, [1, 3, 5])
-    np.testing.assert_array_equal(J.data, [2., 4., 0.])
-    r.outside = 1.
+    class SparseEnergy(energy.FixedPatternEnergy):
+        def eval_values(self, x, want_gradient, hessian_kind):
+            return 0., np.zeros(7) if want_gradient else None, derivative() if hessian_kind is not None else None
+
+    obj = SparseResponse(pattern) if kind == "response" else SparseEnergy(7, pattern)
+    evaluate = obj.eval_jacobian if kind == "response" else obj.eval_hessian
+    x = np.zeros(shape[1])
+    actual = evaluate(x)
+    np.testing.assert_array_equal(actual.indices, [1, 3, 5])
+    np.testing.assert_array_equal(actual.indptr, pattern.indptr)
+    np.testing.assert_array_equal(actual.data, [2., 4., 0.])
+    outside = 1.
     with pytest.raises(RuntimeError, match="outside pattern"):
-        r.eval_jacobian(np.zeros(1))
+        evaluate(x)
+    outside = 0.
+    np.testing.assert_array_equal(evaluate(x).data, [2., 4., 0.])

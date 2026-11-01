@@ -1,7 +1,7 @@
 #include "../../../testing/element_formula_energy.hpp"
 #include "../../../testing/finite_difference.hpp"
 #include "litepgo/dof/stencil_dof_map.hpp"
-#include "litepgo/energy/mesh_energy.hpp"
+#include "litepgo/energy/scalar/mesh_energy.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/material/shell/shell_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/2d/triangle_centroid_quadrature.hpp"

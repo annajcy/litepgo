@@ -300,7 +300,7 @@ def test_element_matches_mesh_energy():
     data = single_hex()
     u = 0.05 * np.sin(np.arange(24.0))
     X_field, local = hex_local_energy(fem.VolumetricMaterialLocalEnergyF3D, data, u)
-    assert isinstance(local, fem.LocalEnergy3D) and isinstance(local, fem.VolumetricMaterialLocalEnergy3D)
+    assert isinstance(local, fem.LocalEnergy3D) and isinstance(local, fem.VolumetricMaterialLocalEnergyF3D)
     element = fem.VolumetricElement3D[fem.GaussLegendre3D[2]](X_field)
     value, gradient, hessian = element.eval(local, gradient=True, hessian=True)
     assert element.eval(local)[1:] == (None, None)

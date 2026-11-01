@@ -6,7 +6,7 @@ import pytest
 from litepgo import _core
 
 
-@pytest.mark.parametrize("folder,name", [("energy", "custom_energy"), ("response", "custom_response"), ("response", "mesh_response")])
+@pytest.mark.parametrize("folder,name", [("energy/scalar", "custom_energy"), ("energy/response", "custom_response"), ("energy/response", "mesh_response")])
 def test_cpp_python_api_examples(folder, name):
     root = Path(__file__).resolve().parents[2]
     build = Path(_core.__file__).parents[2]
@@ -24,7 +24,7 @@ def api_modules():
     import importlib.util
     root = Path(__file__).resolve().parents[2] / "example"
     modules = []
-    for folder, name in [("energy", "custom_energy"), ("response", "custom_response")]:
+    for folder, name in [("energy/scalar", "custom_energy"), ("energy/response", "custom_response")]:
         spec = importlib.util.spec_from_file_location(name, root / folder / f"{name}.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)

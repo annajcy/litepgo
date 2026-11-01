@@ -1,6 +1,6 @@
 add_library(litepgo STATIC
-    response/response.cpp
-    response/mesh_response.cpp
+    energy/response/response.cpp
+    energy/response/mesh_response.cpp
     dof/response_assembler.cpp
     fem/sample_boundary.cpp
     contact/ipc_contact_energy.cpp
@@ -14,13 +14,13 @@ add_library(litepgo STATIC
     dof/energy_assembler.cpp
     mesh/extract_surface.cpp
     mesh/triangle_mid_edge_stencils.cpp
-    energy/mesh_energy.cpp
-    energy/affine_mapped_energy.cpp
-    energy/dynamic_pattern_energy.cpp
-    energy/energy.cpp
-    energy/quadratic_energy.cpp
-    energy/vertex_pulling_energy.cpp
-    energy/weighted_energy_sum.cpp
+    energy/scalar/mesh_energy.cpp
+    energy/scalar/affine_mapped_energy.cpp
+    energy/scalar/dynamic_pattern_energy.cpp
+    energy/scalar/energy.cpp
+    energy/scalar/quadratic_energy.cpp
+    energy/scalar/vertex_pulling_energy.cpp
+    energy/scalar/weighted_energy_sum.cpp
     fem/material/volumetric/multiplicative_kinematics.cpp
     fem/material/volumetric/neo_hookean.cpp
     fem/material/shell/koiter_stvk.cpp

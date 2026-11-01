@@ -1,6 +1,6 @@
 #include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
-#include "litepgo/response/dynamic_pattern_response.hpp"
-#include "litepgo/response/fixed_pattern_response.hpp"
+#include "litepgo/energy/response/dynamic_pattern_response.hpp"
+#include "litepgo/energy/response/fixed_pattern_response.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
 #include <cmath>
 #include <functional>
@@ -11,7 +11,7 @@
 using namespace litepgo;
 using namespace litepgo::solver;
 
-class TestResponse final : public response::FixedPatternResponse {
+class TestResponse final : public energy::FixedPatternResponse {
   public:
     using Evaluator = std::function<Vec(const ConstVecRef&, SpMat*)>;
     TestResponse(const SpMat& pattern, Evaluator f) : FixedPatternResponse(pattern), evaluator(std::move(f)) {}
@@ -22,7 +22,7 @@ class TestResponse final : public response::FixedPatternResponse {
     }
     Evaluator evaluator;
 };
-static_assert(std::is_abstract_v<response::FixedPatternResponse>);
+static_assert(std::is_abstract_v<energy::FixedPatternResponse>);
 
 // Test adapter keeps the small analytic fixtures readable; the solver receives an object.
 template <class F> auto make_response(int rows, int cols, F evaluator) {
@@ -162,7 +162,7 @@ TEST(Response, PatternAndInputContracts) {
 }
 
 TEST(Response, DynamicPatternRefreshesAtAcceptedStates) {
-    class Changing final : public response::DynamicPatternResponse {
+    class Changing final : public energy::DynamicPatternResponse {
       public:
         Changing() : DynamicPatternResponse(SpMat(1, 1)) {}
 
@@ -214,7 +214,7 @@ TEST(GaussNewton, SparseRectangularProblem) {
 }
 
 TEST(GaussNewton, PatternChangesDuringSolve) {
-    class Piecewise final : public response::DynamicPatternResponse {
+    class Piecewise final : public energy::DynamicPatternResponse {
       public:
         Piecewise() : DynamicPatternResponse(SpMat(2, 2)) {}
         mutable int changes = 0;

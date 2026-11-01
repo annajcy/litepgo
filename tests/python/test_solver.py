@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import scipy.sparse as sp
 
-from litepgo.response import FixedPatternResponse
+from litepgo.energy import FixedPatternResponse
 from litepgo.dof import DofReduction
 from litepgo.energy import AffineMappedEnergy, HessianKind, QuadraticEnergy, WeightedEnergySum
 from litepgo.linalg.sparse_solver import AutoIndefiniteSparseSolver, EigenLDLT
@@ -152,7 +152,7 @@ def test_gauss_newton_infeasible_trials_and_errors():
 
 
 def test_response_pattern_and_object_protocol():
-    from litepgo.response import Response
+    from litepgo.energy import Response
     from litepgo.solver import gauss_newton_solve, GaussNewtonOptions
 
     r = TestResponse(sp.eye(2, format="csc"),

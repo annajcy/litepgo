@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from litepgo import response, dof, fem, linalg, mesh, solver
+from litepgo import energy, dof, fem, linalg, mesh, solver
 
 
 def main():
@@ -53,7 +53,7 @@ def main():
         Force = fem.VolumetricFemForceMaterialResponse[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
         force_response = Force(dof.ConstantDofMap(topology, 2), mapping, geometry, result.x,
                                [fem.IdentityField3D(np.eye(3).ravel())] * topology.num_cells)
-        B = force_response.eval_jacobian(theta).toarray()
+        B = force_energy.eval_jacobian(theta).toarray()
         K = elastic.eval_hessian(result.x)  # Python eval_hessian returns the exact Hessian.
         if not linear_solver.compute(fixed.reduce(K)):
             raise RuntimeError("Sensitivity factorization failed")
@@ -82,7 +82,7 @@ def main():
     observed = observed[0]
     scales = np.maximum(np.abs(observed), 1e-8)
 
-    class MaterialResidual(response.FixedPatternResponse):
+    class MaterialResidual(energy.FixedPatternResponse):
         def __init__(self):
             super().__init__(np.ones((2, 2)))
 

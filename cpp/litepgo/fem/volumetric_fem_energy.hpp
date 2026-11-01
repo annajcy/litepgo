@@ -1,14 +1,15 @@
 #pragma once
+#include "litepgo/fem/detail/batch_views.hpp"
 
 #include "litepgo/dof/vertex_dof_map.hpp"
-#include "litepgo/energy/mesh_energy.hpp"
-#include "litepgo/fem/field/deformation_gradient_field.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
+#include "litepgo/energy/scalar/mesh_energy.hpp"
 #include "litepgo/fem/kinematics/basis_dof_transform.hpp"
+#include "litepgo/fem/kinematics/deformation_gradient_kinematics.hpp"
 #include "litepgo/fem/kinematics/volumetric_element.hpp"
-#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
+#include "litepgo/fem/local/dof_derivatives.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_inputs.hpp"
 #include <concepts>
-#include <optional>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -39,20 +40,12 @@ class VolumetricFemEnergy final : public energy::MeshEnergy {
                       const int e = ids[b];
                       Eigen::MatrixXd u = inputs.row(b).reshaped<Eigen::RowMajor>(
                           n / BasisDofTransform<UBasis>::dofs_per_vertex, BasisDofTransform<UBasis>::dofs_per_vertex);
-                      std::optional<StridedVecRef> g;
-                      std::optional<StridedMatRef> H;
-                      if (gradients)
-                          g.emplace(gradients->row(b).transpose());
-                      if (hessians) {
-                          Eigen::Map<Eigen::MatrixXd, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>> block(
-                              hessians->data() + b * n * n, n, n, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>(1, n));
-                          H.emplace(block);
-                      }
+                      auto g = detail::batch_vector_view(gradients, b);
+                      auto H = detail::batch_matrix_view(hessians, b, n);
                       const auto index = static_cast<std::size_t>(e);
-                      const CachedDeformationGradient F(transforms_[index].to_coefficients(std::move(u)),
-                                                        derivatives_[index]);
-                      const VolumetricMaterialLocalEnergyF3D<Material> local(F, Fp_[index], theta_[index]);
-                      values[b] = integration_[index].eval_into(local, g ? &*g : nullptr, H ? &*H : nullptr);
+                      const Eigen::MatrixXd coefficients = transforms_[index].to_coefficients(std::move(u));
+                      const Vec flattened = coefficients.reshaped<Eigen::RowMajor>();
+                      values[b] = eval_element(index, flattened, g ? &*g : nullptr, H ? &*H : nullptr);
                       transforms_[index].pullback_into(g ? &*g : nullptr, H ? &*H : nullptr);
                   }
                   return values;
@@ -69,11 +62,19 @@ class VolumetricFemEnergy final : public energy::MeshEnergy {
                           n / BasisDofTransform<UBasis>::dofs_per_vertex, BasisDofTransform<UBasis>::dofs_per_vertex);
 
                       const auto index = static_cast<std::size_t>(e);
-                      const CachedDeformationGradient F(transforms_[index].to_coefficients(u), derivatives_[index]);
-                      const VolumetricMaterialLocalEnergyF3D<Material> local(F, Fp_[index], theta_[index]);
-                      const auto& delta_coefficients = transforms_[index].to_coefficients(du);
-                      const Vec delta = delta_coefficients.template reshaped<Eigen::RowMajor>();
-                      steps[b] = integration_[index].max_feasible_step(local, delta);
+                      const Eigen::MatrixXd coefficients = transforms_[index].to_coefficients(u);
+                      const Vec flattened = coefficients.reshaped<Eigen::RowMajor>();
+                      const Eigen::MatrixXd delta_coefficients = transforms_[index].to_coefficients(du);
+                      const Vec delta = delta_coefficients.reshaped<Eigen::RowMajor>();
+                      steps[b] = integration_[index].max_feasible_step([&](int q, const auto& point) {
+                          const auto input = material_inputs(index, q, point.xi, flattened);
+                          const Vec delta_F = kinematics_[index].derivative(q) * delta;
+                          if (!delta_F.allFinite())
+                              throw std::domain_error("VolumetricFemEnergy: non-finite input increment");
+                          const VolumetricMaterialInputs direction{delta_F.reshaped(3, 3), Eigen::Matrix3d::Zero(),
+                                                                   Vec::Zero(input.theta.size())};
+                          return Material::eval_feasible_step(input, direction);
+                      });
                   }
                   return steps;
               }),
@@ -84,6 +85,7 @@ class VolumetricFemEnergy final : public energy::MeshEnergy {
             throw std::invalid_argument("VolumetricFemEnergy: incompatible map or field counts");
         integration_.reserve(count);
         transforms_.reserve(count);
+        kinematics_.reserve(count);
         for (int e = 0; e < displacement_map.num_elements(); ++e) {
             const auto index = static_cast<std::size_t>(e);
             if (Fp_[index].num_components() != 9 || theta_[index].num_components() <= 0)
@@ -92,48 +94,37 @@ class VolumetricFemEnergy final : public energy::MeshEnergy {
                 throw std::invalid_argument("VolumetricFemEnergy: incompatible displacement basis");
             integration_.emplace_back(rest_position_fields_[index]);
             transforms_.emplace_back(rest_position_fields_[index]);
-            const InterpolatedField3D<UBasis> zero(Eigen::MatrixXd::Zero(UBasis::num_basis_functions, 3));
-            const DeformationGradientField3D F(zero, rest_position_fields_[index]);
-            derivatives_.emplace_back();
-            for (int q = 0; q < Q::num_points; ++q)
-                derivatives_.back()[q] = F.eval_dvalue_dcoeffs(Q::points().row(q).transpose());
+            kinematics_.emplace_back(rest_position_fields_[index]);
         }
     }
 
   private:
-    using Derivatives = std::array<Eigen::MatrixXd, Q::num_points>;
-    // Fixed geometry and basis make F affine in the current coefficients.
-    class CachedDeformationGradient final : public Field3D {
-      public:
-        CachedDeformationGradient(const Eigen::MatrixXd& u, const Derivatives& derivatives)
-            : coefficients_(u.template reshaped<Eigen::RowMajor>()), derivatives_(derivatives) {}
-        int num_components() const override {
-            return 9;
-        }
-        int num_dofs() const override {
-            return static_cast<int>(coefficients_.size());
-        }
-        Eigen::VectorXd eval_value(const Eigen::Vector3d& xi) const override {
-            // The cached Jacobian also supplies physical gradients without reevaluating X.
-            Eigen::VectorXd value = derivatives_[index(xi)] * coefficients_;
-            value += Eigen::Matrix3d::Identity().reshaped();
-            return value;
-        }
-        Eigen::MatrixXd eval_dvalue_dcoeffs(const Eigen::Vector3d& xi) const override {
-            return derivatives_[index(xi)];
-        }
+    VolumetricMaterialInputs material_inputs(std::size_t e, int q, const Eigen::Vector3d& xi,
+                                             const Vec& coefficients) const {
+        const auto Fp = Fp_[e].eval_value(xi);
+        const auto theta = theta_[e].eval_value(xi);
+        if (Fp.size() != 9 || theta.size() == 0 || !Fp.allFinite() || !theta.allFinite())
+            throw std::invalid_argument("VolumetricFemEnergy: incompatible finite material inputs required");
+        return {kinematics_[e].eval(q, coefficients), Fp.reshaped(3, 3), theta};
+    }
 
-      private:
-        static int index(const Eigen::Vector3d& xi) {
-            for (int q = 0; q < Q::num_points; ++q)
-                if ((Q::points().row(q).transpose().array() == xi.array()).all())
-                    return q;
-            throw std::invalid_argument("Cached deformation gradient requires a quadrature point");
-        }
-        Eigen::VectorXd coefficients_;
-        const Derivatives& derivatives_;
-    };
-    std::vector<Derivatives> derivatives_;
+    double eval_element(std::size_t e, const Vec& coefficients, StridedVecRef* gradient, StridedMatRef* hessian) const {
+        return integration_[e].eval_into(
+            static_cast<int>(coefficients.size()),
+            [&](int q, const auto& point, StridedVecRef* g, StridedMatRef* H) {
+                const auto input = material_inputs(e, q, point.xi, coefficients);
+                const double value = point.w_dV * Material::eval_W(input);
+                const auto& derivative = kinematics_[e].derivative(q);
+                if (g)
+                    add_gradient_wrt_dofs(derivative, Material::eval_dW_dF(input), point.w_dV, *g, false);
+                if (H)
+                    add_hessian_wrt_dofs(derivative, Material::eval_d2W_dF2(input), point.w_dV, *H, false);
+                return value;
+            },
+            gradient, hessian);
+    }
+
+    std::vector<DeformationGradientKinematics3D<UBasis, Q>> kinematics_;
     std::vector<FpField> Fp_;
     std::vector<ThetaField> theta_;
     std::vector<XField> rest_position_fields_;

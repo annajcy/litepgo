@@ -9,7 +9,7 @@ def test_batch_workers_gil_exception_and_recovery():
         import threading
         import time
         import numpy as np
-        from litepgo import dof, energy, response
+        from litepgo import dof, energy
 
         mapping = dof.StencilDofMap(1, [[0]] * 64, 1)
         workers = set()
@@ -36,7 +36,7 @@ def test_batch_workers_gil_exception_and_recovery():
             return (x, np.ones_like(x)) if need_j else x
 
         E = energy.MeshEnergy(mapping, e, batch_size=1, step=step)
-        R = response.MeshResponse(mapping, mapping, r, batch_size=1)
+        R = energy.MeshResponse(mapping, mapping, r, batch_size=1)
         x = np.ones(1)
         for operation, expected in [
             (lambda: E.eval_value(x), 32),

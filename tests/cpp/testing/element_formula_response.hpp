@@ -1,15 +1,15 @@
 #pragma once
-#include "litepgo/response/mesh_response.hpp"
+#include "litepgo/energy/response/mesh_response.hpp"
 #include <limits>
 
 namespace litepgo::testing {
 // Test-only scalar oracle evaluated for each row of the public batch protocol.
 template <class Input, class Output, class Formula> auto formula_response(Input input, Output output, Formula formula) {
-    return response::MeshResponse(
+    return energy::MeshResponse(
         input, output,
-        [input, output, formula](std::span<const int> ids, const response::BatchMatrix& x, response::BatchMatrix* J) {
+        [input, output, formula](std::span<const int> ids, const energy::BatchMatrix& x, energy::BatchMatrix* J) {
             const Eigen::Index no = output.dof_indices(ids.front()).size(), ni = x.cols();
-            response::BatchMatrix values(ids.size(), no);
+            energy::BatchMatrix values(ids.size(), no);
             if (J)
                 J->resize(ids.size() * no, ni);
             for (Eigen::Index b = 0; b < x.rows(); ++b) {
