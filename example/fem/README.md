@@ -1357,3 +1357,32 @@ cmake --build build/release --target volume_equilibrium_fp_fit shell_equilibrium
 .venv/bin/python -m pytest -q tests/python/test_equilibrium_fp_fit_examples.py
 ctest --test-dir build/release -R '^FemFit\.(volume|shell)_equilibrium_fp_fit$' --output-on-failure
 ```
+
+### Optional PyTorch material fitting
+
+`fitting/volume_equilibrium_material_fit_torch.py` reuses the volume equilibrium
+reaction experiment with PyTorch L-BFGS instead of the native Gauss-Newton solver.
+It fits positive material parameters in log coordinates, and checks recovery and
+an unseen compression load. Run `uv pip install torch`, then
+`python example/fem/fitting/volume_equilibrium_material_fit_torch.py`.
+
+`litepgo.torch.energy(E, x)` and `litepgo.torch.response(R, x)` support CPU float64
+vectors and first-order autograd. Only explicit tensor inputs are differentiable;
+callbacks do not acquire a Torch graph. No GPU, batching or double backward is
+provided. Importing the main litepgo package does not require PyTorch.
+
+The Torch equilibrium fitting examples cover all four combinations:
+
+| Example in `fitting/` | Unknowns | Observations |
+| --- | --- | --- |
+| `volume_equilibrium_material_fit_torch.py` | Two volume material parameters theta | Boundary reactions |
+| `shell_equilibrium_material_fit_torch.py` | Two shell material parameters theta, fixed thickness | Boundary reactions |
+| `volume_equilibrium_fp_fit_torch.py` | Shared positive diagonal volume Fp stretches | Free displacements and boundary reactions |
+| `shell_equilibrium_fp_fit_torch.py` | Shared positive diagonal shell Fp stretches | Free displacements and boundary reactions |
+
+Run each with Python as above. Each Torch script contains its own FEM setup, residual, L-BFGS loop and validation.
+No script imports another example; all use `litepgo.torch.response`.
+Fp is optimized in log coordinates. These are synthetic parameter recovery cases,
+not arbitrary full-matrix or independent per-element Fp fitting. All cases check
+parameter recovery and a held-out load; the shell material and both Fp cases also
+run equilibrium re-solve finite differences and identifiability checks.
