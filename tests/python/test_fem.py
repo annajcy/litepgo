@@ -271,6 +271,27 @@ def test_plastic_twist_examples(tmp_path, name, asset):
         py_surface = mesh.read_obj(tmp_path / f"py_{case}.obj")
         np.testing.assert_array_equal(py_surface.cells, cpp_surface.cells)
         np.testing.assert_allclose(py_surface.positions, cpp_surface.positions, rtol=0, atol=1e-12)
+        if name == "hex_hermite_plastic_twist":
+            # Four samples per edge produce 16 triangles per original boundary triangle.
+            coarse = mesh.extract_surface(cpp_mesh)
+            assert len(cpp_surface.cells) == 16 * len(coarse.cells)
+            assert len(cpp_surface.positions) > len(coarse.positions)
+            assert np.isfinite(cpp_surface.positions).all()
+
+    if name == "tet_p1_plastic_twist":
+        for run, prefix in ((cpp, "cpp"), (py, "py")):
+            for line in run.stdout.splitlines():
+                fields = dict(item.split("=") for item in line.split(": ", 1)[1].split(", "))
+                assert float(fields["free residual"]) <= 1e-8
+                assert float(fields["max displacement"]) > 0
+            rest_surface = mesh.read_obj(tmp_path / f"{prefix}_rest.obj")
+            final_surface = mesh.read_obj(tmp_path / f"{prefix}_free.obj")
+            np.testing.assert_array_equal(rest_surface.cells, final_surface.cells)
+            assert np.isfinite(final_surface.positions).all()
+            original = mesh.read_veg(ASSETS / asset)
+            final = mesh.read_veg(tmp_path / f"{prefix}_free.veg")
+            bottom = np.isclose(original.positions[:, 2], original.positions[:, 2].min())
+            np.testing.assert_allclose(final.positions[bottom], original.positions[bottom], atol=1e-14)
     free, clamped = cpp_results["free"], cpp_results["clamped"]
     assert free["converged"] and clamped["converged"]
     assert free["twist"] == pytest.approx(90.0, abs=1e-6)

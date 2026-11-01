@@ -587,20 +587,22 @@ basis coefficients, so `u_p` is C1 like the displacement. Then
 Fp = DeformationGradientField3D(u_p, X) = I + du_p/dX
 ```
 
-is the gradient of `X + u_p`: a rotation times a shear with `det Fp = 1`, not a
-rotation. `W = det(Fp) psi(F Fp^-1)` then equals the elastic energy measured from the
+is the gradient of the interpolated `X + u_p`, containing shear as well as
+rotation. The smooth twist is volume preserving; its finite-element interpolation
+need not have exactly unit determinant. `W = det(Fp) psi(F Fp^-1)` then equals the elastic energy measured from the
 shape `X + u_p`, so that shape is the bar's stress-free state. `DeformationGradientField3D`
 borrows `u_p` and `X`: in C++ both field vectors are filled before taking references and
 outlive the energy; in Python the field keeps them alive.
 
-Each run solves twice and writes `<stem>_free` and `<stem>_clamped` VEG and surface OBJ
+Each run solves the two boundary conditions and writes `<stem>_free` and `<stem>_clamped` VEG and surface OBJ
 files: `free` clamps the bottom face, so the bar twists; `clamped` also holds the top
 face, so it cannot and keeps residual stress. Hermite clamps fix `u, u_X, u_Y, u_XY`,
-which determine the displacement on a face `z = const`.
+which determine the displacement on a face `z = const`. The Tet P1 example uses
+four loading increments for each case and also exports `<stem>_rest.obj`.
 
 | Example | Free top twist | Free elastic energy | Clamped elastic energy |
 | --- | --- | --- | --- |
-| Tet P1 | 90 deg | 6e-19 | 7.9e-2 |
+| Tet P1 | 90 deg | below 1e-16 | 7.9e-2 |
 | Hex Q1 | 90 deg | 1e-18 | 6.6e-2 |
 | Hex Hermite | 90 deg | 6e-18 | 6.3e-2 |
 
@@ -1109,3 +1111,115 @@ The regression test compares the C++ and Python recovered stretches and
 diagnostics. Each executable fails on a deficient Jacobian, incorrect chain
 rule or unsuccessful recovery. No thickness optimization, plastic evolution,
 noise, regularization or per-face fitting is included.
+
+## Apply a plastic field and export static equilibrium
+
+These forward examples prescribe plastic geometry and **solve displacement**,
+unlike the fixed-pose force-fitting examples. They use no applied loads. Clamps
+remove rigid motion, and Newton minimizes elastic energy on the remaining DOFs.
+Each starts with an identity-field check and then uses four loading increments,
+warm-starting from the preceding equilibrium. Failure to converge stops the
+program before the corresponding final OBJ is written.
+
+### Shell: differential in-plane growth
+
+[shell_plastic_field.cpp](shell_plastic_field.cpp) and
+[shell_plastic_field.py](shell_plastic_field.py) generate a 4-by-1 xy strip
+(65 vertices, 96 triangles). The first two vertex columns are clamped, fixing
+position and strip direction. Thickness is 0.2 and Koiter parameters are (2,3).
+At each face centroid y, prescribe
+
+```text
+Fp(y) = diag(exp(2*alpha*y), 1, 1), alpha: 0 -> 0.04.
+```
+
+The two sides have different natural lengths, and the strip bends in its plane.
+Each face applies its sampled Fp uniformly to its whole reference stencil.
+A planar stencil retains zero natural curvature under that transformation;
+this example does not prescribe an out-of-plane bend or select a buckling branch.
+
+The energy constructor now accepts an optional final array:
+
+```python
+elastic = fem.ShellFemEnergy[fem.KoiterStVK](
+    displacement_map, rest_data, thickness, theta, Fp=plastic_matrices)
+```
+
+C++ accepts `const std::vector<Eigen::Matrix3d>& Fp = {}`.
+Omitting Fp preserves the previous behavior and supplied rest forms. Otherwise
+there must be one finite positive-determinant matrix per face. The constructor
+computes and snapshots natural forms from transformed original stencils, using
+the same transformation as `ShellFemForceFpResponse`. Original coordinates,
+area weights and thickness stay fixed; current positions are always `X+u`.
+The cached forms enter the existing displacement gradient and Hessian, while
+geometric step limits still use current positions. There is no retained Fp
+reference or runtime plastic update; construct the next energy for the next
+loading step.
+
+### Volume: plastic twist
+
+Reuse [tet_p1_plastic_twist.cpp](plastic_twist/tet_p1_plastic_twist.cpp) and
+[tet_p1_plastic_twist.py](plastic_twist/tet_p1_plastic_twist.py). The tetrahedral
+bar's nodal plastic displacement twists progressively to 90 degrees at its top;
+`DeformationGradientField3D` supplies its elementwise gradient Fp. It includes
+shear, not just rotation. With only the bottom fixed the bar relaxes to the
+prescribed twisted shape; the existing both-ends-clamped case additionally
+illustrates residual stress. Unlike the shell convention, the volumetric
+Neo-Hookean density retains its existing `det(Fp)` factor.
+
+### Run and inspect
+
+From the repository root:
+
+```sh
+cmake --build build/debug --target shell_plastic_field tet_p1_plastic_twist
+build/debug/example/fem/shell_plastic_field output/shell_plastic_field
+PYTHONPATH=build/debug/python .venv/bin/python example/fem/shell_plastic_field.py output/python/shell_plastic_field
+build/debug/example/fem/plastic_twist/tet_p1_plastic_twist assets/box-tet.veg output/volumetric_plastic_field/twist.veg
+PYTHONPATH=build/debug/python .venv/bin/python example/fem/plastic_twist/tet_p1_plastic_twist.py assets/box-tet.veg output/python/volumetric_plastic_field/twist.veg
+```
+
+Shell writes `rest.obj` and `equilibrium.obj`. Volume writes
+`twist_rest.obj`, `twist_free.obj`, `twist_clamped.obj`, and the corresponding
+deformed VEG meshes. Its OBJ files contain extracted boundary triangles.
+Python writes separate copies under `output/python`.
+
+On the bundled inputs, the shell's maximum nodal displacement is about 0.442
+with free-force Euclidean norm about 2.2e-9. The released volume reaches a
+90-degree top twist with free-force max-norm about 1.3e-9; the clamped case
+retains energy about 0.0792. Logs include energy, free-force residual and
+displacement. The volume's displacement diagnostic is the maximum absolute
+coordinate displacement.
+
+```sh
+ctest --test-dir build/debug -R '^ShellPlasticField$' --output-on-failure
+PYTHONPATH=build/debug/python .venv/bin/python -m pytest tests/python/test_shell_plastic_field_example.py tests/python/test_shell_fp_force_response.py -q
+PYTHONPATH=build/debug/python .venv/bin/python -m pytest tests/python/test_fem.py -k 'plastic_twist_examples and tet_p1' -q
+```
+
+Tests check energy/gradient/Hessian consistency, force-response agreement,
+identity and invalid Fp, fixed input snapshots, fixed clamps, free residuals,
+nonzero deformation and C++/Python OBJ agreement. These are prescribed-plasticity
+equilibria, without a yield rule, evolution, self-contact or a global stability
+guarantee.
+
+### Hermite equilibrium surfaces at subdivision 4
+
+The Hermite plastic-twist example solves all 24 physical displacement DOFs per
+vertex with GaussLegendre3D[4] integration, for both released and double-clamped
+cases. Its OBJ output now uses `sample_boundary(..., 4)` and
+`build_point_displacement_map<HexHermiteBasis>` to evaluate the solved field at
+the sampled boundary points. This preserves the derivative DOFs' contribution
+between corners; it does not subdivide a piecewise-linear deformed surface.
+Each boundary quad becomes 4-by-4 quads (32 triangles), with shared samples welded.
+
+```sh
+cmake --build build/debug --target hex_hermite_plastic_twist
+build/debug/example/fem/plastic_twist/hex_hermite_plastic_twist assets/box-hex.veg output/volumetric_plastic_field/hermite.veg
+PYTHONPATH=build/debug/python .venv/bin/python example/fem/plastic_twist/hex_hermite_plastic_twist.py assets/box-hex.veg output/python/volumetric_plastic_field/hermite.veg
+```
+
+Outputs are `hermite_free.obj` and `hermite_clamped.obj`. The accompanying VEG
+files contain only displaced corner positions; use OBJ to inspect the sampled
+Hermite surface. The Python regression checks subdivision counts and agreement
+between the two languages.

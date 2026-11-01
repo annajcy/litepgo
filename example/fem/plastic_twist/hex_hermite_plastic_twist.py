@@ -79,6 +79,10 @@ def main():
     output = args.output
     output.parent.mkdir(parents=True, exist_ok=True)
 
+    surface = fem.sample_boundary[fem.HexQ1Basis](topology, rest_position_fields, 4)
+    W = fem.build_point_displacement_map[fem.HexHermiteBasis](
+        surface.embedding, displacement_map, rest_position_fields)
+
     # free: clamp the bottom face; the bar twists. clamped: also hold the top face in place;
     # the bar cannot twist and keeps residual stress. Clamping a face z = const fixes u and its
     # in-face derivatives u_X, u_Y, u_XY, which determine the displacement on the whole face.
@@ -102,12 +106,15 @@ def main():
         print(
             f"{'clamped' if clamp_top else 'free'}: "
             f"converged={int(result.status == solver.NewtonStatus.Converged)}, iterations={result.iterations}, "
-            f"elastic={result.energy:.6g}, top twist={np.arctan2(cross, dot) * 180 / np.pi:.6g} deg"
+            f"elastic={result.energy:.6g}, free residual={result.gradient_norm:.6g}, top twist={np.arctan2(cross, dot) * 180 / np.pi:.6g} deg"
         )
         path = output.parent / f"{output.stem}{'_clamped' if clamp_top else '_free'}.veg"
         deformed = mesh.HexMesh(rest_nodes + result.x.reshape(-1, 24)[:, :3], topology)
         mesh.write_veg(path, deformed)
-        mesh.write_obj(path.with_suffix(".obj"), mesh.extract_surface(deformed))
+        if not converged:
+            raise RuntimeError("Hermite equilibrium did not converge")
+        positions = surface.mesh.positions + (W @ result.x).reshape(-1, 3)
+        mesh.write_obj(path.with_suffix(".obj"), mesh.TriangleMesh(positions, surface.mesh.topology))
     return 0 if converged else 1
 
 
