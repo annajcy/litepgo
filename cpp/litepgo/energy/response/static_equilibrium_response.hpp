@@ -5,6 +5,10 @@
 #include <memory>
 
 namespace litepgo::energy {
+namespace binding {
+struct StaticEquilibriumGC;
+}
+
 // p -> equilibrium displacement, starting from the same initial state on every call.
 // Fixed indices AND values are independent of p. Callbacks must be deterministic.
 // make_energy supplies the total potential; partial supplies d(grad_u potential)/dp
@@ -18,6 +22,7 @@ class StaticEquilibriumResponse final : public FixedPatternResponse {
                               MakeEnergy make_energy, Partial partial);
 
   private:
+    friend struct binding::StaticEquilibriumGC; // Python GC visits and clears the owned callbacks.
     Vec eval_values(const ConstVecRef& p, SpMat* J) const override;
     dof::DofReduction fixed_;
     Vec initial_;
