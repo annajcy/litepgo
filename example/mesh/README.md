@@ -111,7 +111,7 @@ Both C++ and Python use the same batch-only MeshEnergy protocol.
 
 ## MeshEnergy API
 
-C++ includes `litepgo/energy/mesh_energy.hpp`:
+C++ includes `litepgo/energy/scalar/mesh_energy.hpp`:
 
 ```cpp
 MeshEnergy energy(map, eval_batch, 256);

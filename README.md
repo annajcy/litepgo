@@ -146,8 +146,9 @@ Matrix and vector arguments must be NumPy arrays.
 The energies' field template arguments are erased (`fem::SharedField3D`): each
 list may hold any `Field3D`, chosen per element, and the energy shares ownership
 of them. Material, basis and quadrature arguments are compiled in;
-`cpp/litepgo/bindings/fem_energy.cpp` lists the available instantiations, and
-indexing any other combination raises `TypeError` naming them. Add one line there
+`cpp/litepgo/bindings/fem/volumetric_fem_energy.cpp` and the other matching FEM
+binding files list the available instantiations. Indexing any other combination
+raises `TypeError` naming them. Add an instantiation in the corresponding file
 to bind another. Fields and energies cannot be subclassed in Python: they are
 evaluated per quadrature point inside parallel C++ loops. `example/fem/*.py` mirror
 the four C++ FEM examples line by line, and `tests/python/test_fem.py` checks that

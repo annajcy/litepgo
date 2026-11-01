@@ -5,7 +5,7 @@ prints its result, and checks it numerically. C++ checks remain enabled in Relea
 
 | Example | What it demonstrates | Expected result |
 | --- | --- | --- |
-| [`energy_composition`](../energy/energy_composition.cpp) / [Python](../energy/energy_composition.py) | `QuadraticEnergy`, `VertexPullingEnergy`, `WeightedEnergySum`, and `AffineMappedEnergy`; value, gradient, sparse Hessian | Direct agreement with the quadratic formula and chain rule |
+| [`energy_composition`](../energy/scalar/energy_composition.cpp) / [Python](../energy/scalar/energy_composition.py) | `QuadraticEnergy`, `VertexPullingEnergy`, `WeightedEnergySum`, and `AffineMappedEnergy`; value, gradient, sparse Hessian | Direct agreement with the quadratic formula and chain rule |
 | [`newton_chain`](newton_chain.cpp) / [Python](newton_chain.py) | `DofReduction`, Newton tolerance, iteration callback, and convergence status | Six scalar displacements evenly spaced from 1 to 3 |
 | [`gauss_newton_fit`](gauss_newton_fit.cpp) / [Python](gauss_newton_fit.py) | Sparse nonlinear least squares with an analytic Jacobian; residual-only trial evaluations | Amplitude 2.5 and decay rate 0.8 |
 
@@ -13,12 +13,12 @@ From the repository root, after configuring the release preset:
 
 ```bash
 cmake --build build/release --target energy_composition newton_chain gauss_newton_fit
-build/release/example/energy/energy_composition
+build/release/example/energy/scalar/energy_composition
 build/release/example/solver/newton_chain
 build/release/example/solver/gauss_newton_fit
 
 cmake --build build/release --target _core
-PYTHONPATH=build/release/python .venv/bin/python example/energy/energy_composition.py
+PYTHONPATH=build/release/python .venv/bin/python example/energy/scalar/energy_composition.py
 PYTHONPATH=build/release/python .venv/bin/python example/solver/newton_chain.py
 PYTHONPATH=build/release/python .venv/bin/python example/solver/gauss_newton_fit.py
 ```
@@ -58,4 +58,4 @@ damping without repeating symbolic analysis. Normal equations can amplify
 conditioning problems and introduce fill-in; scale parameters and residuals.
 
 For defining your own fixed/dynamic Energy or Response subclasses, see the
-[base API examples](../response/README.md), including matching Python implementations.
+[base API examples](../energy/README.md), including matching Python implementations.
