@@ -131,7 +131,7 @@ int main() {
                   << ", fitted_ratio=" << fitted_ratio << ", jacobian_error=" << jacobian_error << '\n';
         return converged && parameter_error < 1e-7 && relative_residual < 1e-9 ? 0 : 1;
     } catch (const std::exception& error) {
-        std::cerr << "shell_fp_fit: " << error.what() << '\n';
+        std::cerr << "shell_fixed_pose_fp_fit: " << error.what() << '\n';
         return 1;
     }
 }

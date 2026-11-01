@@ -1,4 +1,4 @@
-"""Python mirror of hex_q1_mesh_energy.cpp: pull a hex box's corners and solve static equilibrium."""
+"""Python mirror of hex_q1_corner_pull.cpp: pull a hex box's corners and solve static equilibrium."""
 
 import argparse
 import sys
@@ -8,7 +8,7 @@ import numpy as np
 
 from litepgo import dof, energy, fem, linalg, mesh, solver
 
-REPO = Path(__file__).resolve().parents[2]
+REPO = Path(__file__).resolve().parents[3]
 
 
 def main():
@@ -18,7 +18,7 @@ def main():
         "output",
         nargs="?",
         type=Path,
-        default=REPO / "output/python/hex_q1_mesh_energy.veg",
+        default=REPO / "output/python/hex_q1_corner_pull.veg",
         help="deformed VEG mesh; its boundary surface is written beside it as OBJ",
     )
     args = parser.parse_args()

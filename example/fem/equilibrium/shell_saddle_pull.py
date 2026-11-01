@@ -1,4 +1,4 @@
-"""Python mirror of shell_stvk_mesh_energy.cpp: pull a sheet's corners into a saddle and solve static equilibrium."""
+"""Python mirror of shell_saddle_pull.cpp: pull a sheet's corners into a saddle and solve static equilibrium."""
 
 import argparse
 import sys
@@ -8,7 +8,7 @@ import numpy as np
 
 from litepgo import dof, energy, fem, linalg, mesh, solver
 
-REPO = Path(__file__).resolve().parents[2]
+REPO = Path(__file__).resolve().parents[3]
 
 
 def main():
@@ -18,7 +18,7 @@ def main():
         "output",
         nargs="?",
         type=Path,
-        default=REPO / "output/python/shell_stvk_mesh_energy.obj",
+        default=REPO / "output/python/shell_saddle_pull.obj",
         help="deformed OBJ mesh",
     )
     args = parser.parse_args()

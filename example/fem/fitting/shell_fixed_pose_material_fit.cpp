@@ -90,7 +90,7 @@ int main() {
                   << ", singular_ratio=" << singular_ratio << '\n';
         return converged && parameter_error < 1e-7 && force_residual / scale < 1e-9 ? 0 : 1;
     } catch (const std::exception& error) {
-        std::cerr << "shell_material_fit: " << error.what() << '\n';
+        std::cerr << "shell_fixed_pose_material_fit: " << error.what() << '\n';
         return 1;
     }
 }

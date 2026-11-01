@@ -5,7 +5,7 @@ import pytest
 from litepgo import _core
 
 
-@pytest.mark.parametrize('folder,name',[('spatial','spatial_query'),('fem','point_embedding')])
+@pytest.mark.parametrize('folder,name',[('spatial','spatial_query'),('fem/embedding','point_embedding')])
 def test_cpp_python_query_examples_match(folder,name):
     root = Path(__file__).resolve().parents[2]
     executable = Path(_core.__file__).parents[2]/'example'/folder/name

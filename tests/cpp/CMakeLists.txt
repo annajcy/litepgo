@@ -11,10 +11,10 @@ add_executable(litepgo_tests
     dof/energy_assembler_gtest.cpp
     dof/response_assembler_gtest.cpp
     energy/scalar/mesh_energy_gtest.cpp
-    ../example/fem/hex_q1_mesh_energy_gtest.cpp
-    ../example/fem/hex_hermite_mesh_energy_gtest.cpp
-    ../example/fem/tet_p1_mesh_energy_gtest.cpp
-    ../example/fem/shell_stvk_mesh_energy_gtest.cpp
+    ../example/fem/equilibrium/hex_q1_corner_pull_gtest.cpp
+    ../example/fem/equilibrium/hex_hermite_corner_pull_gtest.cpp
+    ../example/fem/equilibrium/tet_p1_corner_pull_gtest.cpp
+    ../example/fem/equilibrium/shell_saddle_pull_gtest.cpp
     core/build_info_gtest.cpp
     core/busy_scope_gtest.cpp
     core/memory_gtest.cpp
@@ -93,7 +93,7 @@ target_link_libraries(litepgo_tests PRIVATE litepgo::litepgo litepgo::warnings G
 gtest_discover_tests(litepgo_tests DISCOVERY_MODE PRE_TEST)
 
 # Run the standalone examples as loaded static-equilibrium regression tests.
-foreach(example tet_p1_mesh_energy hex_q1_mesh_energy hex_hermite_mesh_energy shell_stvk_mesh_energy)
+foreach(example tet_p1_corner_pull hex_q1_corner_pull hex_hermite_corner_pull shell_saddle_pull)
     add_dependencies(litepgo_tests ${example})
     add_test(NAME FemEquilibrium.${example} COMMAND $<TARGET_FILE:${example}>)
 endforeach()
@@ -116,8 +116,8 @@ add_dependencies(litepgo_tests spatial_query point_embedding)
 add_test(NAME SpatialQueryExample COMMAND $<TARGET_FILE:spatial_query>)
 add_test(NAME PointEmbeddingExample COMMAND $<TARGET_FILE:point_embedding>)
 
-add_dependencies(litepgo_tests material_fit)
-add_test(NAME MaterialFit COMMAND $<TARGET_FILE:material_fit>)
+add_dependencies(litepgo_tests volume_equilibrium_material_fit)
+add_test(NAME FemFit.volume_equilibrium_material_fit COMMAND $<TARGET_FILE:volume_equilibrium_material_fit>)
 
 add_dependencies(litepgo_tests custom_energy custom_response)
 add_test(NAME EnergyApiExample COMMAND $<TARGET_FILE:custom_energy>)
@@ -125,21 +125,21 @@ add_test(NAME ResponseApiExample COMMAND $<TARGET_FILE:custom_response>)
 add_dependencies(litepgo_tests mesh_response)
 add_test(NAME MeshResponseExample COMMAND $<TARGET_FILE:mesh_response>)
 
-add_dependencies(litepgo_tests shell_material_fit)
-add_test(NAME ShellMaterialFit COMMAND $<TARGET_FILE:shell_material_fit>)
+add_dependencies(litepgo_tests shell_fixed_pose_material_fit)
+add_test(NAME FemFit.shell_fixed_pose_material_fit COMMAND $<TARGET_FILE:shell_fixed_pose_material_fit>)
 
-add_dependencies(litepgo_tests diagonal_fp_fit)
-add_test(NAME DiagonalFpFit COMMAND $<TARGET_FILE:diagonal_fp_fit>)
+add_dependencies(litepgo_tests volume_fixed_pose_fp_fit)
+add_test(NAME FemFit.volume_fixed_pose_fp_fit COMMAND $<TARGET_FILE:volume_fixed_pose_fp_fit>)
 
-add_dependencies(litepgo_tests shell_fp_fit)
-add_test(NAME ShellFpFit COMMAND $<TARGET_FILE:shell_fp_fit>)
+add_dependencies(litepgo_tests shell_fixed_pose_fp_fit)
+add_test(NAME FemFit.shell_fixed_pose_fp_fit COMMAND $<TARGET_FILE:shell_fixed_pose_fp_fit>)
 
 add_dependencies(litepgo_tests shell_plastic_field)
 add_test(NAME ShellPlasticField COMMAND $<TARGET_FILE:shell_plastic_field> ${CMAKE_CURRENT_BINARY_DIR}/shell_plastic_field)
 
 add_dependencies(litepgo_tests shell_equilibrium_material_fit)
-add_test(NAME ShellEquilibriumMaterialFit COMMAND $<TARGET_FILE:shell_equilibrium_material_fit>)
+add_test(NAME FemFit.shell_equilibrium_material_fit COMMAND $<TARGET_FILE:shell_equilibrium_material_fit>)
 
 add_dependencies(litepgo_tests volume_equilibrium_fp_fit shell_equilibrium_fp_fit)
-add_test(NAME VolumeEquilibriumFpFit COMMAND $<TARGET_FILE:volume_equilibrium_fp_fit>)
-add_test(NAME ShellEquilibriumFpFit COMMAND $<TARGET_FILE:shell_equilibrium_fp_fit>)
+add_test(NAME FemFit.volume_equilibrium_fp_fit COMMAND $<TARGET_FILE:volume_equilibrium_fp_fit>)
+add_test(NAME FemFit.shell_equilibrium_fp_fit COMMAND $<TARGET_FILE:shell_equilibrium_fp_fit>)

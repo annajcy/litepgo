@@ -13,8 +13,8 @@ def test_equilibrium_fp_fit_python_matches_cpp(kind, truth):
     build = Path(_core.__file__).parents[2]
     name = f"{kind}_equilibrium_fp_fit"
     outputs = []
-    for command in ([str(build / "example/fem" / name)],
-                    [sys.executable, str(root / "example/fem" / f"{name}.py")]):
+    for command in ([str(build / "example/fem/fitting" / name)],
+                    [sys.executable, str(root / "example/fem/fitting" / f"{name}.py")]):
         completed = subprocess.run(command, capture_output=True, text=True, timeout=120)
         assert completed.returncode == 0, completed.stdout + completed.stderr
         fields = dict(part.strip().split("=", 1) for part in completed.stdout.strip().split(","))

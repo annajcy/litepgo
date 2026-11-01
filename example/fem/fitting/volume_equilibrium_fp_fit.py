@@ -9,7 +9,7 @@ from litepgo import dof, energy, fem, mesh, solver
 
 
 def main():
-    volume = mesh.read_veg(Path(__file__).resolve().parents[2] / "assets/box-tet.veg")
+    volume = mesh.read_veg(Path(__file__).resolve().parents[3] / "assets/box-tet.veg")
     topology, nodes = volume.topology, volume.positions
     mapping = dof.VertexDofMap(topology, 3)
     XField = fem.InterpolatedField3D[fem.TetP1Basis]

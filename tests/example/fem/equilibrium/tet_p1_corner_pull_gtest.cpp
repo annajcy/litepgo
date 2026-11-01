@@ -30,7 +30,7 @@ inline Vec tet_p1_rest_positions() {
     return rest_positions.reshaped<Eigen::RowMajor>();
 }
 
-inline auto make_tet_p1_mesh_energy(const Vec& rest_positions) {
+inline auto make_tet_p1_corner_pull(const Vec& rest_positions) {
     const mesh::TetTopology topology(5, {{0, 1, 2, 3}, {0, 2, 1, 4}});
     const dof::VertexDofMap rest_position_map(topology, 3);
     using XField = fem::InterpolatedField3D<fem::TetP1Basis>;
@@ -49,7 +49,7 @@ inline auto make_tet_p1_mesh_energy(const Vec& rest_positions) {
 
 TEST(TetP1Example, GradientAndHessianMatchFiniteDifferences) {
     const Vec X_nodes = tet_p1_rest_positions();
-    auto energy = make_tet_p1_mesh_energy(X_nodes);
+    auto energy = make_tet_p1_corner_pull(X_nodes);
     ASSERT_EQ(X_nodes.size(), 15);
     for (int state : {0, 1, 2}) {
         SCOPED_TRACE(state);
@@ -115,20 +115,20 @@ TEST(TetP1Example, ConstructionRejectsInvalidGeometry) {
     for (double scale : {0., -1., 1e200}) {
         SCOPED_TRACE(scale);
         const Vec X_nodes = scale * tet_p1_rest_positions();
-        EXPECT_THROW(make_tet_p1_mesh_energy(X_nodes), std::invalid_argument);
+        EXPECT_THROW(make_tet_p1_corner_pull(X_nodes), std::invalid_argument);
     }
-    EXPECT_THROW(make_tet_p1_mesh_energy(Vec::Zero(14)), std::invalid_argument);
+    EXPECT_THROW(make_tet_p1_corner_pull(Vec::Zero(14)), std::invalid_argument);
     for (double bad : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
                        -std::numeric_limits<double>::infinity()}) {
         Vec X_nodes = tet_p1_rest_positions();
         X_nodes[0] = bad;
-        EXPECT_THROW(make_tet_p1_mesh_energy(X_nodes), std::invalid_argument);
+        EXPECT_THROW(make_tet_p1_corner_pull(X_nodes), std::invalid_argument);
     }
 }
 
 TEST(TetP1Example, FeasibleStepBoundsTheWholeSegmentAndUsesBothElements) {
     const Vec X = tet_p1_rest_positions(), zero = Vec::Zero(X.size());
-    auto energy = make_tet_p1_mesh_energy(X);
+    auto energy = make_tet_p1_corner_pull(X);
     EXPECT_EQ(energy.max_feasible_step(zero, zero), 1);
     EXPECT_EQ(energy.max_feasible_step(zero, 0.1 * X), 1);
     Vec direction = zero;
@@ -148,7 +148,7 @@ TEST(TetP1Example, FeasibleStepBoundsTheWholeSegmentAndUsesBothElements) {
 }
 
 TEST(TetP1Example, NewtonRelaxesTheFreeVerticesWithFeasibleSteps) {
-    auto energy = make_tet_p1_mesh_energy(tet_p1_rest_positions());
+    auto energy = make_tet_p1_corner_pull(tet_p1_rest_positions());
     Vec u = Vec::Zero(15);
     u[11] = 0.3;
     u[14] = -0.2;
