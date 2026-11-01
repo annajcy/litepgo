@@ -1,5 +1,6 @@
 # Test files mirror cpp/litepgo: tests/cpp/<dir>/<name>_gtest.cpp covers cpp/litepgo/<dir>/.
 add_executable(litepgo_tests
+    response/mesh_response_gtest.cpp
     solver/gauss_newton_gtest.cpp
     fem/sample_boundary_gtest.cpp
     dof/vertex_displacement_map_gtest.cpp
@@ -7,6 +8,7 @@ add_executable(litepgo_tests
     fem/element_locator_gtest.cpp
     spatial/spatial_hash_gtest.cpp
     dof/energy_assembler_gtest.cpp
+    dof/response_assembler_gtest.cpp
     energy/mesh_energy_gtest.cpp
     ../example/fem/hex_q1_mesh_energy_gtest.cpp
     ../example/fem/hex_hermite_mesh_energy_gtest.cpp
@@ -45,6 +47,10 @@ add_executable(litepgo_tests
     fem/basis/1d/linear_lagrange_basis_gtest.cpp
     fem/shell_fem_energy_gtest.cpp
     fem/local/local_energy_gtest.cpp
+    fem/local/local_response_gtest.cpp
+    fem/volumetric_fem_force_response_gtest.cpp
+    fem/volumetric_fem_force_material_response_gtest.cpp
+    fem/material/volumetric/volumetric_material_force_local_response_gtest.cpp
     fem/local/dof_derivatives_gtest.cpp
     fem/kinematics/volumetric_element_gtest.cpp
     fem/material/volumetric/volumetric_material_inputs_gtest.cpp
