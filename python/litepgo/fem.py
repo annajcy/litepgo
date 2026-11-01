@@ -43,6 +43,15 @@ element. eval(theta, need_jacobian=True) returns global positive nodal force and
 a sparse parameter Jacobian. Constitutive evaluation and integration run through
 the local response API, with batched TBB assembly and no equilibrium solve.
 
+ShellFemForceMaterialResponse[KoiterStVK] takes (parameter_map, displacement_map,
+rest_data, displacement, thickness, batch_size=256). It snapshots fixed inputs,
+caches pose kinematics and returns positive displacement-gradient force and its
+theta Jacobian. The output map is StencilDofMap; parameters use ConstantDofMap or
+ElementDofMap with [lambda_ps, mu] per block. Thickness is fixed.
+ShellMaterialForceLocalResponse2D[KoiterStVK](rest, u_local, thickness, theta)
+borrows a Field2D for theta and returns density per reference area; accumulate
+applies a caller-supplied weight. Python keeps theta alive.
+
 Only the instantiations compiled into the extension exist; indexing any other
 raises TypeError listing them. Every instantiation is an ordinary class, and
 ``isinstance(x, Template)`` tests membership in any of them.
@@ -142,6 +151,8 @@ VolumetricFemEnergy = _templates["VolumetricFemEnergy"]
 VolumetricFemForceFpResponse = _templates["VolumetricFemForceFpResponse"]
 VolumetricFemForceMaterialResponse = _templates["VolumetricFemForceMaterialResponse"]
 ShellFemEnergy = _templates["ShellFemEnergy"]
+ShellMaterialForceLocalResponse2D = _templates["ShellMaterialForceLocalResponse2D"]
+ShellFemForceMaterialResponse = _templates["ShellFemForceMaterialResponse"]
 
 __all__ = [
     "sample_boundary",
@@ -189,4 +200,6 @@ __all__ = [
     "VolumetricFemForceMaterialResponse",
     "VolumetricFemForceFpResponse",
     "ShellFemEnergy",
+    "ShellMaterialForceLocalResponse2D",
+    "ShellFemForceMaterialResponse",
 ]

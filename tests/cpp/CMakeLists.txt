@@ -46,6 +46,7 @@ add_executable(litepgo_tests
     fem/kinematics/basis_dof_transform_gtest.cpp
     fem/basis/1d/linear_lagrange_basis_gtest.cpp
     fem/shell_fem_energy_gtest.cpp
+    fem/shell_fem_force_material_response_gtest.cpp
     fem/local/local_energy_gtest.cpp
     fem/local/local_response_gtest.cpp
     fem/volumetric_fem_force_response_gtest.cpp
@@ -61,6 +62,7 @@ add_executable(litepgo_tests
     fem/material/volumetric/neo_hookean_gtest.cpp
     fem/material/shell/koiter_stvk_gtest.cpp
     fem/material/shell/shell_material_local_energy_gtest.cpp
+    fem/material/shell/shell_material_force_local_response_gtest.cpp
     fem/material/volumetric/volumetric_material_local_energy_gtest.cpp
     fem/quadrature/quadrature_gtest.cpp
     fem/quadrature/2d/tensor_product_quadrature_2d_gtest.cpp

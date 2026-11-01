@@ -17,6 +17,8 @@ class KoiterStVK final {
     static double eval_W(const ShellMaterialInputs& inputs);
     static Eigen::Matrix<double, 6, 1> eval_dW_dab(const ShellMaterialInputs& inputs);
     static Eigen::Matrix<double, 6, 6> eval_d2W_dab2(const ShellMaterialInputs& inputs);
+    // Columns follow theta = [lambda_ps, mu]; geometry and thickness stay fixed.
+    static Eigen::Matrix<double, 6, 2> eval_d2W_dab_dtheta(const ShellMaterialInputs& inputs);
 };
 
 } // namespace litepgo::fem

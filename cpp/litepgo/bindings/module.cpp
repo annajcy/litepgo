@@ -81,6 +81,7 @@ NB_MODULE(_core, m) {
     litepgo::fem::binding::bind_volumetric_material_force_local_response(fem);
     litepgo::fem::binding::bind_volumetric_fp_force_local_response(fem);
     litepgo::fem::binding::bind_fem_material_shell_shell_material_local_energy(fem);
+    litepgo::fem::binding::bind_fem_material_shell_shell_material_force_local_response(fem);
     litepgo::fem::binding::bind_fem_kinematics_basis_dof_transform(fem);
     litepgo::fem::binding::bind_fem_kinematics_volumetric_element(fem);
     litepgo::fem::binding::bind_positive_det_feasible_step(fem);
@@ -90,6 +91,7 @@ NB_MODULE(_core, m) {
     litepgo::fem::binding::bind_fem_volumetric_fem_force_material_response(fem);
     litepgo::fem::binding::bind_fem_volumetric_fem_force_fp_response(fem);
     litepgo::fem::binding::bind_fem_shell_fem_energy(fem);
+    litepgo::fem::binding::bind_fem_shell_fem_force_material_response(fem);
 
     nb::module_ solver = m.def_submodule("solver");
     solver.doc() = "Nonlinear solvers (cpp/litepgo/solver)";

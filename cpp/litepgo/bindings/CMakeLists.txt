@@ -44,6 +44,7 @@ nanobind_add_module(_core NB_STATIC
     fem/local/local_response.cpp
     fem/material/shell/koiter_stvk.cpp
     fem/material/shell/shell_material_local_energy.cpp
+    fem/material/shell/shell_material_force_local_response.cpp
     fem/material/volumetric/neo_hookean.cpp
     fem/material/volumetric/volumetric_fp_force_local_response.cpp
     fem/material/volumetric/volumetric_material_force_local_response.cpp
@@ -55,6 +56,7 @@ nanobind_add_module(_core NB_STATIC
     fem/quadrature/3d/tet_centroid_quadrature.cpp
     fem/sample_boundary.cpp
     fem/shell_fem_energy.cpp
+    fem/shell_fem_force_material_response.cpp
     fem/volumetric_fem_energy.cpp
     fem/volumetric_fem_force_fp_response.cpp
     fem/volumetric_fem_force_material_response.cpp
