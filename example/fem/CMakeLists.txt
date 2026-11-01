@@ -40,3 +40,6 @@ target_compile_definitions(shell_fp_fit PRIVATE LITEPGO_ASSETS_DIR="${PROJECT_SO
 add_executable(shell_plastic_field shell_plastic_field.cpp)
 target_link_libraries(shell_plastic_field PRIVATE litepgo::io litepgo::litepgo litepgo::warnings)
 target_compile_definitions(shell_plastic_field PRIVATE LITEPGO_OUTPUT_DIR="${PROJECT_SOURCE_DIR}/output")
+
+add_executable(shell_equilibrium_material_fit shell_equilibrium_material_fit.cpp)
+target_link_libraries(shell_equilibrium_material_fit PRIVATE litepgo::litepgo litepgo::warnings)

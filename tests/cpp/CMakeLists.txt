@@ -136,3 +136,6 @@ add_test(NAME ShellFpFit COMMAND $<TARGET_FILE:shell_fp_fit>)
 
 add_dependencies(litepgo_tests shell_plastic_field)
 add_test(NAME ShellPlasticField COMMAND $<TARGET_FILE:shell_plastic_field> ${CMAKE_CURRENT_BINARY_DIR}/shell_plastic_field)
+
+add_dependencies(litepgo_tests shell_equilibrium_material_fit)
+add_test(NAME ShellEquilibriumMaterialFit COMMAND $<TARGET_FILE:shell_equilibrium_material_fit>)
