@@ -121,3 +121,6 @@ add_test(NAME EnergyApiExample COMMAND $<TARGET_FILE:custom_energy>)
 add_test(NAME ResponseApiExample COMMAND $<TARGET_FILE:custom_response>)
 add_dependencies(litepgo_tests mesh_response)
 add_test(NAME MeshResponseExample COMMAND $<TARGET_FILE:mesh_response>)
+
+add_dependencies(litepgo_tests shell_material_fit)
+add_test(NAME ShellMaterialFit COMMAND $<TARGET_FILE:shell_material_fit>)
