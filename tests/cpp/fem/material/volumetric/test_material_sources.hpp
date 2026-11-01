@@ -19,9 +19,6 @@ template <class UField, class XField> class OwnedDeformationField final : public
     int num_dofs() const override {
         return u_field_.num_dofs();
     }
-    const Field3D& coordinate_field() const {
-        return X_field_;
-    }
     Eigen::VectorXd eval_value(const Eigen::Vector3d& xi) const override {
         return DeformationGradientField3D(u_field_, X_field_).eval_value(xi);
     }

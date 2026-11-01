@@ -67,16 +67,18 @@ TEST(DofDerivatives, WeightedContractionsAddToBuffersAndPackStridedGradientsByCo
     H(3, 0) = -0.1;
     const Eigen::MatrixXd storage = Eigen::MatrixXd::Random(5, 4);
     const auto gradient = storage.block<2, 2>(1, 1);
+    const Eigen::Vector4d packed(gradient(0, 0), gradient(1, 0), gradient(0, 1), gradient(1, 1));
+    const Eigen::Vector3d expected_g = dvalue_dcoeffs.transpose() * packed;
+    const Eigen::Matrix3d expected_H = dvalue_dcoeffs.transpose() * H * dvalue_dcoeffs;
+    EXPECT_TRUE(eval_gradient_wrt_dofs(dvalue_dcoeffs, gradient).isApprox(expected_g, 1e-13));
+    EXPECT_TRUE(eval_hessian_wrt_dofs(dvalue_dcoeffs, H).isApprox(expected_H, 1e-13));
     for (double weight : {0.0, 0.3, -0.7}) {
         Eigen::VectorXd g = Eigen::VectorXd::Constant(3, 2);
         Eigen::MatrixXd h = Eigen::MatrixXd::Constant(3, 3, 4);
         litepgo::fem::add_gradient_wrt_dofs(dvalue_dcoeffs, gradient, weight, g);
         litepgo::fem::add_hessian_wrt_dofs(dvalue_dcoeffs, H, weight, h);
-        EXPECT_TRUE(g.isApprox(Eigen::Vector3d::Constant(2) +
-                                   weight * litepgo::fem::eval_gradient_wrt_dofs(dvalue_dcoeffs, gradient),
-                               1e-13));
-        EXPECT_TRUE(h.isApprox(
-            Eigen::Matrix3d::Constant(4) + weight * litepgo::fem::eval_hessian_wrt_dofs(dvalue_dcoeffs, H), 1e-13));
+        EXPECT_TRUE(g.isApprox(Eigen::Vector3d::Constant(2) + weight * expected_g, 1e-13));
+        EXPECT_TRUE(h.isApprox(Eigen::Matrix3d::Constant(4) + weight * expected_H, 1e-13));
     }
 }
 
