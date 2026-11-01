@@ -1,3 +1,7 @@
+// Weighted energies in reduced coordinates x = T z + offset.
+// Build: cmake --build build/release --target energy_composition
+// Run: build/release/example/energy/scalar/energy_composition
+
 #include "litepgo/energy/scalar/affine_mapped_energy.hpp"
 #include "litepgo/energy/scalar/quadratic_energy.hpp"
 #include "litepgo/energy/scalar/vertex_pulling_energy.hpp"

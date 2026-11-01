@@ -1,4 +1,8 @@
-"""Python mirror of tet_p1_plastic_twist.cpp: release and clamp a tet bar with a plastic twist Fp."""
+"""Python mirror of tet_p1_plastic_twist.cpp: release and clamp a tet bar with a plastic twist Fp.
+
+Run from the repository root after building litepgo:
+    .venv/bin/python example/fem/plasticity/tet_p1_plastic_twist.py
+"""
 
 import argparse
 import sys
@@ -13,7 +17,13 @@ REPO = Path(__file__).resolve().parents[3]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", nargs="?", type=Path, default=REPO / "assets/box-tet.veg", help="rest VEG mesh")
+    parser.add_argument(
+        "input",
+        nargs="?",
+        type=Path,
+        default=REPO / "assets/box-tet.veg",
+        help="rest VEG mesh",
+    )
     parser.add_argument(
         "output",
         nargs="?",
@@ -45,7 +55,9 @@ def main():
     output = args.output
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    mesh.write_obj(output.parent / f"{output.stem}_rest.obj", mesh.extract_surface(rest_mesh))
+    mesh.write_obj(
+        output.parent / f"{output.stem}_rest.obj", mesh.extract_surface(rest_mesh)
+    )
 
     # free: clamp the bottom face; the bar twists. clamped: also hold the top face in place;
     # the bar cannot twist and keeps residual stress.
@@ -64,21 +76,41 @@ def main():
             angle = (step / 4) * np.pi / 2 * (rest_nodes[:, 2] - lower[2]) / height
             c, s = np.cos(angle), np.sin(angle)
             plastic_displacement = np.column_stack(
-                [c * r[:, 0] - s * r[:, 1] - r[:, 0], s * r[:, 0] + c * r[:, 1] - r[:, 1], np.zeros(topology.num_vertices)]
+                [
+                    c * r[:, 0] - s * r[:, 1] - r[:, 0],
+                    s * r[:, 0] + c * r[:, 1] - r[:, 1],
+                    np.zeros(topology.num_vertices),
+                ]
             ).ravel()
 
             # DeformationGradientField3D(u_p, X) borrows both fields and keeps them alive.
             rest_position_map = dof.VertexDofMap(topology, 3)
             XField = fem.InterpolatedField3D[fem.TetP1Basis]
-            rest_position_fields = [XField(rest_position_map.gather(e, rest_positions)) for e in range(topology.num_cells)]
-            plastic_fields = [XField(rest_position_map.gather(e, plastic_displacement)) for e in range(topology.num_cells)]
-            Fp_fields = [fem.DeformationGradientField3D(u_p, X) for u_p, X in zip(plastic_fields, rest_position_fields)]
+            rest_position_fields = [
+                XField(rest_position_map.gather(e, rest_positions))
+                for e in range(topology.num_cells)
+            ]
+            plastic_fields = [
+                XField(rest_position_map.gather(e, plastic_displacement))
+                for e in range(topology.num_cells)
+            ]
+            Fp_fields = [
+                fem.DeformationGradientField3D(u_p, X)
+                for u_p, X in zip(plastic_fields, rest_position_fields)
+            ]
             theta_field = fem.IdentityField3D(np.array([2.0, 3.0]))
-            elastic = fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature](
-                rest_position_map, rest_position_fields, Fp_fields, [theta_field] * topology.num_cells
+            elastic = fem.VolumetricFemEnergy[
+                fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
+            ](
+                rest_position_map,
+                rest_position_fields,
+                Fp_fields,
+                [theta_field] * topology.num_cells,
             )
 
-            result = solver.newton_solve(elastic, fixed, initial, options, sparse_solver)
+            result = solver.newton_solve(
+                elastic, fixed, initial, options, sparse_solver
+            )
             if result.status != solver.NewtonStatus.Converged:
                 raise RuntimeError("Plastic twist did not reach equilibrium")
             if np.max(np.abs(result.x[fixed_dofs])) > 1e-14:
@@ -98,7 +130,9 @@ def main():
             f"elastic={result.energy:.6g}, free residual={result.gradient_norm:.6g}, "
             f"max displacement={np.abs(result.x).max():.6g}, top twist={np.arctan2(cross, dot) * 180 / np.pi:.6g} deg"
         )
-        path = output.parent / f"{output.stem}{'_clamped' if clamp_top else '_free'}.veg"
+        path = (
+            output.parent / f"{output.stem}{'_clamped' if clamp_top else '_free'}.veg"
+        )
         deformed = mesh.TetMesh((rest_positions + result.x).reshape(-1, 3), topology)
         mesh.write_veg(path, deformed)
         mesh.write_obj(path.with_suffix(".obj"), mesh.extract_surface(deformed))

@@ -1,3 +1,7 @@
+// pull a tet box's corners and solve static equilibrium.
+// Build: cmake --build build/release --target tet_p1_corner_pull
+// Run: build/release/example/fem/equilibrium/tet_p1_corner_pull
+
 #include "litepgo/energy/scalar/vertex_pulling_energy.hpp"
 #include "litepgo/energy/scalar/weighted_energy_sum.hpp"
 #include "litepgo/fem/field/identity_field.hpp"

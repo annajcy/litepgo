@@ -1,3 +1,7 @@
+// Locate independent points and interpolate physical DOFs for P1, Q1 and Hermite.
+// Build: cmake --build build/release --target point_embedding
+// Run: build/release/example/fem/embedding/point_embedding
+
 #include "litepgo/dof/surface_kinematics.hpp"
 #include "litepgo/fem/point_displacement_map.hpp"
 #include <iostream>

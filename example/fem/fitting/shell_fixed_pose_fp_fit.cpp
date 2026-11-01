@@ -1,3 +1,7 @@
+// Fit two shared positive in-plane Fp stretches at a prescribed shell pose.
+// Build: cmake --build build/release --target shell_fixed_pose_fp_fit
+// Run: build/release/example/fem/fitting/shell_fixed_pose_fp_fit
+
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/material/shell/shell_material_local_energy.hpp"
@@ -117,6 +121,7 @@ int main() {
             throw std::runtime_error("Plastic stretch chain-rule check failed");
         solver::GaussNewtonOptions options;
         options.gradient_tolerance = 1e-12;
+        // Fit the measured response using its analytic parameter Jacobian.
         const auto result = solver::gauss_newton_solve(residual, initial_p, options);
         const Eigen::Vector2d fitted = result.x.array().exp();
         const double fitted_ratio = check_identifiability(result.x);

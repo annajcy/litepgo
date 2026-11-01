@@ -1,3 +1,7 @@
+// Fit y(t) = amplitude * exp(-rate * t) with an analytic Jacobian.
+// Build: cmake --build build/release --target gauss_newton_fit
+// Run: build/release/example/solver/gauss_newton_fit
+
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
 #include <iostream>

@@ -1,4 +1,8 @@
-"""Python mirror of hex_q1_plastic_twist.cpp: release and clamp a hex bar with a plastic twist Fp."""
+"""Python mirror of hex_q1_plastic_twist.cpp: release and clamp a hex bar with a plastic twist Fp.
+
+Run from the repository root after building litepgo:
+    .venv/bin/python example/fem/plasticity/hex_q1_plastic_twist.py
+"""
 
 import argparse
 import sys
@@ -13,7 +17,13 @@ REPO = Path(__file__).resolve().parents[3]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", nargs="?", type=Path, default=REPO / "assets/box-hex.veg", help="rest VEG mesh")
+    parser.add_argument(
+        "input",
+        nargs="?",
+        type=Path,
+        default=REPO / "assets/box-hex.veg",
+        help="rest VEG mesh",
+    )
     parser.add_argument(
         "output",
         nargs="?",
@@ -43,18 +53,36 @@ def main():
     angle = np.pi / 2 * (rest_nodes[:, 2] - lower[2]) / height
     c, s = np.cos(angle), np.sin(angle)
     plastic_displacement = np.column_stack(
-        [c * r[:, 0] - s * r[:, 1] - r[:, 0], s * r[:, 0] + c * r[:, 1] - r[:, 1], np.zeros(topology.num_vertices)]
+        [
+            c * r[:, 0] - s * r[:, 1] - r[:, 0],
+            s * r[:, 0] + c * r[:, 1] - r[:, 1],
+            np.zeros(topology.num_vertices),
+        ]
     ).ravel()
 
     # DeformationGradientField3D(u_p, X) borrows both fields and keeps them alive.
     rest_position_map = dof.VertexDofMap(topology, 3)
     XField = fem.InterpolatedField3D[fem.HexQ1Basis]
-    rest_position_fields = [XField(rest_position_map.gather(e, rest_positions)) for e in range(topology.num_cells)]
-    plastic_fields = [XField(rest_position_map.gather(e, plastic_displacement)) for e in range(topology.num_cells)]
-    Fp_fields = [fem.DeformationGradientField3D(u_p, X) for u_p, X in zip(plastic_fields, rest_position_fields)]
+    rest_position_fields = [
+        XField(rest_position_map.gather(e, rest_positions))
+        for e in range(topology.num_cells)
+    ]
+    plastic_fields = [
+        XField(rest_position_map.gather(e, plastic_displacement))
+        for e in range(topology.num_cells)
+    ]
+    Fp_fields = [
+        fem.DeformationGradientField3D(u_p, X)
+        for u_p, X in zip(plastic_fields, rest_position_fields)
+    ]
     theta_field = fem.IdentityField3D(np.array([2.0, 3.0]))
-    elastic = fem.VolumetricFemEnergy[fem.NeoHookean, fem.HexQ1Basis, fem.GaussLegendre3D[2]](
-        rest_position_map, rest_position_fields, Fp_fields, [theta_field] * topology.num_cells
+    elastic = fem.VolumetricFemEnergy[
+        fem.NeoHookean, fem.HexQ1Basis, fem.GaussLegendre3D[2]
+    ](
+        rest_position_map,
+        rest_position_fields,
+        Fp_fields,
+        [theta_field] * topology.num_cells,
     )
 
     tolerance = height * 1e-8
@@ -87,7 +115,9 @@ def main():
             f"converged={int(result.status == solver.NewtonStatus.Converged)}, iterations={result.iterations}, "
             f"elastic={result.energy:.6g}, top twist={np.arctan2(cross, dot) * 180 / np.pi:.6g} deg"
         )
-        path = output.parent / f"{output.stem}{'_clamped' if clamp_top else '_free'}.veg"
+        path = (
+            output.parent / f"{output.stem}{'_clamped' if clamp_top else '_free'}.veg"
+        )
         deformed = mesh.HexMesh((rest_positions + result.x).reshape(-1, 3), topology)
         mesh.write_veg(path, deformed)
         mesh.write_obj(path.with_suffix(".obj"), mesh.extract_surface(deformed))

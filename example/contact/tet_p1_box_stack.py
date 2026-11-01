@@ -1,4 +1,8 @@
-"""Python mirror of tet_p1_box_stack.cpp: press two tet boxes together and solve static equilibrium with contact."""
+"""Python mirror of tet_p1_box_stack.cpp: press two tet boxes together and solve static equilibrium with contact.
+
+Run from the repository root after building litepgo:
+    .venv/bin/python example/contact/tet_p1_box_stack.py
+"""
 
 import argparse
 import sys
@@ -13,7 +17,13 @@ REPO = Path(__file__).resolve().parents[2]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", nargs="?", type=Path, default=REPO / "assets/box-tet.veg", help="rest VEG mesh")
+    parser.add_argument(
+        "input",
+        nargs="?",
+        type=Path,
+        default=REPO / "assets/box-tet.veg",
+        help="rest VEG mesh",
+    )
     parser.add_argument(
         "output",
         nargs="?",
@@ -35,7 +45,9 @@ def main():
     # Two copies of the box, one body each, the upper one a small gap above the lower.
     gap = 0.04 * height
     # A small lateral offset avoids an exactly symmetric contact bifurcation.
-    rest_nodes = np.vstack([box_nodes, box_nodes + [0.013 * height, height + gap, 0.017 * height]])
+    rest_nodes = np.vstack(
+        [box_nodes, box_nodes + [0.013 * height, height + gap, 0.017 * height]]
+    )
     rest_positions = rest_nodes.ravel()
     cells = np.vstack([box.cells, box.cells + box_vertices]).astype(np.int32)
     stack = mesh.TetMesh(rest_nodes, cells)
@@ -43,10 +55,15 @@ def main():
 
     rest_position_map = dof.VertexDofMap(topology, 3)
     XField = fem.InterpolatedField3D[fem.TetP1Basis]
-    rest_position_fields = [XField(rest_position_map.gather(e, rest_positions)) for e in range(topology.num_cells)]
+    rest_position_fields = [
+        XField(rest_position_map.gather(e, rest_positions))
+        for e in range(topology.num_cells)
+    ]
     Fp_field = fem.IdentityField3D(np.eye(3).ravel(order="F"))
     theta_field = fem.IdentityField3D(np.array([2.0, 3.0]))
-    elastic = fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature](
+    elastic = fem.VolumetricFemEnergy[
+        fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
+    ](
         rest_position_map,
         rest_position_fields,
         [Fp_field] * topology.num_cells,
@@ -58,7 +75,10 @@ def main():
     # by more than the gap, so the boxes press against each other.
     tolerance, press, stiffness = height * 1e-8, 0.2 * height, 1.0
     clamped_vertices = np.flatnonzero(np.abs(box_nodes[:, 1] - bottom) <= tolerance)
-    pulled_vertices = np.flatnonzero(np.abs(box_nodes[:, 1] - bottom - height) <= tolerance) + box_vertices
+    pulled_vertices = (
+        np.flatnonzero(np.abs(box_nodes[:, 1] - bottom - height) <= tolerance)
+        + box_vertices
+    )
     clamped = (3 * clamped_vertices[:, None] + np.arange(3)).ravel().tolist()
     pulled_dofs = (3 * pulled_vertices[:, None] + np.arange(3)).astype(np.int32)
     targets = np.zeros((len(pulled_vertices), 3))
@@ -78,7 +98,9 @@ def main():
     )
     kappa = 1e3
 
-    potential = energy.WeightedEnergySum([(elastic, 1.0), (pulling, 1.0), (contact_energy, kappa)])
+    potential = energy.WeightedEnergySum(
+        [(elastic, 1.0), (pulling, 1.0), (contact_energy, kappa)]
+    )
     fixed = dof.DofReduction(num_dofs, clamped)
     initial = np.zeros(num_dofs)
     options = solver.NewtonOptions()

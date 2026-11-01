@@ -1,3 +1,7 @@
+// Subclass fixed/dynamic Energy; request values, gradients and sparse Hessians.
+// Build: cmake --build build/release --target custom_energy
+// Run: build/release/example/energy/scalar/custom_energy
+
 #include "litepgo/energy/scalar/dynamic_pattern_energy.hpp"
 #include "litepgo/energy/scalar/fixed_pattern_energy.hpp"
 #include <iostream>

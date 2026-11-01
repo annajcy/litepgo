@@ -1,4 +1,8 @@
-"""Python mirror of hex_q1_corner_pull.cpp: pull a hex box's corners and solve static equilibrium."""
+"""Python mirror of hex_q1_corner_pull.cpp: pull a hex box's corners and solve static equilibrium.
+
+Run from the repository root after building litepgo:
+    .venv/bin/python example/fem/equilibrium/hex_q1_corner_pull.py
+"""
 
 import argparse
 import sys
@@ -13,7 +17,13 @@ REPO = Path(__file__).resolve().parents[3]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", nargs="?", type=Path, default=REPO / "assets/box-hex.veg", help="rest VEG mesh")
+    parser.add_argument(
+        "input",
+        nargs="?",
+        type=Path,
+        default=REPO / "assets/box-hex.veg",
+        help="rest VEG mesh",
+    )
     parser.add_argument(
         "output",
         nargs="?",
@@ -30,10 +40,15 @@ def main():
         raise RuntimeError("Example requires a nonempty mesh")
     rest_position_map = dof.VertexDofMap(topology, 3)
     XField = fem.InterpolatedField3D[fem.HexQ1Basis]
-    rest_position_fields = [XField(rest_position_map.gather(e, rest_positions)) for e in range(topology.num_cells)]
+    rest_position_fields = [
+        XField(rest_position_map.gather(e, rest_positions))
+        for e in range(topology.num_cells)
+    ]
     Fp_field = fem.IdentityField3D(np.eye(3).ravel(order="F"))
     theta_field = fem.IdentityField3D(np.array([2.0, 3.0]))
-    elastic = fem.VolumetricFemEnergy[fem.NeoHookean, fem.HexQ1Basis, fem.GaussLegendre3D[2]](
+    elastic = fem.VolumetricFemEnergy[
+        fem.NeoHookean, fem.HexQ1Basis, fem.GaussLegendre3D[2]
+    ](
         rest_position_map,
         rest_position_fields,
         [Fp_field] * topology.num_cells,
@@ -47,14 +62,18 @@ def main():
     tolerance = (upper - lower).max() * 1e-8
     if not ((upper - lower) > tolerance).all():
         raise RuntimeError("Example requires nonzero extent along every axis")
-    near = (np.abs(rest_nodes - lower) <= tolerance) | (np.abs(rest_nodes - upper) <= tolerance)
+    near = (np.abs(rest_nodes - lower) <= tolerance) | (
+        np.abs(rest_nodes - upper) <= tolerance
+    )
     corners = np.flatnonzero(near.all(axis=1))
     if len(corners) != 8:
         raise RuntimeError("Example requires a vertex at each bounding-box corner")
     stretch, stiffness = 0.3, 1.0
     pulled_dofs = (3 * corners[:, None] + np.arange(3)).astype(np.int32)
     targets = stretch * (rest_nodes[corners] - lower)
-    pulling = energy.VertexPullingEnergy(elastic.num_dofs, pulled_dofs, targets, stiffness)
+    pulling = energy.VertexPullingEnergy(
+        elastic.num_dofs, pulled_dofs, targets, stiffness
+    )
 
     # Static equilibrium minimizes Pi(u) = E_elastic(u) + E_pulling(u); the springs
     # remove all rigid motions, so no DOF is fixed.
@@ -64,9 +83,13 @@ def main():
     options = solver.NewtonOptions()
     options.gradient_tolerance = 1e-8
     sparse_solver = linalg.AutoSparseSolver()
-    result = solver.newton_solve(potential, unconstrained, initial, options, sparse_solver)
+    result = solver.newton_solve(
+        potential, unconstrained, initial, options, sparse_solver
+    )
     converged = result.status == solver.NewtonStatus.Converged
-    corner_gap = np.linalg.norm(result.x.reshape(-1, 3)[corners] - targets, axis=1).max()
+    corner_gap = np.linalg.norm(
+        result.x.reshape(-1, 3)[corners] - targets, axis=1
+    ).max()
     print(
         f"converged={int(converged)}, iterations={result.iterations}, potential={result.energy:.6g}, "
         f"elastic={elastic.eval_value(result.x):.6g}, pulling={pulling.eval_value(result.x):.6g}, "

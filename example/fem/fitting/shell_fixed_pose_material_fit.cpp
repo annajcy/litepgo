@@ -1,3 +1,7 @@
+// Recover shared KoiterStVK parameters from forces at a prescribed shell pose.
+// Build: cmake --build build/release --target shell_fixed_pose_material_fit
+// Run: build/release/example/fem/fitting/shell_fixed_pose_material_fit
+
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/shell_fem_energy.hpp"
@@ -79,6 +83,7 @@ int main() {
         } residual(force, target, scale);
         solver::GaussNewtonOptions options;
         options.gradient_tolerance = 1e-12;
+        // Fit the measured response using its analytic parameter Jacobian.
         const auto result = solver::gauss_newton_solve(residual, initial, options);
         const double parameter_error = (result.x - truth).norm() / truth.norm();
         const double force_residual = (force.eval_value(result.x) - target).norm();

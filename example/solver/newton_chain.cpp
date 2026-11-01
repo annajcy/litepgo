@@ -1,3 +1,7 @@
+// Minimize 1/2 sum (x[i+1] - x[i])**2 with prescribed endpoints.
+// Build: cmake --build build/release --target newton_chain
+// Run: build/release/example/solver/newton_chain
+
 #include "litepgo/energy/scalar/quadratic_energy.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include "litepgo/solver/newton.hpp"

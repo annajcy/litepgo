@@ -1,3 +1,7 @@
+// pull a sheet's corners into a saddle and solve static equilibrium.
+// Build: cmake --build build/release --target shell_saddle_pull
+// Run: build/release/example/fem/equilibrium/shell_saddle_pull
+
 #include "litepgo/energy/scalar/vertex_pulling_energy.hpp"
 #include "litepgo/energy/scalar/weighted_energy_sum.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"

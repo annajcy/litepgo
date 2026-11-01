@@ -1,3 +1,7 @@
+// Subclass fixed/dynamic Response and pass the residual object to Gauss-Newton.
+// Build: cmake --build build/release --target custom_response
+// Run: build/release/example/energy/response/custom_response
+
 #include "litepgo/energy/response/dynamic_pattern_response.hpp"
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
 #include "litepgo/solver/gauss_newton.hpp"

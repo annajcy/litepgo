@@ -1,3 +1,7 @@
+// Point, region and filtered pair queries; mirrors spatial_query.cpp.
+// Build: cmake --build build/release --target spatial_query
+// Run: build/release/example/spatial/spatial_query
+
 #include "litepgo/spatial/spatial_hash.hpp"
 #include <iostream>
 #include <stdexcept>

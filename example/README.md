@@ -1,6 +1,8 @@
 # Example catalog
 
-Each runnable case has matching `.cpp` and `.py` files. The CMake target matches
+Native cases have matching `.cpp` and `.py` files; the optional Torch fitting
+examples are Python-only. Each example keeps its setup and solve in its own file.
+The CMake target matches
 the filename stem. Executables mirror source directories under `build/<preset>/`.
 Run Python examples from the configured environment (`.venv/bin/python` or
 `PYTHONPATH=build/<preset>/python .venv/bin/python`).

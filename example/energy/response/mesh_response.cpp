@@ -1,10 +1,14 @@
+// Fit shared Neo-Hookean parameters from forces at a prescribed deformation, using batches.
+// Build: cmake --build build/release --target mesh_response
+// Run: build/release/example/energy/response/mesh_response
+
+#include "litepgo/energy/response/mesh_response.hpp"
 #include "litepgo/dof/constant_dof_map.hpp"
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
 #include "litepgo/fem/volumetric_fem_force_material_response.hpp"
-#include "litepgo/energy/response/mesh_response.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
 #include <Eigen/LU>
 #include <algorithm>
