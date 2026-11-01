@@ -139,3 +139,6 @@ add_test(NAME ShellPlasticField COMMAND $<TARGET_FILE:shell_plastic_field> ${CMA
 
 add_dependencies(litepgo_tests shell_equilibrium_material_fit)
 add_test(NAME ShellEquilibriumMaterialFit COMMAND $<TARGET_FILE:shell_equilibrium_material_fit>)
+
+add_dependencies(litepgo_tests volume_equilibrium_fp_fit)
+add_test(NAME VolumeEquilibriumFpFit COMMAND $<TARGET_FILE:volume_equilibrium_fp_fit>)
