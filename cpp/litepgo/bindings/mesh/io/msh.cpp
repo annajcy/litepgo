@@ -1,4 +1,5 @@
 #include "litepgo/bindings/bindings.hpp"
+#include "litepgo/mesh/mesh_data.hpp"
 #include <filesystem>
 #ifdef LITEPGO_HAS_GMSH
 #include "litepgo/mesh/io/msh.hpp"
