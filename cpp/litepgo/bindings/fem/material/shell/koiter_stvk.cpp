@@ -22,6 +22,7 @@ template <class M> void bind_koiter_stvk(nb::module_& m, const char* name) {
     LITEPGO_SHELL(eval_dW_dab);
     LITEPGO_SHELL(eval_d2W_dab2);
     LITEPGO_SHELL(eval_d2W_dab_dtheta);
+    LITEPGO_SHELL(eval_d2W_dab_dabarbbar);
 #undef LITEPGO_SHELL
 }
 } // namespace

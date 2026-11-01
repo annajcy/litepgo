@@ -24,9 +24,9 @@ template <class M> void bind_shell_fem_energy(nb::module_& m) {
     const std::string name = "ShellFemEnergy[" + class_name(key[0]) + "]";
     nb::class_<Energy, energy::Energy>(m, name.c_str())
         .def(nb::init<const dof::StencilDofMap&, std::vector<TriangleMidEdgeRestData>, std::vector<double>,
-                      std::vector<Eigen::VectorXd>>(),
-             "displacement_map"_a, "rest_data"_a, "thickness"_a, "theta"_a,
-             "One rest data, positive thickness and parameter vector per face, in map order.");
+                      std::vector<Eigen::VectorXd>, const std::vector<Eigen::Matrix3d>&>(),
+             "displacement_map"_a, "rest_data"_a, "thickness"_a, "theta"_a, "Fp"_a = std::vector<Eigen::Matrix3d>{},
+             "Fixed per-face inputs; optional Fp changes natural forms, preserving original areas and thickness.");
     register_instance(m, "ShellFemEnergy", key, nb::type<Energy>());
 }
 } // namespace

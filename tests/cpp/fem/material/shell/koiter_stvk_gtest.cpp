@@ -54,6 +54,30 @@ template <class Exception> void expect_invalid(const ShellMaterialInputs& p) {
     EXPECT_THROW(KoiterStVK::eval_dW_dab(p), Exception);
     EXPECT_THROW(KoiterStVK::eval_d2W_dab2(p), Exception);
     EXPECT_THROW(KoiterStVK::eval_d2W_dab_dtheta(p), Exception);
+    EXPECT_THROW(KoiterStVK::eval_d2W_dab_dabarbbar(p), Exception);
+}
+
+TEST(KoiterStVK, NaturalFormMixedDerivativeMatchesAllSixPackedDirections) {
+    const auto p = inputs();
+    const auto C = KoiterStVK::eval_d2W_dab_dabarbbar(p);
+    for (int j = 0; j < 6; ++j) {
+        auto plus = p, minus = p;
+        auto perturb_natural = [j](ShellMaterialInputs& q, double step) {
+            auto& M = j < 3 ? q.a_bar : q.b_bar;
+            if (j % 3 == 0)
+                M(0, 0) += step;
+            else if (j % 3 == 1) {
+                M(0, 1) += step;
+                M(1, 0) += step;
+            } else
+                M(1, 1) += step;
+        };
+        perturb_natural(plus, 1e-6);
+        perturb_natural(minus, -1e-6);
+        const Eigen::Matrix<double, 6, 1> fd = (KoiterStVK::eval_dW_dab(plus) - KoiterStVK::eval_dW_dab(minus)) / 2e-6;
+        EXPECT_LT((C.col(j) - fd).norm(), 1e-9);
+    }
+    EXPECT_GT((C + KoiterStVK::eval_d2W_dab2(p)).norm(), 1e-4);
 }
 
 TEST(KoiterStVK, ParameterMixedDerivativeMatchesFiniteDifferencesAndLinearity) {

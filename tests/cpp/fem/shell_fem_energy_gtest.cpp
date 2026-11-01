@@ -1,6 +1,7 @@
 #include "../testing/finite_difference.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/shell_fem_energy.hpp"
+#include "litepgo/fem/shell_fem_force_fp_response.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include <gtest/gtest.h>
 #include <limits>
@@ -108,6 +109,65 @@ TEST(ShellFemEnergy, EmptyMeshProducesZeroAndFullStep) {
     EXPECT_EQ(energy.eval_hessian(Vec(0)).rows(), 0);
     EXPECT_EQ(energy.max_feasible_step(Vec(0), Vec(0)), 1);
 }
+
+TEST(ShellFemEnergy, PlasticFormsPreserveOriginalMeasureAndMatchResponse) {
+    Patch p;
+    // Curved reference exercises both transformed natural metric and curvature.
+    Vec X = rest_positions();
+    X[11] = .2;
+    X[14] = -.1;
+    X[17] = .15;
+    const auto stencils = mesh::make_triangle_mid_edge_stencils(topology());
+    for (int e = 0; e < 4; ++e)
+        p.rest[e] = TriangleMidEdgeRestData(p.map.gather(e, X), stencils.opposite[e]);
+    Eigen::Matrix3d P;
+    P << 1.12, .08, -.03, .02, .94, .04, -.01, .03, 1.05;
+    std::vector<Eigen::Matrix3d> plastic(4, P);
+    Vec u = .02 * Vec::LinSpaced(18, -1, 1);
+    ShellFemEnergy<KoiterStVK> elastic(p.map, p.rest, p.thickness, p.theta, plastic);
+    ShellFemEnergy<KoiterStVK> original(p.map, p.rest, p.thickness, p.theta);
+    ShellFemEnergy<KoiterStVK> identity(p.map, p.rest, p.thickness, p.theta,
+                                        std::vector<Eigen::Matrix3d>(4, Eigen::Matrix3d::Identity()));
+    EXPECT_NEAR(identity.eval_value(u), original.eval_value(u), 1e-12);
+    EXPECT_TRUE(identity.eval_gradient(u).isApprox(original.eval_gradient(u), 1e-12));
+    EXPECT_DOUBLE_EQ(elastic.max_feasible_step(u, -2 * X), original.max_feasible_step(u, -2 * X));
+    double expected = 0;
+    for (int e = 0; e < 4; ++e) {
+        const auto& r = p.rest[e];
+        const Eigen::MatrixXd Y = r.X_local * P.transpose();
+        const TriangleMidEdgeRestData natural(Y, r.opposite);
+        const ShellMaterialLocalEnergy2D<KoiterStVK> local(natural, r.X_local + p.map.gather(e, u) - Y, p.thickness[e],
+                                                           p.theta[e]);
+        expected += .5 * r.sqrt_det_a_bar * local.eval_value(Eigen::Vector2d::Zero());
+    }
+    EXPECT_NEAR(elastic.eval_value(u), expected, 1e-12);
+    ShellFemForceFpResponse<KoiterStVK> response(dof::ConstantDofMap(topology(), 9), p.map, p.rest, u, p.thickness,
+                                                 p.theta);
+    EXPECT_TRUE(elastic.eval_gradient(u).isApprox(response.eval_value(P.reshaped()), 1e-11));
+    energy::test::expect_derivatives_match(elastic, u);
+    plastic[0].setZero();
+    p.rest.clear();
+    EXPECT_NEAR(elastic.eval_value(u), expected, 1e-12);
+}
+
+TEST(ShellFemEnergy, RejectsInvalidPlasticFields) {
+    Patch p;
+    using Shell = ShellFemEnergy<KoiterStVK>;
+    auto malformed = p.rest;
+    malformed[0].X_local.resize(malformed[0].X_local.rows(), 2);
+    EXPECT_THROW(
+        (Shell(p.map, malformed, p.thickness, p.theta, std::vector<Eigen::Matrix3d>(4, Eigen::Matrix3d::Identity()))),
+        std::invalid_argument);
+
+    EXPECT_THROW((Shell(p.map, p.rest, p.thickness, p.theta, {Eigen::Matrix3d::Identity()})), std::invalid_argument);
+    for (const double diagonal :
+         {0., -1., std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()}) {
+        std::vector<Eigen::Matrix3d> plastic(4, Eigen::Matrix3d::Identity());
+        plastic[2](0, 0) = diagonal;
+        EXPECT_THROW((Shell(p.map, p.rest, p.thickness, p.theta, plastic)), std::domain_error);
+    }
+}
+
 } // namespace
 
 } // namespace litepgo::fem::test

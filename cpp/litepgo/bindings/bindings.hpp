@@ -77,6 +77,7 @@ void bind_volumetric_material_force_local_response(nanobind::module_& m);
 void bind_volumetric_fp_force_local_response(nanobind::module_& m);
 void bind_fem_material_shell_shell_material_local_energy(nanobind::module_& m);
 void bind_fem_material_shell_shell_material_force_local_response(nanobind::module_& m);
+void bind_fem_material_shell_shell_fp_force_local_response(nanobind::module_& m);
 void bind_fem_kinematics_basis_dof_transform(nanobind::module_& m);
 void bind_fem_kinematics_volumetric_element(nanobind::module_& m);
 void bind_positive_det_feasible_step(nanobind::module_& m);
@@ -87,6 +88,7 @@ void bind_fem_volumetric_fem_force_material_response(nanobind::module_& m);
 void bind_fem_volumetric_fem_force_fp_response(nanobind::module_& m);
 void bind_fem_shell_fem_energy(nanobind::module_& m);
 void bind_fem_shell_fem_force_material_response(nanobind::module_& m);
+void bind_fem_shell_fem_force_fp_response(nanobind::module_& m);
 } // namespace litepgo::fem::binding
 
 namespace litepgo::solver::binding {

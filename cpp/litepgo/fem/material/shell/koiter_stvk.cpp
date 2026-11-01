@@ -17,8 +17,7 @@ Eigen::Matrix<double, 6, 1> eval_delta_ab(const ShellMaterialInputs& inputs) {
     return delta_ab;
 }
 
-Eigen::Matrix<double, 6, 6> eval_stiffness(const ShellMaterialInputs& inputs,
-                                           Eigen::Matrix<double, 6, 2>* mixed = nullptr) {
+Eigen::Matrix2d validated_inverse_metric(const ShellMaterialInputs& inputs) {
     for (const auto* form : {&inputs.a, &inputs.b, &inputs.a_bar, &inputs.b_bar})
         if (!form->allFinite() || !form->isApprox(form->transpose(), 1e-12))
             throw std::invalid_argument("KoiterStVK requires finite symmetric fundamental forms");
@@ -33,6 +32,12 @@ Eigen::Matrix<double, 6, 6> eval_stiffness(const ShellMaterialInputs& inputs,
     if (!inv_a_bar.allFinite())
         throw std::domain_error("KoiterStVK: non-finite inverse reference metric");
 
+    return inv_a_bar;
+}
+
+Eigen::Matrix<double, 6, 6> eval_stiffness(const ShellMaterialInputs& inputs,
+                                           Eigen::Matrix<double, 6, 2>* mixed = nullptr) {
+    const Eigen::Matrix2d inv_a_bar = validated_inverse_metric(inputs);
     std::array<Eigen::Matrix2d, 3> E;
     E[0] << 1, 0, 0, 0;
     E[1] << 0, 1, 1, 0;
@@ -96,6 +101,40 @@ Eigen::Matrix<double, 6, 6> KoiterStVK::eval_d2W_dab2(const ShellMaterialInputs&
 Eigen::Matrix<double, 6, 2> KoiterStVK::eval_d2W_dab_dtheta(const ShellMaterialInputs& inputs) {
     Eigen::Matrix<double, 6, 2> result;
     eval_stiffness(inputs, &result);
+    return result;
+}
+
+Eigen::Matrix<double, 6, 6> KoiterStVK::eval_d2W_dab_dabarbbar(const ShellMaterialInputs& inputs) {
+    const Eigen::Matrix2d G = validated_inverse_metric(inputs);
+    eval_delta_ab(inputs);
+    const Eigen::Matrix2d S = (inputs.a - inputs.a_bar) / 2;
+    const Eigen::Matrix2d H = inputs.b - inputs.b_bar;
+    const double lambda = inputs.theta[0], mu = inputs.theta[1];
+    const auto delta_stress = [&](const Eigen::Matrix2d& V, const Eigen::Matrix2d& dV,
+                                  const Eigen::Matrix2d& dG) -> Eigen::Matrix2d {
+        return lambda * ((dG * V + G * dV).trace() * G + (G * V).trace() * dG) +
+               2 * mu * (dG * V * G + G * dV * G + G * V * dG);
+    };
+    Eigen::Matrix<double, 6, 6> result;
+    for (int j = 0; j < 6; ++j) {
+        Eigen::Matrix2d direction = Eigen::Matrix2d::Zero();
+        if (j % 3 == 0)
+            direction(0, 0) = 1;
+        else if (j % 3 == 1)
+            direction(0, 1) = direction(1, 0) = 1;
+        else
+            direction(1, 1) = 1;
+        const Eigen::Matrix2d dA = j < 3 ? direction : Eigen::Matrix2d::Zero().eval();
+        const Eigen::Matrix2d dK = j >= 3 ? direction : Eigen::Matrix2d::Zero().eval();
+        const Eigen::Matrix2d dG = -G * dA * G;
+        const Eigen::Matrix2d da = (inputs.thickness / 2) * delta_stress(S, -dA / 2, dG);
+        const double bending = (inputs.thickness / 12) * inputs.thickness * inputs.thickness;
+        const Eigen::Matrix2d db = bending * delta_stress(H, -dK, dG);
+        // Off-diagonal entries are independent symmetric-form coordinates.
+        result.col(j) << da(0, 0), 2 * da(0, 1), da(1, 1), db(0, 0), 2 * db(0, 1), db(1, 1);
+    }
+    if (!result.allFinite())
+        throw std::domain_error("KoiterStVK: non-finite natural-form mixed derivative");
     return result;
 }
 
