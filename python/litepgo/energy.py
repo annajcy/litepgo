@@ -28,13 +28,6 @@ and defaults to 1. Dynamic subclasses must also override pattern_at(x).
 Evaluation arguments own their data. Call update_pattern(x) before requesting
 a dynamic Hessian; Newton manages this automatically.
 
-StaticEquilibriumResponse(num_parameters, fixed, initial, options, make_energy, partial)
-returns equilibrium displacement and its direct parameter Jacobian. make_energy(p)
-returns the total Energy; partial(p, u) returns its sparse gradient/parameter
-Jacobian at fixed u. Fixed DOFs and values must be parameter-independent.
-Each call starts from initial; sensitivities use the exact unshifted Hessian.
-Nonconverged equilibria raise ValueError. See example/fem/fitting/volume_equilibrium_material_fit.py.
-
 Vector responses and analytic sparse Jacobians.
 
 Subclass FixedPatternResponse(pattern) and override eval_values(x, need_jacobian).
@@ -73,7 +66,3 @@ __all__ = ["FixedPatternEnergy", "DynamicPatternEnergy", "HessianKind", "Energy"
 from litepgo._core.energy import Response, FixedPatternResponse, DynamicPatternResponse, MeshResponse
 
 __all__ += ["Response", "FixedPatternResponse", "DynamicPatternResponse", "MeshResponse"]
-
-from litepgo._core.energy import StaticEquilibriumResponse
-
-__all__ += ["StaticEquilibriumResponse"]

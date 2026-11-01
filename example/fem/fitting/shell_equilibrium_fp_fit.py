@@ -54,7 +54,7 @@ def main():
 
     def experiment(p, load, need_jacobian):
         initial = load * prescribed
-        equilibrium = energy.StaticEquilibriumResponse(
+        equilibrium = solver.StaticEquilibriumResponse(
             n, fixed, initial, solver.NewtonOptions(gradient_tolerance=1e-13, max_iterations=100),
             make_energy, partial,
         )

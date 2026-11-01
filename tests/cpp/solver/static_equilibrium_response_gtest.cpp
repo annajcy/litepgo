@@ -1,12 +1,12 @@
-#include "litepgo/energy/response/static_equilibrium_response.hpp"
 #include "litepgo/energy/scalar/quadratic_energy.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
 #include "litepgo/fem/volumetric_fem_force_material_response.hpp"
+#include "litepgo/solver/static_equilibrium_response.hpp"
 #include <gtest/gtest.h>
 
-namespace litepgo::energy::test {
+namespace litepgo::solver::test {
 TEST(StaticEquilibriumResponse, FemDisplacementAndReactionMatchResolveFiniteDifferences) {
     using namespace fem;
     const mesh::TetTopology topology(4, {{0, 1, 2, 3}});
@@ -26,7 +26,7 @@ TEST(StaticEquilibriumResponse, FemDisplacementAndReactionMatchResolveFiniteDiff
     Vec initial = Vec::Zero(12);
     initial[3] = .15;
     initial[7] = -.04;
-    const auto make_energy = [&](const Vec& p) -> std::shared_ptr<Energy> {
+    const auto make_energy = [&](const Vec& p) -> std::shared_ptr<energy::Energy> {
         return std::make_shared<Elastic>(map, geometry, plastic, std::vector<Field>{Field(p)});
     };
     int partial_calls = 0;
@@ -72,8 +72,8 @@ TEST(StaticEquilibriumResponse, FemDisplacementAndReactionMatchResolveFiniteDiff
 TEST(StaticEquilibriumResponse, ValidationFailureAndFullyFixedStates) {
     solver::NewtonOptions options;
     options.gradient_tolerance = 1e-12;
-    const auto make_energy = [](const Vec& p) -> std::shared_ptr<Energy> {
-        return std::make_shared<QuadraticEnergy>(Eigen::Matrix2d::Identity().sparseView(), -p);
+    const auto make_energy = [](const Vec& p) -> std::shared_ptr<energy::Energy> {
+        return std::make_shared<energy::QuadraticEnergy>(Eigen::Matrix2d::Identity().sparseView(), -p);
     };
     const auto partial = [](const Vec&, const Vec&) -> SpMat { return (-Eigen::Matrix2d::Identity()).sparseView(); };
     const Vec p = Eigen::Vector2d(2, 3), initial = Eigen::Vector2d(.3, .4);
@@ -95,13 +95,13 @@ TEST(StaticEquilibriumResponse, ValidationFailureAndFullyFixedStates) {
                                           [](const Vec&, const Vec&) { return SpMat(1, 2); });
     EXPECT_THROW(bad_partial.eval_jacobian(p), std::invalid_argument);
     StaticEquilibriumResponse null_energy(
-        2, free, initial, options, [](const Vec&) { return std::shared_ptr<Energy>{}; }, partial);
+        2, free, initial, options, [](const Vec&) { return std::shared_ptr<energy::Energy>{}; }, partial);
     EXPECT_THROW(null_energy.eval_value(p), std::invalid_argument);
     StaticEquilibriumResponse singular(
         2, free, initial, options,
-        [](const Vec&) -> std::shared_ptr<Energy> {
+        [](const Vec&) -> std::shared_ptr<energy::Energy> {
             Eigen::Matrix2d K = Eigen::Vector2d(1, 0).asDiagonal();
-            return std::make_shared<QuadraticEnergy>(K.sparseView());
+            return std::make_shared<energy::QuadraticEnergy>(K.sparseView());
         },
         partial);
     EXPECT_THROW(singular.eval_jacobian(p), std::exception);
@@ -117,8 +117,8 @@ TEST(StaticEquilibriumResponse, InterleavedFixedDofsMatchResolveFiniteDifference
     options.gradient_tolerance = 1e-12;
     StaticEquilibriumResponse response(
         2, fixed, initial, options,
-        [&](const Vec& p) -> std::shared_ptr<Energy> {
-            return std::make_shared<QuadraticEnergy>(K.sparseView(), -A * p);
+        [&](const Vec& p) -> std::shared_ptr<energy::Energy> {
+            return std::make_shared<energy::QuadraticEnergy>(K.sparseView(), -A * p);
         },
         [&](const Vec&, const Vec&) -> SpMat { return (-A).sparseView(); });
     const Vec p = Eigen::Vector2d(.6, -1.1);
@@ -142,4 +142,4 @@ TEST(StaticEquilibriumResponse, InterleavedFixedDofsMatchResolveFiniteDifference
         }
     }
 }
-} // namespace litepgo::energy::test
+} // namespace litepgo::solver::test

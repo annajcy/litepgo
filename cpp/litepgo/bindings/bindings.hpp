@@ -45,7 +45,6 @@ void bind_quadratic_energy(nanobind::module_& m);
 void bind_vertex_pulling_energy(nanobind::module_& m);
 void bind_weighted_energy_sum(nanobind::module_& m);
 void bind_affine_mapped_energy(nanobind::module_& m);
-void bind_static_equilibrium_response(nanobind::module_& m);
 void bind_response(nanobind::module_& m);
 void bind_fixed_pattern_response(nanobind::module_& m);
 void bind_dynamic_pattern_response(nanobind::module_& m);
@@ -93,6 +92,7 @@ void bind_fem_shell_fem_force_fp_response(nanobind::module_& m);
 } // namespace litepgo::fem::binding
 
 namespace litepgo::solver::binding {
+void bind_static_equilibrium_response(nanobind::module_& m);
 void bind_gauss_newton(nanobind::module_& m);
 void bind_newton(nanobind::module_& m);
 } // namespace litepgo::solver::binding

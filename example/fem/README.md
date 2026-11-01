@@ -1255,7 +1255,7 @@ between the two languages.
 
 ## Static equilibrium response
 
-`energy::StaticEquilibriumResponse` (`energy/response/static_equilibrium_response.hpp`)
+`solver::StaticEquilibriumResponse` (`solver/static_equilibrium_response.hpp`)
 implements the direct sensitivity of the equilibrium displacement to parameters.
 C++ and Python use `(num_parameters, fixed, initial, options, make_energy, partial)`.
 `make_energy(p)` returns the total potential (`shared_ptr<Energy>` in C++);

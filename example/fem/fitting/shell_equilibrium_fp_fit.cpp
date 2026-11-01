@@ -1,4 +1,4 @@
-#include "litepgo/energy/response/static_equilibrium_response.hpp"
+#include "litepgo/solver/static_equilibrium_response.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/shell_fem_energy.hpp"
 #include "litepgo/fem/shell_fem_force_fp_response.hpp"
@@ -85,7 +85,7 @@ int main() {
             solver::NewtonOptions options;
             options.gradient_tolerance = 1e-13;
             options.max_iterations = 100;
-            energy::StaticEquilibriumResponse equilibrium(n, fixed, initial, options, make_energy, partial);
+            solver::StaticEquilibriumResponse equilibrium(n, fixed, initial, options, make_energy, partial);
             SpMat J = equilibrium.jacobian_pattern();
             const Vec u = equilibrium.eval(p, derivatives ? &J : nullptr);
             const auto elastic = make_energy(p);
