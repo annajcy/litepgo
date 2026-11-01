@@ -1,10 +1,14 @@
-#include "litepgo/solver/static_equilibrium_response.hpp"
+// Recover shared positive diagonal volume Fp from equilibrium shapes and reactions.
+// Build: cmake --build build/release --target volume_equilibrium_fp_fit
+// Run: build/release/example/fem/fitting/volume_equilibrium_fp_fit
+
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
 #include "litepgo/fem/volumetric_fem_force_fp_response.hpp"
 #include "litepgo/mesh/io/veg.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
+#include "litepgo/solver/static_equilibrium_response.hpp"
 #include <Eigen/SVD>
 #include <algorithm>
 #include <cmath>
@@ -63,6 +67,7 @@ int main() {
             return std::make_shared<Elastic>(map, geometry,
                                              std::vector<Field>(map.num_elements(), Field(Vec(Fp.reshaped()))), theta);
         };
+        // Partial force derivative at fixed displacement; equilibrium supplies du/dp separately.
         const auto partial = [&](const Vec& p, const Vec& u) -> SpMat {
             const Eigen::Matrix3d Fp = plastic(p);
             const Vec packed = Fp.reshaped();
@@ -77,6 +82,7 @@ int main() {
             Vec value;
             Eigen::MatrixXd jacobian;
         };
+        // Re-solve free DOFs at each trial; prescribed boundary values are parameter-independent.
         const auto experiment = [&](const Vec& p, double load, bool derivatives) {
             const Vec initial = load * prescribed;
             solver::NewtonOptions options;
@@ -167,6 +173,7 @@ int main() {
                                      ", reaction=" + std::to_string(reaction_fd_error));
         solver::GaussNewtonOptions options;
         options.gradient_tolerance = 1e-10;
+        // Fit the measured response using its analytic parameter Jacobian.
         const auto result = solver::gauss_newton_solve(residual, initial, options);
         const Vec fitted = result.x.array().exp();
         const double fitted_ratio = check_rank(result.x);

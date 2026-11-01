@@ -1,4 +1,8 @@
-"""Python mirror of hex_hermite_plastic_twist.cpp: release and clamp a Hermite hex bar with a plastic twist Fp."""
+"""Python mirror of hex_hermite_plastic_twist.cpp: release and clamp a Hermite hex bar with a plastic twist Fp.
+
+Run from the repository root after building litepgo:
+    .venv/bin/python example/fem/plasticity/hex_hermite_plastic_twist.py
+"""
 
 import argparse
 import sys
@@ -13,7 +17,13 @@ REPO = Path(__file__).resolve().parents[3]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", nargs="?", type=Path, default=REPO / "assets/box-hex.veg", help="rest VEG mesh")
+    parser.add_argument(
+        "input",
+        nargs="?",
+        type=Path,
+        default=REPO / "assets/box-hex.veg",
+        help="rest VEG mesh",
+    )
     parser.add_argument(
         "output",
         nargs="?",
@@ -46,7 +56,9 @@ def main():
     r = (rest_nodes - center)[:, :2]
     angle = rate * (rest_nodes[:, 2] - lower[2])
     c, s = np.cos(angle), np.sin(angle)
-    p = np.column_stack([c * r[:, 0] - s * r[:, 1], s * r[:, 0] + c * r[:, 1]])  # r rotated by angle
+    p = np.column_stack(
+        [c * r[:, 0] - s * r[:, 1], s * r[:, 0] + c * r[:, 1]]
+    )  # r rotated by angle
     slots = np.zeros((topology.num_vertices, 8, 3))
     slots[:, 0, :2] = p - r
     slots[:, 1, :2] = np.column_stack([c - 1, s])
@@ -62,15 +74,30 @@ def main():
     displacement_map = dof.VertexDofMap(topology, 24)
     XField = fem.InterpolatedField3D[fem.HexQ1Basis]
     PlasticField = fem.InterpolatedField3D[fem.HexHermiteBasis]
-    rest_position_fields = [XField(rest_position_map.gather(e, rest_positions)) for e in range(topology.num_cells)]
+    rest_position_fields = [
+        XField(rest_position_map.gather(e, rest_positions))
+        for e in range(topology.num_cells)
+    ]
     plastic_fields = []
     for e, X in enumerate(rest_position_fields):
         transform = fem.BasisDofTransform[fem.HexHermiteBasis](X)
-        plastic_fields.append(PlasticField(transform.to_coefficients(displacement_map.gather(e, plastic_dofs))))
-    Fp_fields = [fem.DeformationGradientField3D(u_p, X) for u_p, X in zip(plastic_fields, rest_position_fields)]
+        plastic_fields.append(
+            PlasticField(
+                transform.to_coefficients(displacement_map.gather(e, plastic_dofs))
+            )
+        )
+    Fp_fields = [
+        fem.DeformationGradientField3D(u_p, X)
+        for u_p, X in zip(plastic_fields, rest_position_fields)
+    ]
     theta_field = fem.IdentityField3D(np.array([2.0, 3.0]))
-    elastic = fem.VolumetricFemEnergy[fem.NeoHookean, fem.HexHermiteBasis, fem.GaussLegendre3D[4]](
-        displacement_map, rest_position_fields, Fp_fields, [theta_field] * topology.num_cells
+    elastic = fem.VolumetricFemEnergy[
+        fem.NeoHookean, fem.HexHermiteBasis, fem.GaussLegendre3D[4]
+    ](
+        displacement_map,
+        rest_position_fields,
+        Fp_fields,
+        [theta_field] * topology.num_cells,
     )
 
     tolerance = height * 1e-8
@@ -81,7 +108,8 @@ def main():
 
     surface = fem.sample_boundary[fem.HexQ1Basis](topology, rest_position_fields, 4)
     W = fem.build_point_displacement_map[fem.HexHermiteBasis](
-        surface.embedding, displacement_map, rest_position_fields)
+        surface.embedding, displacement_map, rest_position_fields
+    )
 
     # free: clamp the bottom face; the bar twists. clamped: also hold the top face in place;
     # the bar cannot twist and keeps residual stress. Clamping a face z = const fixes u and its
@@ -89,7 +117,13 @@ def main():
     converged = True
     for clamp_top in (False, True):
         faces = [bottom, top] if clamp_top else [bottom]
-        fixed_dofs = [24 * v + 3 * slot + c for face in faces for v in face for slot in (0, 1, 2, 4) for c in range(3)]
+        fixed_dofs = [
+            24 * v + 3 * slot + c
+            for face in faces
+            for v in face
+            for slot in (0, 1, 2, 4)
+            for c in range(3)
+        ]
         fixed = dof.DofReduction(elastic.num_dofs, fixed_dofs)
         initial = np.zeros(elastic.num_dofs)
         options = solver.NewtonOptions()
@@ -108,13 +142,18 @@ def main():
             f"converged={int(result.status == solver.NewtonStatus.Converged)}, iterations={result.iterations}, "
             f"elastic={result.energy:.6g}, free residual={result.gradient_norm:.6g}, top twist={np.arctan2(cross, dot) * 180 / np.pi:.6g} deg"
         )
-        path = output.parent / f"{output.stem}{'_clamped' if clamp_top else '_free'}.veg"
+        path = (
+            output.parent / f"{output.stem}{'_clamped' if clamp_top else '_free'}.veg"
+        )
         deformed = mesh.HexMesh(rest_nodes + result.x.reshape(-1, 24)[:, :3], topology)
         mesh.write_veg(path, deformed)
         if not converged:
             raise RuntimeError("Hermite equilibrium did not converge")
         positions = surface.mesh.positions + (W @ result.x).reshape(-1, 3)
-        mesh.write_obj(path.with_suffix(".obj"), mesh.TriangleMesh(positions, surface.mesh.topology))
+        mesh.write_obj(
+            path.with_suffix(".obj"),
+            mesh.TriangleMesh(positions, surface.mesh.topology),
+        )
     return 0 if converged else 1
 
 

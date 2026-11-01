@@ -1,4 +1,8 @@
-"""Python mirror of shell_saddle_pull.cpp: pull a sheet's corners into a saddle and solve static equilibrium."""
+"""Python mirror of shell_saddle_pull.cpp: pull a sheet's corners into a saddle and solve static equilibrium.
+
+Run from the repository root after building litepgo:
+    .venv/bin/python example/fem/equilibrium/shell_saddle_pull.py
+"""
 
 import argparse
 import sys
@@ -13,7 +17,13 @@ REPO = Path(__file__).resolve().parents[3]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", nargs="?", type=Path, default=REPO / "assets/shell.obj", help="rest OBJ mesh")
+    parser.add_argument(
+        "input",
+        nargs="?",
+        type=Path,
+        default=REPO / "assets/shell.obj",
+        help="rest OBJ mesh",
+    )
     parser.add_argument(
         "output",
         nargs="?",
@@ -31,7 +41,9 @@ def main():
     stencils = mesh.make_triangle_mid_edge_stencils(topology)
     stencil_map = dof.StencilDofMap(topology.num_vertices, stencils.vertices, 3)
     rest = [
-        fem.TriangleMidEdgeRestData(stencil_map.gather(f, rest_positions), stencils.opposite[f])
+        fem.TriangleMidEdgeRestData(
+            stencil_map.gather(f, rest_positions), stencils.opposite[f]
+        )
         for f in range(stencil_map.num_elements)
     ]
 
@@ -39,7 +51,10 @@ def main():
     # Plane-stress Lame parameters for a shell.
     theta = np.array([Y * nu / (1 - nu * nu), Y / (2 * (1 + nu))])
     elastic = fem.ShellFemEnergy[fem.KoiterStVK](
-        stencil_map, rest, [thickness] * stencil_map.num_elements, [theta] * stencil_map.num_elements
+        stencil_map,
+        rest,
+        [thickness] * stencil_map.num_elements,
+        [theta] * stencil_map.num_elements,
     )
 
     # Pull the four corners of the flat xy-plane sheet outward in plane and alternately
@@ -51,7 +66,9 @@ def main():
     tolerance = size * 1e-8
     if not ((upper - lower)[:2] > tolerance).all() or upper[2] - lower[2] > tolerance:
         raise RuntimeError("Example requires a flat sheet in the xy plane")
-    near = (np.abs(rest_nodes - lower) <= tolerance) | (np.abs(rest_nodes - upper) <= tolerance)
+    near = (np.abs(rest_nodes - lower) <= tolerance) | (
+        np.abs(rest_nodes - upper) <= tolerance
+    )
     corners = np.flatnonzero(near[:, :2].all(axis=1))
     if len(corners) != 4:
         raise RuntimeError("Example requires a vertex at each bounding-box corner")
@@ -59,9 +76,15 @@ def main():
     pulled_dofs = (3 * corners[:, None] + np.arange(3)).astype(np.int32)
     offset = rest_nodes[corners] - center
     targets = np.column_stack(
-        [stretch * offset[:, 0], stretch * offset[:, 1], np.where(offset[:, 0] * offset[:, 1] > 0, lift, -lift)]
+        [
+            stretch * offset[:, 0],
+            stretch * offset[:, 1],
+            np.where(offset[:, 0] * offset[:, 1] > 0, lift, -lift),
+        ]
     )
-    pulling = energy.VertexPullingEnergy(elastic.num_dofs, pulled_dofs, targets, stiffness)
+    pulling = energy.VertexPullingEnergy(
+        elastic.num_dofs, pulled_dofs, targets, stiffness
+    )
 
     # Static equilibrium minimizes Pi(u) = E_elastic(u) + E_pulling(u); the springs
     # remove all rigid motions, so no DOF is fixed.
@@ -71,9 +94,13 @@ def main():
     options = solver.NewtonOptions()
     options.gradient_tolerance = 1e-8
     sparse_solver = linalg.AutoSparseSolver()
-    result = solver.newton_solve(potential, unconstrained, initial, options, sparse_solver)
+    result = solver.newton_solve(
+        potential, unconstrained, initial, options, sparse_solver
+    )
     converged = result.status == solver.NewtonStatus.Converged
-    corner_gap = np.linalg.norm(result.x.reshape(-1, 3)[corners] - targets, axis=1).max()
+    corner_gap = np.linalg.norm(
+        result.x.reshape(-1, 3)[corners] - targets, axis=1
+    ).max()
     print(
         f"converged={int(converged)}, iterations={result.iterations}, potential={result.energy:.6g}, "
         f"elastic={elastic.eval_value(result.x):.6g}, pulling={pulling.eval_value(result.x):.6g}, "
@@ -81,7 +108,9 @@ def main():
     )
     output = args.output
     output.parent.mkdir(parents=True, exist_ok=True)
-    mesh.write_obj(output, mesh.TriangleMesh((rest_positions + result.x).reshape(-1, 3), topology))
+    mesh.write_obj(
+        output, mesh.TriangleMesh((rest_positions + result.x).reshape(-1, 3), topology)
+    )
     return 0 if converged else 1
 
 

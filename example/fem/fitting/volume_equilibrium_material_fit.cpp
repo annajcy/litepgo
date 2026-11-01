@@ -1,4 +1,7 @@
-#include "litepgo/solver/static_equilibrium_response.hpp"
+// Fit volume material parameters from reactions using analytic equilibrium sensitivities.
+// Build: cmake --build build/release --target volume_equilibrium_material_fit
+// Run: build/release/example/fem/fitting/volume_equilibrium_material_fit
+
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
@@ -6,6 +9,7 @@
 #include "litepgo/fem/volumetric_fem_force_material_response.hpp"
 #include "litepgo/mesh/io/veg.hpp"
 #include "litepgo/solver/newton.hpp"
+#include "litepgo/solver/static_equilibrium_response.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -58,6 +62,7 @@ int main() {
             solver::NewtonOptions options;
             options.gradient_tolerance = 1e-10;
             options.max_iterations = 100;
+            // Partial force derivative at fixed displacement; equilibrium supplies du/dp separately.
             const auto partial = [&](const Vec& parameters, const Vec& displacement) -> SpMat {
                 using Force = fem::VolumetricFemForceMaterialResponse<fem::NeoHookean, fem::TetP1Basis,
                                                                       fem::TetCentroidQuadrature, XField, Field>;
@@ -136,6 +141,7 @@ int main() {
         MaterialResidual residual(measurements, observed, scales);
         solver::GaussNewtonOptions options;
         options.gradient_tolerance = 1e-8;
+        // Fit the measured response using its analytic parameter Jacobian.
         const auto result = solver::gauss_newton_solve(residual, Vec::Zero(2), options);
         const Eigen::Vector2d fitted = result.x.array().exp().matrix();
         const Vec r = residual.eval_value(result.x);

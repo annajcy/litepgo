@@ -1,3 +1,7 @@
+// release and clamp a tet bar with a plastic twist Fp.
+// Build: cmake --build build/release --target tet_p1_plastic_twist
+// Run: build/release/example/fem/plasticity/tet_p1_plastic_twist
+
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"

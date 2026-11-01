@@ -1,3 +1,7 @@
+// release and clamp a Hermite hex bar with a plastic twist Fp.
+// Build: cmake --build build/release --target hex_hermite_plastic_twist
+// Run: build/release/example/fem/plasticity/hex_hermite_plastic_twist
+
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/kinematics/basis_dof_transform.hpp"

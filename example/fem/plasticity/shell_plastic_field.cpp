@@ -1,3 +1,7 @@
+// Differential plastic growth of a clamped shell strip; solve u and write OBJ.
+// Build: cmake --build build/release --target shell_plastic_field
+// Run: build/release/example/fem/plasticity/shell_plastic_field
+
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/shell_fem_energy.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"

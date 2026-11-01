@@ -1,3 +1,7 @@
+// pull a Hermite hex box's corners and solve static equilibrium.
+// Build: cmake --build build/release --target hex_hermite_corner_pull
+// Run: build/release/example/fem/equilibrium/hex_hermite_corner_pull
+
 #include "litepgo/energy/scalar/vertex_pulling_energy.hpp"
 #include "litepgo/energy/scalar/weighted_energy_sum.hpp"
 #include "litepgo/fem/field/identity_field.hpp"

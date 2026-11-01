@@ -1,3 +1,7 @@
+// Boundary-fixed smoothing and differential-coordinate mesh editing.
+// Build: cmake --build build/release --target laplacian_optimization
+// Run: build/release/example/mesh/laplacian_optimization
+
 #include "litepgo/dof/stencil_dof_map.hpp"
 #include "litepgo/energy/scalar/mesh_energy.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"

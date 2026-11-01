@@ -1,3 +1,7 @@
+// press two tet boxes together and solve static equilibrium with contact.
+// Build: cmake --build build/release --target tet_p1_box_stack
+// Run: build/release/example/contact/tet_p1_box_stack
+
 #include "litepgo/contact/broad_phase/spatial_hash.hpp"
 #include "litepgo/contact/ipc_contact_energy.hpp"
 #include "litepgo/dof/surface_kinematics.hpp"

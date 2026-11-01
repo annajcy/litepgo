@@ -1,9 +1,13 @@
-#include "litepgo/solver/static_equilibrium_response.hpp"
+// Fit plane-stress KoiterStVK parameters from equilibrium boundary reactions.
+// Build: cmake --build build/release --target shell_equilibrium_material_fit
+// Run: build/release/example/fem/fitting/shell_equilibrium_material_fit
+
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/shell_fem_energy.hpp"
 #include "litepgo/fem/shell_fem_force_material_response.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
+#include "litepgo/solver/static_equilibrium_response.hpp"
 #include <Eigen/SVD>
 #include <algorithm>
 #include <iomanip>
@@ -50,11 +54,13 @@ int main() {
             Eigen::MatrixXd reaction_J;
             SpMat state_J;
         };
+        // Re-solve free DOFs at each trial; prescribed boundary values are parameter-independent.
         const auto experiment = [&](const Vec& theta, double load, bool derivatives) {
             const Vec initial = load * prescribed;
             solver::NewtonOptions options;
             options.gradient_tolerance = 1e-12;
             options.max_iterations = 100;
+            // Partial force derivative at fixed displacement; equilibrium supplies du/dp separately.
             const auto partial = [&](const Vec& p, const Vec& u) -> SpMat {
                 return Force(dof::ConstantDofMap(topology, 2), map, rest, u, thickness).eval_jacobian(p);
             };
@@ -135,6 +141,7 @@ int main() {
         } residual(experiment, target, scale);
         solver::GaussNewtonOptions options;
         options.gradient_tolerance = 1e-10;
+        // Fit the measured response using its analytic parameter Jacobian.
         const auto result = solver::gauss_newton_solve(residual, initial, options);
         const double parameter_error = (result.x - truth).norm() / truth.norm();
         const double relative_residual = (experiment(result.x, 1, false).reaction - target).norm() / scale;
