@@ -14,7 +14,7 @@ def test_direct_sensitivity_callbacks_and_fixed_values():
         calls.append(u.copy())
         return -sparse.eye(2, format="csc")
 
-    response = energy.StaticEquilibriumResponse(
+    response = solver.StaticEquilibriumResponse(
         2, dof.DofReduction(2, [0]), np.array([0.4, 0.0]),
         solver.NewtonOptions(gradient_tolerance=1e-12), make_energy, partial,
     )
@@ -35,7 +35,7 @@ def test_bound_callbacks_are_kept_alive_and_cycles_are_collected():
 
     class Problem:
         def __init__(self):
-            self.response = energy.StaticEquilibriumResponse(
+            self.response = solver.StaticEquilibriumResponse(
                 2, dof.DofReduction(2, []), np.zeros(2),
                 solver.NewtonOptions(gradient_tolerance=1e-12), self.make_energy, self.partial,
             )
@@ -64,11 +64,11 @@ def test_gc_handles_uninitialized_and_failed_construction():
     import gc
     import pytest
 
-    instance = energy.StaticEquilibriumResponse.__new__(energy.StaticEquilibriumResponse)
+    instance = solver.StaticEquilibriumResponse.__new__(solver.StaticEquilibriumResponse)
     gc.collect()
     del instance
     with pytest.raises(ValueError):
-        energy.StaticEquilibriumResponse(
+        solver.StaticEquilibriumResponse(
             2, dof.DofReduction(2, []), np.zeros(3),
             solver.NewtonOptions(gradient_tolerance=1e-12), lambda p: None, lambda p, u: None,
         )

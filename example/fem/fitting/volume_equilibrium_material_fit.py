@@ -52,7 +52,7 @@ def main():
                              [fem.IdentityField3D(np.eye(3).ravel())] * topology.num_cells)
             return response.eval_jacobian(parameters)
 
-        equilibrium = energy.StaticEquilibriumResponse(2, fixed, initial, options, make_energy, partial)
+        equilibrium = solver.StaticEquilibriumResponse(2, fixed, initial, options, make_energy, partial)
         displacement, J = equilibrium.eval(theta, need_jacobian=need_jacobian)
         if not np.array_equal(displacement[fixed_dofs], initial[fixed_dofs]):
             raise RuntimeError("Prescribed displacement changed")

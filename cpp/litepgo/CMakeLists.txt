@@ -1,5 +1,5 @@
 add_library(litepgo STATIC
-    energy/response/static_equilibrium_response.cpp
+    solver/static_equilibrium_response.cpp
     energy/response/response.cpp
     energy/response/mesh_response.cpp
     dof/response_assembler.cpp

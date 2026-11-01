@@ -3,6 +3,14 @@
 Gauss-Newton accepts a Response and uses sparse damped normal equations for damped steps.
 Jacobian patterns are updated at current iterates; symbolic analysis is reused
 while the structure is unchanged. Trials evaluate only the residual vector.
+
+StaticEquilibriumResponse(num_parameters, fixed, initial, options, make_energy, partial)
+returns equilibrium displacement and its direct parameter Jacobian. make_energy(p)
+returns the total Energy; partial(p, u) returns its sparse gradient/parameter
+Jacobian at fixed u. Fixed DOFs and values must be parameter-independent.
+Each call starts from initial; sensitivities use the exact unshifted Hessian.
+Nonconverged equilibria raise ValueError. See example/fem/fitting/volume_equilibrium_material_fit.py.
+
 """
 
 from litepgo._core import solver as _native
@@ -21,3 +29,7 @@ GaussNewtonResult = _native.GaussNewtonResult
 gauss_newton_solve = _native.gauss_newton_solve
 
 __all__ += ["GaussNewtonOptions", "GaussNewtonStatus", "GaussNewtonResult", "gauss_newton_solve"]
+
+StaticEquilibriumResponse = _native.StaticEquilibriumResponse
+
+__all__ += ["StaticEquilibriumResponse"]

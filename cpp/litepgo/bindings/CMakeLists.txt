@@ -79,6 +79,7 @@ nanobind_add_module(_core NB_STATIC
     mesh/triangle_mid_edge_stencils.cpp
     solver/gauss_newton.cpp
     solver/newton.cpp
+    solver/static_equilibrium_response.cpp
     spatial/spatial_hash.cpp
 )
 target_link_libraries(_core PRIVATE litepgo::io litepgo::litepgo litepgo::warnings)

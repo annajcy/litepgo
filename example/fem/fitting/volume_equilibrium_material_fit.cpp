@@ -1,4 +1,4 @@
-#include "litepgo/energy/response/static_equilibrium_response.hpp"
+#include "litepgo/solver/static_equilibrium_response.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
@@ -66,7 +66,7 @@ int main() {
                     std::vector<Field>(geometry.size(), Field(Eigen::Matrix3d::Identity().reshaped())));
                 return response.eval_jacobian(parameters);
             };
-            energy::StaticEquilibriumResponse equilibrium(
+            solver::StaticEquilibriumResponse equilibrium(
                 2, fixed, initial, options,
                 [&](const Vec& parameters) -> std::shared_ptr<energy::Energy> {
                     ++solves;

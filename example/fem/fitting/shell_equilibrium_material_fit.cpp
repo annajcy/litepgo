@@ -1,4 +1,4 @@
-#include "litepgo/energy/response/static_equilibrium_response.hpp"
+#include "litepgo/solver/static_equilibrium_response.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/shell_fem_energy.hpp"
 #include "litepgo/fem/shell_fem_force_material_response.hpp"
@@ -58,7 +58,7 @@ int main() {
             const auto partial = [&](const Vec& p, const Vec& u) -> SpMat {
                 return Force(dof::ConstantDofMap(topology, 2), map, rest, u, thickness).eval_jacobian(p);
             };
-            energy::StaticEquilibriumResponse equilibrium(
+            solver::StaticEquilibriumResponse equilibrium(
                 2, fixed, initial, options,
                 [&](const Vec& p) -> std::shared_ptr<energy::Energy> {
                     return std::make_shared<Elastic>(map, rest, thickness, std::vector<Vec>(map.num_elements(), p));

@@ -31,7 +31,7 @@ def main():
 
     def experiment(theta, load, need_jacobian):
         initial = load * prescribed
-        equilibrium = energy.StaticEquilibriumResponse(
+        equilibrium = solver.StaticEquilibriumResponse(
             2, fixed, initial, solver.NewtonOptions(gradient_tolerance=1e-12, max_iterations=100),
             lambda p: Elastic(mapping, rest, thickness, [p] * mapping.num_elements),
             lambda p, u: Force(dof.ConstantDofMap(topology, 2), mapping, rest, u, thickness).eval_jacobian(p),
