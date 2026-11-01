@@ -923,3 +923,72 @@ there is no inner displacement solve or equilibrium sensitivity calculation.
 The example does not add noise, per-face fitting, regularization or thickness
 optimization, and does not write a deformed mesh. The Python regression runs both
 executables and checks parameter recovery and matching results.
+
+## Shell force response with plastic natural geometry
+
+`ShellFemForceFpResponse<Material>` supplies the positive displacement-gradient
+force and its analytic Jacobian with respect to all nine column-major entries of
+Fp. `ShellFemForceFpResponse[KoiterStVK]` is exposed in Python:
+
+```python
+parameters = dof.ConstantDofMap(topology, 9)  # ElementDofMap for independent per-face Fp
+Response = fem.ShellFemForceFpResponse[fem.KoiterStVK]
+response = Response(parameters, stencil_map, rest_data, displacement, thickness, theta)
+force, J = response.eval(Fp.ravel(order="F"), need_jacobian=True)
+```
+
+`theta` contains one fixed material parameter vector per face. All other fixed
+inputs and their order match `ShellFemForceMaterialResponse`. For per-face Fp,
+concatenate the nine-entry column-major blocks in face order. The constructor
+snapshots fixed inputs and caches current forms, `d(ab)/du`, and the linear map
+from vec(Fp) to transformed reference vertices. It supports variable stencil
+sizes and fixed sparse Jacobian patterns through `MeshResponse`.
+
+For each face, **one** Fp transforms its entire original stencil, including the
+neighboring vertices used for curvature. In coordinates centered at its first
+vertex, `Y_i = Fp (X_i-X_0)`. The existing mid-edge kinematics computes the natural
+forms `(a_bar_p,b_bar_p)` from Y. This uses the actual discrete curvature rule,
+not a smooth-surface curvature shortcut. Each face has its own local virtual
+natural stencil; these need not form one compatible global natural mesh.
+
+Current positions remain `x=X+u`. Original area weights
+`w0=0.5*rest.sqrt_det_a_bar`, thickness and theta remain **fixed**: no plastic-area
+factor, `det(Fp)` density factor, or thickness update is introduced. This defines
+an energy per original reference area,
+`E_e = w0 W(ab(X+u), abar_bbar(Y(Fp)), thickness, theta)`. It is a prescribed natural
+geometry model, not a claim of equivalence to a general 3D plasticity reduction.
+
+The local interface is
+`ShellFpForceLocalResponse2D<Material>(rest, u_local, thickness, Fp_field, theta)`.
+It owns fixed numerical data and borrows a nine-component `Field2D` for Fp (Python
+keeps the field alive). It returns force density per original reference area;
+`accumulate` applies the caller's complete weight. Value-only calls do not request
+field coefficient derivatives. An `IdentityField2D` exposes nine Fp coordinates;
+an interpolated field returns derivatives with respect to all of its coefficients.
+Each query applies the sampled Fp uniformly to the local stencil; it does not
+construct a globally varying plastic embedding or differentiate Fp spatially.
+
+Let `B=d(ab(x))/du`, `Bbar=d(ab(Y))/dY`, and `T=dY/dvec(Fp)`. With row-packed
+vertex coordinates, `T[3*i+k,k+3*l]=(X_i-X_0)[l]`. Then
+
+```text
+f_e    = w0 * B.T * dW/dab
+J_Fp,e = w0 * B.T * (d2W/dab_dabarbbar) * Bbar * T
+```
+
+`KoiterStVK.eval_d2W_dab_dabarbbar` exposes the 6-by-6 material mixed derivative.
+Rows and columns use `(11,12,22)` for metric followed by curvature. It includes
+`d(abar^-1)=-abar^-1 d(abar) abar^-1`, in addition to derivatives of the strain
+and curvature differences; it is not simply the negative current-form Hessian.
+Current geometry is fixed during Fp differentiation, so no second kinematic
+derivatives are needed. Parameterizations remain the caller's responsibility:
+`J_p = J_Fp @ dvec(Fp)/dp`.
+
+Finite Fp with `det(Fp)>0` is required. Degenerate natural stencils and
+unrepresentable numerical results are rejected. Fp=I reproduces the original
+shell force. Left rotations of Fp leave natural forms unchanged; a planar
+reference stencil also cannot see changes to Fp's normal input direction.
+Consequently the full nine-column Jacobian is generally rank-deficient: do not
+assume all nine entries are identifiable. Constant affine Fp cannot create
+nonzero natural curvature from a planar stencil. No plastic evolution law or
+thickness response is included.
