@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/core/types.hpp"
+#include "litepgo/common/types.hpp"
 #include "litepgo/mesh/mesh_topology.hpp"
 
 #include <cstddef>

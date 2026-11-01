@@ -1,7 +1,7 @@
 #include "litepgo/linalg/sparse_solver/sparse_solver.hpp"
 
-#include "litepgo/core/busy_scope.hpp"
-#include "litepgo/core/memory.hpp"
+#include "litepgo/common/busy_scope.hpp"
+#include "litepgo/common/memory.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <algorithm>
@@ -27,7 +27,7 @@ void check_matrix(const SpMat& A) {
 } // namespace
 
 bool SparseSolver::analyze(const SpMat& A) {
-    BusyScope scope(busy_, "SparseSolver");
+    ::litepgo::detail::BusyScope scope(busy_, "SparseSolver");
     check_matrix(A);
     forget_analysis();
     // A hook that throws leaves the solver unanalyzed, as forget_analysis() set it.
@@ -41,7 +41,7 @@ bool SparseSolver::analyze(const SpMat& A) {
 }
 
 bool SparseSolver::factorize(const SpMat& A) {
-    BusyScope scope(busy_, "SparseSolver");
+    ::litepgo::detail::BusyScope scope(busy_, "SparseSolver");
     if (!analyzed_) {
         throw std::logic_error("SparseSolver::factorize requires a successful analyze()");
     }
@@ -65,7 +65,7 @@ bool SparseSolver::compute(const SpMat& A) {
 }
 
 void SparseSolver::solve(const ConstVecRef& rhs, VecRef x) const {
-    BusyScope scope(busy_, "SparseSolver");
+    ::litepgo::detail::BusyScope scope(busy_, "SparseSolver");
     if (!factored_) {
         throw std::logic_error("SparseSolver::solve requires a successful factorize()");
     }
@@ -73,7 +73,7 @@ void SparseSolver::solve(const ConstVecRef& rhs, VecRef x) const {
     if (rhs.size() != size || x.size() != size) {
         throw std::invalid_argument("SparseSolver::solve vector sizes must match the factorized matrix");
     }
-    if (overlaps(rhs.data(), size, x.data(), size)) {
+    if (::litepgo::detail::overlaps(rhs.data(), size, x.data(), size)) {
         throw std::invalid_argument("SparseSolver::solve requires rhs and x not to overlap");
     }
     solve_factored(rhs, x);

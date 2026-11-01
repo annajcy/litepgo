@@ -10,5 +10,5 @@ add_library(litepgo_contact STATIC
 )
 add_library(litepgo::contact ALIAS litepgo_contact)
 target_link_libraries(litepgo_contact
-    PUBLIC litepgo::energy litepgo::mesh litepgo::spatial litepgo::core
+    PUBLIC litepgo::energy litepgo::mesh litepgo::spatial litepgo::common
     PRIVATE litepgo::warnings)

@@ -1,5 +1,5 @@
 #include "litepgo/energy/response/response.hpp"
-#include "litepgo/core/busy_scope.hpp"
+#include "litepgo/common/busy_scope.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
 #include <stdexcept>
 
@@ -18,7 +18,7 @@ void Response::check_input(const ConstVecRef& x) const {
         throw std::invalid_argument("Response: invalid input");
 }
 bool Response::update_pattern(const ConstVecRef& x) {
-    BusyScope scope(busy_, "Response");
+    ::litepgo::detail::BusyScope scope(busy_, "Response");
     check_input(x);
     if (fixed_)
         return false;
@@ -34,7 +34,7 @@ bool Response::update_pattern(const ConstVecRef& x) {
     return true;
 }
 Vec Response::eval(const ConstVecRef& x, SpMat* J) const {
-    BusyScope scope(busy_, "Response");
+    ::litepgo::detail::BusyScope scope(busy_, "Response");
     check_input(x);
     if (J && !linalg::same_pattern(*J, pattern_))
         throw std::invalid_argument("Response: mismatched Jacobian pattern");

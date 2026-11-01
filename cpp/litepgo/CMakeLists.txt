@@ -1,4 +1,4 @@
-add_subdirectory(core)
+add_subdirectory(common)
 add_subdirectory(spatial)
 add_subdirectory(linalg)
 add_subdirectory(mesh)
@@ -13,7 +13,7 @@ add_library(litepgo INTERFACE)
 add_library(litepgo::litepgo ALIAS litepgo)
 target_link_libraries(litepgo INTERFACE
     litepgo::contact litepgo::solver litepgo::fem litepgo::energy litepgo::dof
-    litepgo::mesh litepgo::linalg litepgo::spatial litepgo::core)
+    litepgo::mesh litepgo::linalg litepgo::spatial litepgo::common)
 
 add_library(litepgo_io STATIC mesh/io/obj.cpp mesh/io/veg.cpp)
 add_library(litepgo::io ALIAS litepgo_io)

@@ -6,7 +6,7 @@ add_library(litepgo_linalg STATIC
 )
 add_library(litepgo::linalg ALIAS litepgo_linalg)
 target_link_libraries(litepgo_linalg
-    PUBLIC litepgo::core
+    PUBLIC litepgo::common
     PRIVATE litepgo::warnings)
 target_link_libraries(litepgo_linalg PUBLIC litepgo::accelerate litepgo::mkl)
 if(LITEPGO_WITH_ACCELERATE)

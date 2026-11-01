@@ -1,9 +1,9 @@
-#include "litepgo/core/build_info.hpp"
+#include "litepgo/common/build_info.hpp"
 #include "litepgo/bindings/bindings.hpp"
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 namespace nb = nanobind;
-namespace litepgo::core::binding {
+namespace litepgo::common::binding {
 void bind_build_info(nb::module_& m) {
     m.def("build_info", [] {
         const litepgo::BuildInfo info = litepgo::build_info();
@@ -17,4 +17,4 @@ void bind_build_info(nb::module_& m) {
         return result;
     });
 }
-} // namespace litepgo::core::binding
+} // namespace litepgo::common::binding

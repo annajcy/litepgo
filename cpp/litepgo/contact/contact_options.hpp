@@ -1,5 +1,5 @@
 #pragma once
-#include "litepgo/core/types.hpp"
+#include "litepgo/common/types.hpp"
 #include <limits>
 namespace litepgo::contact {
 // A static infinite plane through point with the given normal (nonzero, normalized

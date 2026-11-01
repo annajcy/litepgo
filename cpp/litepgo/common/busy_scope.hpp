@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace litepgo {
+namespace litepgo::detail {
 
 // Marks an object busy for one call, so a second call that overlaps it throws
 // std::logic_error instead of racing on the object's scratch state.
@@ -25,4 +25,4 @@ class BusyScope {
     std::atomic<bool>& busy_;
 };
 
-} // namespace litepgo
+} // namespace litepgo::detail

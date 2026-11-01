@@ -1,4 +1,4 @@
-#include "litepgo/core/build_info.hpp"
+#include "litepgo/common/build_info.hpp"
 
 #include <gtest/gtest.h>
 

@@ -1,6 +1,6 @@
 #include "litepgo/energy/scalar/energy.hpp"
 
-#include "litepgo/core/busy_scope.hpp"
+#include "litepgo/common/busy_scope.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <cmath>
@@ -33,7 +33,7 @@ Energy::Energy(int num_dofs, const SpMat& pattern, bool fixed_pattern)
 }
 
 bool Energy::update_pattern(const ConstVecRef& x) {
-    BusyScope scope(busy_, "Energy");
+    ::litepgo::detail::BusyScope scope(busy_, "Energy");
     check_size(x, "update_pattern");
     if (fixed_pattern_) {
         return false;
@@ -47,7 +47,7 @@ bool Energy::update_pattern(const ConstVecRef& x) {
 }
 
 double Energy::eval(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const {
-    BusyScope scope(busy_, "Energy");
+    ::litepgo::detail::BusyScope scope(busy_, "Energy");
     check_size(x, "eval");
     if (hessian != nullptr && !linalg::same_pattern(*hessian, pattern_)) {
         throw std::invalid_argument("Energy::eval: the hessian does not have this energy's current sparsity "
@@ -69,7 +69,7 @@ double Energy::eval(const ConstVecRef& x, Vec* gradient, SpMat* hessian, Hessian
 }
 
 double Energy::max_feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const {
-    BusyScope scope(busy_, "Energy");
+    ::litepgo::detail::BusyScope scope(busy_, "Energy");
     check_size(x, "max_feasible_step");
     if (dx.size() != num_dofs_ || !dx.allFinite()) {
         throw std::invalid_argument("Energy::max_feasible_step: dx must have num_dofs finite entries");
