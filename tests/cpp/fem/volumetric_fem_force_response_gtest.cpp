@@ -1,0 +1,116 @@
+#include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
+#include "litepgo/fem/volumetric_fem_energy.hpp"
+#include "litepgo/fem/volumetric_fem_force_fp_response.hpp"
+#include "litepgo/fem/volumetric_fem_force_material_response.hpp"
+#include <cmath>
+#include <gtest/gtest.h>
+
+namespace litepgo::fem::test {
+namespace {
+using Geometry = InterpolatedField3D<HexQ1Basis>;
+
+template <class B, class Q> void check_hex_responses(bool warped = false) {
+    const mesh::HexTopology topology(12, {{0, 1, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 2, 5, 10, 11, 6}});
+    const dof::VertexDofMap map(topology, BasisDofTransform<B>::dofs_per_vertex);
+    std::vector<Geometry> geometry;
+    for (int e = 0; e < 2; ++e) {
+        Eigen::MatrixXd X(8, 3);
+        for (int v = 0; v < 8; ++v) {
+            const auto xi = HexQ1Basis::reference_node(v);
+            X.row(v) = Eigen::Vector3d(2.0 + 1.7 * (xi.x() + e), -.3 + .8 * xi.y(), .4 + 1.2 * xi.z());
+            if (warped)
+                X(v, 0) += .05 * xi.y() * xi.z();
+        }
+        geometry.emplace_back(X);
+    }
+    Vec u(map.num_dofs());
+    for (int i = 0; i < u.size(); ++i)
+        u[i] = .002 * std::sin(i + .3);
+    const Eigen::Vector2d theta(2, 3);
+    Eigen::Matrix3d Fp;
+    Fp << 1.1, .05, 0, .02, .95, .03, 0, .04, 1.03;
+    const Vec p = Fp.reshaped();
+    const std::vector<IdentityField3D> plastic(2, IdentityField3D(p)), parameters(2, IdentityField3D(theta));
+    using Energy = VolumetricFemEnergy<NeoHookean, B, Q, Geometry, IdentityField3D, IdentityField3D>;
+    using MaterialForce = VolumetricFemForceMaterialResponse<NeoHookean, B, Q, Geometry, IdentityField3D>;
+    using PlasticForce = VolumetricFemForceFpResponse<NeoHookean, B, Q, Geometry, IdentityField3D>;
+    const Vec expected = Energy(map, geometry, plastic, parameters).eval_gradient(u);
+    Eigen::MatrixXd material_reference, plastic_reference;
+    for (int batch_size : {1, 3}) {
+        MaterialForce material(dof::ConstantDofMap(topology, 2), map, geometry, u, plastic, batch_size);
+        PlasticForce plastic_force(dof::ConstantDofMap(topology, 9), map, geometry, u, parameters, batch_size);
+        EXPECT_TRUE(material.eval_value(theta).isApprox(expected, 1e-11));
+        EXPECT_TRUE(plastic_force.eval_value(p).isApprox(expected, 1e-11));
+        const Eigen::MatrixXd M = material.eval_jacobian(theta), P = plastic_force.eval_jacobian(p);
+        EXPECT_TRUE((M * theta).isApprox(expected, 1e-11));
+        if (batch_size == 1) {
+            material_reference = M;
+            plastic_reference = P;
+        } else {
+            EXPECT_EQ((M - material_reference).norm(), 0);
+            EXPECT_EQ((P - plastic_reference).norm(), 0);
+        }
+        const Vec direction = Vec::LinSpaced(9, -.2, .3);
+        const double h = 1e-6;
+        const std::vector<IdentityField3D> plus(2, IdentityField3D(p + h * direction)),
+            minus(2, IdentityField3D(p - h * direction));
+        const Vec fd = (Energy(map, geometry, plus, parameters).eval_gradient(u) -
+                        Energy(map, geometry, minus, parameters).eval_gradient(u)) /
+                       (2 * h);
+        EXPECT_TRUE((P * direction).isApprox(fd, 1e-8));
+        MaterialForce material_elements(dof::ElementDofMap(topology, 2), map, geometry, u, plastic, batch_size);
+        PlasticForce plastic_elements(dof::ElementDofMap(topology, 9), map, geometry, u, parameters, batch_size);
+        Vec ts(4), ps(18);
+        ts << theta, theta;
+        ps << p, p;
+        const Eigen::MatrixXd Me = material_elements.eval_jacobian(ts), Pe = plastic_elements.eval_jacobian(ps);
+        EXPECT_TRUE(M.isApprox(Me.leftCols(2) + Me.rightCols(2), 1e-13));
+        EXPECT_TRUE(P.isApprox(Pe.leftCols(9) + Pe.rightCols(9), 1e-13));
+        EXPECT_TRUE(plastic_elements.eval_value(ps).isApprox(expected, 1e-11));
+        EXPECT_THROW(plastic_force.eval_jacobian(Vec::Zero(9)), std::domain_error);
+        EXPECT_TRUE(plastic_force.eval_value(p).isApprox(expected, 1e-11));
+    }
+    const dof::VertexDofMap wrong(topology, BasisDofTransform<B>::dofs_per_vertex == 3 ? 24 : 3);
+    EXPECT_THROW(
+        (MaterialForce(dof::ConstantDofMap(topology, 2), wrong, geometry, Vec::Zero(wrong.num_dofs()), plastic)),
+        std::invalid_argument);
+    EXPECT_THROW(
+        (PlasticForce(dof::ConstantDofMap(topology, 9), wrong, geometry, Vec::Zero(wrong.num_dofs()), parameters)),
+        std::invalid_argument);
+}
+
+TEST(VolumetricFemForceResponse, HexQ1WarpedGeometryMatchesEnergy) {
+    check_hex_responses<HexQ1Basis, GaussLegendre3D<2>>(true);
+}
+TEST(VolumetricFemForceResponse, HexHermitePhysicalDofsMatchEnergyOnNonunitBoxes) {
+    check_hex_responses<HexHermiteBasis, GaussLegendre3D<2>>();
+}
+
+TEST(BasisDofTransformResponse, HermiteScalesOnlyRowsInPaddedViews) {
+    Eigen::MatrixXd X(8, 3);
+    for (int v = 0; v < 8; ++v)
+        X.row(v) = HexQ1Basis::reference_node(v).cwiseProduct(Eigen::Vector3d(2, 3, 4));
+    const Geometry geometry(X);
+    const BasisDofTransform<HexHermiteBasis> transform(geometry);
+    Eigen::MatrixXd storage = Eigen::MatrixXd::Constant(194, 5, 7);
+    StridedVecRef value(storage.col(0).segment(1, 192));
+    StridedMatRef J(storage.block(1, 1, 192, 3));
+    value.setOnes();
+    J.setOnes();
+    transform.pullback_response_into(value, &J);
+    const std::array<double, 8> scales{1, 2, 3, 4, 6, 8, 12, 24};
+    for (int i = 0; i < 192; ++i) {
+        EXPECT_EQ(value[i], scales[(i / 3) % 8]);
+        EXPECT_TRUE(J.row(i).isConstant(value[i]));
+    }
+    EXPECT_TRUE(storage.row(0).isConstant(7));
+    EXPECT_TRUE(storage.row(193).isConstant(7));
+    EXPECT_TRUE(storage.col(4).isConstant(7));
+    StridedMatRef bad(storage.block(1, 1, 191, 3));
+    const Vec before = value;
+    EXPECT_THROW(transform.pullback_response_into(value, &bad), std::invalid_argument);
+    EXPECT_EQ(value, before);
+}
+} // namespace
+} // namespace litepgo::fem::test
