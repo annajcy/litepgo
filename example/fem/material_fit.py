@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from litepgo import energy, dof, fem, linalg, mesh, solver
+from litepgo import energy, dof, fem, mesh, solver
 
 
 def main():
@@ -37,34 +37,30 @@ def main():
         initial = np.zeros(positions.size)
         loaded = 3 * top + axis
         initial[loaded] = strain * height
-        linear_solver = linalg.AutoSparseSolver()
         options = solver.NewtonOptions(gradient_tolerance=1e-10, max_iterations=100)
-        solves += 1
-        result = solver.newton_solve(elastic, fixed, initial, options, linear_solver)
-        if result.status != solver.NewtonStatus.Converged:
-            return None
-        if not np.array_equal(result.x[fixed_dofs], initial[fixed_dofs]):
+        Force = fem.VolumetricFemForceMaterialResponse[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
+
+        def make_energy(parameters):
+            nonlocal solves
+            solves += 1
+            return Elastic(mapping, geometry,
+                           [fem.IdentityField3D(np.eye(3).ravel())] * topology.num_cells,
+                           [fem.IdentityField3D(parameters)] * topology.num_cells)
+
+        def partial(parameters, displacement):
+            response = Force(dof.ConstantDofMap(topology, 2), mapping, geometry, displacement,
+                             [fem.IdentityField3D(np.eye(3).ravel())] * topology.num_cells)
+            return response.eval_jacobian(parameters)
+
+        equilibrium = energy.StaticEquilibriumResponse(2, fixed, initial, options, make_energy, partial)
+        displacement, J = equilibrium.eval(theta, need_jacobian=need_jacobian)
+        if not np.array_equal(displacement[fixed_dofs], initial[fixed_dofs]):
             raise RuntimeError("Prescribed displacement changed")
-        force = elastic.eval_gradient(result.x)[loaded].sum()
+        force = elastic.eval_gradient(displacement)[loaded].sum()
         if not need_jacobian:
             return force, None
-
-        # Fixed-state partial derivative; the sensitivity solve below accounts for du/dtheta.
-        Force = fem.VolumetricFemForceMaterialResponse[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
-        force_response = Force(dof.ConstantDofMap(topology, 2), mapping, geometry, result.x,
-                               [fem.IdentityField3D(np.eye(3).ravel())] * topology.num_cells)
-        B = force_response.eval_jacobian(theta).toarray()
-        K = elastic.eval_hessian(result.x)  # Python eval_hessian returns the exact Hessian.
-        if not linear_solver.compute(fixed.reduce(K)):
-            raise RuntimeError("Sensitivity factorization failed")
-        derivative = np.zeros(2)
-        for j in range(2):
-            sensitivity = np.zeros(positions.size)
-            fixed.expand(linear_solver.solve(-fixed.reduce(B[:, j].copy())), sensitivity)
-            force_derivative = B[:, j] + K @ sensitivity
-            if np.linalg.norm(fixed.reduce(force_derivative), ord=np.inf) > 1e-8:
-                raise RuntimeError("Sensitivity equation residual too large")
-            derivative[j] = force_derivative[loaded].sum()
+        force_derivative = partial(theta, displacement) + elastic.eval_hessian(displacement) @ J
+        derivative = np.asarray(force_derivative[loaded].sum(axis=0)).ravel()
         if abs(derivative @ theta - force) > 1e-7 * max(1, abs(force)):
             raise RuntimeError("Reaction sensitivity violates stiffness scaling")
         return force, derivative

@@ -2,7 +2,10 @@
 #include "litepgo/bindings/bindings.hpp"
 #include "litepgo/bindings/detail/sparse_matrix.hpp"
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
+#include "litepgo/energy/response/static_equilibrium_response.hpp"
 #include <nanobind/eigen/dense.h>
+#include <nanobind/stl/function.h>
+#include <nanobind/stl/shared_ptr.h>
 namespace nb = nanobind;
 using namespace nb::literals;
 
@@ -29,5 +32,11 @@ void bind_response(nb::module_& m) {
                 return nb::make_tuple(value, need_jacobian ? nb::cast(J) : nb::none());
             },
             "x"_a, "need_jacobian"_a = false);
+}
+void bind_static_equilibrium_response(nb::module_& m) {
+    nb::class_<StaticEquilibriumResponse, Response>(m, "StaticEquilibriumResponse")
+        .def(nb::init<int, dof::DofReduction, Vec, solver::NewtonOptions, StaticEquilibriumResponse::MakeEnergy,
+                      StaticEquilibriumResponse::Partial>(),
+             "num_parameters"_a, "fixed"_a, "initial"_a, "options"_a, "make_energy"_a, "partial"_a);
 }
 } // namespace litepgo::energy::binding
