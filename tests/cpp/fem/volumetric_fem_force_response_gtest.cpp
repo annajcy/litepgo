@@ -68,6 +68,43 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
         EXPECT_TRUE(M.isApprox(Me.leftCols(2) + Me.rightCols(2), 1e-13));
         EXPECT_TRUE(P.isApprox(Pe.leftCols(9) + Pe.rightCols(9), 1e-13));
         EXPECT_TRUE(plastic_elements.eval_value(ps).isApprox(expected, 1e-11));
+        // Unequal element parameters expose column swaps hidden by shared-block sums.
+        ts.tail(2) *= 1.3;
+        ps.tail(9) *= 1.05;
+        const Eigen::MatrixXd heterogeneous_M = material_elements.eval_jacobian(ts);
+        const Eigen::MatrixXd heterogeneous_P = plastic_elements.eval_jacobian(ps);
+        const auto material_gradient = [&](const Vec& t) -> Vec {
+            const std::vector<IdentityField3D> fields{IdentityField3D(t.head(2)), IdentityField3D(t.tail(2))};
+            return Energy(map, geometry, plastic, fields).eval_gradient(u);
+        };
+        const auto plastic_gradient = [&](const Vec& p_element) -> Vec {
+            const std::vector<IdentityField3D> fields{IdentityField3D(p_element.head(9)),
+                                                      IdentityField3D(p_element.tail(9))};
+            return Energy(map, geometry, fields, parameters).eval_gradient(u);
+        };
+        EXPECT_TRUE(material_elements.eval_value(ts).isApprox(material_gradient(ts), 1e-11));
+        EXPECT_TRUE(plastic_elements.eval_value(ps).isApprox(plastic_gradient(ps), 1e-11));
+        for (double step : {1e-4, 1e-6}) {
+            SCOPED_TRACE(step);
+            for (int c = 0; c < ts.size(); ++c) {
+                SCOPED_TRACE(c);
+                Vec forward = ts, backward = ts;
+                forward[c] += step;
+                backward[c] -= step;
+                const Vec numerical = (material_gradient(forward) - material_gradient(backward)) / (2 * step);
+                EXPECT_LE((heterogeneous_M.col(c) - numerical).lpNorm<Eigen::Infinity>(),
+                          1e-7 * (1 + numerical.lpNorm<Eigen::Infinity>()));
+            }
+            for (int c = 0; c < ps.size(); ++c) {
+                SCOPED_TRACE(c);
+                Vec forward = ps, backward = ps;
+                forward[c] += step;
+                backward[c] -= step;
+                const Vec numerical = (plastic_gradient(forward) - plastic_gradient(backward)) / (2 * step);
+                EXPECT_LE((heterogeneous_P.col(c) - numerical).lpNorm<Eigen::Infinity>(),
+                          1e-7 * (1 + numerical.lpNorm<Eigen::Infinity>()));
+            }
+        }
         EXPECT_THROW(plastic_force.eval_jacobian(Vec::Zero(9)), std::domain_error);
         EXPECT_TRUE(plastic_force.eval_value(p).isApprox(expected, 1e-11));
     }
@@ -85,6 +122,13 @@ TEST(VolumetricFemForceResponse, HexQ1WarpedGeometryMatchesEnergy) {
 }
 TEST(VolumetricFemForceResponse, HexHermitePhysicalDofsMatchEnergyOnNonunitBoxes) {
     check_hex_responses<HexHermiteBasis, GaussLegendre3D<2>>();
+}
+
+TEST(VolumetricFemForceResponse, HexQ1FourthOrderQuadratureParameterDerivatives) {
+    check_hex_responses<HexQ1Basis, GaussLegendre3D<4>>(true);
+}
+TEST(VolumetricFemForceResponse, HexHermiteFourthOrderQuadratureParameterDerivatives) {
+    check_hex_responses<HexHermiteBasis, GaussLegendre3D<4>>();
 }
 
 TEST(BasisDofTransformResponse, HermiteScalesOnlyRowsInPaddedViews) {
