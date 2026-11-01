@@ -1,5 +1,6 @@
 # Test files mirror cpp/litepgo: tests/cpp/<dir>/<name>_gtest.cpp covers cpp/litepgo/<dir>/.
 add_executable(litepgo_tests
+    energy/response/static_equilibrium_response_gtest.cpp
     energy/response/mesh_response_gtest.cpp
     solver/gauss_newton_gtest.cpp
     fem/sample_boundary_gtest.cpp

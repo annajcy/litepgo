@@ -99,6 +99,7 @@ NB_MODULE(_core, m) {
     solver.doc() = "Nonlinear solvers (cpp/litepgo/solver)";
     litepgo::solver::binding::bind_gauss_newton(solver);
     litepgo::solver::binding::bind_newton(solver);
+    litepgo::energy::binding::bind_static_equilibrium_response(energy);
 
     nb::module_ contact = m.def_submodule("contact");
     contact.doc() = "Native IPC and optional IPC Toolkit contact (cpp/litepgo/contact)";

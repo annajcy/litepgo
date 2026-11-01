@@ -1,9 +1,9 @@
+#include "litepgo/energy/response/static_equilibrium_response.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
 #include "litepgo/fem/volumetric_fem_force_material_response.hpp"
-#include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include "litepgo/mesh/io/veg.hpp"
 #include "litepgo/solver/newton.hpp"
 
@@ -13,7 +13,6 @@
 
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
-#include <Eigen/LU>
 #include <cmath>
 
 // Synthetic force calibration; all trial solves start from the same displacement.
@@ -59,40 +58,39 @@ int main() {
             solver::NewtonOptions options;
             options.gradient_tolerance = 1e-10;
             options.max_iterations = 100;
-            linalg::AutoSparseSolver linear_solver;
-            ++solves;
-            const auto result = solver::newton_solve(elastic, fixed, initial, options, linear_solver);
-            if (result.status != solver::NewtonStatus::Converged)
-                throw std::domain_error("Forward equilibrium did not converge");
+            const auto partial = [&](const Vec& parameters, const Vec& displacement) -> SpMat {
+                using Force = fem::VolumetricFemForceMaterialResponse<fem::NeoHookean, fem::TetP1Basis,
+                                                                      fem::TetCentroidQuadrature, XField, Field>;
+                const Force response(
+                    dof::ConstantDofMap(mesh.topology, 2), map, geometry, displacement,
+                    std::vector<Field>(geometry.size(), Field(Eigen::Matrix3d::Identity().reshaped())));
+                return response.eval_jacobian(parameters);
+            };
+            energy::StaticEquilibriumResponse equilibrium(
+                2, fixed, initial, options,
+                [&](const Vec& parameters) -> std::shared_ptr<energy::Energy> {
+                    ++solves;
+                    return std::make_shared<Elastic>(
+                        map, geometry,
+                        std::vector<Field>(geometry.size(), Field(Eigen::Matrix3d::Identity().reshaped())),
+                        std::vector<Field>(geometry.size(), Field(parameters)));
+                },
+                partial);
+            SpMat J = equilibrium.jacobian_pattern();
+            const Vec displacement = equilibrium.eval(theta, derivative ? &J : nullptr);
             for (int i : fixed_dofs)
-                if (result.x[i] != initial[i])
+                if (displacement[i] != initial[i])
                     throw std::logic_error("Prescribed displacement changed");
-            const Vec gradient = elastic.eval_gradient(result.x);
+            const Vec gradient = elastic.eval_gradient(displacement);
             double force = 0;
             for (int v : top_vertices)
                 force += gradient[3 * v + axis];
             if (derivative) {
-                // Partial derivative at fixed equilibrium displacement; the solve below adds du/dtheta.
-                using Force = fem::VolumetricFemForceMaterialResponse<fem::NeoHookean, fem::TetP1Basis,
-                                                                      fem::TetCentroidQuadrature, XField, Field>;
-                const Force response(
-                    dof::ConstantDofMap(mesh.topology, 2), map, geometry, result.x,
-                    std::vector<Field>(geometry.size(), Field(Eigen::Matrix3d::Identity().reshaped())));
-                const Eigen::MatrixXd B = response.eval_jacobian(theta);
-                const SpMat K = elastic.eval_hessian(result.x, energy::HessianKind::Exact);
-                if (!linear_solver.compute(fixed.reduce(K)))
-                    throw std::runtime_error("Sensitivity factorization failed");
+                const Eigen::MatrixXd force_derivative =
+                    Eigen::MatrixXd(partial(theta, displacement)) + elastic.eval_hessian(displacement) * J;
                 derivative->setZero();
-                for (int j = 0; j < 2; ++j) {
-                    const Vec rhs = -fixed.reduce(Vec(B.col(j)));
-                    Vec sensitivity = Vec::Zero(elastic.num_dofs());
-                    fixed.expand(linear_solver.solve(rhs), sensitivity);
-                    const Vec force_derivative = B.col(j) + K * sensitivity;
-                    if (fixed.reduce(force_derivative).lpNorm<Eigen::Infinity>() > 1e-8)
-                        throw std::runtime_error("Sensitivity equation residual too large");
-                    for (int v : top_vertices)
-                        (*derivative)[j] += force_derivative[3 * v + axis];
-                }
+                for (int v : top_vertices)
+                    *derivative += force_derivative.row(3 * v + axis);
             }
             // Uniform stiffness scaling leaves the equilibrium shape unchanged.
             if (derivative && std::abs(derivative->dot(theta) - force) > 1e-7 * std::max(1.0, std::abs(force)))

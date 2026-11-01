@@ -1223,3 +1223,28 @@ Outputs are `hermite_free.obj` and `hermite_clamped.obj`. The accompanying VEG
 files contain only displaced corner positions; use OBJ to inspect the sampled
 Hermite surface. The Python regression checks subdivision counts and agreement
 between the two languages.
+
+## Static equilibrium response
+
+`energy::StaticEquilibriumResponse` (`energy/response/static_equilibrium_response.hpp`)
+implements the direct sensitivity of the equilibrium displacement to parameters.
+C++ and Python use `(num_parameters, fixed, initial, options, make_energy, partial)`.
+`make_energy(p)` returns the total potential (`shared_ptr<Energy>` in C++);
+`partial(p, u)` returns the sparse derivative of its full displacement gradient
+with respect to parameters at fixed displacement. Include parameter-dependent
+loads as well as constitutive terms. Python callbacks receive owning arrays.
+
+Every evaluation starts from `initial`, preserving its fixed values. Value-only
+calls skip sensitivities. Jacobian calls solve `K_ff J_f = -B_f` using the exact,
+unshifted Hessian at equilibrium, factorized once for all parameter columns.
+Fixed rows are zero; free rows have a structurally dense parameter Jacobian.
+The Newton Hessian option affects the forward solve only. Nonconvergence or
+failed sensitivity solves throw; no approximate derivative is returned.
+
+Fixed DOFs and their prescribed values must be independent of parameters.
+Derivatives apply to an isolated differentiable equilibrium branch; branch
+switches and singular equilibria are outside this contract. Callbacks and
+borrowed data must remain deterministic for the response lifetime.
+`material_fit.cpp` and `.py` use this response, then form reaction derivatives
+as `B + K J`. The C++ regression compares both displacement and reaction
+sensitivities against independently re-solved central differences.
