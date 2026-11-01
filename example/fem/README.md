@@ -924,6 +924,68 @@ The example does not add noise, per-face fitting, regularization or thickness
 optimization, and does not write a deformed mesh. The Python regression runs both
 executables and checks parameter recovery and matching results.
 
+## Diagonal plastic deformation fitting example
+
+`diagonal_fp_fit.cpp` and `diagonal_fp_fit.py` identify three **globally shared**
+positive plastic stretches from all nodal force components at one prescribed
+pose of `assets/box-tet.veg`. Reference geometry and NeoHookean parameters
+`theta = [2, 3]` stay fixed. Displacement is prescribed as
+`u(X) = (F - I) (X - center)`, where
+
+```text
+F = [1.12  0.08  0.02
+     0.01  0.96  0.06
+     0.03  0.00  1.07]
+```
+
+The model uses `F = Fe Fp`. The unknown is restricted to
+`Fp = diag(exp(p0), exp(p1), exp(p2))` in the reference coordinate axes. This
+allows positive permanent stretches/compressions, but does not fit shear or
+plastic rotations and does not impose plastic incompressibility. The true
+stretches are `[1.08, 0.94, 1.03]`; optimization starts from `Fp = I` (`p = 0`).
+
+The target is `VolumetricFemEnergy::eval_gradient(u)` at the true Fp. The
+`VolumetricFemForceFpResponse` uses `ConstantDofMap(topology, 9)` and returns the
+same positive energy-gradient force convention. All geometry, displacement and
+material inputs remain fixed throughout optimization. The residual is
+`(force(diag(exp(p))) - target) / ||target||`, with analytic Jacobian
+
+```text
+J_p = J_vecFp[:, [0, 4, 8]] * diag(exp(p)) / ||target||
+```
+
+Here `vec(Fp)` is column-major. A finite-difference check at nonzero log stretches
+verifies the composed three-column Jacobian, including the exponential factors.
+Exponentiation guarantees positive stretches mathematically; unrepresentable
+floating-point trials are rejected. Gauss–Newton uses these three parameters,
+not the full unconstrained nine-component Fp.
+
+Both versions check `sigma_min / sigma_max > 1e-6` for `J_p` at the initial,
+true and recovered parameters. This verifies **local identifiability at those
+states**, not global uniqueness. Full Fp in an isotropic material has rotational
+ambiguities; restricting the parameterization and checking its Jacobian avoids
+assuming that all nine entries can be recovered from one pose.
+
+```sh
+cmake --build build/debug --target diagonal_fp_fit -j 4
+./build/debug/example/fem/diagonal_fp_fit
+PYTHONPATH=build/debug/python .venv/bin/python example/fem/diagonal_fp_fit.py
+
+ctest --test-dir build/debug -R '^DiagonalFpFit$' --output-on-failure
+PYTHONPATH=build/debug/python .venv/bin/python -m pytest tests/python/test_diagonal_fp_fit_example.py -q
+```
+
+Output includes true/initial/fitted stretches, convergence, iterations, parameter
+error, absolute/relative force residual, the three singular-value ratios and
+finite-difference Jacobian error. A failed rank, derivative or recovery check
+causes a nonzero exit. Tests run both versions and compare their recovered
+parameters and diagnostics.
+
+This is fixed-pose inverse plastic-strain calibration. Unlike the shell example's
+linear dependence on material parameters, force depends nonlinearly on these
+plastic stretches. No equilibrium solve, yield rule, loading history, plastic
+update, noise, per-element fitting or regularization is included.
+
 ## Shell force response with plastic natural geometry
 
 `ShellFemForceFpResponse<Material>` supplies the positive displacement-gradient
@@ -992,3 +1054,58 @@ Consequently the full nine-column Jacobian is generally rank-deficient: do not
 assume all nine entries are identifiable. Constant affine Fp cannot create
 nonzero natural curvature from a planar stencil. No plastic evolution law or
 thickness response is included.
+
+## Fit shell plastic stretches at a prescribed pose
+
+[shell_fp_fit.cpp](shell_fp_fit.cpp) and [shell_fp_fit.py](shell_fp_fit.py)
+recover two shared in-plane stretches on the flat xy sheet in `assets/shell.obj`:
+
+```text
+Fp(p) = diag(exp(p0), exp(p1), 1)
+truth = (1.06, 0.95), initial = (1, 1)
+```
+
+The plastic principal axes are assumed known and aligned with x and y. Fixing
+rotation, shear and the normal stretch keeps this example to two unknowns.
+A planar reference stencil cannot identify the normal input direction of Fp;
+left rotations also leave its natural forms unchanged. This parameterization
+avoids those ambiguities, without claiming to recover a general Fp.
+
+The prescribed displacement combines anisotropic in-plane stretch, shear and
+saddle bending. Geometry, displacement, Koiter parameters `(2,3)`, thickness
+`0.1` and original integration areas remain fixed. All nodal force components,
+including boundary reactions, are observed; there is no equilibrium solve.
+The target is assembled independently from local shell energy gradients at the
+transformed natural stencils, with displacement adjusted to keep current
+positions equal to `X+u` and weights taken from the original reference stencils.
+
+Gauss–Newton minimizes `0.5 * ||r(p)||²`, where
+`r(p) = (f(Fp(p))-target)/||target||`.
+The response still exposes the full nine-column Jacobian. The example selects
+column-major columns 0 and 4 and applies the chain rule:
+
+```text
+Jp[:,0] = JFp[:,0] * exp(p0) / ||target||
+Jp[:,1] = JFp[:,4] * exp(p1) / ||target||
+```
+
+Both programs check the composed Jacobian by centered finite differences and
+require `sigma_min/sigma_max > 1e-6` at the initial, true and fitted parameters.
+For this fixture the ratios are approximately 0.51, 0.60 and 0.60: the two
+parameters are locally identifiable. This is a numerical local rank check,
+not a global uniqueness guarantee. Starting from identity recovers both target
+stretches in five iterations.
+
+```sh
+cmake --build build/debug --target shell_fp_fit
+build/debug/example/fem/shell_fp_fit
+PYTHONPATH=build/debug/python .venv/bin/python example/fem/shell_fp_fit.py
+
+ctest --test-dir build/debug -R '^ShellFpFit$' --output-on-failure
+PYTHONPATH=build/debug/python .venv/bin/python -m pytest tests/python/test_shell_fp_fit_example.py -q
+```
+
+The regression test compares the C++ and Python recovered stretches and
+diagnostics. Each executable fails on a deficient Jacobian, incorrect chain
+rule or unsuccessful recovery. No thickness optimization, plastic evolution,
+noise, regularization or per-face fitting is included.
