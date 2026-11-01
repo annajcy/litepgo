@@ -106,4 +106,40 @@ TEST(StaticEquilibriumResponse, ValidationFailureAndFullyFixedStates) {
         partial);
     EXPECT_THROW(singular.eval_jacobian(p), std::exception);
 }
+TEST(StaticEquilibriumResponse, InterleavedFixedDofsMatchResolveFiniteDifferences) {
+    Eigen::Matrix3d K;
+    K << 4, 1, .5, 1, 3, -.4, .5, -.4, 2;
+    Eigen::Matrix<double, 3, 2> A;
+    A << 1, -.5, .3, 2, -.7, 1.2;
+    const dof::DofReduction fixed(3, {1});
+    const Vec initial = Eigen::Vector3d(0, .8, 0);
+    solver::NewtonOptions options;
+    options.gradient_tolerance = 1e-12;
+    StaticEquilibriumResponse response(
+        2, fixed, initial, options,
+        [&](const Vec& p) -> std::shared_ptr<Energy> {
+            return std::make_shared<QuadraticEnergy>(K.sparseView(), -A * p);
+        },
+        [&](const Vec&, const Vec&) -> SpMat { return (-A).sparseView(); });
+    const Vec p = Eigen::Vector2d(.6, -1.1);
+    SpMat J = response.jacobian_pattern();
+    const Vec u = response.eval(p, &J);
+    EXPECT_EQ(u[1], initial[1]);
+    EXPECT_EQ(Eigen::MatrixXd(J).row(1).norm(), 0);
+    EXPECT_LT(fixed.reduce(Vec(K * u - A * p)).norm(), 1e-12);
+    EXPECT_GT(std::abs(J.coeff(0, 0) - J.coeff(2, 0)), .1);
+    for (double h : {1e-3, 1e-5}) {
+        SCOPED_TRACE(h);
+        for (int c = 0; c < 2; ++c) {
+            SCOPED_TRACE(c);
+            Vec plus = p, minus = p;
+            plus[c] += h;
+            minus[c] -= h;
+            const Vec up = response.eval_value(plus), um = response.eval_value(minus);
+            EXPECT_EQ(up[1], initial[1]);
+            EXPECT_EQ(um[1], initial[1]);
+            EXPECT_LT((Vec(J.col(c)) - (up - um) / (2 * h)).norm(), 1e-9);
+        }
+    }
+}
 } // namespace litepgo::energy::test
