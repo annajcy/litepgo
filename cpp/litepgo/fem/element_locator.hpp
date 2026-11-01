@@ -22,7 +22,6 @@ class ElementLocator {
     using Field = InterpolatedField3D<B>;
     std::vector<Field> fields_;
     std::vector<double> tolerances_;
-    std::vector<spatial::AABB> boxes_;
     spatial::SpatialHash index_;
 
     std::vector<spatial::AABB> bounds() {
@@ -87,8 +86,7 @@ class ElementLocator {
     }
 
   public:
-    explicit ElementLocator(std::vector<Field> X_fields)
-        : fields_(std::move(X_fields)), boxes_(bounds()), index_(boxes_) {}
+    explicit ElementLocator(std::vector<Field> X_fields) : fields_(std::move(X_fields)), index_(bounds()) {}
 
     // Boundary points are accepted within tolerance; lowest valid element ID wins.
     // Failure throws with the point index; no extrapolation or nearest-element fallback.

@@ -34,7 +34,6 @@ TEST(SharedField, ForwardsEveryEvaluation) {
     auto field = std::make_shared<const InterpolatedField3D<HexQ1Basis>>(coeffs);
     const SharedField3D shared(field);
     const Eigen::Vector3d xi(0.2, 0.7, 0.4);
-    EXPECT_EQ(&shared.field(), field.get());
     EXPECT_EQ(shared.num_components(), field->num_components());
     EXPECT_EQ(shared.num_dofs(), field->num_dofs());
     EXPECT_EQ(shared.eval_value(xi), field->eval_value(xi));

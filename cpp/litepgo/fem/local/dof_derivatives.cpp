@@ -7,24 +7,15 @@ namespace litepgo::fem {
 
 Eigen::VectorXd eval_gradient_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoeffs,
                                        const Eigen::Ref<const Eigen::MatrixXd>& gradient) {
-    if (dvalue_dcoeffs.rows() != gradient.size() || dvalue_dcoeffs.rows() == 0 || dvalue_dcoeffs.cols() == 0)
-        throw std::invalid_argument("eval_gradient_wrt_dofs: incompatible Jacobian and gradient");
-    const Eigen::MatrixXd packed = gradient;
-    Eigen::VectorXd result =
-        dvalue_dcoeffs.transpose() * Eigen::Map<const Eigen::VectorXd>(packed.data(), packed.size());
-    if (!result.allFinite())
-        throw std::domain_error("eval_gradient_wrt_dofs: non-finite pullback");
+    Eigen::VectorXd result = Eigen::VectorXd::Zero(dvalue_dcoeffs.cols());
+    add_gradient_wrt_dofs(dvalue_dcoeffs, gradient, 1, result);
     return result;
 }
 
 Eigen::MatrixXd eval_hessian_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoeffs,
                                       const Eigen::Ref<const Eigen::MatrixXd>& hessian) {
-    if (dvalue_dcoeffs.rows() != hessian.rows() || dvalue_dcoeffs.rows() != hessian.cols() ||
-        dvalue_dcoeffs.rows() == 0 || dvalue_dcoeffs.cols() == 0)
-        throw std::invalid_argument("eval_hessian_wrt_dofs: incompatible Jacobian and Hessian");
-    Eigen::MatrixXd result = dvalue_dcoeffs.transpose() * hessian * dvalue_dcoeffs;
-    if (!result.allFinite())
-        throw std::domain_error("eval_hessian_wrt_dofs: non-finite pullback");
+    Eigen::MatrixXd result = Eigen::MatrixXd::Zero(dvalue_dcoeffs.cols(), dvalue_dcoeffs.cols());
+    add_hessian_wrt_dofs(dvalue_dcoeffs, hessian, 1, result);
     return result;
 }
 

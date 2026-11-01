@@ -75,7 +75,6 @@ TEST(DeformationGradientField3D, BorrowsNamedFieldsAndRejectsTemporaryInputs) {
     UField u_field(coefficients), X_field(nodes());
     const DeformationGradientField3D deformation(u_field, X_field);
     const auto copy = deformation;
-    EXPECT_EQ(&copy.coordinate_field(), &X_field);
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
     const auto owned_value = deformation.eval_value(xi);
     EXPECT_TRUE(owned_value.reshaped(3, 3).isApprox(Eigen::Matrix3d::Identity() + A, 1e-14));

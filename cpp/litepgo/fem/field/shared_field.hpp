@@ -25,10 +25,6 @@ template <int ParamDim> class SharedFieldT final : public FieldT<ParamDim> {
             throw std::invalid_argument("SharedFieldT requires a field");
     }
 
-    const Base& field() const {
-        return *field_;
-    }
-
     int num_components() const override {
         return field_->num_components();
     }

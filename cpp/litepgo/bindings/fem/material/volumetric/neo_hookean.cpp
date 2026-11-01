@@ -8,9 +8,6 @@ using namespace nb::literals;
 
 namespace litepgo::fem::binding {
 namespace {
-VolumetricMaterialInputs volumetric_inputs(const Eigen::Matrix3d& F, const Eigen::Matrix3d& Fp, const Eigen::VectorXd& theta) {
-    return {F, Fp, theta};
-}
 // Volumetric materials are tags with their pointwise density and derivatives.
 template <class M> void bind_neo_hookean(nb::module_& m, const char* name) {
     nb::class_<M> cls(m, name);
@@ -19,7 +16,7 @@ template <class M> void bind_neo_hookean(nb::module_& m, const char* name) {
     cls.def_static(                                                                                                    \
         #fn,                                                                                                           \
         [](const Eigen::Matrix3d& F, const Eigen::Matrix3d& Fp, const Eigen::VectorXd& theta) {                        \
-            return M::fn(volumetric_inputs(F, Fp, theta));                                                      \
+            return M::fn(VolumetricMaterialInputs{F, Fp, theta});                                                      \
         },                                                                                                             \
         "F"_a, "Fp"_a, "theta"_a)
     LITEPGO_VOLUMETRIC(eval_W);
@@ -32,8 +29,8 @@ template <class M> void bind_neo_hookean(nb::module_& m, const char* name) {
         "eval_feasible_step",
         [](const Eigen::Matrix3d& F, const Eigen::Matrix3d& Fp, const Eigen::VectorXd& theta, const Eigen::Matrix3d& dF,
            const Eigen::Matrix3d& dFp, const Eigen::VectorXd& dtheta) {
-            return M::eval_feasible_step(volumetric_inputs(F, Fp, theta),
-                                         volumetric_inputs(dF, dFp, dtheta));
+            return M::eval_feasible_step(VolumetricMaterialInputs{F, Fp, theta},
+                                         VolumetricMaterialInputs{dF, dFp, dtheta});
         },
         "F"_a, "Fp"_a, "theta"_a, "dF"_a, "dFp"_a, "dtheta"_a,
         "Largest alpha in [0, 1] keeping the inputs valid along inputs + t * increments.");

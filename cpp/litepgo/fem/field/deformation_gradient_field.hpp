@@ -26,9 +26,6 @@ class DeformationGradientField3D final : public Field3D {
     int num_dofs() const override {
         return u_field_.num_dofs();
     }
-    const Field3D& coordinate_field() const {
-        return X_field_;
-    }
     Eigen::VectorXd eval_value(const Eigen::Vector3d& xi) const override {
         const Eigen::Matrix3d dxi_dX = eval_dxi_dX(xi);
         const auto du_dxi = u_field_.eval_dvalue_dxi(xi);
