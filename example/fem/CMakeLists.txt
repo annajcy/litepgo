@@ -43,3 +43,7 @@ target_compile_definitions(shell_plastic_field PRIVATE LITEPGO_OUTPUT_DIR="${PRO
 
 add_executable(shell_equilibrium_material_fit shell_equilibrium_material_fit.cpp)
 target_link_libraries(shell_equilibrium_material_fit PRIVATE litepgo::litepgo litepgo::warnings)
+
+add_executable(volume_equilibrium_fp_fit volume_equilibrium_fp_fit.cpp)
+target_link_libraries(volume_equilibrium_fp_fit PRIVATE litepgo::io litepgo::litepgo litepgo::warnings)
+target_compile_definitions(volume_equilibrium_fp_fit PRIVATE LITEPGO_ASSETS_DIR="${PROJECT_SOURCE_DIR}/assets")
