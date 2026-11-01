@@ -1,7 +1,7 @@
 #include "litepgo/dof/constant_dof_map.hpp"
 #include "litepgo/dof/element_dof_map.hpp"
 #include "litepgo/dof/vertex_dof_map.hpp"
-#include "litepgo/energy/energy.hpp"
+#include "litepgo/energy/scalar/energy.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "test_material_sources.hpp"

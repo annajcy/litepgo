@@ -1,6 +1,6 @@
 # Test files mirror cpp/litepgo: tests/cpp/<dir>/<name>_gtest.cpp covers cpp/litepgo/<dir>/.
 add_executable(litepgo_tests
-    response/mesh_response_gtest.cpp
+    energy/response/mesh_response_gtest.cpp
     solver/gauss_newton_gtest.cpp
     fem/sample_boundary_gtest.cpp
     dof/vertex_displacement_map_gtest.cpp
@@ -9,7 +9,7 @@ add_executable(litepgo_tests
     spatial/spatial_hash_gtest.cpp
     dof/energy_assembler_gtest.cpp
     dof/response_assembler_gtest.cpp
-    energy/mesh_energy_gtest.cpp
+    energy/scalar/mesh_energy_gtest.cpp
     ../example/fem/hex_q1_mesh_energy_gtest.cpp
     ../example/fem/hex_hermite_mesh_energy_gtest.cpp
     ../example/fem/tet_p1_mesh_energy_gtest.cpp
@@ -18,13 +18,13 @@ add_executable(litepgo_tests
     core/busy_scope_gtest.cpp
     core/memory_gtest.cpp
     core/types_gtest.cpp
-    energy/affine_mapped_energy_gtest.cpp
-    energy/dynamic_pattern_energy_gtest.cpp
-    energy/energy_gtest.cpp
-    energy/fixed_pattern_energy_gtest.cpp
-    energy/quadratic_energy_gtest.cpp
-    energy/vertex_pulling_energy_gtest.cpp
-    energy/weighted_energy_sum_gtest.cpp
+    energy/scalar/affine_mapped_energy_gtest.cpp
+    energy/scalar/dynamic_pattern_energy_gtest.cpp
+    energy/scalar/energy_gtest.cpp
+    energy/scalar/fixed_pattern_energy_gtest.cpp
+    energy/scalar/quadratic_energy_gtest.cpp
+    energy/scalar/vertex_pulling_energy_gtest.cpp
+    energy/scalar/weighted_energy_sum_gtest.cpp
     fem/basis/basis_gtest.cpp
     fem/basis/1d/cubic_hermite_basis_gtest.cpp
     fem/basis/2d/tensor_product_basis_2d_gtest.cpp
@@ -52,6 +52,7 @@ add_executable(litepgo_tests
     fem/volumetric_fem_force_material_response_gtest.cpp
     fem/material/volumetric/volumetric_material_force_local_response_gtest.cpp
     fem/local/dof_derivatives_gtest.cpp
+    fem/kinematics/deformation_gradient_kinematics_gtest.cpp
     fem/kinematics/volumetric_element_gtest.cpp
     fem/material/volumetric/volumetric_material_inputs_gtest.cpp
     fem/material/volumetric/multiplicative_kinematics_gtest.cpp

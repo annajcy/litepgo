@@ -2,9 +2,9 @@
 #include "litepgo/solver/newton.hpp"
 
 #include "litepgo/dof/constant_dof_map.hpp"
-#include "litepgo/energy/mesh_energy.hpp"
-#include "litepgo/energy/quadratic_energy.hpp"
-#include "litepgo/energy/weighted_energy_sum.hpp"
+#include "litepgo/energy/scalar/mesh_energy.hpp"
+#include "litepgo/energy/scalar/quadratic_energy.hpp"
+#include "litepgo/energy/scalar/weighted_energy_sum.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"

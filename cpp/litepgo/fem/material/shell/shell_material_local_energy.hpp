@@ -52,10 +52,6 @@ template <class Material> class ShellMaterialLocalEnergy2D final : public LocalE
         eval_density(xi, nullptr, &hessian);
         return hessian;
     }
-    double accumulate(const Eigen::Vector2d& xi, double weight, Eigen::VectorXd* gradient,
-                      Eigen::MatrixXd* hessian) const override {
-        return accumulate_density(xi, weight, gradient, hessian);
-    }
     double accumulate_into(const Eigen::Vector2d& xi, double weight, StridedVecRef* gradient,
                            StridedMatRef* hessian) const override {
         return accumulate_density(xi, weight, gradient, hessian);

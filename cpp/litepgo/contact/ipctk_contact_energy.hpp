@@ -1,7 +1,7 @@
 #pragma once
 
 #include "litepgo/contact/contact_options.hpp"
-#include "litepgo/energy/dynamic_pattern_energy.hpp"
+#include "litepgo/energy/scalar/dynamic_pattern_energy.hpp"
 #include "litepgo/mesh/mesh_data.hpp"
 
 #include <limits>

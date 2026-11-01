@@ -2,7 +2,7 @@
 
 // Central-difference checks of an energy's gradient and exact Hessian.
 
-#include "litepgo/energy/energy.hpp"
+#include "litepgo/energy/scalar/energy.hpp"
 
 #include <Eigen/Dense>
 #include <gtest/gtest.h>

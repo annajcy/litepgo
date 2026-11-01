@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from litepgo import fem,mesh,dof,contact
+from litepgo import fem, mesh, dof, contact
 
 
 def model():

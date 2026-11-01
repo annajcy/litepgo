@@ -43,7 +43,7 @@ TEST(LocalResponse, DefaultCapabilitiesAndWeightedAddition) {
     value.setOnes();
     J.setOnes();
     full.accumulate(xi, .5, value, &J);
-    full.accumulate_for_integration(xi, -.25, value, &J);
+    full.accumulate(xi, -.25, value, &J);
     EXPECT_TRUE(value.isApprox(Eigen::Vector3d::Ones() + .25 * full.eval_value(xi), 1e-14));
     EXPECT_TRUE(J.isApprox(Eigen::MatrixXd::Ones(3, 2) + .25 * full.eval_jacobian(xi), 1e-14));
 }
@@ -81,7 +81,7 @@ TEST(LocalResponse, RejectsMalformedLocalResultsBeforeAccumulating) {
     EXPECT_EQ(J, Eigen::MatrixXd::Ones(3, 2));
 }
 
-TEST(LocalResponse, IntegratorUsesFastPathAndChecksFinalOutputs) {
+TEST(LocalResponse, IntegratorUsesAccumulationAndChecksFinalOutputs) {
     Eigen::Matrix<double, 4, 3> vertices;
     vertices << 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1;
     const InterpolatedField3D<TetP1Basis> X(vertices);
@@ -90,47 +90,40 @@ TEST(LocalResponse, IntegratorUsesFastPathAndChecksFinalOutputs) {
     Eigen::MatrixXd J;
     EXPECT_THROW(element.eval(no_jacobian, &J), std::logic_error);
     struct Fast : Full {
-        mutable int checked = 0, fast = 0;
-        bool bad = false, wrong_size = false;
-        void accumulate(const Eigen::Vector3d& xi, double w, Eigen::VectorXd& value,
-                        Eigen::MatrixXd* jacobian) const override {
-            ++checked;
-            Full::accumulate(xi, w, value, jacobian);
-        }
-        void accumulate_for_integration(const Eigen::Vector3d& xi, double w, Eigen::VectorXd& value,
-                                        Eigen::MatrixXd* jacobian) const override {
-            ++fast;
-            Full::accumulate(xi, w, value, jacobian);
+        mutable int calls = 0;
+        bool bad = false;
+        void accumulate_into(const Eigen::Vector3d& xi, double w, StridedVecRef value,
+                             StridedMatRef* jacobian) const override {
+            ++calls;
+            Full::accumulate_into(xi, w, value, jacobian);
             if (bad)
                 value[0] = std::numeric_limits<double>::infinity();
-            if (wrong_size)
-                value.resize(1);
         }
     } local;
     const auto value = element.eval(local, &J);
-    EXPECT_EQ(local.checked, 0);
-    EXPECT_EQ(local.fast, 1);
+    EXPECT_EQ(local.calls, 1);
     EXPECT_TRUE(value.isApprox(local.eval_value(Eigen::Vector3d::Constant(.25)) / 6, 1e-14));
     EXPECT_TRUE(J.isApprox(local.eval_jacobian(Eigen::Vector3d::Zero()) / 6, 1e-14));
     local.bad = true;
     EXPECT_THROW(element.eval(local), std::domain_error);
-    local.bad = false;
-    local.wrong_size = true;
-    EXPECT_THROW(element.eval(local), std::logic_error);
 }
 } // namespace
 } // namespace litepgo::fem::test
 
 namespace litepgo::fem::test {
-TEST(LocalResponse, StridedFallbackPreservesCustomAccumulation) {
+TEST(LocalResponse, OwningAndStridedBuffersUseCustomAccumulation) {
     struct Custom : Full {
-        void accumulate_for_integration(const Coordinate&, double weight, Eigen::VectorXd& value,
-                                        Eigen::MatrixXd* J) const override {
+        void accumulate_into(const Coordinate&, double weight, StridedVecRef value, StridedMatRef* J) const override {
             value.array() += 2 * weight;
             if (J)
                 J->array() += 3 * weight;
         }
     } local;
+    Eigen::VectorXd owned_value = Eigen::VectorXd::Constant(3, -5);
+    Eigen::MatrixXd owned_J = Eigen::MatrixXd::Constant(3, 2, -5);
+    local.accumulate(Eigen::Vector3d::Zero(), .5, owned_value, &owned_J);
+    EXPECT_TRUE(owned_value.isConstant(-4));
+    EXPECT_TRUE(owned_J.isConstant(-3.5));
     Eigen::MatrixXd values = Eigen::MatrixXd::Constant(2, 3, -5);
     Eigen::MatrixXd jacobians = Eigen::MatrixXd::Constant(5, 4, -5);
     StridedVecRef v(values.row(1).transpose());

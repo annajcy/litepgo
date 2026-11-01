@@ -1,5 +1,5 @@
-#include "litepgo/energy/vertex_pulling_energy.hpp"
-#include "litepgo/energy/weighted_energy_sum.hpp"
+#include "litepgo/energy/scalar/vertex_pulling_energy.hpp"
+#include "litepgo/energy/scalar/weighted_energy_sum.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/shell_fem_energy.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"

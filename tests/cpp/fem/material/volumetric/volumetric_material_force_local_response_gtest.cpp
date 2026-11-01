@@ -1,8 +1,8 @@
-#include "litepgo/fem/material/volumetric/volumetric_fp_force_local_response.hpp"
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/kinematics/volumetric_element.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_fp_force_local_response.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_force_local_response.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
@@ -82,7 +82,9 @@ TEST(MaterialLocalResponse, AccumulationAndIntegrationMatchEnergyWithVolumeAppli
     Eigen::VectorXd value = Eigen::VectorXd::Ones(4), fast = value;
     Eigen::MatrixXd J = Eigen::MatrixXd::Ones(4, 3), fast_J = J;
     local.accumulate(xi, .4, value, &J);
-    local.accumulate_for_integration(xi, .4, fast, &fast_J);
+    StridedVecRef value_view(fast);
+    StridedMatRef J_view(fast_J);
+    local.accumulate_into(xi, .4, value_view, &J_view);
     EXPECT_EQ((value - fast).norm(), 0);
     EXPECT_EQ((J - fast_J).norm(), 0);
     EXPECT_TRUE(value.isApprox(Eigen::VectorXd::Ones(4) + .4 * local.eval_value(xi), 1e-13));
@@ -97,15 +99,15 @@ TEST(MaterialLocalResponse, AccumulationAndIntegrationMatchEnergyWithVolumeAppli
     EXPECT_TRUE(integrated.isApprox(gradient, 1e-13));
     EXPECT_TRUE(integrated.isApprox((8. / 6) * local.eval_value(xi), 1e-13));
     EXPECT_TRUE(J.isApprox((8. / 6) * local.eval_jacobian(xi), 1e-13));
-    // The fast path skips finite scans; the integrator must reject the resulting NaN.
+    // Direct evaluation and integration reject invalid field derivatives consistently.
     f.F.D(0, 0) = std::numeric_limits<double>::quiet_NaN();
     EXPECT_THROW(local.eval_value(xi), std::invalid_argument);
-    EXPECT_THROW(element.eval(local, &J), std::domain_error);
+    EXPECT_THROW(element.eval(local, &J), std::invalid_argument);
     f.F.D(0, 0) = 1;
     f.theta.D(0, 0) = std::numeric_limits<double>::quiet_NaN();
     EXPECT_NO_THROW(element.eval(local));
     EXPECT_THROW(local.eval_jacobian(xi), std::invalid_argument);
-    EXPECT_THROW(element.eval(local, &J), std::domain_error);
+    EXPECT_THROW(element.eval(local, &J), std::invalid_argument);
 }
 TEST(MaterialLocalResponse, RejectsInvalidFieldsBuffersAndNumericalResults) {
     Fixture f;

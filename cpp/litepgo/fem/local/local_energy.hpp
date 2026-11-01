@@ -21,17 +21,10 @@ template <int ParamDim> class LocalEnergyT {
     // The caller supplies the complete weight; no geometry or measure is applied here.
     // Adds requested derivatives to initialized, non-aliasing buffers without resizing them.
     // Non-finite numerical results throw std::domain_error.
-    virtual double accumulate(const Coordinate& xi, double weight, Eigen::VectorXd* gradient,
-                              Eigen::MatrixXd* hessian) const;
-    // Integration into pre-sized strided outputs. The default preserves custom
-    // accumulate overrides; built-in materials override this to write directly.
+    double accumulate(const Coordinate& xi, double weight, Eigen::VectorXd* gradient, Eigen::MatrixXd* hessian) const;
+    // Single implementation hook for owning buffers and strided views.
     virtual double accumulate_into(const Coordinate& xi, double weight, StridedVecRef* gradient,
                                    StridedMatRef* hessian) const;
-    // Integrators supply finite coordinates/weights and check final outputs for finiteness.
-    virtual double accumulate_for_integration(const Coordinate& xi, double weight, Eigen::VectorXd* gradient,
-                                              Eigen::MatrixXd* hessian) const {
-        return accumulate(xi, weight, gradient, hessian);
-    }
 };
 
 extern template class LocalEnergyT<2>;

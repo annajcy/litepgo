@@ -2,7 +2,7 @@
 
 #include "litepgo/core/types.hpp"
 #include "litepgo/linalg/sparse_solver/sparse_solver.hpp"
-#include "litepgo/response/response.hpp"
+#include "litepgo/energy/response/response.hpp"
 #include <limits>
 
 namespace litepgo::solver {
@@ -30,10 +30,10 @@ struct GaussNewtonResult {
 // Trials request only residuals. Convergence means ||J^T r||_inf <= tolerance,
 // not a zero residual or a guarantee of a local minimum. Responses must be deterministic. The value is interpreted as a
 // residual targeting zero.
-GaussNewtonResult gauss_newton_solve(response::Response& residual, const ConstVecRef& initial,
+GaussNewtonResult gauss_newton_solve(energy::Response& residual, const ConstVecRef& initial,
                                      const GaussNewtonOptions& options);
 
-GaussNewtonResult gauss_newton_solve(response::Response& residual, const ConstVecRef& initial,
+GaussNewtonResult gauss_newton_solve(energy::Response& residual, const ConstVecRef& initial,
                                      const GaussNewtonOptions& options, linalg::SparseSolver& linear_solver);
 
 } // namespace litepgo::solver

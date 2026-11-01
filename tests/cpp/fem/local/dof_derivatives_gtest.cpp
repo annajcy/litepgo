@@ -1,4 +1,4 @@
-#include "litepgo/energy/energy.hpp"
+#include "litepgo/energy/scalar/energy.hpp"
 #include "litepgo/fem/local/dof_derivatives.hpp"
 
 #include <gtest/gtest.h>

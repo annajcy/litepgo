@@ -1,10 +1,10 @@
 #pragma once
+#include "litepgo/fem/detail/batch_views.hpp"
 
 #include "litepgo/dof/stencil_dof_map.hpp"
-#include "litepgo/energy/mesh_energy.hpp"
+#include "litepgo/energy/scalar/mesh_energy.hpp"
 #include "litepgo/fem/material/shell/shell_material_local_energy.hpp"
 #include <cmath>
-#include <optional>
 #include <utility>
 #include <vector>
 
@@ -32,15 +32,8 @@ template <class Material> class ShellFemEnergy final : public energy::MeshEnergy
                   for (Eigen::Index b = 0; b < count; ++b) {
                       const int e = ids[b];
                       const Eigen::MatrixXd u = inputs.row(b).reshaped<Eigen::RowMajor>(n / 3, 3);
-                      std::optional<StridedVecRef> g;
-                      std::optional<StridedMatRef> H;
-                      if (gradients)
-                          g.emplace(gradients->row(b).transpose());
-                      if (hessians) {
-                          Eigen::Map<Eigen::MatrixXd, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>> block(
-                              hessians->data() + b * n * n, n, n, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>(1, n));
-                          H.emplace(block);
-                      }
+                      auto g = detail::batch_vector_view(gradients, b);
+                      auto H = detail::batch_matrix_view(hessians, b, n);
                       const auto index = static_cast<std::size_t>(e);
                       const auto& rest = rest_data_[index];
                       const ShellMaterialLocalEnergy2D<Material> local(rest, u, thickness_[index], theta_[index]);

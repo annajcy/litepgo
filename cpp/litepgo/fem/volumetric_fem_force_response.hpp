@@ -2,13 +2,14 @@
 #include "litepgo/dof/constant_dof_map.hpp"
 #include "litepgo/dof/element_dof_map.hpp"
 #include "litepgo/dof/vertex_dof_map.hpp"
+#include "litepgo/energy/response/mesh_response.hpp"
+#include "litepgo/fem/detail/batch_views.hpp"
 #include "litepgo/fem/field/deformation_gradient_field.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/kinematics/basis_dof_transform.hpp"
 #include "litepgo/fem/kinematics/volumetric_element.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_force_local_response.hpp"
-#include "litepgo/response/mesh_response.hpp"
 #include <concepts>
 #include <memory>
 #include <utility>
@@ -18,7 +19,7 @@ namespace detail {
 // Fixed displacement and geometry; the other material input is stored per element.
 template <class Material, Basis3D UBasis, Quadrature3D Q, std::derived_from<Field3D> XField,
           std::derived_from<Field3D> FixedField, ForceInput Input>
-class VolumetricFemForceResponse final : public response::FixedPatternResponse {
+class VolumetricFemForceResponse final : public energy::MeshResponse {
     static constexpr int output_size = 3 * UBasis::num_basis_functions;
     static constexpr int input_size = Input == ForceInput::Plastic ? 9 : Material::num_parameters;
     static constexpr int fixed_size = Input == ForceInput::Plastic ? Material::num_parameters : 9;
@@ -29,8 +30,10 @@ class VolumetricFemForceResponse final : public response::FixedPatternResponse {
     VolumetricFemForceResponse(const ParameterMap& parameter_map, const dof::VertexDofMap& displacement_map,
                                std::vector<XField> rest_position_fields, Vec displacement,
                                std::vector<FixedField> fixed_fields, int batch_size = 256)
-        : VolumetricFemForceResponse(make_response(parameter_map, displacement_map, std::move(rest_position_fields),
-                                                   std::move(displacement), std::move(fixed_fields), batch_size)) {}
+        : energy::MeshResponse(parameter_map, displacement_map,
+                               make_callback(parameter_map, displacement_map, std::move(rest_position_fields),
+                                             std::move(displacement), std::move(fixed_fields), batch_size),
+                               batch_size) {}
 
   private:
     struct State {
@@ -57,9 +60,9 @@ class VolumetricFemForceResponse final : public response::FixedPatternResponse {
                 integration.emplace_back(geometry[e]);
             }
         }
-        response::BatchMatrix evaluate(std::span<const int> ids, const response::BatchMatrix& coefficients,
-                                       response::BatchMatrix* jacobian) const {
-            response::BatchMatrix values(ids.size(), output_size);
+        energy::BatchMatrix evaluate(std::span<const int> ids, const energy::BatchMatrix& coefficients,
+                                     energy::BatchMatrix* jacobian) const {
+            energy::BatchMatrix values(ids.size(), output_size);
             if (jacobian)
                 jacobian->resize(output_size * ids.size(), input_size);
             for (std::size_t b = 0; b < ids.size(); ++b) {
@@ -73,26 +76,17 @@ class VolumetricFemForceResponse final : public response::FixedPatternResponse {
                         return VolumetricForceLocalResponse3D<Material, Input>(F, fixed[e], active);
                 }();
                 StridedVecRef value(values.row(b).transpose());
-                if (jacobian) {
-                    // Expose the row-major batch block through the strided output API.
-                    Eigen::Map<Eigen::MatrixXd, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>> block(
-                        jacobian->data() + output_size * b * input_size, output_size, input_size,
-                        Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>(1, input_size));
-                    StridedMatRef J(block);
-                    integration[e].eval_into(local, value, &J);
-                    transforms[e].pullback_response_into(value, &J);
-                } else {
-                    integration[e].eval_into(local, value);
-                    transforms[e].pullback_response_into(value, nullptr);
-                }
+                auto J = batch_matrix_view(jacobian, b, output_size);
+                integration[e].eval_into(local, value, J ? &*J : nullptr);
+                transforms[e].pullback_response_into(value, J ? &*J : nullptr);
             }
             return values;
         }
     };
     template <class ParameterMap>
-    static std::unique_ptr<response::MeshResponse>
-    make_response(const ParameterMap& parameters, const dof::VertexDofMap& map, std::vector<XField> X, Vec u,
-                  std::vector<FixedField> fixed_fields, int batch_size) {
+    static energy::MeshResponse::Callback make_callback(const ParameterMap& parameters, const dof::VertexDofMap& map,
+                                                        std::vector<XField> X, Vec u,
+                                                        std::vector<FixedField> fixed_fields, int batch_size) {
         if (parameters.num_elements() != map.num_elements() || batch_size <= 0)
             throw std::invalid_argument("VolumetricFemForceResponse: incompatible element count or batch size");
         const int width = [&] {
@@ -104,19 +98,10 @@ class VolumetricFemForceResponse final : public response::FixedPatternResponse {
         if (width != input_size)
             throw std::invalid_argument("VolumetricFemForceResponse: invalid parameter count");
         auto state = std::make_shared<State>(map, std::move(X), u, std::move(fixed_fields));
-        return std::make_unique<response::MeshResponse>(
-            parameters, map,
-            [state](std::span<const int> ids, const response::BatchMatrix& coefficients, response::BatchMatrix* J) {
-                return state->evaluate(ids, coefficients, J);
-            },
-            batch_size);
+        return [state](std::span<const int> ids, const energy::BatchMatrix& coefficients, energy::BatchMatrix* J) {
+            return state->evaluate(ids, coefficients, J);
+        };
     }
-    explicit VolumetricFemForceResponse(std::unique_ptr<response::MeshResponse> assembled)
-        : FixedPatternResponse(assembled->jacobian_pattern()), assembled_(std::move(assembled)) {}
-    Vec eval_values(const ConstVecRef& coefficients, SpMat* J) const override {
-        return assembled_->eval(coefficients, J);
-    }
-    std::unique_ptr<response::MeshResponse> assembled_;
 };
 } // namespace detail
 } // namespace litepgo::fem

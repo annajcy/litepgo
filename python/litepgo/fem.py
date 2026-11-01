@@ -32,8 +32,8 @@ borrows (F, Fp, theta), keeps Python fields alive, and returns the positive
 F-coefficient force density and its theta-coefficient Jacobian. F and Fp stay
 fixed. accumulate(xi, weight, jacobian=False) returns weighted outputs; geometry
 is applied only by VolumetricElement3D.eval(local_response, jacobian=False).
-The integrator uses accumulate_for_integration and validates final results;
-this fast C++ entry point is not exposed directly in Python, as for LocalEnergy.
+The integrator uses accumulate_into and validates final results;
+this strided C++ entry point is not exposed directly in Python, as for LocalEnergy.
 
 VolumetricFemForceMaterialResponse[NeoHookean, TetP1Basis, TetCentroidQuadrature]
 takes (parameter_map, displacement_map, rest_position_fields, displacement, Fp,
@@ -133,7 +133,6 @@ LocalResponse2D = _native.LocalResponse2D
 LocalResponse3D = _native.LocalResponse3D
 VolumetricFpForceLocalResponse3D = _templates["VolumetricFpForceLocalResponse3D"]
 VolumetricMaterialForceLocalResponse3D = _templates["VolumetricMaterialForceLocalResponse3D"]
-VolumetricMaterialLocalEnergy3D = _templates["VolumetricMaterialLocalEnergy3D"]
 VolumetricMaterialLocalEnergyF3D = _templates["VolumetricMaterialLocalEnergyF3D"]
 ShellMaterialLocalEnergy2D = _templates["ShellMaterialLocalEnergy2D"]
 VolumetricElement3D = _templates["VolumetricElement3D"]
@@ -182,7 +181,6 @@ __all__ = [
     "LocalResponse3D",
     "VolumetricMaterialForceLocalResponse3D",
     "VolumetricFpForceLocalResponse3D",
-    "VolumetricMaterialLocalEnergy3D",
     "VolumetricMaterialLocalEnergyF3D",
     "ShellMaterialLocalEnergy2D",
     "VolumetricElement3D",

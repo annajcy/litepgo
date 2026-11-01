@@ -1,0 +1,47 @@
+"""Subclass fixed/dynamic Response and pass the residual object to Gauss-Newton."""
+import numpy as np
+from litepgo import energy, solver
+
+
+class LinearResidual(energy.FixedPatternResponse):
+    def __init__(self):
+        self.J = np.array([[1., 0.], [0., 1.], [1., 1.]])
+        super().__init__(self.J)
+
+    def eval_values(self, x, need_jacobian):
+        r = self.J @ x - [1., 2., 3.]
+        return (r, self.J) if need_jacobian else r
+
+
+class NonlinearResidual(energy.DynamicPatternResponse):
+    def __init__(self):
+        super().__init__(np.eye(2))
+
+    def pattern_at(self, x):
+        return np.array([[1., 0.], [float(x[0] > 0), 1.]])
+
+    def eval_values(self, x, need_jacobian):
+        s = max(0., x[0])
+        r = np.array([x[0]-1, x[1]+s*s-2])
+        return (r, np.array([[1., 0.], [2*s, 1.]])) if need_jacobian else r
+
+
+def main():
+    fixed, dynamic = LinearResidual(), NonlinearResidual()
+    r, J = fixed.eval(np.array([1., 2.]), need_jacobian=True)
+    assert np.linalg.norm(r) == 0 and J.shape == (3, 2) and J.nnz == 4
+    active = np.ones(2)
+    assert np.linalg.norm(dynamic.eval_value(active)) == 0
+    assert dynamic.update_pattern(active)
+    J = dynamic.eval_jacobian(active)
+    assert J.nnz == 3 and J[1, 0] == 2
+    assert dynamic.update_pattern(-active)
+    result = solver.gauss_newton_solve(dynamic, -active, solver.GaussNewtonOptions(gradient_tolerance=1e-9))
+    assert result.status == solver.GaussNewtonStatus.Converged
+    np.testing.assert_allclose(result.x, active, atol=1e-8)
+    print(f"fixed Jacobian=3x2, dynamic solution={result.x[0]:g} {result.x[1]:g}, "
+          f"Jacobian nnz={dynamic.jacobian_pattern.nnz}")
+
+
+if __name__ == "__main__":
+    main()

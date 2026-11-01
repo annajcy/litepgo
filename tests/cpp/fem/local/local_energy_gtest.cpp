@@ -1,4 +1,5 @@
-#include "litepgo/energy/energy.hpp"
+#include "litepgo/energy/scalar/energy.hpp"
+#include "litepgo/fem/detail/batch_views.hpp"
 #include "litepgo/fem/local/local_energy.hpp"
 
 #include <gtest/gtest.h>
@@ -104,10 +105,9 @@ TEST(LocalEnergy3D, DefaultAccumulationAddsWeightedValuesAndChecksRequests) {
 } // namespace litepgo::fem::test
 
 namespace litepgo::fem::test {
-TEST(LocalEnergy3D, StridedFallbackPreservesCustomAccumulation) {
+TEST(LocalEnergy3D, OwningAndStridedBuffersUseCustomAccumulation) {
     struct Custom : FullEnergy {
-        double accumulate_for_integration(const Coordinate&, double weight, Eigen::VectorXd* g,
-                                          Eigen::MatrixXd* H) const override {
+        double accumulate_into(const Coordinate&, double weight, StridedVecRef* g, StridedMatRef* H) const override {
             if (g)
                 g->array() += 2 * weight;
             if (H)
@@ -115,6 +115,11 @@ TEST(LocalEnergy3D, StridedFallbackPreservesCustomAccumulation) {
             return 4 * weight;
         }
     } local;
+    Eigen::VectorXd owned_g = Eigen::VectorXd::Constant(3, -5);
+    Eigen::MatrixXd owned_H = Eigen::MatrixXd::Constant(3, 3, -5);
+    EXPECT_DOUBLE_EQ(local.accumulate(Eigen::Vector3d::Zero(), .5, &owned_g, &owned_H), 2);
+    EXPECT_TRUE(owned_g.isConstant(-4));
+    EXPECT_TRUE(owned_H.isConstant(-3.5));
     Eigen::MatrixXd gs = Eigen::MatrixXd::Constant(2, 3, -5);
     Eigen::MatrixXd hs = Eigen::MatrixXd::Constant(5, 5, -5);
     StridedVecRef g(gs.row(1).transpose());
@@ -125,5 +130,25 @@ TEST(LocalEnergy3D, StridedFallbackPreservesCustomAccumulation) {
     EXPECT_TRUE(gs.row(0).isConstant(-5));
     EXPECT_TRUE(hs.row(0).isConstant(-5));
     EXPECT_TRUE(hs.col(4).isConstant(-5));
+}
+} // namespace litepgo::fem::test
+
+namespace litepgo::fem::test {
+TEST(BatchViews, RectangularBlocksAndOptionalOutputs) {
+    using Batch = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+    Batch matrices = Batch::Constant(6, 2, -5);
+    auto J = detail::batch_matrix_view(&matrices, 1, 3);
+    J->setConstant(7);
+    (*J)(2, 1) = 9;
+    EXPECT_TRUE(matrices.topRows(3).isConstant(-5));
+    EXPECT_DOUBLE_EQ(matrices(3, 0), 7);
+    EXPECT_DOUBLE_EQ(matrices(5, 1), 9);
+    Batch vectors = Batch::Constant(2, 3, -5);
+    auto v = detail::batch_vector_view(&vectors, 1);
+    v->setConstant(4);
+    EXPECT_TRUE(vectors.row(0).isConstant(-5));
+    EXPECT_TRUE(vectors.row(1).isConstant(4));
+    EXPECT_FALSE(detail::batch_vector_view(static_cast<Batch*>(nullptr), 0));
+    EXPECT_FALSE(detail::batch_matrix_view(static_cast<Batch*>(nullptr), 0, 3));
 }
 } // namespace litepgo::fem::test

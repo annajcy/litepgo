@@ -11,7 +11,7 @@
 #include <iostream>
 #include <vector>
 
-#include "litepgo/response/fixed_pattern_response.hpp"
+#include "litepgo/energy/response/fixed_pattern_response.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
 #include <Eigen/LU>
 #include <cmath>
@@ -113,7 +113,7 @@ int main() {
         };
         const Eigen::Vector2d observed = measurements(truth, nullptr);
         const Eigen::Vector2d scales = observed.cwiseAbs().cwiseMax(1e-8);
-        class MaterialResidual final : public response::FixedPatternResponse {
+        class MaterialResidual final : public energy::FixedPatternResponse {
           public:
             MaterialResidual(const decltype(measurements)& experiments, Eigen::Vector2d target, Eigen::Vector2d scale)
                 : FixedPatternResponse(Eigen::Matrix2d::Ones().sparseView()), measurements_(experiments),

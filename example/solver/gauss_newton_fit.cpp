@@ -1,11 +1,11 @@
-#include "litepgo/response/fixed_pattern_response.hpp"
+#include "litepgo/energy/response/fixed_pattern_response.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
 #include <iostream>
 #include <stdexcept>
 
 using namespace litepgo;
 
-class ExponentialResidual final : public response::FixedPatternResponse {
+class ExponentialResidual final : public energy::FixedPatternResponse {
   public:
     ExponentialResidual()
         : FixedPatternResponse(Eigen::MatrixXd::Ones(9, 2).sparseView()), t(Vec::LinSpaced(9, 0., 2.)),

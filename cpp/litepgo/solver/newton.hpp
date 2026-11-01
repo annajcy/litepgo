@@ -2,7 +2,7 @@
 
 #include "litepgo/core/types.hpp"
 #include "litepgo/dof/dof_reduction.hpp"
-#include "litepgo/energy/energy.hpp"
+#include "litepgo/energy/scalar/energy.hpp"
 #include "litepgo/linalg/sparse_solver/sparse_solver.hpp"
 
 #include <functional>

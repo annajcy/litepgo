@@ -1,4 +1,4 @@
-#include "litepgo/energy/energy.hpp"
+#include "litepgo/energy/scalar/energy.hpp"
 #include "litepgo/fem/kinematics/positive_det_feasible_step.hpp"
 
 #include <Eigen/Geometry>

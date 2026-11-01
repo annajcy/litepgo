@@ -1,4 +1,4 @@
-#include "litepgo/energy/energy.hpp"
+#include "litepgo/energy/scalar/energy.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 
 #include <Eigen/Geometry>

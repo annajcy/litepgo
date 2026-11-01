@@ -1,5 +1,5 @@
 #pragma once
-#include "litepgo/energy/mesh_energy.hpp"
+#include "litepgo/energy/scalar/mesh_energy.hpp"
 #include <limits>
 
 namespace litepgo::testing {
