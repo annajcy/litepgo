@@ -132,3 +132,54 @@ TEST(Energy, RejectsNonFiniteValuesAsABrokenEnergy) {
 }
 
 } // namespace litepgo::energy::test
+
+TEST(EnergyContract, RejectsBrokenRequestedDerivativesAndRecovers) {
+    using namespace litepgo;
+    struct Broken final : energy::FixedPatternEnergy {
+        int mode = 0;
+        mutable int calls = 0;
+        static SpMat pattern() {
+            SpMat p(2, 2);
+            p.insert(0, 0) = 0;
+            return p;
+        }
+        Broken() : FixedPatternEnergy(2, pattern()) {}
+        double eval_values(const ConstVecRef&, Vec* g, SpMat* H, energy::HessianKind) const override {
+            ++calls;
+            if (g) {
+                g->setOnes();
+                if (mode == 1)
+                    g->resize(1);
+                if (mode == 2)
+                    (*g)[0] = std::numeric_limits<double>::quiet_NaN();
+            }
+            if (H) {
+                H->coeffs().setOnes();
+                if (mode == 3)
+                    H->valuePtr()[0] = std::numeric_limits<double>::infinity();
+                if (mode == 4)
+                    H->coeffRef(1, 1) = 1;
+            }
+            return 1;
+        }
+    } e;
+    const Vec x = Vec::Zero(2);
+    for (int mode : {1, 2, 3, 4}) {
+        e.mode = mode;
+        EXPECT_DOUBLE_EQ(e.eval_value(x), 1);
+        if (mode <= 2)
+            EXPECT_THROW(e.eval_gradient(x), std::logic_error);
+        else
+            EXPECT_THROW(e.eval_hessian(x), std::logic_error);
+        e.mode = 0;
+        EXPECT_TRUE(e.eval_gradient(x).isOnes());
+        EXPECT_DOUBLE_EQ(e.eval_hessian(x).coeff(0, 0), 1);
+    }
+    Vec bad = x;
+    bad[0] = std::numeric_limits<double>::quiet_NaN();
+    const int calls = e.calls;
+    EXPECT_THROW(e.eval_value(bad), std::invalid_argument);
+    EXPECT_THROW(e.update_pattern(bad), std::invalid_argument);
+    EXPECT_THROW(e.max_feasible_step(x, bad), std::invalid_argument);
+    EXPECT_EQ(e.calls, calls);
+}

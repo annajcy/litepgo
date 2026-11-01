@@ -104,18 +104,32 @@ int main(int argc, char** argv) {
     int iterations = 0;
     for (; iterations < 1000;) {
         // Rotations stay fixed throughout this global solve.
-        energy::MeshEnergy global(edge_map, [&](int e, const Eigen::MatrixXd& local_x, Vec* g, Eigen::MatrixXd* h) {
-            const auto& stencil = edge_stencils[e];
-            const int i = stencil[0], j = stencil[1];
-            const Eigen::Vector3d p = rest.segment<3>(3 * i) - rest.segment<3>(3 * j);
-            const Eigen::Vector3d d = (local_x.row(0) - local_x.row(1)).transpose();
-            const Eigen::Vector3d ri = d - rotation[i] * p, rj = d - rotation[j] * p;
-            // Two directed contributions, each with weight 1/4.
-            if (g)
-                *g = B.transpose() * (0.5 * (ri + rj));
-            if (h)
-                *h = B.transpose() * B;
-            return 0.25 * (ri.squaredNorm() + rj.squaredNorm());
+        energy::MeshEnergy global(edge_map, [&](std::span<const int> ids, const energy::BatchMatrix& inputs,
+                                                energy::BatchMatrix* gradients, energy::BatchMatrix* hessians) {
+            const Eigen::Index n = inputs.cols();
+            Vec values(ids.size());
+            if (gradients)
+                gradients->resize(ids.size(), n);
+            if (hessians)
+                hessians->resize(ids.size() * n, n);
+            for (Eigen::Index batch = 0; batch < inputs.rows(); ++batch) {
+                [[maybe_unused]] const int e = ids[batch];
+                const Eigen::MatrixXd local_x = inputs.row(batch).reshaped<Eigen::RowMajor>(n / 3, 3);
+
+                const auto& stencil = edge_stencils[e];
+                const int i = stencil[0], j = stencil[1];
+                const Eigen::Vector3d p = rest.segment<3>(3 * i) - rest.segment<3>(3 * j);
+                const Eigen::Vector3d d = (local_x.row(0) - local_x.row(1)).transpose();
+                const Eigen::Vector3d ri = d - rotation[i] * p, rj = d - rotation[j] * p;
+                // Two directed contributions, each with weight 1/4.
+                if (gradients)
+                    gradients->row(batch) = (B.transpose() * (0.5 * (ri + rj))).transpose();
+                if (hessians)
+                    hessians->middleRows(batch * n, n) = B.transpose() * B;
+
+                values[batch] = 0.25 * (ri.squaredNorm() + rj.squaredNorm());
+            }
+            return values;
         });
         auto result = solver::newton_solve(global, fixed, x, {.gradient_tolerance = 1e-10}, linear_solver);
         if (result.status != solver::NewtonStatus::Converged)

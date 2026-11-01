@@ -2,6 +2,7 @@
 
 #include "litepgo/fem/field/field.hpp"
 #include "litepgo/fem/local/local_energy.hpp"
+#include "litepgo/fem/local/local_response.hpp"
 #include "litepgo/fem/quadrature/quadrature.hpp"
 
 #include <Eigen/LU>
@@ -58,6 +59,63 @@ template <Quadrature3D Q> class VolumetricElement3D final {
         if ((gradient && !gradient->allFinite()) || (hessian && !hessian->allFinite()))
             throw std::domain_error("VolumetricElement3D: non-finite integrated derivatives");
         return E;
+    }
+
+    // Overwrites pre-sized views, allowing direct integration into batch output blocks.
+    double eval_into(const LocalEnergy3D& local_energy, StridedVecRef* gradient, StridedMatRef* hessian) const {
+        const int n = local_energy.num_dofs();
+        if (n <= 0 || (gradient && gradient->size() != n) ||
+            (hessian && (hessian->rows() != n || hessian->cols() != n)))
+            throw std::invalid_argument("VolumetricElement3D::eval_into: invalid output dimensions");
+        if ((gradient && !local_energy.has_gradient()) || (hessian && !local_energy.has_hessian()))
+            throw std::logic_error("VolumetricElement3D: unsupported local-energy derivative");
+        if (gradient)
+            gradient->setZero();
+        if (hessian)
+            hessian->setZero();
+        double E = 0;
+        for (const auto& point : points_)
+            E += local_energy.accumulate_into(point.xi, point.w_dV, gradient, hessian);
+        if (!std::isfinite(E) || (gradient && !gradient->allFinite()) || (hessian && !hessian->allFinite()))
+            throw std::domain_error("VolumetricElement3D: non-finite integrated outputs");
+        return E;
+    }
+
+    // Same cached geometry and complete weights as the energy overload.
+    // Resizes and overwrites outputs; the Jacobian is num_outputs x num_inputs.
+    Eigen::VectorXd eval(const LocalResponse3D& local_response, Eigen::MatrixXd* jacobian = nullptr) const {
+        const int m = local_response.num_outputs(), n = local_response.num_inputs();
+        if (m <= 0 || n <= 0)
+            throw std::invalid_argument("VolumetricElement3D: local response requires positive dimensions");
+        if (jacobian && !local_response.has_jacobian())
+            throw std::logic_error("VolumetricElement3D: unsupported local-response Jacobian");
+        Eigen::VectorXd value = Eigen::VectorXd::Zero(m);
+        if (jacobian)
+            jacobian->setZero(m, n);
+        for (const auto& point : points_)
+            local_response.accumulate_for_integration(point.xi, point.w_dV, value, jacobian);
+        if (value.size() != m || (jacobian && (jacobian->rows() != m || jacobian->cols() != n)))
+            throw std::logic_error("VolumetricElement3D: invalid local-response dimensions");
+        if (!value.allFinite() || (jacobian && !jacobian->allFinite()))
+            throw std::domain_error("VolumetricElement3D: non-finite integrated response");
+        return value;
+    }
+
+    // Response counterpart of the energy view overload; no output allocation.
+    void eval_into(const LocalResponse3D& local_response, StridedVecRef value,
+                   StridedMatRef* jacobian = nullptr) const {
+        const int m = local_response.num_outputs(), n = local_response.num_inputs();
+        if (m <= 0 || n <= 0 || value.size() != m || (jacobian && (jacobian->rows() != m || jacobian->cols() != n)))
+            throw std::invalid_argument("VolumetricElement3D::eval_into: invalid response dimensions");
+        if (jacobian && !local_response.has_jacobian())
+            throw std::logic_error("VolumetricElement3D: unsupported local-response Jacobian");
+        value.setZero();
+        if (jacobian)
+            jacobian->setZero();
+        for (const auto& point : points_)
+            local_response.accumulate_into(point.xi, point.w_dV, value, jacobian);
+        if (!value.allFinite() || (jacobian && !jacobian->allFinite()))
+            throw std::domain_error("VolumetricElement3D: non-finite integrated response");
     }
 
     // LocalEnergy supplies eval_feasible_step(xi, delta_coeffs) when this is used.

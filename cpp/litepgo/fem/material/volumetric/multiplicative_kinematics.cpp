@@ -50,40 +50,4 @@ MultiplicativeKinematics::eval_d2W_dF2(const Eigen::Matrix<double, 9, 9>& d2psi_
     return hessian;
 }
 
-Eigen::Matrix3d MultiplicativeKinematics::eval_dW_dFp(double psi, const Eigen::Matrix3d& dpsi_dFe) const {
-    const Eigen::Matrix3d R = psi * Eigen::Matrix3d::Identity() - Fe_.transpose() * dpsi_dFe;
-    const Eigen::Matrix3d gradient = det_Fp_ * R * inv_Fp_.transpose();
-    if (!gradient.allFinite())
-        throw std::domain_error("MultiplicativeKinematics: non-finite Fp gradient");
-    return gradient;
-}
-
-Eigen::Matrix<double, 9, 9>
-MultiplicativeKinematics::eval_d2W_dFp2(double psi, const Eigen::Matrix3d& dpsi_dFe,
-                                        const Eigen::Matrix<double, 9, 9>& d2psi_dFe2) const {
-
-    const Eigen::Matrix3d& inv_Fp = inv_Fp_;
-    const Eigen::Matrix3d R = psi * Eigen::Matrix3d::Identity() - Fe_.transpose() * dpsi_dFe;
-    Eigen::Matrix<double, 9, 9> d2W_dFp2;
-    for (int column = 0; column < 9; ++column) {
-        Eigen::Matrix3d delta_Fp = Eigen::Matrix3d::Zero();
-        delta_Fp.data()[column] = 1.0;
-        // Differentiate dW_dFp = det_Fp * R * inv_Fp^T in direction delta_Fp.
-        const Eigen::Matrix3d delta_Fe = -Fe_ * delta_Fp * inv_Fp;
-        const double delta_psi = dpsi_dFe.cwiseProduct(delta_Fe).sum();
-        const Eigen::Matrix<double, 9, 1> delta_dpsi_dFe_vec =
-            d2psi_dFe2 * Eigen::Map<const Eigen::Matrix<double, 9, 1>>(delta_Fe.data());
-        const Eigen::Map<const Eigen::Matrix3d> delta_dpsi_dFe(delta_dpsi_dFe_vec.data());
-        const Eigen::Matrix3d delta_R = delta_psi * Eigen::Matrix3d::Identity() - delta_Fe.transpose() * dpsi_dFe -
-                                        Fe_.transpose() * delta_dpsi_dFe;
-        const Eigen::Matrix3d delta_dW_dFp =
-            det_Fp_ * (((inv_Fp * delta_Fp).trace() * R + delta_R) * inv_Fp.transpose() -
-                       R * inv_Fp.transpose() * delta_Fp.transpose() * inv_Fp.transpose());
-        d2W_dFp2.col(column) = Eigen::Map<const Eigen::Matrix<double, 9, 1>>(delta_dW_dFp.data());
-    }
-    if (!d2W_dFp2.allFinite())
-        throw std::domain_error("MultiplicativeKinematics: non-finite Fp Hessian");
-    return d2W_dFp2;
-}
-
 } // namespace litepgo::fem

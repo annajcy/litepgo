@@ -1,4 +1,4 @@
-#include "litepgo/dof/assembler.hpp"
+#include "litepgo/dof/energy_assembler.hpp"
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
 
@@ -13,11 +13,11 @@ namespace litepgo::dof::test {
 
 namespace {
 
-TEST(Assembler, SharedHexVerticesMatchDenseScatterAndGlobalFiniteDifferences) {
+TEST(EnergyAssembler, SharedHexVerticesMatchDenseScatterAndGlobalFiniteDifferences) {
     const mesh::HexTopology topology(12, {{1, 3, 9, 4, 7, 6, 0, 10}, {3, 8, 5, 9, 6, 2, 11, 0}});
     const VertexDofMap map(topology, 3);
     const Vec data(Vec::LinSpaced(36, -0.2, 0.4));
-    const Assembler assembler(36, {map.dof_indices(0), map.dof_indices(1)});
+    const EnergyAssembler assembler(36, {map.dof_indices(0), map.dof_indices(1)});
     SpMat hessian = assembler.hessian_pattern();
     EXPECT_TRUE(linalg::is_canonical(hessian));
     EXPECT_EQ(hessian.nonZeros(), 2 * 24 * 24 - 12 * 12);
@@ -77,8 +77,8 @@ TEST(Assembler, SharedHexVerticesMatchDenseScatterAndGlobalFiniteDifferences) {
     }
 }
 
-TEST(Assembler, AddsWithoutClearingAndPreservesLocalRowColumnOrder) {
-    const Assembler assembler(4, {{2, 0}, {2, 0}, {1, 1}});
+TEST(EnergyAssembler, AddsWithoutClearingAndPreservesLocalRowColumnOrder) {
+    const EnergyAssembler assembler(4, {{2, 0}, {2, 0}, {1, 1}});
     Vec gradient = Vec::Constant(4, 10);
     SpMat hessian = assembler.hessian_pattern();
     std::fill_n(hessian.valuePtr(), hessian.nonZeros(), 10.0);
@@ -95,11 +95,11 @@ TEST(Assembler, AddsWithoutClearingAndPreservesLocalRowColumnOrder) {
     EXPECT_EQ(hessian.coeff(3, 3), 0);
 }
 
-TEST(Assembler, RejectsInvalidInputsBeforeWriting) {
-    EXPECT_THROW((Assembler(-1, {})), std::invalid_argument);
-    EXPECT_THROW((Assembler(2, {{-1}})), std::invalid_argument);
-    EXPECT_THROW((Assembler(2, {{2}})), std::invalid_argument);
-    const Assembler assembler(3, {{0, 2}});
+TEST(EnergyAssembler, RejectsInvalidInputsBeforeWriting) {
+    EXPECT_THROW((EnergyAssembler(-1, {})), std::invalid_argument);
+    EXPECT_THROW((EnergyAssembler(2, {{-1}})), std::invalid_argument);
+    EXPECT_THROW((EnergyAssembler(2, {{2}})), std::invalid_argument);
+    const EnergyAssembler assembler(3, {{0, 2}});
     Vec gradient = Vec::Ones(3);
     SpMat hessian = assembler.hessian_pattern();
     const Eigen::Matrix2d local = Eigen::Matrix2d::Identity();
@@ -128,13 +128,13 @@ TEST(Assembler, RejectsInvalidInputsBeforeWriting) {
     EXPECT_THROW(assembler.add_hessian(0, local, hessian), std::invalid_argument);
 }
 
-TEST(Assembler, AllowsEmptyPlansAndEmptyElements) {
-    const Assembler empty(0, {});
+TEST(EnergyAssembler, AllowsEmptyPlansAndEmptyElements) {
+    const EnergyAssembler empty(0, {});
     EXPECT_EQ(empty.hessian_pattern().rows(), 0);
     EXPECT_TRUE(linalg::is_canonical(empty.hessian_pattern()));
     Vec gradient(0);
     EXPECT_THROW(empty.add_gradient(0, Vec(0), gradient), std::out_of_range);
-    const Assembler assembler(3, {{}});
+    const EnergyAssembler assembler(3, {{}});
     SpMat hessian = assembler.hessian_pattern();
     Vec values = Vec::Ones(3);
     assembler.add_gradient(0, Vec(0), values);
@@ -144,9 +144,9 @@ TEST(Assembler, AllowsEmptyPlansAndEmptyElements) {
 }
 } // namespace
 
-TEST(Assembler, AssembleOverwritesWithTheSumOfAddedResults) {
+TEST(EnergyAssembler, AssembleOverwritesWithTheSumOfAddedResults) {
     // Repeated and shared indices, including an element with no DOFs.
-    const Assembler assembler(4, {{2, 0}, {0, 3, 1}, {}, {1, 1}});
+    const EnergyAssembler assembler(4, {{2, 0}, {0, 3, 1}, {}, {1, 1}});
     std::vector<Vec> gradients;
     std::vector<Eigen::MatrixXd> hessians;
     Vec expected_gradient = Vec::Zero(4);
@@ -174,8 +174,8 @@ TEST(Assembler, AssembleOverwritesWithTheSumOfAddedResults) {
     assembler.assemble({}, {}, nullptr, nullptr);
 }
 
-TEST(Assembler, AssembleRejectsInvalidInputsBeforeWriting) {
-    const Assembler assembler(3, {{0, 2}, {1}});
+TEST(EnergyAssembler, AssembleRejectsInvalidInputsBeforeWriting) {
+    const EnergyAssembler assembler(3, {{0, 2}, {1}});
     const std::vector<Vec> gradients = {Vec::Ones(2), Vec::Ones(1)};
     const std::vector<Eigen::MatrixXd> hessians = {Eigen::MatrixXd::Ones(2, 2), Eigen::MatrixXd::Ones(1, 1)};
     Vec gradient = Vec::Constant(3, 5.0);
@@ -203,16 +203,76 @@ TEST(Assembler, AssembleRejectsInvalidInputsBeforeWriting) {
     expect_untouched();
 }
 
-TEST(Assembler, AssembleRejectsNonFiniteSums) {
-    const Assembler assembler(2, {{0, 1}});
+TEST(EnergyAssembler, AssembleRejectsNonFiniteSums) {
+    const EnergyAssembler assembler(2, {{0, 1}});
     std::vector<Vec> gradients = {Vec::Ones(2)};
     std::vector<Eigen::MatrixXd> hessians = {Eigen::MatrixXd::Ones(2, 2)};
     gradients[0][1] = std::numeric_limits<double>::quiet_NaN();
     hessians[0](1, 0) = std::numeric_limits<double>::infinity();
     Vec gradient;
     SpMat hessian = assembler.hessian_pattern();
-    EXPECT_THROW(assembler.assemble(gradients, {}, &gradient, nullptr), std::domain_error);
-    EXPECT_THROW(assembler.assemble({}, hessians, nullptr, &hessian), std::domain_error);
+    EXPECT_THROW(assembler.assemble(gradients, {}, &gradient, nullptr), std::invalid_argument);
+    EXPECT_THROW(assembler.assemble({}, hessians, nullptr, &hessian), std::invalid_argument);
 }
 
 } // namespace litepgo::dof::test
+
+TEST(EnergyAssemblerViews, StridedBlocksPreserveOrientationAndSharedAccumulation) {
+    using namespace litepgo;
+    const dof::EnergyAssembler assembler(3, {{0, 1}, {1, 2}});
+    Eigen::MatrixXd gradients = Eigen::MatrixXd::Constant(2, 4, -99);
+    gradients.row(0).head(2) << 1, 2;
+    gradients.row(1).head(2) << 3, 4;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> blocks =
+        Eigen::MatrixXd::Constant(6, 5, -99);
+    blocks.block(0, 1, 2, 2) << 1, 2, 3, 4;
+    blocks.block(3, 1, 2, 2) << 5, 6, 7, 8;
+    std::vector<dof::EnergyAssembler::ElementView> views;
+    views.emplace_back(gradients.row(0).head(2), blocks.block(0, 1, 2, 2));
+    views.emplace_back(gradients.row(1).head(2), blocks.block(3, 1, 2, 2));
+    Vec g;
+    SpMat H = assembler.hessian_pattern();
+    assembler.assemble(views, &g, &H);
+    EXPECT_TRUE(g.isApprox((Vec(3) << 1, 5, 4).finished()));
+    Eigen::Matrix3d expected;
+    expected << 1, 2, 0, 3, 9, 6, 0, 7, 8;
+    EXPECT_TRUE(Eigen::MatrixXd(H).isApprox(expected));
+    // Views must observe current storage, rather than own an old copy.
+    blocks(0, 1) = 11;
+    assembler.assemble(views, nullptr, &H);
+    EXPECT_DOUBLE_EQ(H.coeff(0, 0), 11);
+    const Vec saved = g;
+    views.clear();
+    views.emplace_back(gradients.row(0).head(1), blocks.block(0, 1, 2, 2));
+    views.emplace_back(gradients.row(1).head(2), blocks.block(3, 1, 2, 2));
+    EXPECT_THROW(assembler.assemble(views, &g, &H), std::invalid_argument);
+    EXPECT_TRUE(g.isApprox(saved));
+}
+
+TEST(EnergyAssemblerViews, InvalidInputsLeaveBothOutputsUntouchedAndRetrySucceeds) {
+    using namespace litepgo;
+    dof::EnergyAssembler assembler(2, {{0, 1}});
+    Vec local = Vec::Ones(2), g = Vec::Constant(2, 7);
+    Eigen::MatrixXd Hlocal = Eigen::MatrixXd::Identity(2, 2);
+    SpMat H = assembler.hessian_pattern();
+    H.coeffs().setConstant(9);
+    std::vector<dof::EnergyAssembler::ElementView> views;
+    views.emplace_back(local, Hlocal);
+    for (bool bad_gradient : {true, false}) {
+        local.setOnes();
+        Hlocal.setIdentity();
+        if (bad_gradient)
+            local[1] = std::numeric_limits<double>::quiet_NaN();
+        else
+            Hlocal(1, 0) = std::numeric_limits<double>::infinity();
+        EXPECT_THROW(assembler.assemble(views, &g, &H), std::invalid_argument);
+        EXPECT_TRUE(g.isConstant(7));
+        EXPECT_TRUE(H.coeffs().isConstant(9));
+    }
+    // The unrequested invalid Hessian must not be read.
+    assembler.assemble(views, &g, nullptr);
+    EXPECT_TRUE(g.isOnes());
+    Hlocal.setIdentity();
+    assembler.assemble(views, &g, &H);
+    EXPECT_TRUE(Eigen::MatrixXd(H).isIdentity());
+}

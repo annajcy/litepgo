@@ -415,7 +415,7 @@ double IPCContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat*
         for (std::size_t index = 0; index < pairs.size(); ++index)
             for (int i = 0; i < pairs[index].count(); ++i)
                 contributions[next[pairs[index].ids[i]]++] = {index, i};
-        // Like dof::Assembler, each task owns complete CSC columns and gradient DOFs.
+        // Like dof::EnergyAssembler, each task owns complete CSC columns and gradient DOFs.
         tbb::parallel_for(tbb::blocked_range<int>(0, num_vertices(), 32), [&](const auto& range) {
             if (hessian && hessian->nonZeros() != 0) {
                 const auto* outer = hessian->outerIndexPtr();

@@ -1,4 +1,7 @@
 add_library(litepgo STATIC
+    response/response.cpp
+    response/mesh_response.cpp
+    dof/response_assembler.cpp
     fem/sample_boundary.cpp
     contact/ipc_contact_energy.cpp
     contact/detail/distance_derivatives.cpp
@@ -8,7 +11,7 @@ add_library(litepgo STATIC
     contact/detail/ipc_derivatives/line_line.cpp
     contact/detail/ipc_derivatives/edge_edge_mollifier.cpp
     contact/broad_phase/spatial_hash.cpp
-    dof/assembler.cpp
+    dof/energy_assembler.cpp
     mesh/extract_surface.cpp
     mesh/triangle_mid_edge_stencils.cpp
     energy/mesh_energy.cpp
@@ -23,6 +26,7 @@ add_library(litepgo STATIC
     fem/material/shell/koiter_stvk.cpp
     fem/local/dof_derivatives.cpp
     fem/local/local_energy.cpp
+    fem/local/local_response.cpp
     fem/kinematics/triangle_mid_edge_kinematics.cpp
     fem/kinematics/positive_det_feasible_step.cpp
     fem/basis/2d/quad_hermite_basis.cpp

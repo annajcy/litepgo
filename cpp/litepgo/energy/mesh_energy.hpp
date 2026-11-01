@@ -1,67 +1,50 @@
 #pragma once
-
-#include "litepgo/dof/assembler.hpp"
+#include "litepgo/dof/energy_assembler.hpp"
 #include "litepgo/energy/fixed_pattern_energy.hpp"
 #include <functional>
-#include <memory>
 #include <stdexcept>
 #include <utility>
 
 namespace litepgo::energy {
-
-// Owns a fixed DOF plan and callbacks, not references to the supplied map. Every call
-// uses x's current values. Callbacks must support concurrent calls on different
-// elements and own (or safely share) their captures. Callbacks must be copyable.
-// x_local = map.gather(e, x) preserves the map's matrix or vector shape.
-// Derivatives use the corresponding flattened scalar-slot order, without repacking.
-// Numerical overflow in projection or assembly throws std::domain_error; invalid
-// callback outputs (including non-finite values) remain logic_error.
+using BatchMatrix = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+// Concurrent callbacks on size-grouped batches; input rows follow map DOF-index
+// order. Values have B entries, gradients B x n, Hessians (B*n) x n. Callbacks
+// must overwrite requested outputs and safely share captures. No ordering assumed.
+// batch_size=1 uses exactly the same protocol. Projection is per element, followed
+// by deterministic EnergyAssembler reduction. Maps are snapshotted at construction.
 class MeshEnergy : public FixedPatternEnergy {
   public:
-    // Only for energies feasible along every finite segment: step defaults to 1.
-    // eval_local(e, x_local, gradient*, hessian*) returns integrated energy.
-    // Non-null outputs must be overwritten, in the map's local DOF order.
-    // Unsupported derivative requests must throw; pointers are independently nullable.
-    template <class DofMap, class Lambda>
-    MeshEnergy(const DofMap& map, Lambda eval_local)
-        : MeshEnergy(map, std::move(eval_local), [](int, const auto&, const auto&) { return 1.0; }) {}
-
-    // step(e, x_local, dx_local) returns a safe inclusive bound in [0,1].
-    // Trial values are x_local + alpha * dx_local (delta is unscaled).
-    // It must reject infeasible starting states, e.g. by throwing std::domain_error.
-    // Like eval_local, step may run concurrently on different elements.
-    template <class DofMap, class Lambda, class Step>
-    MeshEnergy(const DofMap& map, Lambda eval_local, Step step) : MeshEnergy(make_assembler(map)) {
-        auto owned_map = std::make_shared<const DofMap>(map);
-        eval_local_ = [owned_map, eval_local = std::move(eval_local)](int element, const ConstVecRef& x, Vec* gradient,
-                                                                      Eigen::MatrixXd* hessian) {
-            const auto x_local = owned_map->gather(element, x);
-            return eval_local(element, x_local, gradient, hessian);
-        };
-        local_step_ = [owned_map, step = std::move(step)](int element, const ConstVecRef& x, const ConstVecRef& dx) {
-            const auto x_local = owned_map->gather(element, x);
-            const auto dx_local = owned_map->gather(element, dx);
-            return step(element, x_local, dx_local);
-        };
-    }
+    using Callback = std::function<Vec(std::span<const int>, const BatchMatrix&, BatchMatrix*, BatchMatrix*)>;
+    using Step = std::function<Vec(std::span<const int>, const BatchMatrix&, const BatchMatrix&)>;
+    // Omit step only when every finite segment is feasible. Otherwise return one
+    // safe bound in [0,1] per batch element. Step callbacks may also run concurrently.
+    template <class Map>
+    MeshEnergy(const Map& map, Callback callback, int batch_size = 256, Step step = {})
+        : MeshEnergy(make_assembler(map), std::move(callback), batch_size, std::move(step)) {}
 
   private:
-    template <class DofMap> static dof::Assembler make_assembler(const DofMap& map) {
+    template <class Map> static dof::EnergyAssembler make_assembler(const Map& map) {
+        if (map.num_elements() < 0)
+            throw std::invalid_argument("MeshEnergy: negative element count");
         std::vector<std::vector<int>> indices;
-        for (int element = 0; element < map.num_elements(); ++element)
-            indices.push_back(map.dof_indices(element));
-        return dof::Assembler(map.num_dofs(), std::move(indices));
+        for (int e = 0; e < map.num_elements(); ++e)
+            indices.push_back(map.dof_indices(e));
+        return dof::EnergyAssembler(map.num_dofs(), std::move(indices));
     }
-
-    explicit MeshEnergy(dof::Assembler assembler);
+    MeshEnergy(dof::EnergyAssembler assembler, Callback callback, int batch_size, Step step);
+    void gather(const std::vector<int>& ids, const ConstVecRef& x, BatchMatrix& result) const;
     double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const override;
     double feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const override;
-
-    dof::Assembler assembler_;
-    std::function<double(int, const ConstVecRef&, Vec*, Eigen::MatrixXd*)> eval_local_;
-    std::function<double(int, const ConstVecRef&, const ConstVecRef&)> local_step_;
-    mutable std::vector<double> local_values_;
-    mutable std::vector<Vec> local_gradients_;
-    mutable std::vector<Eigen::MatrixXd> local_hessians_;
+    dof::EnergyAssembler assembler_;
+    Callback callback_;
+    Step step_;
+    std::vector<std::vector<int>> batches_;
+    struct Storage {
+        BatchMatrix inputs, gradient, hessian, delta;
+        Vec values;
+    };
+    mutable std::vector<Storage> storage_;
+    mutable std::vector<double> values_;
+    mutable std::vector<dof::EnergyAssembler::ElementView> views_;
 };
 } // namespace litepgo::energy

@@ -102,3 +102,28 @@ TEST(LocalEnergy3D, DefaultAccumulationAddsWeightedValuesAndChecksRequests) {
 } // namespace
 
 } // namespace litepgo::fem::test
+
+namespace litepgo::fem::test {
+TEST(LocalEnergy3D, StridedFallbackPreservesCustomAccumulation) {
+    struct Custom : FullEnergy {
+        double accumulate_for_integration(const Coordinate&, double weight, Eigen::VectorXd* g,
+                                          Eigen::MatrixXd* H) const override {
+            if (g)
+                g->array() += 2 * weight;
+            if (H)
+                H->array() += 3 * weight;
+            return 4 * weight;
+        }
+    } local;
+    Eigen::MatrixXd gs = Eigen::MatrixXd::Constant(2, 3, -5);
+    Eigen::MatrixXd hs = Eigen::MatrixXd::Constant(5, 5, -5);
+    StridedVecRef g(gs.row(1).transpose());
+    StridedMatRef H(hs.block(1, 1, 3, 3));
+    EXPECT_DOUBLE_EQ(local.accumulate_into(Eigen::Vector3d::Zero(), .5, &g, &H), 2);
+    EXPECT_TRUE(g.isConstant(-4));
+    EXPECT_TRUE(H.isConstant(-3.5));
+    EXPECT_TRUE(gs.row(0).isConstant(-5));
+    EXPECT_TRUE(hs.row(0).isConstant(-5));
+    EXPECT_TRUE(hs.col(4).isConstant(-5));
+}
+} // namespace litepgo::fem::test

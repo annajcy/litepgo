@@ -15,9 +15,6 @@ TEST(VolumetricMaterialInputs, NeoHookeanRejectsWrongParameterCountsBeforeIndexi
                                                       Eigen::VectorXd::Ones(n)};
         EXPECT_THROW(litepgo::fem::NeoHookean::eval_W(inputs), std::invalid_argument);
         EXPECT_THROW(litepgo::fem::NeoHookean::eval_dW_dF(inputs), std::invalid_argument);
-        EXPECT_THROW(litepgo::fem::NeoHookean::eval_d2W_dFp2(inputs), std::invalid_argument);
-        EXPECT_THROW(litepgo::fem::NeoHookean::eval_dW_dtheta(inputs), std::invalid_argument);
-        EXPECT_THROW(litepgo::fem::NeoHookean::eval_d2W_dtheta2(inputs), std::invalid_argument);
     }
 }
 

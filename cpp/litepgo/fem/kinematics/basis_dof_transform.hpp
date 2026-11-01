@@ -1,5 +1,6 @@
 #pragma once
 
+#include "litepgo/core/types.hpp"
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
@@ -23,6 +24,19 @@ template <int Nodes> class NodalDofTransform {
         return local;
     }
     void pullback(Eigen::VectorXd* gradient, Eigen::MatrixXd* hessian) const {
+        pullback_impl(gradient, hessian);
+    }
+    void pullback_into(StridedVecRef* gradient, StridedMatRef* hessian) const {
+        pullback_impl(gradient, hessian);
+    }
+    // Force and parameter Jacobian: transform output rows only (T^T g, T^T J).
+    void pullback_response_into(StridedVecRef value, StridedMatRef* jacobian) const {
+        if (value.size() != 3 * Nodes || (jacobian && jacobian->rows() != 3 * Nodes))
+            throw std::invalid_argument("BasisDofTransform: invalid response dimensions");
+    }
+
+  private:
+    template <class G, class H> void pullback_impl(G* gradient, H* hessian) const {
         if ((gradient && gradient->size() != 3 * Nodes) ||
             (hessian && (hessian->rows() != 3 * Nodes || hessian->cols() != 3 * Nodes)))
             throw std::invalid_argument("BasisDofTransform: invalid derivative dimensions");
@@ -84,6 +98,24 @@ template <> class BasisDofTransform<HexHermiteBasis> {
         return u_local;
     }
     void pullback(Eigen::VectorXd* gradient, Eigen::MatrixXd* hessian) const {
+        pullback_impl(gradient, hessian);
+    }
+    void pullback_into(StridedVecRef* gradient, StridedMatRef* hessian) const {
+        pullback_impl(gradient, hessian);
+    }
+    // The input parameters are unchanged, so the Jacobian receives no right transform.
+    void pullback_response_into(StridedVecRef value, StridedMatRef* jacobian) const {
+        if (value.size() != scales_.size() || (jacobian && jacobian->rows() != scales_.size()))
+            throw std::invalid_argument("Hermite DOFs: invalid response dimensions");
+        value.array() *= scales_.array();
+        if (jacobian)
+            jacobian->array().colwise() *= scales_.array();
+        if (!value.allFinite() || (jacobian && !jacobian->allFinite()))
+            throw std::domain_error("Hermite DOFs: non-finite physical response");
+    }
+
+  private:
+    template <class G, class H> void pullback_impl(G* gradient, H* hessian) const {
         if ((gradient && gradient->size() != scales_.size()) ||
             (hessian && (hessian->rows() != scales_.size() || hessian->cols() != scales_.size())))
             throw std::invalid_argument("Hermite DOFs: invalid derivative dimensions");
@@ -97,7 +129,6 @@ template <> class BasisDofTransform<HexHermiteBasis> {
             throw std::domain_error("Hermite DOFs: non-finite physical derivatives");
     }
 
-  private:
     Eigen::VectorXd scales_;
 };
 

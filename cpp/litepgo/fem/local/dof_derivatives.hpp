@@ -1,5 +1,5 @@
 #pragma once
-#include <Eigen/Core>
+#include "litepgo/core/types.hpp"
 
 namespace litepgo::fem {
 
@@ -16,10 +16,10 @@ Eigen::MatrixXd eval_hessian_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& d
 // Add weighted contractions into initialized outputs, which must not alias
 // inputs. In particular, the Hessian product accumulates without an n-by-n temporary.
 void add_gradient_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoeffs,
-                           const Eigen::Ref<const Eigen::MatrixXd>& gradient, double weight,
-                           Eigen::Ref<Eigen::VectorXd> output, bool check_finite = true);
+                           const Eigen::Ref<const Eigen::MatrixXd>& gradient, double weight, StridedVecRef output,
+                           bool check_finite = true);
 // With check_finite=false, the caller must validate the completed accumulation.
 void add_hessian_wrt_dofs(const Eigen::Ref<const Eigen::MatrixXd>& dvalue_dcoeffs,
-                          const Eigen::Ref<const Eigen::MatrixXd>& hessian, double weight,
-                          Eigen::Ref<Eigen::MatrixXd> output, bool check_finite = true);
+                          const Eigen::Ref<const Eigen::MatrixXd>& hessian, double weight, StridedMatRef output,
+                          bool check_finite = true);
 } // namespace litepgo::fem

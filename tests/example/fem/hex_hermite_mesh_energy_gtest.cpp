@@ -1,3 +1,4 @@
+#include "../../cpp/testing/element_formula_energy.hpp"
 
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
@@ -319,7 +320,7 @@ TEST(HexHermiteExample, CachedKinematicsMatchesUncachedAcrossChangingDisplacemen
     const auto topology = hex_hermite_topology();
     const dof::VertexDofMap rest_map(topology, 3), map(topology, 24);
     auto cached = make_hex_hermite_mesh_energy(positions);
-    energy::MeshEnergy uncached(map, [&](int e, const Eigen::MatrixXd& u, Vec* g, Eigen::MatrixXd* H) {
+    litepgo::testing::ElementFormulaEnergy uncached(map, [&](int e, const Eigen::MatrixXd& u, Vec* g, Eigen::MatrixXd* H) {
         const fem::InterpolatedField3D<fem::HexQ1Basis> X(rest_map.gather(e, positions));
         const fem::BasisDofTransform<fem::HexHermiteBasis> transform(X);
         const fem::InterpolatedField3D<fem::HexHermiteBasis> displacement(transform.to_coefficients(u));

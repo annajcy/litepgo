@@ -1,4 +1,9 @@
-"""Nonlinear solvers, mirroring cpp/litepgo/solver."""
+"""Nonlinear solvers, mirroring cpp/litepgo/solver.
+
+Gauss-Newton accepts a Response and uses sparse damped normal equations for damped steps.
+Jacobian patterns are updated at current iterates; symbolic analysis is reused
+while the structure is unchanged. Trials evaluate only the residual vector.
+"""
 
 from litepgo._core import solver as _native
 

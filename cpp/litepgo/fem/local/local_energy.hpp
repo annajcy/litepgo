@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Eigen/Core>
+#include "litepgo/core/types.hpp"
 
 namespace litepgo::fem {
 
@@ -23,6 +23,10 @@ template <int ParamDim> class LocalEnergyT {
     // Non-finite numerical results throw std::domain_error.
     virtual double accumulate(const Coordinate& xi, double weight, Eigen::VectorXd* gradient,
                               Eigen::MatrixXd* hessian) const;
+    // Integration into pre-sized strided outputs. The default preserves custom
+    // accumulate overrides; built-in materials override this to write directly.
+    virtual double accumulate_into(const Coordinate& xi, double weight, StridedVecRef* gradient,
+                                   StridedMatRef* hessian) const;
     // Integrators supply finite coordinates/weights and check final outputs for finiteness.
     virtual double accumulate_for_integration(const Coordinate& xi, double weight, Eigen::VectorXd* gradient,
                                               Eigen::MatrixXd* hessian) const {

@@ -6,7 +6,7 @@ add_executable(litepgo_tests
     fem/point_displacement_map_gtest.cpp
     fem/element_locator_gtest.cpp
     spatial/spatial_hash_gtest.cpp
-    dof/assembler_gtest.cpp
+    dof/energy_assembler_gtest.cpp
     energy/mesh_energy_gtest.cpp
     ../example/fem/hex_q1_mesh_energy_gtest.cpp
     ../example/fem/hex_hermite_mesh_energy_gtest.cpp

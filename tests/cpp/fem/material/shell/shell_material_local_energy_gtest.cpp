@@ -1,3 +1,4 @@
+#include "../../../testing/element_formula_energy.hpp"
 #include "../../../testing/finite_difference.hpp"
 #include "litepgo/dof/stencil_dof_map.hpp"
 #include "litepgo/energy/mesh_energy.hpp"
@@ -221,7 +222,7 @@ TEST(ShellMaterialLocalEnergy2D, MeshEnergyAssemblesIntegratedStencilDerivatives
     std::vector<TriangleMidEdgeRestData> rest;
     for (int f = 0; f < map.num_elements(); ++f)
         rest.emplace_back(map.gather(f, X_packed), stencils.opposite[static_cast<std::size_t>(f)]);
-    energy::MeshEnergy energy(
+    litepgo::testing::ElementFormulaEnergy energy(
         map,
         [rest](int f, const Eigen::MatrixXd& u_local, Vec* g, Eigen::MatrixXd* H) {
             const auto& r = rest[static_cast<std::size_t>(f)];

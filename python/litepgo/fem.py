@@ -8,6 +8,41 @@ Field type arguments of the energies are erased: they accept any Field3D.
     Energy = fem.VolumetricFemEnergy[fem.NeoHookean, fem.HexQ1Basis, fem.GaussLegendre3D[2]]
     energy = Energy(displacement_map, rest_position_fields, Fp, theta)
 
+NeoHookean.eval_d2W_dF_dtheta(F, Fp, theta) returns a (9, 2) analytic stress
+parameter Jacobian at fixed F and Fp. Rows flatten stress in column-major order;
+columns follow theta=[lambda, mu]. It includes the reference-volume det(Fp)
+factor and does not differentiate equilibrium or plastic evolution.
+
+NeoHookean.eval_d2W_dF_dFp(F, Fp, theta) returns the analytic (9, 9)
+stress/plastic Jacobian at fixed F and theta, with both axes column-major.
+VolumetricFpForceLocalResponse3D[Material](F, Fp, theta) differentiates force
+with respect to the Fp field's affine coefficients. VolumetricFemForceFpResponse
+[NeoHookean, TetP1Basis, TetCentroidQuadrature] takes the same arguments as the
+material mesh response but with fixed theta fields replacing Fp fields. Its
+parameter_map has nine DOFs per block, and eval accepts column-major vec(Fp).
+Both ForceResponse families have the same basis/quadrature instantiations as
+VolumetricFemEnergy: TetP1/TetCentroid, and HexQ1 or HexHermite with
+GaussLegendre3D[2] or GaussLegendre3D[4].
+Displacements and output forces use BasisDofTransform's physical DOF convention;
+Hermite uses 24 DOFs per vertex on positive axis-aligned affine reference boxes.
+
+LocalResponse2D/3D mirror LocalEnergy with num_inputs, num_outputs, eval_value,
+has_jacobian and eval_jacobian. VolumetricMaterialForceLocalResponse3D[Material]
+borrows (F, Fp, theta), keeps Python fields alive, and returns the positive
+F-coefficient force density and its theta-coefficient Jacobian. F and Fp stay
+fixed. accumulate(xi, weight, jacobian=False) returns weighted outputs; geometry
+is applied only by VolumetricElement3D.eval(local_response, jacobian=False).
+The integrator uses accumulate_for_integration and validates final results;
+this fast C++ entry point is not exposed directly in Python, as for LocalEnergy.
+
+VolumetricFemForceMaterialResponse[NeoHookean, TetP1Basis, TetCentroidQuadrature]
+takes (parameter_map, displacement_map, rest_position_fields, displacement, Fp,
+batch_size=256). It copies displacement and owns/shares fields, which must remain
+unchanged. ConstantDofMap shares [lambda, mu]; ElementDofMap assigns a pair per
+element. eval(theta, need_jacobian=True) returns global positive nodal force and
+a sparse parameter Jacobian. Constitutive evaluation and integration run through
+the local response API, with batched TBB assembly and no equilibrium solve.
+
 Only the instantiations compiled into the extension exist; indexing any other
 raises TypeError listing them. Every instantiation is an ordinary class, and
 ``isinstance(x, Template)`` tests membership in any of them.
@@ -94,15 +129,19 @@ eval_hessian_wrt_dofs = _native.eval_hessian_wrt_dofs
 
 LocalEnergy2D = _native.LocalEnergy2D
 LocalEnergy3D = _native.LocalEnergy3D
+LocalResponse2D = _native.LocalResponse2D
+LocalResponse3D = _native.LocalResponse3D
+VolumetricFpForceLocalResponse3D = _templates["VolumetricFpForceLocalResponse3D"]
+VolumetricMaterialForceLocalResponse3D = _templates["VolumetricMaterialForceLocalResponse3D"]
 VolumetricMaterialLocalEnergy3D = _templates["VolumetricMaterialLocalEnergy3D"]
 VolumetricMaterialLocalEnergyF3D = _templates["VolumetricMaterialLocalEnergyF3D"]
-VolumetricMaterialLocalEnergyFp3D = _templates["VolumetricMaterialLocalEnergyFp3D"]
-VolumetricMaterialLocalEnergyTheta3D = _templates["VolumetricMaterialLocalEnergyTheta3D"]
 ShellMaterialLocalEnergy2D = _templates["ShellMaterialLocalEnergy2D"]
 VolumetricElement3D = _templates["VolumetricElement3D"]
 BasisDofTransform = _templates["BasisDofTransform"]
 
 VolumetricFemEnergy = _templates["VolumetricFemEnergy"]
+VolumetricFemForceFpResponse = _templates["VolumetricFemForceFpResponse"]
+VolumetricFemForceMaterialResponse = _templates["VolumetricFemForceMaterialResponse"]
 ShellFemEnergy = _templates["ShellFemEnergy"]
 
 __all__ = [
@@ -139,13 +178,17 @@ __all__ = [
     "eval_hessian_wrt_dofs",
     "LocalEnergy2D",
     "LocalEnergy3D",
+    "LocalResponse2D",
+    "LocalResponse3D",
+    "VolumetricMaterialForceLocalResponse3D",
+    "VolumetricFpForceLocalResponse3D",
     "VolumetricMaterialLocalEnergy3D",
     "VolumetricMaterialLocalEnergyF3D",
-    "VolumetricMaterialLocalEnergyFp3D",
-    "VolumetricMaterialLocalEnergyTheta3D",
     "ShellMaterialLocalEnergy2D",
     "VolumetricElement3D",
     "BasisDofTransform",
     "VolumetricFemEnergy",
+    "VolumetricFemForceMaterialResponse",
+    "VolumetricFemForceFpResponse",
     "ShellFemEnergy",
 ]

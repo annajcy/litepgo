@@ -313,16 +313,6 @@ def test_element_matches_mesh_energy():
     assert element.max_feasible_step(local, np.zeros(24)) == 1.0
 
 
-def test_theta_local_energy_differentiates_parameters():
-    data = single_hex()
-    A = np.array([[1.1, 0.1, 0.0], [0.0, 0.9, 0.2], [0.05, 0.0, 1.2]])
-    u = (data.positions @ (A - np.eye(3)).T).ravel()  # constant F = A
-    X_field, local = hex_local_energy(fem.VolumetricMaterialLocalEnergyTheta3D, data, u)
-    _, gradient, _ = fem.VolumetricElement3D[fem.GaussLegendre3D[2]](X_field).eval(local, gradient=True)
-    expected = 1.5**3 * fem.NeoHookean.eval_dW_dtheta(A, np.eye(3), NEO_HOOKEAN_THETA)
-    np.testing.assert_allclose(gradient, expected, rtol=1e-12)
-
-
 def test_shell_local_energy_matches_shell_energy():
     X = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0.0]])
     topology = mesh.TriangleTopology(3, np.array([[0, 1, 2]], dtype=np.int32))
@@ -403,3 +393,28 @@ def test_material_fit_python_matches_cpp():
               for output in outputs]
     assert values[0].size == values[1].size == 8
     np.testing.assert_allclose(values[0], values[1], rtol=1e-3, atol=1e-9)
+
+
+def test_neo_hookean_mixed_parameter_derivative():
+    F = np.array([[1.2, .3, -.1], [.1, .9, .2], [-.05, .1, 1.1]])
+    Fp = np.array([[1.3, .2, .1], [0., .9, -.1], [.1, .2, 1.2]])
+    theta = np.array([2., 3.])  # lambda, mu
+    B = fem.NeoHookean.eval_d2W_dF_dtheta(F, Fp, theta)
+    assert B.shape == (9, 2)
+    inv_p = np.linalg.inv(Fp)
+    inv_F_T = np.linalg.inv(F).T
+    expected = np.column_stack([
+        (np.linalg.det(Fp) * np.log(np.linalg.det(F @ inv_p)) * inv_F_T).ravel(order="F"),
+        (np.linalg.det(Fp) * (F @ inv_p @ inv_p.T - inv_F_T)).ravel(order="F"),
+    ])
+    np.testing.assert_allclose(B, expected, rtol=1e-12, atol=1e-14)
+    for parameters in (np.array([0., 1.]), np.array([5., .7]), theta):
+        np.testing.assert_allclose(B @ parameters,
+                                  fem.NeoHookean.eval_dW_dF(F, Fp, parameters).ravel(order="F"),
+                                  rtol=1e-12, atol=1e-14)
+    with pytest.raises(ValueError):
+        fem.NeoHookean.eval_d2W_dF_dtheta(F, Fp, np.ones(1))
+    with pytest.raises(ValueError):
+        fem.NeoHookean.eval_d2W_dF_dtheta(F, Fp, np.array([2., 0.]))
+    with pytest.raises(ValueError):
+        fem.NeoHookean.eval_d2W_dF_dtheta(-np.eye(3), np.eye(3), theta)

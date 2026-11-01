@@ -24,11 +24,12 @@ NB_MODULE(_core, m) {
         return result;
     });
 
-    // Bases come first: fem uses mesh and dof types, and its energies derive from energy.Energy.
+    // Bases come first: fem uses mesh/dof types and derives from Energy and Response.
     for (const auto& [name, bind] :
          {std::pair{"spatial", &litepgo::spatial::binding::bind}, std::pair{"mesh", &litepgo::mesh::binding::bind},
           std::pair{"dof", &litepgo::dof::binding::bind}, std::pair{"linalg", &litepgo::linalg::binding::bind},
-          std::pair{"energy", &litepgo::energy::binding::bind}, std::pair{"fem", &litepgo::fem::binding::bind},
+          std::pair{"energy", &litepgo::energy::binding::bind},
+          std::pair{"response", &litepgo::response::binding::bind}, std::pair{"fem", &litepgo::fem::binding::bind},
           std::pair{"solver", &litepgo::solver::binding::bind}}) {
         nb::module_ submodule = m.def_submodule(name);
         bind(submodule);

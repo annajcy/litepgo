@@ -54,30 +54,26 @@ template <class Material> class ShellMaterialLocalEnergy2D final : public LocalE
     }
     double accumulate(const Eigen::Vector2d& xi, double weight, Eigen::VectorXd* gradient,
                       Eigen::MatrixXd* hessian) const override {
-        if (!std::isfinite(weight) || (gradient && gradient->size() != num_dofs()) ||
-            (hessian && (hessian->rows() != num_dofs() || hessian->cols() != num_dofs())))
-            throw std::invalid_argument("ShellMaterialLocalEnergy2D::accumulate: invalid weight or output dimensions");
-        Eigen::VectorXd g;
-        Eigen::MatrixXd H;
-        const double W = eval_density(xi, gradient ? &g : nullptr, hessian ? &H : nullptr);
-        const double result = weight * W;
-        if (!std::isfinite(result))
-            throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite weighted density");
-        if (gradient) {
-            *gradient += weight * g;
-            if (!gradient->allFinite())
-                throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite accumulated gradient");
-        }
-        if (hessian) {
-            *hessian += weight * H;
-            if (!hessian->allFinite())
-                throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite accumulated Hessian");
-        }
-        return result;
+        return accumulate_density(xi, weight, gradient, hessian);
+    }
+    double accumulate_into(const Eigen::Vector2d& xi, double weight, StridedVecRef* gradient,
+                           StridedMatRef* hessian) const override {
+        return accumulate_density(xi, weight, gradient, hessian);
     }
 
   private:
     double eval_density(const Eigen::Vector2d& xi, Eigen::VectorXd* gradient, Eigen::MatrixXd* hessian) const {
+        if (gradient)
+            gradient->setZero(num_dofs());
+        if (hessian)
+            hessian->setZero(num_dofs(), num_dofs());
+        return accumulate_density(xi, 1, gradient, hessian);
+    }
+    template <class G, class H>
+    double accumulate_density(const Eigen::Vector2d& xi, double weight, G* gradient, H* hessian) const {
+        if (!std::isfinite(weight) || (gradient && gradient->size() != num_dofs()) ||
+            (hessian && (hessian->rows() != num_dofs() || hessian->cols() != num_dofs())))
+            throw std::invalid_argument("ShellMaterialLocalEnergy2D: invalid weight or output dimensions");
         if (!xi.allFinite())
             throw std::invalid_argument("ShellMaterialLocalEnergy2D requires finite parameter coordinates");
         Eigen::MatrixXd dab_dx;
@@ -85,7 +81,7 @@ template <class Material> class ShellMaterialLocalEnergy2D final : public LocalE
         const auto current = eval_triangle_mid_edge_kinematics(
             x_local_, opposite_, (gradient || hessian) ? &dab_dx : nullptr, hessian ? &d2ab_dx2 : nullptr);
         const ShellMaterialInputs inputs{current.a, current.b, a_bar_, b_bar_, thickness_, theta_};
-        const double W = Material::eval_W(inputs);
+        const double W = weight * Material::eval_W(inputs);
         if (!std::isfinite(W))
             throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite density");
         if (gradient || hessian) {
@@ -95,7 +91,7 @@ template <class Material> class ShellMaterialLocalEnergy2D final : public LocalE
             if (!dW_dab.allFinite())
                 throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite material gradient");
             if (gradient) {
-                *gradient = dab_dx.transpose() * dW_dab;
+                gradient->noalias() += weight * (dab_dx.transpose() * dW_dab);
                 if (!gradient->allFinite())
                     throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite gradient");
             }
@@ -105,9 +101,9 @@ template <class Material> class ShellMaterialLocalEnergy2D final : public LocalE
                     throw std::logic_error("ShellMaterialLocalEnergy2D: invalid material Hessian");
                 if (!d2W_dab2.allFinite())
                     throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite material Hessian");
-                *hessian = dab_dx.transpose() * d2W_dab2 * dab_dx;
+                hessian->noalias() += weight * (dab_dx.transpose() * d2W_dab2 * dab_dx);
                 for (std::size_t i = 0; i < d2ab_dx2.size(); ++i)
-                    *hessian += dW_dab[static_cast<Eigen::Index>(i)] * d2ab_dx2[i];
+                    *hessian += weight * dW_dab[static_cast<Eigen::Index>(i)] * d2ab_dx2[i];
                 if (!hessian->allFinite())
                     throw std::domain_error("ShellMaterialLocalEnergy2D: non-finite Hessian");
             }

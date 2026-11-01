@@ -66,9 +66,15 @@ template <class Material> class VolumetricMaterialLocalEnergy3D : public LocalEn
         return accumulate_impl(xi, weight, gradient, hessian, false);
     }
 
+    double accumulate_into(const Eigen::Vector3d& xi, double weight, StridedVecRef* gradient,
+                           StridedMatRef* hessian) const override {
+        return accumulate_impl(xi, weight, gradient, hessian, false);
+    }
+
   private:
-    double accumulate_impl(const Eigen::Vector3d& xi, double weight, Eigen::VectorXd* gradient,
-                           Eigen::MatrixXd* hessian, bool check_derivative) const {
+    template <class G, class H>
+    double accumulate_impl(const Eigen::Vector3d& xi, double weight, G* gradient, H* hessian,
+                           bool check_derivative) const {
         const auto input = eval_inputs(xi);
         const double result = weight * Material::eval_W(input);
         if (gradient || hessian) {
@@ -142,56 +148,6 @@ class VolumetricMaterialLocalEnergyF3D final : public VolumetricMaterialLocalEne
     }
     Eigen::MatrixXd eval_material_hessian(const VolumetricMaterialInputs& input) const override {
         return Material::eval_d2W_dF2(input);
-    }
-};
-
-template <class Material>
-class VolumetricMaterialLocalEnergyFp3D final : public VolumetricMaterialLocalEnergy3D<Material> {
-    using Base = VolumetricMaterialLocalEnergy3D<Material>;
-
-  public:
-    VolumetricMaterialLocalEnergyFp3D(const Field3D& F, const Field3D& Fp, const Field3D& theta)
-        : Base(F, Fp, theta, Fp) {}
-    VolumetricMaterialLocalEnergyFp3D(const Field3D&&, const Field3D&, const Field3D&) = delete;
-    VolumetricMaterialLocalEnergyFp3D(const Field3D&, const Field3D&&, const Field3D&) = delete;
-    VolumetricMaterialLocalEnergyFp3D(const Field3D&, const Field3D&, const Field3D&&) = delete;
-
-  private:
-    void set_material_direction(VolumetricMaterialInputs& delta, const Eigen::VectorXd& value) const override {
-        if (value.size() != 9)
-            throw std::invalid_argument("VolumetricMaterialLocalEnergyFp3D requires nine Fp increments");
-        delta.Fp = value.reshaped(3, 3);
-    }
-    Eigen::MatrixXd eval_material_gradient(const VolumetricMaterialInputs& input) const override {
-        return Material::eval_dW_dFp(input);
-    }
-    Eigen::MatrixXd eval_material_hessian(const VolumetricMaterialInputs& input) const override {
-        return Material::eval_d2W_dFp2(input);
-    }
-};
-
-template <class Material>
-class VolumetricMaterialLocalEnergyTheta3D final : public VolumetricMaterialLocalEnergy3D<Material> {
-    using Base = VolumetricMaterialLocalEnergy3D<Material>;
-
-  public:
-    VolumetricMaterialLocalEnergyTheta3D(const Field3D& F, const Field3D& Fp, const Field3D& theta)
-        : Base(F, Fp, theta, theta) {}
-    VolumetricMaterialLocalEnergyTheta3D(const Field3D&&, const Field3D&, const Field3D&) = delete;
-    VolumetricMaterialLocalEnergyTheta3D(const Field3D&, const Field3D&&, const Field3D&) = delete;
-    VolumetricMaterialLocalEnergyTheta3D(const Field3D&, const Field3D&, const Field3D&&) = delete;
-
-  private:
-    void set_material_direction(VolumetricMaterialInputs& delta, const Eigen::VectorXd& value) const override {
-        if (value.size() != delta.theta.size())
-            throw std::invalid_argument("VolumetricMaterialLocalEnergyTheta3D: incompatible parameter increment");
-        delta.theta = value;
-    }
-    Eigen::MatrixXd eval_material_gradient(const VolumetricMaterialInputs& input) const override {
-        return Material::eval_dW_dtheta(input);
-    }
-    Eigen::MatrixXd eval_material_hessian(const VolumetricMaterialInputs& input) const override {
-        return Material::eval_d2W_dtheta2(input);
     }
 };
 

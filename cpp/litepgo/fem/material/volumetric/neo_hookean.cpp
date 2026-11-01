@@ -85,43 +85,46 @@ Eigen::Matrix<double, 9, 9> NeoHookean::eval_d2W_dF2(const VolumetricMaterialInp
     return kinematics.eval_d2W_dF2(eval_d2psi_dFe2(theta, log_det_Fe, eval_inv_Fe_T(Fe)));
 }
 
-Eigen::Matrix3d NeoHookean::eval_dW_dFp(const VolumetricMaterialInputs& inputs) {
-    const auto& [F, Fp, theta] = inputs;
-    const MultiplicativeKinematics kinematics(F, Fp);
-    const Eigen::Matrix3d& Fe = kinematics.elastic_gradient();
-    const double log_det_Fe = eval_log_det_Fe(Fe, theta);
-    return kinematics.eval_dW_dFp(eval_psi(Fe, theta, log_det_Fe),
-                                  eval_dpsi_dFe(Fe, theta, log_det_Fe, eval_inv_Fe_T(Fe)));
-}
-
-Eigen::Matrix<double, 9, 9> NeoHookean::eval_d2W_dFp2(const VolumetricMaterialInputs& inputs) {
+Eigen::Matrix<double, 9, NeoHookean::num_parameters>
+NeoHookean::eval_d2W_dF_dtheta(const VolumetricMaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics kinematics(F, Fp);
     const Eigen::Matrix3d& Fe = kinematics.elastic_gradient();
     const double log_det_Fe = eval_log_det_Fe(Fe, theta);
     const Eigen::Matrix3d inv_Fe_T = eval_inv_Fe_T(Fe);
-    return kinematics.eval_d2W_dFp2(eval_psi(Fe, theta, log_det_Fe), eval_dpsi_dFe(Fe, theta, log_det_Fe, inv_Fe_T),
-                                    eval_d2psi_dFe2(theta, log_det_Fe, inv_Fe_T));
+    const Eigen::Matrix3d dP_dlambda = kinematics.eval_dW_dF(log_det_Fe * inv_Fe_T);
+    const Eigen::Matrix3d dP_dmu = kinematics.eval_dW_dF(Fe - inv_Fe_T);
+    Eigen::Matrix<double, 9, num_parameters> result;
+    result.col(0) = dP_dlambda.reshaped();
+    result.col(1) = dP_dmu.reshaped();
+    return result;
 }
 
-Eigen::Vector2d NeoHookean::eval_dW_dtheta(const VolumetricMaterialInputs& inputs) {
+Eigen::Matrix<double, 9, 9> NeoHookean::eval_d2W_dF_dFp(const VolumetricMaterialInputs& inputs) {
     const auto& [F, Fp, theta] = inputs;
     const MultiplicativeKinematics kinematics(F, Fp);
     const Eigen::Matrix3d& Fe = kinematics.elastic_gradient();
     const double log_det_Fe = eval_log_det_Fe(Fe, theta);
-    Eigen::Vector2d dW_dtheta;
-    dW_dtheta << 0.5 * log_det_Fe * log_det_Fe, 0.5 * (Fe.squaredNorm() - 3.0) - log_det_Fe;
-    dW_dtheta *= kinematics.plastic_volume_ratio();
-    if (!dW_dtheta.allFinite())
-        throw std::domain_error("NeoHookean: non-finite parameter gradient");
-    return dW_dtheta;
-}
-
-Eigen::Matrix2d NeoHookean::eval_d2W_dtheta2(const VolumetricMaterialInputs& inputs) {
-    const auto& [F, Fp, theta] = inputs;
-    const MultiplicativeKinematics kinematics(F, Fp);
-    eval_log_det_Fe(kinematics.elastic_gradient(), theta);
-    return Eigen::Matrix2d::Zero();
+    const Eigen::Matrix3d inv_Fe_T = eval_inv_Fe_T(Fe);
+    const Eigen::Matrix3d inv_Fp = Fp.inverse();
+    const auto tangent = eval_d2psi_dFe2(theta, log_det_Fe, inv_Fe_T);
+    const Eigen::Matrix3d P = kinematics.eval_dW_dF(eval_dpsi_dFe(Fe, theta, log_det_Fe, inv_Fe_T));
+    Eigen::Matrix<double, 9, 9> result;
+    for (int column = 0; column < 9; ++column) {
+        Eigen::Matrix3d delta_Fp = Eigen::Matrix3d::Zero();
+        delta_Fp.data()[column] = 1;
+        const Eigen::Matrix3d delta_Fe = -Fe * delta_Fp * inv_Fp;
+        const Eigen::Matrix<double, 9, 1> delta_stress = tangent * delta_Fe.reshaped();
+        // Differentiate P = det(Fp) * psi_Fe * Fp^{-T}, including the volume factor.
+        const Eigen::Matrix3d delta_P =
+            (inv_Fp * delta_Fp).trace() * P +
+            kinematics.plastic_volume_ratio() * delta_stress.reshaped(3, 3) * inv_Fp.transpose() -
+            P * delta_Fp.transpose() * inv_Fp.transpose();
+        result.col(column) = delta_P.reshaped();
+    }
+    if (!result.allFinite())
+        throw std::domain_error("NeoHookean: non-finite plastic mixed derivative");
+    return result;
 }
 
 double NeoHookean::eval_feasible_step(const VolumetricMaterialInputs& inputs,
