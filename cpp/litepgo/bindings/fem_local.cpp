@@ -6,9 +6,12 @@
 #include "litepgo/fem/kinematics/volumetric_element.hpp"
 #include "litepgo/fem/local/dof_derivatives.hpp"
 #include "litepgo/fem/local/local_energy.hpp"
+#include "litepgo/fem/local/local_response.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/material/shell/shell_material_local_energy.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_fp_force_local_response.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_force_local_response.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
@@ -62,6 +65,38 @@ template <int Dim> void bind_local_energy(nb::module_& m, const char* name) {
             "Weighted (value, gradient or None, Hessian or None) at xi; C++ adds these into caller buffers.");
 }
 
+template <int Dim> void bind_local_response(nb::module_& m, const char* name) {
+    using Local = LocalResponseT<Dim>;
+    using Coordinate = typename Local::Coordinate;
+    nb::class_<Local>(m, name, "Pointwise vector density and a rectangular coefficient Jacobian.")
+        .def_prop_ro("num_inputs", &Local::num_inputs)
+        .def_prop_ro("num_outputs", &Local::num_outputs)
+        .def_prop_ro("has_jacobian", &Local::has_jacobian)
+        .def("eval_value", &Local::eval_value, "xi"_a)
+        .def("eval_jacobian", &Local::eval_jacobian, "xi"_a)
+        .def(
+            "accumulate",
+            [](const Local& local, const Coordinate& xi, double weight, bool jacobian) {
+                Eigen::VectorXd value = Eigen::VectorXd::Zero(local.num_outputs());
+                Eigen::MatrixXd J =
+                    Eigen::MatrixXd::Zero(jacobian ? local.num_outputs() : 0, jacobian ? local.num_inputs() : 0);
+                local.accumulate(xi, weight, value, jacobian ? &J : nullptr);
+                return nb::make_tuple(value, jacobian ? nb::cast(J) : nb::none());
+            },
+            "xi"_a, "weight"_a, "jacobian"_a = false,
+            "Weighted (value, Jacobian or None); C++ adds into caller buffers. Geometry is not applied here.");
+}
+
+template <class M, class Local>
+void bind_force_local_response(nb::module_& m, const char* template_name, const char* doc) {
+    const nb::tuple key = nb::make_tuple(nb::type<M>());
+    const std::string name = std::string(template_name) + "[" + class_name(key[0]) + "]";
+    nb::class_<Local, LocalResponse3D>(m, name.c_str())
+        .def(nb::init<const Field3D&, const Field3D&, const Field3D&>(), "F"_a, "Fp"_a, "theta"_a,
+             nb::keep_alive<1, 2>(), nb::keep_alive<1, 3>(), nb::keep_alive<1, 4>(), doc);
+    register_instance(m, template_name, key, nb::type<Local>());
+}
+
 template <template <class> class Local, class M> void bind_volumetric_local(nb::module_& m, const char* template_name) {
     using Energy = Local<M>;
     const nb::tuple key = nb::make_tuple(nb::type<M>());
@@ -82,8 +117,6 @@ template <class M> void bind_volumetric_locals(nb::module_& m) {
              "Largest alpha in [0, 1] keeping the material inputs valid along the active coefficients.");
     register_instance(m, "VolumetricMaterialLocalEnergy3D", key, nb::type<Base>());
     bind_volumetric_local<VolumetricMaterialLocalEnergyF3D, M>(m, "VolumetricMaterialLocalEnergyF3D");
-    bind_volumetric_local<VolumetricMaterialLocalEnergyFp3D, M>(m, "VolumetricMaterialLocalEnergyFp3D");
-    bind_volumetric_local<VolumetricMaterialLocalEnergyTheta3D, M>(m, "VolumetricMaterialLocalEnergyTheta3D");
 }
 
 template <class M> void bind_shell_local(nb::module_& m) {
@@ -139,6 +172,14 @@ template <class Q, class... Materials> void bind_volumetric_element(nb::module_&
             },
             "local_energy"_a, "gradient"_a = false, "hessian"_a = false,
             "Integrated (value, gradient or None, Hessian or None) in the local energy's DOF order.");
+    cls.def(
+        "eval",
+        [](const Element& element, const LocalResponse3D& local, bool jacobian) {
+            Eigen::MatrixXd J;
+            const Eigen::VectorXd value = element.eval(local, jacobian ? &J : nullptr);
+            return nb::make_tuple(value, jacobian ? nb::cast(J) : nb::none());
+        },
+        "local_response"_a, "jacobian"_a = false, "Integrated (value, Jacobian or None) in local response order.");
     // max_feasible_step is a C++ member template over local energies with feasible steps.
     (cls.def(
          "max_feasible_step",
@@ -154,6 +195,12 @@ void bind_local(nb::module_& m) {
     bind_local_energy<2>(m, "LocalEnergy2D");
     bind_local_energy<3>(m, "LocalEnergy3D");
     bind_volumetric_locals<NeoHookean>(m);
+    bind_local_response<2>(m, "LocalResponse2D");
+    bind_local_response<3>(m, "LocalResponse3D");
+    bind_force_local_response<NeoHookean, VolumetricMaterialForceLocalResponse3D<NeoHookean>>(
+        m, "VolumetricMaterialForceLocalResponse3D", "Force density and theta-coefficient Jacobian at fixed F and Fp.");
+    bind_force_local_response<NeoHookean, VolumetricFpForceLocalResponse3D<NeoHookean>>(
+        m, "VolumetricFpForceLocalResponse3D", "Force density and Fp-coefficient Jacobian at fixed F and theta.");
     bind_shell_local<KoiterStVK>(m);
 
     bind_dof_transform<TetP1Basis>(m);

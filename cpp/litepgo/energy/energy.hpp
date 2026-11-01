@@ -61,7 +61,8 @@ class Energy {
     // vector's size is unambiguous, but a change of Hessian pattern must be handled
     // by the caller. The value is always finite: at an infeasible x, eval()
     // throws std::domain_error instead. If an exception escapes after the checks,
-    // output values are unspecified, but the hessian's pattern never changes.
+    // output values are unspecified. Implementations must preserve the Hessian pattern;
+    // returning wrong dimensions/pattern or non-finite derivatives throws logic_error.
     double eval(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind = HessianKind::Exact) const;
 
     // A conservative alpha in [0, 1] satisfying the implemented feasibility constraints

@@ -2,10 +2,22 @@ import numpy as np
 import pytest
 import scipy.sparse as sp
 
+from litepgo.response import FixedPatternResponse
 from litepgo.dof import DofReduction
 from litepgo.energy import AffineMappedEnergy, HessianKind, QuadraticEnergy, WeightedEnergySum
 from litepgo.linalg.sparse_solver import AutoIndefiniteSparseSolver, EigenLDLT
 from litepgo.solver import NewtonOptions, NewtonStatus, newton_solve
+
+
+class TestResponse(FixedPatternResponse):
+    __test__ = False
+
+    def __init__(self, pattern, evaluator):
+        super().__init__(pattern)
+        self.evaluator = evaluator
+
+    def eval_values(self, x, need_jacobian):
+        return self.evaluator(x, need_jacobian)
 
 
 def free(n):
@@ -99,7 +111,7 @@ def test_gauss_newton_analytic_callback_and_owned_inputs():
         r = A @ x - [1., 2., 3.]
         return (r, A) if need_jacobian else r
 
-    result = gauss_newton_solve(residual, np.zeros(2), GaussNewtonOptions(gradient_tolerance=1e-8))
+    result = gauss_newton_solve(TestResponse(np.ones((3, 2)), residual), np.zeros(2), GaussNewtonOptions(gradient_tolerance=1e-8))
     assert result.status == GaussNewtonStatus.Converged
     np.testing.assert_allclose(result.x, [2., 2.], atol=1e-8)
     assert result.objective == pytest.approx(1.)
@@ -122,18 +134,55 @@ def test_gauss_newton_infeasible_trials_and_errors():
         return (r, np.array([[1 / x[0]]])) if need_jacobian else r
 
     options = GaussNewtonOptions(gradient_tolerance=1e-9)
-    result = gauss_newton_solve(residual, np.array([10.]), options)
+    result = gauss_newton_solve(TestResponse(np.ones((1, 1)), residual), np.array([10.]), options)
     assert result.status == GaussNewtonStatus.Converged and rejected
     np.testing.assert_allclose(result.x, [1.], atol=1e-8)
     with pytest.raises(ValueError):
-        gauss_newton_solve(residual, np.array([-1.]), options)
+        gauss_newton_solve(TestResponse(np.ones((1, 1)), residual), np.array([-1.]), options)
 
     def fail(x, need_jacobian):
         raise KeyError("callback bug")
     with pytest.raises(KeyError, match="callback bug"):
-        gauss_newton_solve(fail, np.ones(1), options)
+        gauss_newton_solve(TestResponse(np.ones((1, 1)), fail), np.ones(1), options)
     with pytest.raises(TypeError, match="Expected"):
-        gauss_newton_solve(lambda x, need: x, np.ones(1), options)
-    with pytest.raises(RuntimeError, match="invalid residual or Jacobian"):
-        gauss_newton_solve(lambda x, need: (x, np.zeros((2, 2))), np.ones(1), options)
+        gauss_newton_solve(TestResponse(np.ones((1, 1)), lambda x, need: x), np.ones(1), options)
+    with pytest.raises(RuntimeError, match="invalid Jacobian"):
+        gauss_newton_solve(TestResponse(np.ones((1, 1)), lambda x, need: (x, np.zeros((2, 2)))), np.ones(1), options)
     assert np.isnan(GaussNewtonOptions().gradient_tolerance)
+
+
+def test_response_pattern_and_object_protocol():
+    from litepgo.response import Response
+    from litepgo.solver import gauss_newton_solve, GaussNewtonOptions
+
+    r = TestResponse(sp.eye(2, format="csc"),
+                             lambda x, need: (x*x, np.diag(2*x)) if need else x*x)
+    assert isinstance(r, Response)
+    assert r.num_inputs == r.num_outputs == 2 and r.has_fixed_pattern
+    assert not r.update_pattern(np.zeros(2))
+    np.testing.assert_array_equal(r.eval_value(np.array([2., 3.])), [4., 9.])
+    J = r.eval_jacobian(np.zeros(2))
+    assert J.nnz == 2  # Numerical zeros do not remove structural slots.
+    with pytest.raises(ValueError):
+        r.eval_value(np.zeros(3))
+    bad = TestResponse(sp.eye(2), lambda x, need: (x, np.ones((2, 2))))
+    with pytest.raises(RuntimeError, match="outside pattern"):
+        bad.eval_jacobian(np.ones(2))
+    with pytest.raises(TypeError):
+        gauss_newton_solve(lambda x, need: x, np.ones(1), GaussNewtonOptions(gradient_tolerance=1e-8))
+
+
+def test_fixed_response_requires_override():
+    base = FixedPatternResponse(np.ones((1, 1)))
+    with pytest.raises(RuntimeError, match="eval_values"):
+        base.eval_value(np.ones(1))
+    with pytest.raises(TypeError):
+        FixedPatternResponse(np.ones((1, 1)), lambda x, need: x)
+
+
+def test_gauss_newton_explicit_sparse_solver():
+    from litepgo.solver import gauss_newton_solve, GaussNewtonOptions, GaussNewtonStatus
+    r = TestResponse(np.eye(2), lambda x, need: (x - 1, np.eye(2)) if need else x - 1)
+    result = gauss_newton_solve(r, np.zeros(2), GaussNewtonOptions(gradient_tolerance=1e-9), solver=EigenLDLT())
+    assert result.status == GaussNewtonStatus.Converged
+    np.testing.assert_allclose(result.x, np.ones(2), atol=1e-8)

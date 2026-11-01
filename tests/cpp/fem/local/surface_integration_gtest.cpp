@@ -1,6 +1,6 @@
+#include "../../testing/element_formula_energy.hpp"
 #include "../../testing/finite_difference.hpp"
 #include "litepgo/dof/vertex_dof_map.hpp"
-#include "litepgo/energy/mesh_energy.hpp"
 #include "litepgo/fem/basis/2d/quad_hermite_basis.hpp"
 #include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/local/local_energy.hpp"
@@ -67,27 +67,28 @@ F coordinates(int element) {
     return F(coefficients);
 }
 
-energy::MeshEnergy surface_energy() {
+testing::ElementFormulaEnergy surface_energy() {
     const mesh::QuadTopology topology(6, {{0, 1, 2, 3}, {1, 4, 5, 2}});
     const dof::VertexDofMap map(topology, 12);
     const std::array<F, 2> X_fields{coordinates(0), coordinates(1)};
-    return energy::MeshEnergy(map, [X_fields](int e, const Eigen::MatrixXd& x_local, Vec* g, Eigen::MatrixXd* H) {
-        const F u_field(x_local.reshaped<Eigen::RowMajor>(16, 3));
-        const QuadraticFieldEnergy local(u_field);
-        if (g)
-            g->setZero(local.num_dofs());
-        if (H)
-            H->setZero(local.num_dofs(), local.num_dofs());
-        using Q = GaussLegendre2D<4>;
-        double result = 0;
-        for (int q = 0; q < Q::num_points; ++q) {
-            const Eigen::Vector2d xi = Q::points().row(q).transpose();
-            const auto derivative = X_fields[static_cast<std::size_t>(e)].eval_dvalue_dxi(xi);
-            const Eigen::Vector3d a = derivative.col(0), b = derivative.col(1);
-            result += local.accumulate(xi, Q::weights()[q] * a.cross(b).norm(), g, H);
-        }
-        return result;
-    });
+    return testing::ElementFormulaEnergy(
+        map, [X_fields](int e, const Eigen::MatrixXd& x_local, Vec* g, Eigen::MatrixXd* H) {
+            const F u_field(x_local.reshaped<Eigen::RowMajor>(16, 3));
+            const QuadraticFieldEnergy local(u_field);
+            if (g)
+                g->setZero(local.num_dofs());
+            if (H)
+                H->setZero(local.num_dofs(), local.num_dofs());
+            using Q = GaussLegendre2D<4>;
+            double result = 0;
+            for (int q = 0; q < Q::num_points; ++q) {
+                const Eigen::Vector2d xi = Q::points().row(q).transpose();
+                const auto derivative = X_fields[static_cast<std::size_t>(e)].eval_dvalue_dxi(xi);
+                const Eigen::Vector3d a = derivative.col(0), b = derivative.col(1);
+                result += local.accumulate(xi, Q::weights()[q] * a.cross(b).norm(), g, H);
+            }
+            return result;
+        });
 }
 
 TEST(SurfaceIntegration, IntegratesReferenceAreaForThreeComponentFieldsOnTwoDimensionalElements) {

@@ -2,6 +2,7 @@
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
+#include "litepgo/fem/volumetric_fem_force_material_response.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include "litepgo/mesh/io/veg.hpp"
 #include "litepgo/solver/newton.hpp"
@@ -10,6 +11,7 @@
 #include <iostream>
 #include <vector>
 
+#include "litepgo/response/fixed_pattern_response.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
 #include <Eigen/LU>
 #include <cmath>
@@ -70,26 +72,13 @@ int main() {
             for (int v : top_vertices)
                 force += gradient[3 * v + axis];
             if (derivative) {
-                // Fp=I: dP/dlambda = log(det F) F^-T, dP/dmu = F-F^-T.
-                Eigen::MatrixXd B = Eigen::MatrixXd::Zero(elastic.num_dofs(), 2);
-                const Eigen::Vector3d xi = fem::TetCentroidQuadrature::points().row(0).transpose();
-                for (int e = 0; e < mesh.topology.num_cells(); ++e) {
-                    const XField u(map.gather(e, result.x));
-                    const fem::DeformationGradientField3D deformation(u, geometry[e]);
-                    const Eigen::Matrix3d F = deformation.eval_value(xi).reshaped(3, 3);
-                    const Eigen::Matrix3d inverse_transpose = F.inverse().transpose();
-                    const Eigen::Matrix3d lambda_derivative = std::log(F.determinant()) * inverse_transpose;
-                    const Eigen::Matrix3d mu_derivative = F - inverse_transpose;
-                    Eigen::Matrix<double, 9, 2> stress_derivative;
-                    stress_derivative.col(0) = lambda_derivative.reshaped();
-                    stress_derivative.col(1) = mu_derivative.reshaped();
-                    const double volume = geometry[e].eval_dvalue_dxi(xi).determinant() / 6;
-                    const Eigen::MatrixXd local =
-                        volume * deformation.eval_dvalue_dcoeffs(xi).transpose() * stress_derivative;
-                    const auto indices = map.dof_indices(e);
-                    for (Eigen::Index i = 0; i < local.rows(); ++i)
-                        B.row(indices[i]) += local.row(i);
-                }
+                // Partial derivative at fixed equilibrium displacement; the solve below adds du/dtheta.
+                using Force = fem::VolumetricFemForceMaterialResponse<fem::NeoHookean, fem::TetP1Basis,
+                                                                      fem::TetCentroidQuadrature, XField, Field>;
+                const Force response(
+                    dof::ConstantDofMap(mesh.topology, 2), map, geometry, result.x,
+                    std::vector<Field>(geometry.size(), Field(Eigen::Matrix3d::Identity().reshaped())));
+                const Eigen::MatrixXd B = response.eval_jacobian(theta);
                 const SpMat K = elastic.eval_hessian(result.x, energy::HessianKind::Exact);
                 if (!linear_solver.compute(fixed.reduce(K)))
                     throw std::runtime_error("Sensitivity factorization failed");
@@ -124,18 +113,34 @@ int main() {
         };
         const Eigen::Vector2d observed = measurements(truth, nullptr);
         const Eigen::Vector2d scales = observed.cwiseAbs().cwiseMax(1e-8);
-        auto residual = [&](const ConstVecRef& q, Eigen::MatrixXd* J) -> Vec {
-            const Eigen::Vector2d theta = q.array().exp().matrix();
-            const Eigen::Vector2d forces = measurements(theta, J);
-            if (J)
-                *J = (scales.cwiseInverse().asDiagonal() * *J * theta.asDiagonal()).eval();
-            return (forces - observed).cwiseQuotient(scales);
+        class MaterialResidual final : public response::FixedPatternResponse {
+          public:
+            MaterialResidual(const decltype(measurements)& experiments, Eigen::Vector2d target, Eigen::Vector2d scale)
+                : FixedPatternResponse(Eigen::Matrix2d::Ones().sparseView()), measurements_(experiments),
+                  observed(target), scales(scale) {}
+
+          private:
+            Vec eval_values(const ConstVecRef& q, SpMat* J) const override {
+                Eigen::MatrixXd dense_J;
+                const Eigen::Vector2d theta = q.array().exp().matrix();
+                const Eigen::Vector2d forces = measurements_(theta, J ? &dense_J : nullptr);
+                if (J) {
+                    dense_J = (scales.cwiseInverse().asDiagonal() * dense_J * theta.asDiagonal()).eval();
+                    for (int c = 0; c < 2; ++c)
+                        for (int r = 0; r < 2; ++r)
+                            J->coeffRef(r, c) = dense_J(r, c);
+                }
+                return (forces - observed).cwiseQuotient(scales);
+            }
+            const decltype(measurements)& measurements_;
+            Eigen::Vector2d observed, scales;
         };
+        MaterialResidual residual(measurements, observed, scales);
         solver::GaussNewtonOptions options;
         options.gradient_tolerance = 1e-8;
         const auto result = solver::gauss_newton_solve(residual, Vec::Zero(2), options);
         const Eigen::Vector2d fitted = result.x.array().exp().matrix();
-        const Vec r = residual(result.x, nullptr);
+        const Vec r = residual.eval_value(result.x);
         const double parameter_error = (fitted - truth).norm() / truth.norm();
         const double reference = reaction(truth, 2, -0.07, nullptr);
         const double prediction_error = std::abs(reaction(fitted, 2, -0.07, nullptr) - reference) / std::abs(reference);

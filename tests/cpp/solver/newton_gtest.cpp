@@ -1,3 +1,4 @@
+#include "../testing/element_formula_energy.hpp"
 #include "litepgo/solver/newton.hpp"
 
 #include "litepgo/dof/constant_dof_map.hpp"
@@ -80,7 +81,7 @@ class WrongGradientEnergy final : public litepgo::energy::FixedPatternEnergy {
     }
 };
 
-// A finite value and gradient but a NaN Hessian: no diagonal shift can repair it.
+// A broken energy must be rejected before the linear solve.
 class BrokenHessianEnergy final : public litepgo::energy::FixedPatternEnergy {
   public:
     explicit BrokenHessianEnergy(int n) : energy::FixedPatternEnergy(n, energy::test::chain_pattern(n, {})) {}
@@ -118,7 +119,7 @@ TEST(Newton, PropagatesNeoHookeanTrialOverflowWithoutRetrying) {
     // A tiny stiffness gives a finite Newton direction whose initial trial overflows ||F||^2.
     const fem::IdentityField3D theta(Eigen::Vector2d(0, 1e-155));
     int trial_evaluations = 0;
-    auto elastic = std::make_shared<energy::MeshEnergy>(
+    auto elastic = std::make_shared<litepgo::testing::ElementFormulaEnergy>(
         map,
         [Fp, theta, &trial_evaluations](int, const Vec& x, Vec* g, Eigen::MatrixXd* H) {
             if (!g && !H)
@@ -295,13 +296,9 @@ TEST(Newton, ReportsAFailedLineSearch) {
     EXPECT_EQ(result.x, Vec::Ones(3)); // no step was taken
 }
 
-TEST(Newton, ReportsAMissingDescentDirection) {
+TEST(Newton, RejectsAnInvalidHessian) {
     BrokenHessianEnergy energy(3);
-    std::vector<NewtonStep> steps;
-    const NewtonResult result = solve(energy, Vec::Ones(3), {}, options(), &steps);
-    EXPECT_EQ(result.status, NewtonStatus::NoDescentDirection);
-    ASSERT_EQ(steps.size(), 1U);
-    EXPECT_EQ(steps.front().diagonal_shifts, 10);
+    EXPECT_THROW(solve(energy, Vec::Ones(3), {}, options()), std::logic_error);
 }
 
 TEST(Newton, WithEveryDofFixedJustEvaluates) {

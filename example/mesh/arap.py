@@ -57,6 +57,7 @@ def main():
     options = solver.NewtonOptions(gradient_tolerance=1e-10)
     for iteration in range(1000):
         def edge_term(ids, local_x, need_gradient, need_hessian):
+            local_x = local_x.reshape(len(ids), 2, 3)
             # Both directed contributions, each with weight 1/4.
             i, j = edge_vertices[ids].T
             p = rest[i] - rest[j]
@@ -66,10 +67,10 @@ def main():
             force = 0.5 * (ri + rj)
             g = np.concatenate([force, -force], axis=1) if need_gradient else None
             h = np.broadcast_to(edge_hessian, (len(ids), 6, 6)) if need_hessian else None
-            return 0.25 * np.sum(ri*ri + rj*rj, axis=1), g, h
+            return 0.25 * np.sum(ri*ri + rj*rj, axis=1), g, h.reshape(-1, h.shape[-1]) if h is not None else None
 
         # Rotations stay fixed throughout this global solve.
-        global_energy = energy.BatchedMeshEnergy(edge_map, edge_term)
+        global_energy = energy.MeshEnergy(edge_map, edge_term)
         result = solver.newton_solve(global_energy, fixed, x.ravel(), options)
         assert result.status == solver.NewtonStatus.Converged
         updated = result.x.reshape(-1, 3)

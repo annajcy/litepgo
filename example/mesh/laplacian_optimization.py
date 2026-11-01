@@ -25,11 +25,12 @@ def main():
     edge_hessian = np.kron([[1., -1.], [-1., 1.]], np.eye(3))
 
     def edge_term(ids, x, need_gradient, need_hessian):
+        x = x.reshape(len(ids), 2, 3)
         # Each row is one undirected edge: 1/2 ||x_i - x_j||^2.
         d = x[:, 0] - x[:, 1]
         g = np.concatenate([d, -d], axis=1) if need_gradient else None
         h = np.broadcast_to(edge_hessian, (len(ids), 6, 6)) if need_hessian else None
-        return 0.5 * np.sum(d*d, axis=1), g, h
+        return 0.5 * np.sum(d*d, axis=1), g, h.reshape(-1, h.shape[-1]) if h is not None else None
 
     neighbors = [[] for _ in rest]
     for i, j in edges:
@@ -39,6 +40,7 @@ def main():
     ring_map = dof.StencilDofMap(n * n, rings, 3)
 
     def ring_term(ids, x, need_gradient, need_hessian):
+        x = x.reshape(len(ids), -1, 3)
         # Each batch groups equal-length one-rings; ids retain original vertex IDs.
         k = x.shape[1]
         weights = np.array([k - 1, *([-1.] * (k - 1))])
@@ -47,7 +49,7 @@ def main():
         r = np.einsum("k,bkd->bd", weights, x - p)
         g = r @ B if need_gradient else None
         h = np.broadcast_to(B.T @ B, (len(ids), 3*k, 3*k)) if need_hessian else None
-        return 0.5 * np.sum(r*r, axis=1), g, h
+        return 0.5 * np.sum(r*r, axis=1), g, h.reshape(-1, h.shape[-1]) if h is not None else None
 
     boundary = [i * n + j for i in range(n) for j in range(n)
                 if i in (0, n - 1) or j in (0, n - 1)]
@@ -56,7 +58,7 @@ def main():
         for j in range(1, n - 1):
             noisy[i * n + j, 2] = 0.15 * np.sin(0.7 * i) * np.sin(1.1 * j)
     options = solver.NewtonOptions(gradient_tolerance=1e-10)
-    smooth_energy = energy.BatchedMeshEnergy(edge_map, edge_term)
+    smooth_energy = energy.MeshEnergy(edge_map, edge_term)
     boundary_dofs = (3 * np.array(boundary)[:, None] + np.arange(3)).ravel()
     # Solve only the free coordinates; prescribed coordinates retain their initial values.
     smooth = solver.newton_solve(smooth_energy, dof.DofReduction(3 * n * n, boundary_dofs.tolist()),
@@ -67,7 +69,7 @@ def main():
     assert smooth.energy < smooth_energy.eval_value(noisy.ravel())
 
     # MeshEnergy gathers each stencil and assembles its local derivatives.
-    edit_energy = energy.BatchedMeshEnergy(ring_map, ring_term)
+    edit_energy = energy.MeshEnergy(ring_map, ring_term)
     handles = [i * n + j for i in range(n) for j in (0, n - 1)]
     handle_dofs = (3 * np.array(handles)[:, None] + np.arange(3)).ravel()
     initial = rest.copy()

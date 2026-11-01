@@ -49,27 +49,15 @@ void bind(nb::module_& m) {
         .def_ro("status", &GaussNewtonResult::status);
     m.def(
         "gauss_newton_solve",
-        [](nb::callable callback, const ConstVecRef& initial, const GaussNewtonOptions& options) {
-            ResidualFunction residual = [&](const ConstVecRef& x, Eigen::MatrixXd* J) -> Vec {
-                nb::gil_scoped_acquire acquire;
-                // Own the argument so callbacks may safely retain it.
-                nb::object value = callback(nb::cast(Vec(x)), J != nullptr);
-                if (value.is_none())
-                    throw std::domain_error("Residual is infeasible");
-                if (!J)
-                    return nb::cast<Vec>(value);
-                if (!nb::isinstance<nb::tuple>(value) || nb::len(value) != 2)
-                    throw nb::type_error("Expected (residual, Jacobian) when need_jacobian is True");
-                nb::tuple pair = nb::cast<nb::tuple>(value);
-                *J = nb::cast<Eigen::MatrixXd>(pair[1]);
-                return nb::cast<Vec>(pair[0]);
-            };
+        [](response::Response& residual, const ConstVecRef& initial, const GaussNewtonOptions& options,
+           linalg::SparseSolver* linear_solver) {
             nb::gil_scoped_release release;
+            if (linear_solver)
+                return gauss_newton_solve(residual, initial, options, *linear_solver);
             return gauss_newton_solve(residual, initial, options);
         },
-        "residual"_a, "initial"_a, "options"_a,
-        "Minimize 0.5*||r||^2. residual(x, need_jacobian) returns (r, J) when requested, "
-        "otherwise r. Return None for an infeasible point; Python exceptions propagate. No finite differences.");
+        "residual"_a, "initial"_a, "options"_a, "solver"_a = nb::none(),
+        "Minimize 0.5*||response(x)||^2 using sparse damped normal equations. Defaults to AutoSparseSolver.");
 
     nb::enum_<NewtonStatus>(m, "NewtonStatus")
         .value("Converged", NewtonStatus::Converged)

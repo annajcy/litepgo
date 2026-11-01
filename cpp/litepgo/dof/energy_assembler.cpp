@@ -1,4 +1,4 @@
-#include "litepgo/dof/assembler.hpp"
+#include "litepgo/dof/energy_assembler.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <algorithm>
@@ -10,20 +10,20 @@
 
 namespace litepgo::dof {
 
-Assembler::Assembler(int num_dofs, std::vector<std::vector<int>> element_dof_indices)
+EnergyAssembler::EnergyAssembler(int num_dofs, std::vector<std::vector<int>> element_dof_indices)
     : num_dofs_(num_dofs), element_dof_indices_(std::move(element_dof_indices)) {
     if (num_dofs < 0 || element_dof_indices_.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()))
-        throw std::invalid_argument("Assembler: invalid DOF or element count");
+        throw std::invalid_argument("EnergyAssembler: invalid DOF or element count");
 
     std::size_t count = 0;
     for (const auto& indices : element_dof_indices_) {
         const auto n = indices.size();
         if (n != 0 && n > (static_cast<std::size_t>(std::numeric_limits<int>::max()) - count) / n)
-            throw std::invalid_argument("Assembler: local Hessian entry count must fit in int");
+            throw std::invalid_argument("EnergyAssembler: local Hessian entry count must fit in int");
         count += n * n;
         for (int index : indices)
             if (index < 0 || index >= num_dofs)
-                throw std::invalid_argument("Assembler: DOF index out of range");
+                throw std::invalid_argument("EnergyAssembler: DOF index out of range");
     }
 
     std::vector<Triplet> entries;
@@ -58,57 +58,75 @@ Assembler::Assembler(int num_dofs, std::vector<std::vector<int>> element_dof_ind
     });
 }
 
-int Assembler::num_elements() const noexcept {
+int EnergyAssembler::num_elements() const noexcept {
     return static_cast<int>(element_dof_indices_.size());
 }
-std::span<const int> Assembler::dof_indices(int element) const {
+std::span<const int> EnergyAssembler::dof_indices(int element) const {
     check_element(element);
     return element_dof_indices_[static_cast<std::size_t>(element)];
 }
 
-const SpMat& Assembler::hessian_pattern() const noexcept {
+const SpMat& EnergyAssembler::hessian_pattern() const noexcept {
     return pattern_;
 }
 
-void Assembler::check_element(int element) const {
+void EnergyAssembler::check_element(int element) const {
     if (element < 0 || static_cast<std::size_t>(element) >= element_dof_indices_.size())
-        throw std::out_of_range("Assembler: element index out of range");
+        throw std::out_of_range("EnergyAssembler: element index out of range");
 }
 
-void Assembler::add_gradient(int element, const ConstVecRef& local, VecRef global) const {
+void EnergyAssembler::add_gradient(int element, const ConstVecRef& local, VecRef global) const {
     check_element(element);
     const auto& indices = element_dof_indices_[static_cast<std::size_t>(element)];
     if (local.size() != static_cast<Eigen::Index>(indices.size()) || global.size() != num_dofs_ || !local.allFinite())
-        throw std::invalid_argument("Assembler: invalid gradient dimensions or values");
+        throw std::invalid_argument("EnergyAssembler: invalid gradient dimensions or values");
     for (std::size_t i = 0; i < indices.size(); ++i)
         global[indices[i]] += local[static_cast<Eigen::Index>(i)];
 }
 
-void Assembler::add_hessian(int element, const Eigen::Ref<const Eigen::MatrixXd>& local, SpMat& global) const {
+void EnergyAssembler::add_hessian(int element, const Eigen::Ref<const Eigen::MatrixXd>& local, SpMat& global) const {
     check_element(element);
     const auto n = static_cast<Eigen::Index>(element_dof_indices_[static_cast<std::size_t>(element)].size());
     if (local.rows() != n || local.cols() != n || !local.allFinite() || !linalg::same_pattern(global, pattern_))
-        throw std::invalid_argument("Assembler: invalid Hessian dimensions, values, or pattern");
+        throw std::invalid_argument("EnergyAssembler: invalid Hessian dimensions, values, or pattern");
     const auto& offsets = hessian_offsets_[static_cast<std::size_t>(element)];
     for (Eigen::Index j = 0; j < n; ++j)
         for (Eigen::Index i = 0; i < n; ++i)
             global.valuePtr()[offsets[static_cast<std::size_t>(i + n * j)]] += local(i, j);
 }
 
-void Assembler::assemble(std::span<const Vec> gradients, std::span<const Eigen::MatrixXd> hessians, Vec* gradient,
-                         SpMat* hessian) const {
+void EnergyAssembler::assemble(std::span<const Vec> gradients, std::span<const Eigen::MatrixXd> hessians, Vec* gradient,
+                               SpMat* hessian) const {
     if (!gradient && !hessian)
         return;
     const auto count = element_dof_indices_.size();
     if ((gradient && gradients.size() != count) || (hessian && hessians.size() != count))
-        throw std::invalid_argument("Assembler::assemble requires one local result per element");
+        throw std::invalid_argument("EnergyAssembler::assemble requires one local result per element");
+    const Vec empty_gradient;
+    const Eigen::MatrixXd empty_hessian;
+    std::vector<ElementView> elements;
+    elements.reserve(count);
+    for (std::size_t e = 0; e < count; ++e)
+        elements.emplace_back(gradient ? gradients[e] : empty_gradient, hessian ? hessians[e] : empty_hessian);
+    assemble(elements, gradient, hessian);
+}
+
+void EnergyAssembler::assemble(std::span<const ElementView> elements, Vec* gradient, SpMat* hessian) const {
+    if (!gradient && !hessian)
+        return;
+    const auto count = element_dof_indices_.size();
+    if (elements.size() != count)
+        throw std::invalid_argument("EnergyAssembler::assemble requires one view per element");
     for (std::size_t e = 0; e < count; ++e) {
         const auto n = static_cast<Eigen::Index>(element_dof_indices_[e].size());
-        if ((gradient && gradients[e].size() != n) || (hessian && (hessians[e].rows() != n || hessians[e].cols() != n)))
-            throw std::invalid_argument("Assembler::assemble: local result size does not match its element");
+        const auto local_gradient = elements[e].gradient();
+        const auto local_hessian = elements[e].hessian();
+        if ((gradient && (local_gradient.size() != n || !local_gradient.allFinite())) ||
+            (hessian && (local_hessian.rows() != n || local_hessian.cols() != n || !local_hessian.allFinite())))
+            throw std::invalid_argument("EnergyAssembler::assemble: invalid local dimensions or non-finite values");
     }
     if (hessian && !linalg::same_pattern(*hessian, pattern_))
-        throw std::invalid_argument("Assembler::assemble: Hessian pattern does not match hessian_pattern()");
+        throw std::invalid_argument("EnergyAssembler::assemble: Hessian pattern does not match hessian_pattern()");
     if (gradient)
         gradient->resize(num_dofs_);
     // A task owns complete CSC columns and matching gradient entries; no shared writes.
@@ -123,9 +141,9 @@ void Assembler::assemble(std::span<const Vec> gradients, std::span<const Eigen::
                 const auto e = static_cast<std::size_t>(contribution.element);
                 const int j = contribution.local_dof;
                 if (gradient)
-                    g += gradients[e][j];
+                    g += elements[e].gradient()[j];
                 if (hessian) {
-                    const auto& local = hessians[e];
+                    const auto& local = elements[e].hessian();
                     const auto n = local.rows();
                     const auto& offsets = hessian_offsets_[e];
                     for (Eigen::Index i = 0; i < n; ++i)
@@ -137,9 +155,9 @@ void Assembler::assemble(std::span<const Vec> gradients, std::span<const Eigen::
         }
     });
     if (gradient && !gradient->allFinite())
-        throw std::domain_error("Assembler::assemble: non-finite gradient");
+        throw std::domain_error("EnergyAssembler::assemble: non-finite gradient");
     if (hessian && !Eigen::Map<const Vec>(hessian->valuePtr(), hessian->nonZeros()).allFinite())
-        throw std::domain_error("Assembler::assemble: non-finite Hessian");
+        throw std::domain_error("EnergyAssembler::assemble: non-finite Hessian");
 }
 
 } // namespace litepgo::dof

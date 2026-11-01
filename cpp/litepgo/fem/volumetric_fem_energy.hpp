@@ -8,6 +8,7 @@
 #include "litepgo/fem/kinematics/volumetric_element.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include <concepts>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -26,21 +27,55 @@ class VolumetricFemEnergy final : public energy::MeshEnergy {
                         std::vector<FpField> Fp, std::vector<ThetaField> theta)
         : energy::MeshEnergy(
               displacement_map,
-              [this](int e, const Eigen::MatrixXd& u, Vec* g, Eigen::MatrixXd* H) {
-                  const auto index = static_cast<std::size_t>(e);
-                  const CachedDeformationGradient F(transforms_[index].to_coefficients(u), derivatives_[index]);
-                  const VolumetricMaterialLocalEnergyF3D<Material> local(F, Fp_[index], theta_[index]);
-                  const double value = integration_[index].eval(local, g, H);
-                  transforms_[index].pullback(g, H);
-                  return value;
+              [this](std::span<const int> ids, const energy::BatchMatrix& inputs, energy::BatchMatrix* gradients,
+                     energy::BatchMatrix* hessians) {
+                  const Eigen::Index count = inputs.rows(), n = inputs.cols();
+                  Vec values(count);
+                  if (gradients)
+                      gradients->resize(count, n);
+                  if (hessians)
+                      hessians->resize(count * n, n);
+                  for (Eigen::Index b = 0; b < count; ++b) {
+                      const int e = ids[b];
+                      Eigen::MatrixXd u = inputs.row(b).reshaped<Eigen::RowMajor>(
+                          n / BasisDofTransform<UBasis>::dofs_per_vertex, BasisDofTransform<UBasis>::dofs_per_vertex);
+                      std::optional<StridedVecRef> g;
+                      std::optional<StridedMatRef> H;
+                      if (gradients)
+                          g.emplace(gradients->row(b).transpose());
+                      if (hessians) {
+                          Eigen::Map<Eigen::MatrixXd, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>> block(
+                              hessians->data() + b * n * n, n, n, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>(1, n));
+                          H.emplace(block);
+                      }
+                      const auto index = static_cast<std::size_t>(e);
+                      const CachedDeformationGradient F(transforms_[index].to_coefficients(std::move(u)),
+                                                        derivatives_[index]);
+                      const VolumetricMaterialLocalEnergyF3D<Material> local(F, Fp_[index], theta_[index]);
+                      values[b] = integration_[index].eval_into(local, g ? &*g : nullptr, H ? &*H : nullptr);
+                      transforms_[index].pullback_into(g ? &*g : nullptr, H ? &*H : nullptr);
+                  }
+                  return values;
               },
-              [this](int e, const Eigen::MatrixXd& u, const Eigen::MatrixXd& du) {
-                  const auto index = static_cast<std::size_t>(e);
-                  const CachedDeformationGradient F(transforms_[index].to_coefficients(u), derivatives_[index]);
-                  const VolumetricMaterialLocalEnergyF3D<Material> local(F, Fp_[index], theta_[index]);
-                  const auto& delta_coefficients = transforms_[index].to_coefficients(du);
-                  const Vec delta = delta_coefficients.template reshaped<Eigen::RowMajor>();
-                  return integration_[index].max_feasible_step(local, delta);
+              256,
+              [this](std::span<const int> ids, const energy::BatchMatrix& inputs, const energy::BatchMatrix& deltas) {
+                  Vec steps(ids.size());
+                  const Eigen::Index n = inputs.cols();
+                  for (Eigen::Index b = 0; b < inputs.rows(); ++b) {
+                      const int e = ids[b];
+                      const Eigen::MatrixXd u = inputs.row(b).reshaped<Eigen::RowMajor>(
+                          n / BasisDofTransform<UBasis>::dofs_per_vertex, BasisDofTransform<UBasis>::dofs_per_vertex);
+                      const Eigen::MatrixXd du = deltas.row(b).reshaped<Eigen::RowMajor>(
+                          n / BasisDofTransform<UBasis>::dofs_per_vertex, BasisDofTransform<UBasis>::dofs_per_vertex);
+
+                      const auto index = static_cast<std::size_t>(e);
+                      const CachedDeformationGradient F(transforms_[index].to_coefficients(u), derivatives_[index]);
+                      const VolumetricMaterialLocalEnergyF3D<Material> local(F, Fp_[index], theta_[index]);
+                      const auto& delta_coefficients = transforms_[index].to_coefficients(du);
+                      const Vec delta = delta_coefficients.template reshaped<Eigen::RowMajor>();
+                      steps[b] = integration_[index].max_feasible_step(local, delta);
+                  }
+                  return steps;
               }),
           Fp_(std::move(Fp)), theta_(std::move(theta)), rest_position_fields_(std::move(rest_position_fields)) {
         const auto count = static_cast<std::size_t>(displacement_map.num_elements());

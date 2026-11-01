@@ -48,6 +48,28 @@ double LocalEnergyT<ParamDim>::accumulate(const Coordinate& xi, double weight, E
     return result;
 }
 
+template <int ParamDim>
+double LocalEnergyT<ParamDim>::accumulate_into(const Coordinate& xi, double weight, StridedVecRef* gradient,
+                                               StridedMatRef* hessian) const {
+    const int n = num_dofs();
+    if ((gradient && gradient->size() != n) || (hessian && (hessian->rows() != n || hessian->cols() != n)))
+        throw std::invalid_argument("LocalEnergyT::accumulate_into: invalid output dimensions");
+    Eigen::VectorXd g;
+    Eigen::MatrixXd H;
+    if (gradient)
+        g = *gradient;
+    if (hessian)
+        H = *hessian;
+    const double value = accumulate_for_integration(xi, weight, gradient ? &g : nullptr, hessian ? &H : nullptr);
+    if ((gradient && g.size() != n) || (hessian && (H.rows() != n || H.cols() != n)))
+        throw std::logic_error("LocalEnergyT::accumulate_into: resized output");
+    if (gradient)
+        *gradient = g;
+    if (hessian)
+        *hessian = H;
+    return value;
+}
+
 template class LocalEnergyT<2>;
 template class LocalEnergyT<3>;
 

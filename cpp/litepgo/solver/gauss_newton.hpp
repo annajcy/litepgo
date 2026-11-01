@@ -1,16 +1,11 @@
 #pragma once
 
 #include "litepgo/core/types.hpp"
-#include <functional>
+#include "litepgo/linalg/sparse_solver/sparse_solver.hpp"
+#include "litepgo/response/response.hpp"
 #include <limits>
 
 namespace litepgo::solver {
-
-// Returns a nonempty residual. If requested, fills its analytic Jacobian
-// (residuals by parameters). Dimensions stay fixed throughout a solve.
-// Non-finite outputs are errors. domain_error at a trial means infeasible;
-// exceptions at the current point and all other exceptions propagate.
-using ResidualFunction = std::function<Vec(const ConstVecRef&, Eigen::MatrixXd*)>;
 
 struct GaussNewtonOptions {
     double gradient_tolerance = std::numeric_limits<double>::quiet_NaN();
@@ -28,10 +23,17 @@ struct GaussNewtonResult {
     GaussNewtonStatus status = GaussNewtonStatus::MaxIterations;
 };
 
-// Minimizes 0.5*||r||^2 with dense damped Gauss-Newton. No numerical derivatives.
+// Minimizes 0.5*||r||^2 with sparse normal-equation damped Gauss-Newton. No numerical derivatives.
+// Solves (J^T J + damping I) p = -J^T r; scale inputs and residuals appropriately.
+// Symbolic analysis is reused while the normal-matrix pattern is unchanged.
+// The three-argument overload uses AutoSparseSolver.
 // Trials request only residuals. Convergence means ||J^T r||_inf <= tolerance,
-// not a zero residual or a guarantee of a local minimum. Callbacks must be deterministic.
-GaussNewtonResult gauss_newton_solve(const ResidualFunction& residual, const ConstVecRef& initial,
+// not a zero residual or a guarantee of a local minimum. Responses must be deterministic. The value is interpreted as a
+// residual targeting zero.
+GaussNewtonResult gauss_newton_solve(response::Response& residual, const ConstVecRef& initial,
                                      const GaussNewtonOptions& options);
+
+GaussNewtonResult gauss_newton_solve(response::Response& residual, const ConstVecRef& initial,
+                                     const GaussNewtonOptions& options, linalg::SparseSolver& linear_solver);
 
 } // namespace litepgo::solver

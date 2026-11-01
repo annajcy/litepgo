@@ -359,27 +359,6 @@ TEST(VolumetricElement3D, OwnsIntegrationWeightsWithoutRetainingReferenceField) 
     });
 }
 
-TEST(VolumetricElement3D, IntegratesPlasticAndParameterLocalEnergiesWithoutChoosingAnActiveBlock) {
-    const ReferenceField X;
-    const VolumetricElement3D<TetCentroidQuadrature> element(X);
-    const Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
-    const IdentityField3D F((1.1 * I).reshaped()), Fp(I.reshaped()), theta(Eigen::Vector2d(2, 3));
-    const VolumetricMaterialLocalEnergyFp3D<NeoHookean> plastic(F, Fp, theta);
-    const VolumetricMaterialLocalEnergyTheta3D<NeoHookean> parameters(F, Fp, theta);
-    const VolumetricMaterialInputs inputs{1.1 * I, I, Eigen::Vector2d(2, 3)};
-    Eigen::VectorXd g;
-    Eigen::MatrixXd H;
-    EXPECT_NEAR(element.eval(plastic, &g, &H), NeoHookean::eval_W(inputs) / 6, 1e-14);
-    EXPECT_EQ(g.size(), 9);
-    EXPECT_TRUE(g.isApprox(NeoHookean::eval_dW_dFp(inputs).reshaped() / 6, 1e-14));
-    EXPECT_TRUE(H.isApprox(NeoHookean::eval_d2W_dFp2(inputs) / 6, 1e-14));
-    EXPECT_NEAR(element.eval(parameters, &g, &H), NeoHookean::eval_W(inputs) / 6, 1e-14);
-    EXPECT_EQ(g.size(), 2);
-    EXPECT_TRUE(g.isApprox(NeoHookean::eval_dW_dtheta(inputs) / 6, 1e-14));
-    EXPECT_EQ(H, Eigen::Matrix2d::Zero());
-    EXPECT_NEAR(element.max_feasible_step(parameters, Eigen::Vector2d(0, -12)), 0.225, 1e-14);
-}
-
 struct ValueOnlyLocalEnergy : QuadraticLocalEnergy {
     bool has_gradient() const noexcept override {
         return false;
@@ -482,3 +461,84 @@ TEST(VolumetricElement3D, InvertedStatesAndNumericalOverflowThrowDomainError) {
 } // namespace
 
 } // namespace litepgo::fem::test
+
+TEST(VolumetricElementViews, IntegratesIntoPaddedStridedOutputsWithoutTouchingNeighbors) {
+    using namespace litepgo;
+    using namespace litepgo::fem;
+    Eigen::Matrix<double, 4, 3> nodes;
+    for (int i = 0; i < 4; ++i)
+        nodes.row(i) = TetP1Basis::reference_node(i).transpose();
+    const InterpolatedField3D<TetP1Basis> X(nodes);
+    const VolumetricElement3D<TetCentroidQuadrature> element(X);
+    const IdentityField3D F((1.1 * Eigen::Matrix3d::Identity()).eval().reshaped());
+    const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
+    const IdentityField3D theta(Eigen::Vector2d(2, 3));
+    const VolumetricMaterialLocalEnergyF3D<NeoHookean> local(F, Fp, theta);
+    Vec expected_g;
+    Eigen::MatrixXd expected_H;
+    const double expected = element.eval(local, &expected_g, &expected_H);
+    Vec storage = Vec::Constant(22, -123);
+    Eigen::Map<Vec, 0, Eigen::InnerStride<2>> mapped_g(storage.data() + 2, 9);
+    StridedVecRef g(mapped_g);
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> matrix =
+        Eigen::MatrixXd::Constant(11, 13, -123);
+    Eigen::Map<Eigen::MatrixXd, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>> mapped_H(
+        matrix.data() + 15, 9, 9, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>(1, 13));
+    StridedMatRef H(mapped_H);
+    EXPECT_DOUBLE_EQ(element.eval_into(local, &g, &H), expected);
+    EXPECT_TRUE(g.isApprox(expected_g));
+    EXPECT_TRUE(H.isApprox(expected_H));
+    for (int i = 0; i < storage.size(); ++i)
+        if (i < 2 || i > 18 || i % 2 != 0)
+            EXPECT_DOUBLE_EQ(storage[i], -123);
+    for (int i = 0; i < matrix.rows(); ++i)
+        for (int j = 0; j < matrix.cols(); ++j)
+            if (i < 1 || i > 9 || j < 2 || j > 10)
+                EXPECT_DOUBLE_EQ(matrix(i, j), -123);
+    EXPECT_DOUBLE_EQ(element.eval_into(local, nullptr, &H), expected);
+    EXPECT_DOUBLE_EQ(element.eval_into(local, &g, nullptr), expected);
+    EXPECT_DOUBLE_EQ(element.eval_into(local, nullptr, nullptr), expected);
+    EXPECT_TRUE(g.isApprox(expected_g));
+    EXPECT_TRUE(H.isApprox(expected_H));
+    StridedVecRef wrong(storage.head(8));
+    EXPECT_THROW(element.eval_into(local, &wrong, &H), std::invalid_argument);
+    EXPECT_TRUE(H.isApprox(expected_H));
+}
+
+#include "litepgo/fem/material/volumetric/volumetric_material_force_local_response.hpp"
+
+TEST(VolumetricElementViews, ResponseWritesPaddedRectangularBatchBlocks) {
+    using namespace litepgo;
+    using namespace litepgo::fem;
+    Eigen::Matrix<double, 4, 3> nodes;
+    for (int i = 0; i < 4; ++i)
+        nodes.row(i) = TetP1Basis::reference_node(i).transpose();
+    const InterpolatedField3D<TetP1Basis> X(nodes);
+    const VolumetricElement3D<TetCentroidQuadrature> element(X);
+    const IdentityField3D F((1.1 * Eigen::Matrix3d::Identity()).eval().reshaped());
+    const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
+    const IdentityField3D theta(Eigen::Vector2d(2, 3));
+    const VolumetricMaterialForceLocalResponse3D<NeoHookean> local(F, Fp, theta);
+    Eigen::MatrixXd expected_J;
+    const Vec expected = element.eval(local, &expected_J);
+    Eigen::MatrixXd values = Eigen::MatrixXd::Constant(2, 9, -123);
+    StridedVecRef v(values.row(1).transpose());
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> storage =
+        Eigen::MatrixXd::Constant(11, 4, -123);
+    Eigen::Map<Eigen::MatrixXd, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>> block(
+        storage.data() + 5, 9, 2, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>(1, 4));
+    StridedMatRef J(block);
+    element.eval_into(local, v, &J);
+    EXPECT_TRUE(v.isApprox(expected));
+    EXPECT_TRUE(J.isApprox(expected_J));
+    EXPECT_TRUE(values.row(0).isConstant(-123));
+    EXPECT_TRUE(storage.row(0).isConstant(-123));
+    EXPECT_TRUE(storage.row(10).isConstant(-123));
+    EXPECT_TRUE(storage.col(0).isConstant(-123));
+    EXPECT_TRUE(storage.col(3).isConstant(-123));
+    element.eval_into(local, v);
+    EXPECT_TRUE(v.isApprox(expected));
+    StridedVecRef wrong(values.row(0).head(8).transpose());
+    EXPECT_THROW(element.eval_into(local, wrong, &J), std::invalid_argument);
+    EXPECT_TRUE(J.isApprox(expected_J));
+}

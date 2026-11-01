@@ -9,8 +9,8 @@ namespace litepgo::fem {
 // Requires finite theta = [lambda, mu], lambda >= 0, mu > 0,
 // and finite F/Fp (invalid_argument otherwise). Non-positive det(Fp)/det(Fe)
 // or unrepresentable kinematics, density, or requested derivatives throw std::domain_error.
-// Derivatives hold the other arguments fixed. dW_dF/dW_dFp retain 3-by-3 matrix shape;
-// their 9-by-9 Hessians differentiate column-major vec(F)/vec(Fp).
+// Derivatives hold the other arguments fixed. dW_dF retains 3-by-3 matrix shape;
+// its 9-by-9 Hessian differentiates column-major vec(F).
 class NeoHookean final {
   public:
     static constexpr int num_parameters = 2;
@@ -18,10 +18,13 @@ class NeoHookean final {
     static double eval_W(const VolumetricMaterialInputs& inputs);
     static Eigen::Matrix3d eval_dW_dF(const VolumetricMaterialInputs& inputs);
     static Eigen::Matrix<double, 9, 9> eval_d2W_dF2(const VolumetricMaterialInputs& inputs);
-    static Eigen::Matrix3d eval_dW_dFp(const VolumetricMaterialInputs& inputs);
-    static Eigen::Matrix<double, 9, 9> eval_d2W_dFp2(const VolumetricMaterialInputs& inputs);
-    static Eigen::Vector2d eval_dW_dtheta(const VolumetricMaterialInputs& inputs);
-    static Eigen::Matrix2d eval_d2W_dtheta2(const VolumetricMaterialInputs& inputs);
+
+    // d vec(dW/dF) / d theta at fixed F and Fp. Rows use i+3*j;
+    // columns follow theta=[lambda, mu]. Same domain checks as eval_dW_dF.
+    static Eigen::Matrix<double, 9, num_parameters> eval_d2W_dF_dtheta(const VolumetricMaterialInputs& inputs);
+
+    // d vec(dW/dF) / d vec(Fp), at fixed F and theta; both use i+3*j.
+    static Eigen::Matrix<double, 9, 9> eval_d2W_dF_dFp(const VolumetricMaterialInputs& inputs);
 
     // Inputs vary affinely: inputs+t*delta_inputs. Inactive channels have zero
     // increments. Preserves det(F), det(Fp)>0 and lambda>=0, mu>0 on [0,alpha].

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from litepgo import dof, fem, linalg, mesh, solver
+from litepgo import response, dof, fem, linalg, mesh, solver
 
 
 def main():
@@ -49,21 +49,11 @@ def main():
         if not need_jacobian:
             return force, None
 
-        # Fp=I: dP/dlambda = log(det F) F^-T, dP/dmu = F-F^-T.
-        B = np.zeros((positions.size, 2))
-        xi = fem.TetCentroidQuadrature.points()[0]
-        for e, X in enumerate(geometry):
-            u = XField(mapping.gather(e, result.x))
-            deformation = fem.DeformationGradientField3D(u, X)
-            F = deformation.eval_value(xi).reshape(3, 3, order="F")
-            inverse_transpose = np.linalg.inv(F).T
-            stress_derivative = np.column_stack([
-                (np.log(np.linalg.det(F)) * inverse_transpose).ravel(order="F"),
-                (F - inverse_transpose).ravel(order="F"),
-            ])
-            volume = np.linalg.det(X.eval_dvalue_dxi(xi)) / 6
-            local = volume * deformation.eval_dvalue_dcoeffs(xi).T @ stress_derivative
-            B[mapping.dof_indices(e)] += local
+        # Fixed-state partial derivative; the sensitivity solve below accounts for du/dtheta.
+        Force = fem.VolumetricFemForceMaterialResponse[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
+        force_response = Force(dof.ConstantDofMap(topology, 2), mapping, geometry, result.x,
+                               [fem.IdentityField3D(np.eye(3).ravel())] * topology.num_cells)
+        B = force_response.eval_jacobian(theta).toarray()
         K = elastic.eval_hessian(result.x)  # Python eval_hessian returns the exact Hessian.
         if not linear_solver.compute(fixed.reduce(K)):
             raise RuntimeError("Sensitivity factorization failed")
@@ -92,19 +82,24 @@ def main():
     observed = observed[0]
     scales = np.maximum(np.abs(observed), 1e-8)
 
-    def residual(q, need_jacobian):
-        with np.errstate(over="ignore"):
-            theta = np.exp(q)
-        values = measurements(theta, need_jacobian)
-        if values is None:
-            return None
-        forces, J = values
-        r = (forces - observed) / scales
-        return (r, J * theta[None, :] / scales[:, None]) if need_jacobian else r
+    class MaterialResidual(response.FixedPatternResponse):
+        def __init__(self):
+            super().__init__(np.ones((2, 2)))
 
+        def eval_values(self, q, need_jacobian):
+            with np.errstate(over="ignore"):
+                theta = np.exp(q)
+            values = measurements(theta, need_jacobian)
+            if values is None:
+                return None
+            forces, J = values
+            r = (forces - observed) / scales
+            return (r, J * theta[None, :] / scales[:, None]) if need_jacobian else r
+
+    residual = MaterialResidual()
     result = solver.gauss_newton_solve(residual, np.zeros(2), solver.GaussNewtonOptions(gradient_tolerance=1e-8))
     fitted = np.exp(result.x)
-    r = residual(result.x, False)
+    r = residual.eval_value(result.x)
     parameter_error = np.linalg.norm(fitted - truth) / np.linalg.norm(truth)
     reference = reaction(truth, 2, -0.07, False)
     prediction = reaction(fitted, 2, -0.07, False)

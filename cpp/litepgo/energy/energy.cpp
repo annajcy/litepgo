@@ -61,14 +61,18 @@ double Energy::eval(const ConstVecRef& x, Vec* gradient, SpMat* hessian, Hessian
         throw std::logic_error("Energy::eval: the energy returned " + std::to_string(value) +
                                "; values must be finite, with std::domain_error thrown at infeasible states");
     }
+    if (gradient && (gradient->size() != num_dofs_ || !gradient->allFinite()))
+        throw std::logic_error("Energy::eval: invalid gradient");
+    if (hessian && (!linalg::same_pattern(*hessian, pattern_) || !hessian->coeffs().allFinite()))
+        throw std::logic_error("Energy::eval: invalid Hessian");
     return value;
 }
 
 double Energy::max_feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const {
     BusyScope scope(busy_, "Energy");
     check_size(x, "max_feasible_step");
-    if (dx.size() != num_dofs_) {
-        throw std::invalid_argument("Energy::max_feasible_step: dx must have num_dofs entries");
+    if (dx.size() != num_dofs_ || !dx.allFinite()) {
+        throw std::invalid_argument("Energy::max_feasible_step: dx must have num_dofs finite entries");
     }
     const double alpha = feasible_step(x, dx);
     if (!(alpha >= 0.0 && alpha <= 1.0)) {
@@ -99,8 +103,8 @@ double Energy::feasible_step(const ConstVecRef&, const ConstVecRef&) const {
 }
 
 void Energy::check_size(const ConstVecRef& x, const char* caller) const {
-    if (x.size() != num_dofs_) {
-        throw std::invalid_argument(std::string("Energy::") + caller + ": x must have num_dofs entries");
+    if (x.size() != num_dofs_ || !x.allFinite()) {
+        throw std::invalid_argument(std::string("Energy::") + caller + ": x must have num_dofs finite entries");
     }
 }
 

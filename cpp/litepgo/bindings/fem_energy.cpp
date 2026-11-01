@@ -8,6 +8,8 @@
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/shell_fem_energy.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
+#include "litepgo/fem/volumetric_fem_force_fp_response.hpp"
+#include "litepgo/fem/volumetric_fem_force_material_response.hpp"
 #include <nanobind/eigen/sparse.h>
 
 #include <nanobind/eigen/dense.h>
@@ -69,6 +71,29 @@ template <class M, class B, class Q> void bind_volumetric(nb::module_& m) {
     register_instance(m, "VolumetricFemEnergy", key, nb::type<Energy>());
 }
 
+template <class ParameterMap, class Force, class Cls>
+void bind_force_init(Cls& cls, const char* fixed_name, const char* doc) {
+    cls.def(
+        "__init__",
+        [](Force* self, const ParameterMap& parameter_map, const dof::VertexDofMap& displacement_map,
+           const Fields& rest_position_fields, Vec displacement, const Fields& fixed, int batch_size) {
+            new (self) Force(parameter_map, displacement_map, shared(rest_position_fields), std::move(displacement),
+                             shared(fixed), batch_size);
+        },
+        "parameter_map"_a, "displacement_map"_a, "rest_position_fields"_a, "displacement"_a, nb::arg(fixed_name),
+        "batch_size"_a = 256, doc);
+}
+template <class Force, class M, class B, class Q>
+void bind_force(nb::module_& m, const char* template_name, const char* fixed_name, const char* doc) {
+    const nb::tuple key = nb::make_tuple(nb::type<M>(), nb::type<B>(), nb::type<Q>());
+    const std::string name = std::string(template_name) + "[" + class_name(key[0]) + ", " + class_name(key[1]) + ", " +
+                             class_name(key[2]) + "]";
+    auto cls = nb::class_<Force, response::Response>(m, name.c_str());
+    bind_force_init<dof::ConstantDofMap, Force>(cls, fixed_name, doc);
+    bind_force_init<dof::ElementDofMap, Force>(cls, fixed_name, doc);
+    register_instance(m, template_name, key, nb::type<Force>());
+}
+
 template <class M> void bind_shell(nb::module_& m) {
     using Energy = ShellFemEnergy<M>;
     const nb::tuple key = nb::make_tuple(nb::type<M>());
@@ -80,6 +105,17 @@ template <class M> void bind_shell(nb::module_& m) {
              "One rest data, positive thickness and parameter vector per face, in map order.");
     register_instance(m, "ShellFemEnergy", key, nb::type<Energy>());
 }
+// Keep force-response instantiations aligned with the corresponding energy.
+template <class M, class B, class Q> void bind_volumetric_apis(nb::module_& m) {
+    bind_volumetric<M, B, Q>(m);
+    using MaterialForce = VolumetricFemForceMaterialResponse<M, B, Q, SharedField3D, SharedField3D>;
+    using FpForce = VolumetricFemForceFpResponse<M, B, Q, SharedField3D, SharedField3D>;
+    bind_force<MaterialForce, M, B, Q>(m, "VolumetricFemForceMaterialResponse", "Fp",
+                                       "Fixed displacement/geometry/Fp; force and material-parameter Jacobian.");
+    bind_force<FpForce, M, B, Q>(m, "VolumetricFemForceFpResponse", "theta",
+                                 "Fixed displacement/geometry/theta; force and column-major Fp Jacobian.");
+}
+
 } // namespace
 
 void bind_energies(nb::module_& m) {
@@ -87,11 +123,11 @@ void bind_energies(nb::module_& m) {
     bind_point_map<HexQ1Basis>(m, "_point_map_hex_q1");
     bind_point_map<HexHermiteBasis>(m, "_point_map_hex_hermite");
     // Add an instantiation here to make it available as Template[args] in Python.
-    bind_volumetric<NeoHookean, TetP1Basis, TetCentroidQuadrature>(m);
-    bind_volumetric<NeoHookean, HexQ1Basis, GaussLegendre3D<2>>(m);
-    bind_volumetric<NeoHookean, HexQ1Basis, GaussLegendre3D<4>>(m);
-    bind_volumetric<NeoHookean, HexHermiteBasis, GaussLegendre3D<2>>(m);
-    bind_volumetric<NeoHookean, HexHermiteBasis, GaussLegendre3D<4>>(m);
+    bind_volumetric_apis<NeoHookean, TetP1Basis, TetCentroidQuadrature>(m);
+    bind_volumetric_apis<NeoHookean, HexQ1Basis, GaussLegendre3D<2>>(m);
+    bind_volumetric_apis<NeoHookean, HexQ1Basis, GaussLegendre3D<4>>(m);
+    bind_volumetric_apis<NeoHookean, HexHermiteBasis, GaussLegendre3D<2>>(m);
+    bind_volumetric_apis<NeoHookean, HexHermiteBasis, GaussLegendre3D<4>>(m);
     bind_shell<KoiterStVK>(m);
 }
 

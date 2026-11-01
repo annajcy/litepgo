@@ -2,6 +2,7 @@
 
 import numpy as np
 
+from litepgo.response import FixedPatternResponse
 from litepgo.solver import GaussNewtonOptions, GaussNewtonStatus, gauss_newton_solve
 
 
@@ -9,15 +10,20 @@ def main():
     t = np.linspace(0., 2., 9)
     observations = 2.5 * np.exp(-0.8 * t)
 
-    def residual(parameters, need_jacobian):
-        amplitude, rate = parameters
-        decay = np.exp(-rate * t)
-        r = amplitude * decay - observations
-        # Trial points request residuals only; skip the Jacobian in that case.
-        if not need_jacobian:
-            return r
-        return r, np.column_stack([decay, -amplitude * t * decay])
+    class ExponentialResidual(FixedPatternResponse):
+        def __init__(self):
+            super().__init__(np.ones((t.size, 2)))
 
+        def eval_values(self, parameters, need_jacobian):
+            amplitude, rate = parameters
+            decay = np.exp(-rate * t)
+            r = amplitude * decay - observations
+            # Trial points request residuals only; skip the Jacobian in that case.
+            if not need_jacobian:
+                return r
+            return r, np.column_stack([decay, -amplitude * t * decay])
+
+    residual = ExponentialResidual()
     result = gauss_newton_solve(residual, np.array([1., 0.3]), GaussNewtonOptions(gradient_tolerance=1e-10))
     assert result.status == GaussNewtonStatus.Converged
     np.testing.assert_allclose(result.x, [2.5, 0.8], atol=1e-8, rtol=0)

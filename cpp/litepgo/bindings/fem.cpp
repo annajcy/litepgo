@@ -107,10 +107,8 @@ template <class M> void bind_volumetric_material(nb::module_& m, const char* nam
     LITEPGO_VOLUMETRIC(eval_W);
     LITEPGO_VOLUMETRIC(eval_dW_dF);
     LITEPGO_VOLUMETRIC(eval_d2W_dF2);
-    LITEPGO_VOLUMETRIC(eval_dW_dFp);
-    LITEPGO_VOLUMETRIC(eval_d2W_dFp2);
-    LITEPGO_VOLUMETRIC(eval_dW_dtheta);
-    LITEPGO_VOLUMETRIC(eval_d2W_dtheta2);
+    LITEPGO_VOLUMETRIC(eval_d2W_dF_dtheta);
+    LITEPGO_VOLUMETRIC(eval_d2W_dF_dFp);
 #undef LITEPGO_VOLUMETRIC
     cls.def_static(
         "eval_feasible_step",
