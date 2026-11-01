@@ -1248,3 +1248,31 @@ borrowed data must remain deterministic for the response lifetime.
 `material_fit.cpp` and `.py` use this response, then form reaction derivatives
 as `B + K J`. The C++ regression compares both displacement and reaction
 sensitivities against independently re-solved central differences.
+
+### Shell equilibrium material fitting
+
+`shell_equilibrium_material_fit.cpp` and `.py` use `StaticEquilibriumResponse`
+with `ShellFemEnergy<KoiterStVK>` and `ShellFemForceMaterialResponse<KoiterStVK>`.
+They construct a nine-vertex, eight-triangle patch with fixed thickness 0.1.
+All boundary vertex displacements are prescribed, combining anisotropic stretch,
+shear and out-of-plane bending; the three interior displacement DOFs are free.
+The asymmetric boundary loading makes the interior equilibrium depend on material
+parameters. Every evaluation starts from the same prescribed displacement field.
+
+Synthetic observations are the 24 boundary reaction components at equilibrium
+for plane-stress parameters `[lambda_ps, mu] = [2, 3]`. Gauss–Newton fits these
+from `[0.7, 1.2]`, using reaction derivatives `B + K du/dtheta` with exact K.
+The examples check parameter identifiability, nonzero state sensitivity, fixed
+boundary values, and free-force residuals. Both displacement and reaction
+Jacobians are checked against independently re-solved central differences at
+steps 1e-3 and 1e-4. A held-out boundary load of 0.6 times the training load
+checks prediction after fitting. Geometry and thickness are not optimized;
+measurements contain no noise. The original `shell_material_fit` remains the
+fixed-pose force-calibration example.
+
+```sh
+cmake --build build/release --target shell_equilibrium_material_fit -j 4
+./build/release/example/fem/shell_equilibrium_material_fit
+.venv/bin/python example/fem/shell_equilibrium_material_fit.py
+.venv/bin/python -m pytest -q tests/python/test_shell_equilibrium_material_fit_example.py
+```
