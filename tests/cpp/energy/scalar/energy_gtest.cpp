@@ -52,7 +52,7 @@ TEST(Energy, ConveniencesAgreeWithEvaluate) {
     Vec gradient;
     SpMat hessian = energy.hessian_pattern();
     const double value = energy.eval(x, &gradient, &hessian, HessianKind::Projected);
-    EXPECT_EQ(value, energy.eval_value(x));
+    EXPECT_DOUBLE_EQ(value, energy.eval_value(x));
     EXPECT_EQ(gradient, energy.eval_gradient(x));
     EXPECT_EQ(Eigen::MatrixXd(hessian), Eigen::MatrixXd(energy.eval_hessian(x, HessianKind::Projected)));
 }

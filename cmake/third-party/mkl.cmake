@@ -90,6 +90,8 @@ if(LITEPGO_WITH_MKL)
         target_link_libraries(litepgo_mkl INTERFACE litepgo::${name})
     endforeach()
     target_link_libraries(litepgo_mkl INTERFACE TBB::tbb)
+    # Keep TBB a direct dependency so the executable's RUNPATH also resolves MKL's runtime.
+    target_link_options(litepgo_mkl INTERFACE "LINKER:--no-as-needed")
     target_include_directories(litepgo_mkl SYSTEM INTERFACE "${mkl_include_dir}")
     target_compile_definitions(litepgo_mkl INTERFACE LITEPGO_HAS_MKL)
     message(STATUS "oneMKL 2026.1 PARDISO from ${mkl_lib_dir}")
