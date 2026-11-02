@@ -195,6 +195,8 @@ def parse_equilibrium(stdout):
 )
 def test_python_examples_match_cpp(tmp_path, name, suffix):
     executable = EXAMPLES / "equilibrium" / name
+    if sys.platform == "win32":
+        executable = executable.with_suffix(".exe")
     if not executable.exists():
         pytest.skip(f"{executable} is not built")
     script = Path(__file__).resolve().parents[2] / "examples" / "fem" / "equilibrium" / f"{name}.py"
@@ -249,6 +251,8 @@ def parse_plastic_twist(stdout):
 )
 def test_plastic_twist_examples(tmp_path, name, asset):
     executable = EXAMPLES / "plasticity" / name
+    if sys.platform == "win32":
+        executable = executable.with_suffix(".exe")
     if not executable.exists():
         pytest.skip(f"{executable} is not built")
     script = Path(__file__).resolve().parents[2] / "examples" / "fem" / "plasticity" / f"{name}.py"

@@ -1,7 +1,7 @@
 """Locate independent points and interpolate physical DOFs for P1, Q1 and Hermite.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/fem/embedding/point_embedding.py
+    uv run --no-sync python examples/fem/embedding/point_embedding.py
 """
 
 import numpy as np

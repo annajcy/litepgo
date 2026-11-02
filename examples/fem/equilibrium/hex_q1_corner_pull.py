@@ -1,7 +1,7 @@
 """Python mirror of hex_q1_corner_pull.cpp: pull a hex box's corners and solve static equilibrium.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/fem/equilibrium/hex_q1_corner_pull.py
+    uv run --no-sync python examples/fem/equilibrium/hex_q1_corner_pull.py
 """
 
 import argparse

@@ -4,7 +4,7 @@ A small triangulated patch has prescribed boundary displacements and a free
 interior vertex. Thickness is fixed; observations are synthetic and noiseless.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/fem/fitting/shell_equilibrium_material_fit.py
+    uv run --no-sync python examples/fem/fitting/shell_equilibrium_material_fit.py
 """
 
 import numpy as np

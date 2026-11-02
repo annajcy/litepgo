@@ -1,7 +1,7 @@
 """Subclass fixed/dynamic Energy; request values, gradients and sparse Hessians.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/energy/scalar/custom_energy.py
+    uv run --no-sync python examples/energy/scalar/custom_energy.py
 """
 
 import numpy as np

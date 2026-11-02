@@ -1,7 +1,7 @@
 """Fit y(t) = amplitude * exp(-rate * t) with an analytic Jacobian.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/solver/gauss_newton_fit.py
+    uv run --no-sync python examples/solver/gauss_newton_fit.py
 """
 
 import numpy as np

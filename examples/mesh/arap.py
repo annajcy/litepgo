@@ -1,7 +1,7 @@
 """Uniform-weight vertex ARAP, alternating local rotations and global positions.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/mesh/arap.py
+    uv run --no-sync python examples/mesh/arap.py
 """
 
 from pathlib import Path

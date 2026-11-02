@@ -1,7 +1,7 @@
 """Subclass fixed/dynamic Response and pass the residual object to Gauss-Newton.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/energy/response/custom_response.py
+    uv run --no-sync python examples/energy/response/custom_response.py
 """
 
 import numpy as np

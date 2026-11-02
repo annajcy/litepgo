@@ -26,7 +26,7 @@ flowchart TB
   assembly --> api["Global Energy / Response"]
 ```
 
-Native headers are under `cpp/litepgo/fem/`; Python's `litepgo.fem` facade
+Native headers are under `src/cpp/fem/`; Python's `litepgo.fem` facade
 exposes the compiled basis, quadrature, and material combinations. Link
 `litepgo::fem` in C++. The high-level wrappers perform basis transforms and
 integration; custom local constructions must apply each measure and pullback

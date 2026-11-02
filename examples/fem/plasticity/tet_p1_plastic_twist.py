@@ -1,7 +1,7 @@
 """Python mirror of tet_p1_plastic_twist.cpp: release and clamp a tet bar with a plastic twist Fp.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/fem/plasticity/tet_p1_plastic_twist.py
+    uv run --no-sync python examples/fem/plasticity/tet_p1_plastic_twist.py
 """
 
 import argparse

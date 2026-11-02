@@ -22,7 +22,7 @@ flowchart TB
   binding --> native
 ```
 
-The Python files in `python/litepgo/` expose public names from the compiled
+The Python files in `src/python/` expose public names from the compiled
 extension. They do not implement a second FEM or nonlinear solver. NumPy/SciPy
 provide array and sparse-matrix interfaces; `fem.Template` selects concrete
 instantiations already compiled into `_core`.
@@ -85,8 +85,8 @@ API contracts and examples.
 | [Spatial](spatial.md) | Generic AABB indexing and overlap queries | Contact broad phase and FEM point location |
 | [Torch](torch.md) | Optional first-order autograd bridge | Python optimizers |
 
-Native module sources live under `cpp/litepgo/<module>/`; public Python facades
-live under `python/litepgo/`. Common types and `build_info()` are exported in the
+Native module sources live under `src/cpp/<module>/`; public Python facades
+live under `src/python/`. Common types and `build_info()` are exported in the
 root `litepgo` namespace, rather than through a `litepgo.common` Python module.
 
 ## What a model owns

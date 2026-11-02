@@ -26,7 +26,7 @@ flowchart TB
 
 For displacement-based simulation, `AffineMappedEnergy` connects surface
 positions to the simulation vector. The generic energy composite and Newton stay
-outside contact. Native code is under `cpp/litepgo/contact/`; Python uses
+outside contact. Native code is under `src/cpp/contact/`; Python uses
 `litepgo.contact`. The separate optional IPC Toolkit energy implements its own
 backend path; see [collision safety and diagnostics](collision-safety.md).
 

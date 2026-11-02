@@ -1,3 +1,9 @@
+---
+prev:
+  text: API references
+  link: /reference
+---
+
 # Development and documentation maintenance
 
 The library is built from explicit CMake modules. Source code, tests, examples,
@@ -8,14 +14,19 @@ together. Run commands below from its root.
 
 | Directory | Role |
 | --- | --- |
-| `cpp/litepgo/` | C++ public modules and their implementations |
-| `cpp/litepgo/bindings/` | nanobind registrations |
-| `python/litepgo/` | Public Python facades and optional Torch adapters |
+| `src/cpp/` | C++ public modules and their implementations |
+| `src/binding/` | nanobind registrations |
+| `src/python/` | Public Python facades and optional Torch adapters |
 | `examples/` | Standalone paired programs and Python-only Torch examples |
 | `tests/cpp/`, `tests/python/` | Unit and integration/regression tests |
 | `docs/` | User manual, formulations, example explanations, and site configuration |
 | `assets/` | Bundled test/example geometry and provenance notes |
 | `scripts/` | Development registration, benchmarks, and documentation launchers |
+
+The source directories do not contain an extra `litepgo/` level. CMake creates
+forwarding headers under `build/<preset>/include/litepgo/`, preserving public
+`<litepgo/...>` includes. The importable Python package is assembled under
+`build/<preset>/python/litepgo/` from `src/python/` and the compiled extension.
 
 Link the targets your C++ source uses. Public dependencies propagate includes,
 C++20 requirements, and required libraries.
@@ -77,8 +88,9 @@ derivatives, independent formulation checks for energies, and C++/Python agreeme
 for paired examples. Do not replace a physical invariant with a snapshot of one
 platform's final digits. Platform sparse factorizations can round differently.
 
-Configuring a preset points the root `compile_commands.json` at that build for
-clangd. The latest configured ordinary preset wins; ASan leaves the link alone.
+On Unix, configuring a preset points the root `compile_commands.json` at that
+build for clangd. The latest configured ordinary preset wins; ASan leaves the
+link alone. On Windows point clangd at `build/<preset>/compile_commands.json`.
 C++ headers use `.hpp`. To apply the pinned formatter:
 
 ```sh
@@ -87,7 +99,7 @@ git ls-files '*.hpp' '*.cpp' | xargs uv run --no-sync clang-format -i
 
 ## Add or extend a Python binding
 
-Register native classes/functions in `cpp/litepgo/bindings/<module>/`, then expose
+Register native classes/functions in `src/binding/<module>/`, then expose
 public aliases through the corresponding facade. Maintain its `__all__` list.
 For FEM templates, register the concrete instantiation and its argument tuple;
 Python `Template` objects dispatch only to compiled instances.

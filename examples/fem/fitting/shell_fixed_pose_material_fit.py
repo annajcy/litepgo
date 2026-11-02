@@ -4,7 +4,7 @@ Python mirror of shell_fixed_pose_material_fit.cpp. Geometry, displacement and t
 stay fixed; no equilibrium solve, noise or regularization is involved.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/fem/fitting/shell_fixed_pose_material_fit.py
+    uv run --no-sync python examples/fem/fitting/shell_fixed_pose_material_fit.py
 """
 
 from pathlib import Path

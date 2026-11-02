@@ -1,7 +1,7 @@
 """Minimize 1/2 sum (x[i+1] - x[i])**2 with prescribed endpoints.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/solver/newton_chain.py
+    uv run --no-sync python examples/solver/newton_chain.py
 """
 
 import numpy as np

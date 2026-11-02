@@ -1,7 +1,7 @@
 """Differential plastic growth of a clamped shell strip; solve u and write OBJ.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/fem/plasticity/shell_plastic_field.py
+    uv run --no-sync python examples/fem/plasticity/shell_plastic_field.py
 """
 
 import argparse

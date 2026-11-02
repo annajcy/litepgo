@@ -14,7 +14,7 @@ A simplified version of [libpgo](https://github.com/bohanwang/libpgo).
 ## Build and verify
 
 Install Python 3.12, [uv](https://docs.astral.sh/uv/), CMake 3.28+, Ninja, and a
-C++20 compiler. From this checkout:
+C++20 compiler. On Windows use an x64 Visual Studio developer shell. From this checkout:
 
 ```sh
 uv sync --locked
@@ -34,7 +34,7 @@ After configuring the release build:
 ```sh
 cmake --build build/release --target custom_energy litepgo_dev
 build/release/examples/energy/scalar/custom_energy
-PYTHONPATH=build/release/python uv run --no-sync python examples/energy/scalar/custom_energy.py
+uv run --no-sync python examples/energy/scalar/custom_energy.py
 ```
 
 Both programs check the same scalar-energy derivatives. Start with the
