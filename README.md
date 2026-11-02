@@ -32,7 +32,7 @@ steps, presets, optional backends, and selecting a Python build.
 After configuring the release build:
 
 ```sh
-cmake --build build/release --target custom_energy litepgo_dev
+cmake --build build/release --target custom_energy litepgo_python
 build/release/examples/energy/scalar/custom_energy
 uv run --no-sync python examples/energy/scalar/custom_energy.py
 ```
@@ -54,7 +54,7 @@ Build and register the Python extension before generating API documentation:
 ```sh
 uv sync --locked
 cmake --preset release
-cmake --build build/release --target litepgo_dev
+cmake --build build/release --target litepgo_python
 uv run scripts/docs.py          # generate both API references and serve the site
 ```
 

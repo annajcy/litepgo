@@ -59,7 +59,7 @@ not a return-mapping plasticity algorithm.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target tet_p1_plastic_twist litepgo_dev
+cmake --build build/release --target tet_p1_plastic_twist litepgo_python
 build/release/examples/fem/plasticity/tet_p1_plastic_twist
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/plasticity/tet_p1_plastic_twist.py
 ```
@@ -98,7 +98,7 @@ establish a continuum injectivity guarantee between integration points.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target hex_q1_plastic_twist litepgo_dev
+cmake --build build/release --target hex_q1_plastic_twist litepgo_python
 build/release/examples/fem/plasticity/hex_q1_plastic_twist
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/plasticity/hex_q1_plastic_twist.py
 ```
@@ -143,7 +143,7 @@ would generally be incompatible with C1 Hermite displacement across faces.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target hex_hermite_plastic_twist litepgo_dev
+cmake --build build/release --target hex_hermite_plastic_twist litepgo_python
 build/release/examples/fem/plasticity/hex_hermite_plastic_twist
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/plasticity/hex_hermite_plastic_twist.py
 ```
@@ -194,7 +194,7 @@ affine transform; this example does not prescribe an out-of-plane buckling branc
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target shell_plastic_field litepgo_dev
+cmake --build build/release --target shell_plastic_field litepgo_python
 build/release/examples/fem/plasticity/shell_plastic_field
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/plasticity/shell_plastic_field.py
 ```

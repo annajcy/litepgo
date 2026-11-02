@@ -29,7 +29,7 @@ nanobind signatures/docstrings, and concrete FEM template instances. Platform
 sparse backends and optional IPC Toolkit exports reflect that build. The
 `litepgo.torch` module is included when PyTorch is installed.
 
-Build `litepgo_dev` before generation to compile `_core` and register the Python
+Build `litepgo_python` before generation to compile `_core` and register the Python
 facades. An absent extension produces a build command;
 an import from another checkout is rejected. The default package follows the
 venv's `.pth` registration. To select a configured build explicitly:
@@ -38,7 +38,7 @@ venv's `.pth` registration. To select a configured build explicitly:
 PYTHONPATH=build/release/python uv run scripts/docs.py build
 ```
 
-After changing bindings, rebuild `_core` before regenerating. The generated
+After changing bindings, rebuild `litepgo_binding` before regenerating. The generated
 pages do not infer parameter bounds, physical units, or an equilibrium model
 from a function name; those contracts are explained in the corresponding
 [user-guide chapters](index.md#learn-a-model).

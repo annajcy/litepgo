@@ -31,7 +31,7 @@ The [quickstart](../guide/quickstart.md) derives the equations.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target newton_chain litepgo_dev
+cmake --build build/release --target newton_chain litepgo_python
 build/release/examples/solver/newton_chain
 PYTHONPATH=build/release/python uv run --no-sync python examples/solver/newton_chain.py
 ```
@@ -76,7 +76,7 @@ scaling affects conditioning.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target gauss_newton_fit litepgo_dev
+cmake --build build/release --target gauss_newton_fit litepgo_python
 build/release/examples/solver/gauss_newton_fit
 PYTHONPATH=build/release/python uv run --no-sync python examples/solver/gauss_newton_fit.py
 ```

@@ -28,7 +28,7 @@ For just the Python extension, without running the full test workflow:
 
 ```sh
 cmake --preset release
-cmake --build build/release --target litepgo_dev
+cmake --build build/release --target litepgo_python
 ```
 
 ## Configure, build, and test separately
@@ -66,7 +66,7 @@ required.
 
 ## How Python finds the extension
 
-The default build, or the explicit `litepgo_dev` target, creates
+The default build, or the explicit `litepgo_python` target, creates
 `build/<preset>/python/litepgo/`, containing `_core` and links to the Python
 facade files. It registers that directory in `.venv` through `litepgo_dev.pth`.
 The most recently built registration is the default. CMake selects the active
@@ -80,14 +80,14 @@ PYTHONPATH=build/release/python uv run --no-sync python -m pytest -q tests/pytho
 ```
 
 In PowerShell set `$env:PYTHONPATH = "build/release/python"` before the command
-instead of using a shell-variable prefix. Building `litepgo_dev` selects the
+instead of using a shell-variable prefix. Building `litepgo_python` selects the
 default package without needing `PYTHONPATH`.
 
 Editing an existing facade `.py` file takes effect immediately through the links
 on Unix. Windows uses copies to avoid requiring symlink privileges; rebuild
-`litepgo_dev` after editing a facade there.
-Rebuild `_core` after changing C++. Adding/removing a Python module requires
-building `litepgo_dev` to refresh the source links and environment registration.
+`litepgo_python` after editing a facade there.
+Rebuild `litepgo_binding` after changing C++. Adding/removing a Python module requires
+building `litepgo_python` to refresh the source links and environment registration.
 An ASan-only build cannot provide an importable extension for ordinary Python.
 
 ## Sparse backends and optional features
@@ -125,8 +125,8 @@ parallelism. Cache locations and platform-specific paths belong in local presets
 ## Common setup failures
 
 - **`import litepgo` fails:** run `uv sync --locked`, configure a Python-enabled
-  preset, and build `litepgo_dev`. Confirm the interpreter is the checkout's `.venv`.
-- **An old API appears:** set `PYTHONPATH` to the intended build and rebuild `_core`.
+  preset, and build `litepgo_python`. Confirm the interpreter is the checkout's `.venv`.
+- **An old API appears:** set `PYTHONPATH` to the intended build and rebuild `litepgo_binding`.
 - **An example executable is missing:** build its named CMake target explicitly.
 - **An optional symbol is absent:** inspect `build_info()` and the module's
   capability flag, such as `mesh.has_gmsh`; reconfigure and rebuild if needed.

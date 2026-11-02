@@ -62,7 +62,7 @@ depending on a material model or contact implementation. An application can
 therefore use a custom objective with Newton, or combine FEM and contact in the
 same objective.
 
-The `litepgo::litepgo` target aggregates the nine base modules. Geometry I/O is
+The `litepgo::core` target aggregates the nine base modules. Geometry I/O is
 provided by `litepgo::io`; optional Gmsh I/O extends it with `litepgo::io_gmsh`.
 The optional IPC Toolkit backend is `litepgo::ipctk`, which extends contact.
 These targets are separate from the base aggregate.

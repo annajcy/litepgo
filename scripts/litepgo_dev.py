@@ -3,7 +3,7 @@
 Mirrors the Python sources next to the compiled _core in the build tree, then
 points a .pth file in the environment's site-packages at that build. Edits to
 existing .py files take effect immediately on Unix. Windows copies the sources;
-rebuild litepgo_dev after editing them. Adding or removing files needs a build.
+rebuild litepgo_python after editing them. Adding or removing files needs a build.
 """
 
 from __future__ import annotations

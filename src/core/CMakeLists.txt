@@ -16,10 +16,11 @@ add_subdirectory(fem)
 add_subdirectory(solver)
 add_subdirectory(contact)
 
-# Compatibility entry point; module libraries never depend on this aggregate.
-add_library(litepgo INTERFACE)
-add_library(litepgo::litepgo ALIAS litepgo)
-target_link_libraries(litepgo INTERFACE
+# Native module aggregate; module libraries never depend on it.
+add_library(litepgo_core INTERFACE)
+add_library(litepgo::core ALIAS litepgo_core)
+add_library(litepgo::litepgo ALIAS litepgo_core)
+target_link_libraries(litepgo_core INTERFACE
     litepgo::contact litepgo::solver litepgo::fem litepgo::energy litepgo::dof
     litepgo::mesh litepgo::linalg litepgo::spatial litepgo::common)
 
@@ -47,7 +48,7 @@ if(LITEPGO_WITH_IPC_TOOLKIT)
 endif()
 
 include("${PROJECT_SOURCE_DIR}/cmake/litepgo_module_graph.cmake")
-foreach(module litepgo litepgo_io litepgo_io_gmsh litepgo_ipctk)
+foreach(module litepgo_core litepgo_io litepgo_io_gmsh litepgo_ipctk)
     if(TARGET ${module})
         litepgo_check_module_dag(${module} "")
     endif()

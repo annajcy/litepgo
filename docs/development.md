@@ -46,9 +46,14 @@ C++20 requirements, and required libraries.
 | `litepgo::io_gmsh` | io; optional |
 | `litepgo::ipctk` | contact; optional |
 
-`litepgo::litepgo` is an INTERFACE aggregate of the nine base modules. I/O and
+`litepgo::core` is an INTERFACE aggregate of the nine base modules. I/O and
 the Toolkit backend are separate. There is no single `liblitepgo.a` to link
 manually. The module dependency graph is checked for cycles.
+
+`litepgo_binding` builds the native extension, whose Python module name remains
+`litepgo._core`. `litepgo_python` builds that extension and assembles/registers
+the Python package. Use `litepgo::core` as the aggregate C++ link target, or link
+the individual module targets listed above.
 
 For a separate small application, a minimal CMake file is:
 
@@ -70,7 +75,7 @@ Use `#include <litepgo/...hpp>` in `main.cpp`. Domain C++ namespaces are
 
 ```sh
 cmake --preset release
-cmake --build build/release --target litepgo_tests litepgo_dev
+cmake --build build/release --target litepgo_tests litepgo_python
 ctest --test-dir build/release --output-on-failure
 ```
 
@@ -106,7 +111,7 @@ Python `Template` objects dispatch only to compiled instances.
 
 Validate dimensions, finite values, ownership, sparse structure, and exceptional
 states at binding boundaries. Update caller examples and independent regression
-tests. Build `litepgo_dev` after adding/removing modules or changing native code;
+tests. Build `litepgo_python` after adding/removing modules or changing native code;
 it rebuilds `_core` and refreshes source links through `scripts/litepgo_dev.py`.
 
 ## Build and maintain this documentation
