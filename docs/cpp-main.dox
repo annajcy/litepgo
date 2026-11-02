@@ -3,7 +3,7 @@
 
 litepgo is a C++20 library for geometry processing, finite-element elasticity,
 surface contact, and sparse optimization. This reference indexes the public
-headers. The <a href="/">user manual</a> explains numerical conventions,
+headers. The <a href="../../index.html">user manual</a> explains numerical conventions,
 formulations, and complete paired C++/Python examples.
 
 @section cpp_modules Find a module

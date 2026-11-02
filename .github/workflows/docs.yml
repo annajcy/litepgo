@@ -1,0 +1,70 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DOCS_BASE: /${{ github.event.repository.name }}/
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install Ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Install locked Python and documentation dependencies
+        run: uv sync --locked --group docs
+      - name: Cache native dependency downloads
+        uses: actions/cache@v4
+        with:
+          path: build/_cache
+          key: onemkl-2026.1.0
+      - name: Build and register the Python API
+        run: |
+          cmake --preset release -DLITEPGO_BUILD_TESTS=OFF
+          cmake --build build/release --target litepgo_dev --parallel 2
+      - name: Build the manual and C++/Python API references
+        run: uv run scripts/docs.py build
+      - name: Check Markdown rendering and generated API entry points
+        run: |
+          uv run --locked --group docs --directory docs corepack pnpm exec node --test .vitepress/mermaid.test.mjs
+          test -f docs/.vitepress/dist/index.html
+          test -f docs/.vitepress/dist/reference/cpp/index.html
+          test -f docs/.vitepress/dist/reference/python/index.html
+          test -f docs/.vitepress/dist/reference/python/litepgo.html
+      - name: Upload the Pages site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
