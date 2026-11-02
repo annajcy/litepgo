@@ -182,12 +182,12 @@ TEST(MeshResponse, ReusedBuffersDetectIncompleteWritesAndRecover) {
     const dof::ConstantDofMap input(topology, 2);
     const dof::VertexDofMap output(topology, 1);
     bool omit = false;
-    energy::MeshResponse batch(
-        input, output, [&](std::span<const int> ids, const energy::BatchMatrix& x, energy::BatchMatrix* J) {
-            if (J && !omit)
-                J->setOnes(4 * ids.size(), 2);
-            return energy::BatchMatrix::Constant(ids.size(), 4, x.row(0).sum()).eval();
-        });
+    energy::MeshResponse batch(input, output,
+                               [&](std::span<const int> ids, const energy::BatchMatrix& x, energy::BatchMatrix* J) {
+                                   if (J && !omit)
+                                       J->setOnes(4 * ids.size(), 2);
+                                   return energy::BatchMatrix::Constant(ids.size(), 4, x.row(0).sum()).eval();
+                               });
     const Vec x = Vec::Ones(2);
     const SpMat expected = batch.eval_jacobian(x);
     omit = true;

@@ -2,7 +2,6 @@
 
 #include "litepgo/common/types.hpp"
 
-
 namespace litepgo::dof {
 
 // Surface vertex positions as an affine function of the simulation DOFs u:
