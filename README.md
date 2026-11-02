@@ -1,8 +1,6 @@
 # litepgo
 
-litepgo is a C++20 library with Python bindings for finite-element simulation,
-geometry processing, contact, and parameter fitting. It is a minimal adaptation
-of libpgo. Both languages expose the same energy, response, and solver model.
+A simplified version of [libpgo](https://github.com/bohanwang/libpgo).
 
 - **Geometry:** triangle/tet/hex meshes, OBJ and VEG I/O, surface extraction,
   spatial queries, and point embedding.
