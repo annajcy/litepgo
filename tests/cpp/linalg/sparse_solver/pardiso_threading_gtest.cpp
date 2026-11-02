@@ -173,9 +173,10 @@ TEST(PardisoThreading, SharesLitepgoTbbRuntime) {
     ASSERT_TRUE(solver.compute(laplacian_3d(8)));
 #if defined(_WIN32)
     HMODULE litepgo_tbb = nullptr;
+    // DLL data avoids MSVC's function import thunk in the executable.
     ASSERT_TRUE(
         GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                           reinterpret_cast<LPCWSTR>(&TBB_runtime_version), &litepgo_tbb));
+                           reinterpret_cast<LPCWSTR>(TBB_runtime_version()), &litepgo_tbb));
     ASSERT_NE(GetModuleHandleW(L"tbb12.dll"), nullptr);
     EXPECT_EQ(litepgo_tbb, GetModuleHandleW(L"tbb12.dll"));
     EXPECT_EQ(GetModuleHandleW(L"tbb12_debug.dll"), nullptr);

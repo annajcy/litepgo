@@ -54,6 +54,8 @@ jobs:
           path: build/_cache
           key: ${{ runner.os }}-onemkl-2026.1.0
       - name: Configure, build, and test (GoogleTest and pytest)
+        env:
+          CMAKE_BUILD_PARALLEL_LEVEL: ${{ runner.os == 'Windows' && '2' || '' }}
         run: cmake --workflow --preset ${{ matrix.preset }}
       - name: Verify the Windows PARDISO backend is enabled
         if: runner.os == 'Windows'

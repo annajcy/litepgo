@@ -170,7 +170,12 @@ endforeach()
 # The plastic twist examples solve a released and a clamped bar with a plastic torsion Fp.
 foreach(example tet_p1_plastic_twist hex_q1_plastic_twist hex_hermite_plastic_twist)
     add_dependencies(litepgo_tests ${example})
-    add_test(NAME FemPlasticTwist.${example} COMMAND $<TARGET_FILE:${example}>)
+    set(plastic_twist_input)
+    if(example STREQUAL "hex_hermite_plastic_twist")
+        # Keep the high-order regression practical in unoptimized Debug builds.
+        set(plastic_twist_input "${PROJECT_SOURCE_DIR}/tests/assets/box-hex.veg")
+    endif()
+    add_test(NAME FemPlasticTwist.${example} COMMAND $<TARGET_FILE:${example}> ${plastic_twist_input})
 endforeach()
 
 add_dependencies(litepgo_tests tet_p1_box_stack)
