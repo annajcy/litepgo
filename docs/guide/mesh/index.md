@@ -26,7 +26,7 @@ flowchart TB
 
 Topology describes connectivity; it does not carry materials or DOFs. Derived
 boundary IDs connect to the [DOF module](../dof/index.md), and shell stencils connect to
-[FEM](../fem/index.md). Native sources are in `src/cpp/mesh/`; Python imports
+[FEM](../fem/index.md). Native sources are in `src/core/mesh/`; Python imports
 these operations through `litepgo.mesh`.
 
 ## Read this module

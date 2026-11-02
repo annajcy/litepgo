@@ -40,7 +40,7 @@ endif()
 include(cmake/litepgo_warnings.cmake)
 include(cmake/litepgo_dependencies.cmake)
 
-add_subdirectory(src/cpp)
+add_subdirectory(src/core)
 if(LITEPGO_BUILD_PYTHON)
     add_subdirectory(src/binding)
 endif()

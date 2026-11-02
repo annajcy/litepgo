@@ -1,4 +1,4 @@
-"""Degree-of-freedom maps and reductions, mirroring src/cpp/dof."""
+"""Degree-of-freedom maps and reductions, mirroring src/core/dof."""
 
 from litepgo._core import dof as _native
 

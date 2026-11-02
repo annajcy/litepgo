@@ -14,7 +14,7 @@ together. Run commands below from its root.
 
 | Directory | Role |
 | --- | --- |
-| `src/cpp/` | C++ public modules and their implementations |
+| `src/core/` | C++ public modules and their implementations |
 | `src/binding/` | nanobind registrations |
 | `src/python/` | Public Python facades and optional Torch adapters |
 | `examples/` | Standalone paired programs and Python-only Torch examples |

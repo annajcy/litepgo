@@ -1,4 +1,4 @@
-"""Energies and their composites, mirroring src/cpp/energy.
+"""Energies and their composites, mirroring src/core/energy.
 
 Hessians are returned as scipy.sparse.csc_matrix. Before assembling a Hessian of
 an energy whose pattern is not fixed, call update_pattern(x) at that x. Values are

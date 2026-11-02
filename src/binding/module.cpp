@@ -10,7 +10,7 @@ NB_MODULE(_core, m) {
     litepgo::spatial::binding::bind_spatial_hash(spatial);
 
     nb::module_ mesh = m.def_submodule("mesh");
-    mesh.doc() = "Mesh connectivity, geometry, and file I/O (src/cpp/mesh)";
+    mesh.doc() = "Mesh connectivity, geometry, and file I/O (src/core/mesh)";
     litepgo::mesh::binding::bind_mesh_mesh_topology(mesh);
     litepgo::mesh::binding::bind_mesh_mesh_data(mesh);
     litepgo::mesh::binding::bind_extract_surface(mesh);
@@ -20,7 +20,7 @@ NB_MODULE(_core, m) {
     litepgo::mesh::binding::bind_msh(mesh);
 
     nb::module_ dof = m.def_submodule("dof");
-    dof.doc() = "Degree-of-freedom maps and reductions (src/cpp/dof)";
+    dof.doc() = "Degree-of-freedom maps and reductions (src/core/dof)";
     litepgo::dof::binding::bind_dof_reduction(dof);
     litepgo::dof::binding::bind_vertex_displacement_map(dof);
     litepgo::dof::binding::bind_surface_kinematics(dof);
@@ -30,7 +30,7 @@ NB_MODULE(_core, m) {
     litepgo::dof::binding::bind_stencil_dof_map(dof);
 
     nb::module_ linalg = m.def_submodule("linalg");
-    linalg.doc() = "Sparse linear solvers (src/cpp/linalg)";
+    linalg.doc() = "Sparse linear solvers (src/core/linalg)";
     litepgo::linalg::binding::bind_sparse_solver(linalg);
     litepgo::linalg::binding::bind_eigen_ldlt(linalg);
     litepgo::linalg::binding::bind_eigen_sparse_lu(linalg);
@@ -41,7 +41,7 @@ NB_MODULE(_core, m) {
     litepgo::linalg::binding::bind_auto_sparse_solver(linalg);
 
     nb::module_ energy = m.def_submodule("energy");
-    energy.doc() = "Energies and their composites (src/cpp/energy)";
+    energy.doc() = "Energies and their composites (src/core/energy)";
     litepgo::energy::binding::bind_energy(energy);
     litepgo::energy::binding::bind_fixed_pattern_energy(energy);
     litepgo::energy::binding::bind_dynamic_pattern_energy(energy);
@@ -56,7 +56,7 @@ NB_MODULE(_core, m) {
     litepgo::energy::binding::bind_energy_response_mesh_response(energy);
 
     nb::module_ fem = m.def_submodule("fem");
-    fem.doc() = "Finite elements (src/cpp/fem). Template instantiations are in _templates.";
+    fem.doc() = "Finite elements (src/core/fem). Template instantiations are in _templates.";
     litepgo::fem::binding::bind_triangle_p1_basis(fem);
     litepgo::fem::binding::bind_quad_hermite_basis(fem);
     litepgo::fem::binding::bind_tet_p1_basis(fem);
@@ -96,13 +96,13 @@ NB_MODULE(_core, m) {
     litepgo::fem::binding::bind_fem_shell_fem_force_fp_response(fem);
 
     nb::module_ solver = m.def_submodule("solver");
-    solver.doc() = "Nonlinear solvers (src/cpp/solver)";
+    solver.doc() = "Nonlinear solvers (src/core/solver)";
     litepgo::solver::binding::bind_gauss_newton(solver);
     litepgo::solver::binding::bind_newton(solver);
     litepgo::solver::binding::bind_static_equilibrium_response(solver);
 
     nb::module_ contact = m.def_submodule("contact");
-    contact.doc() = "Native IPC and optional IPC Toolkit contact (src/cpp/contact)";
+    contact.doc() = "Native IPC and optional IPC Toolkit contact (src/core/contact)";
     litepgo::contact::binding::bind_contact_contact_options(contact);
     litepgo::contact::binding::bind_broad_phase(contact);
     litepgo::contact::binding::bind_spatial_hash(contact);

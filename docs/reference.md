@@ -16,7 +16,7 @@ development launcher before the site starts.
 
 ## C++ reference
 
-Doxygen scans `src/cpp/**/*.hpp`, excluding bindings and internal `detail/`
+Doxygen scans `src/core/**/*.hpp`, excluding bindings and internal `detail/`
 directories. It lists public declarations and provides source browsing. Many
 headers currently use ordinary `//` comments, so descriptive prose is fuller in
 the handwritten manual than in the generated symbol pages. Native template

@@ -1,2 +1,2 @@
 # Preserve the vendored, generated IPC derivative sources.
-src/cpp/contact/detail/ipc_derivatives/**
+src/core/contact/detail/ipc_derivatives/**
