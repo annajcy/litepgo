@@ -1,37 +1,123 @@
-# Build and test
+# Build and environment setup
 
-Requires Python 3.12, uv, CMake 3.28+, Ninja, and a C++20 compiler.
+This page builds the C++ library, the Python extension, and the regression suite
+from a source checkout. The documented automated test platforms are macOS and
+Linux. CMake configuration may download native dependencies on the first run.
 
-Eigen 5.0.1, oneTBB 2023.1.0, nanobind 3.1.0, and GoogleTest are fetched at pinned versions; TBB is built as a shared library. Eigen's LDLT and SparseLU are always built; the platform's sparse backends become the `AutoSparseSolver` and `AutoIndefiniteSparseSolver` defaults. `litepgo.build_info()` reports what a build contains.
+## Prerequisites and first build
 
-- macOS: Apple Accelerate's LLT and LDLT (`LITEPGO_WITH_ACCELERATE`, on by default).
-- x86-64 Linux: Intel oneMKL 2026.1 PARDISO's LLT and pivoted LDLT (`LITEPGO_WITH_MKL`, on by default). Configuring downloads the pinned `mkl` and `mkl-include` wheels from PyPI (about 225 MB) and unpacks them once into `build/_cache/` (`LITEPGO_MKL_CACHE_DIR`), shared by every preset; `-DLITEPGO_MKL_ROOT=/opt/intel/oneapi/mkl/2026.1` uses a local oneMKL 2026.1 install instead. MKL runs on its oneTBB threading layer over litepgo's own TBB runtime, so `tbb::task_arena` and `tbb::global_control` bound PARDISO like every other parallel loop; `MKL_NUM_THREADS` has no effect. Eigen's dense code does not use MKL.
+Install Python **3.12**, uv, **CMake 3.28 or newer**, Ninja, and a C++20 compiler.
+On macOS use the Xcode command-line tools; on Linux use a suitable GCC or Clang.
+From the repository root:
 
-Native IPC contact is provided by `litepgo::contact` and included in the `litepgo::litepgo` aggregate, with no IPC Toolkit dependency.
-The optional `litepgo::ipctk` target (`LITEPGO_WITH_IPC_TOOLKIT`, on by default) retains the IPC Toolkit 1.6.1 backend.
-It reuses litepgo's Eigen and TBB and fetches its dependencies into `build/_cache/cpm/` (`LITEPGO_CPM_CACHE_DIR`).
-`-DLITEPGO_WITH_IPC_TOOLKIT=OFF` skips the toolkit and its dependencies; native C++ and Python contact remain available.
-
-
-
-```bash
+```sh
 uv sync --locked
-cmake --workflow --preset debug
-```
-
-`uv sync` only creates `.venv` with the Python dependencies; it never builds litepgo. CMake builds the C++ library, the tests, and the nanobind extension. The extension is built against the active virtual environment (`$VIRTUAL_ENV`), else `.venv`.
-
-Presets: `debug`, `release`, `relwithdebinfo`, `asan`. Each builds in `build/<preset>/` and runs GoogleTest and pytest through CTest. `asan` skips the extension, since a sanitized module cannot load into a regular Python. Keep local overrides in the ignored `CMakeUserPresets.json`.
-
-
-## Using litepgo from Python
-
-
-Every build puts an importable package in `build/<preset>/python/litepgo/`: the compiled `_core`, plus symlinks to the sources in `python/litepgo/`. `scripts/litepgo_dev.py` then writes `litepgo_dev.pth` into the venv, so `import litepgo` loads the most recently built preset:
-
-```bash
-cmake --build --preset release
+cmake --workflow --preset release
 uv run --no-sync python -c "import litepgo; print(litepgo.build_info())"
 ```
 
-Edits to existing `.py` files take effect without a rebuild; adding or removing a module, or changing C++, needs `cmake --build`.
+`uv sync` creates `.venv` and installs NumPy, SciPy, pytest, and the development
+tools. It does not build litepgo. The CMake workflow performs configuration,
+compilation, and CTest; CTest runs both native tests and pytest. A nonzero exit
+means a stage failed. `build_info()` reports the compiled versions and available
+backends rather than assuming that an optional feature exists.
+
+For just the Python extension, without running the full test workflow:
+
+```sh
+cmake --preset release
+cmake --build build/release --target litepgo_dev
+```
+
+## Configure, build, and test separately
+
+```sh
+cmake --preset release
+cmake --build --preset release
+ctest --preset release
+```
+
+| Preset | Configuration | Python extension |
+| --- | --- | --- |
+| `release` | Optimized build | Yes |
+| `debug` | Debug build | Yes |
+| `relwithdebinfo` | Optimized build with debug symbols | Yes |
+| `asan` | Address/undefined-behavior sanitizers | No |
+
+The workflow presets are `release`, `debug`, and `asan`. Configure/build/test
+presets also exist for `relwithdebinfo`. Build directories are
+`build/<preset>/`. Keep machine-specific overrides in the ignored
+`CMakeUserPresets.json`.
+
+Examples are CMake targets named after their source stem and are excluded from
+the default build unless a test depends on them. Build a particular example
+explicitly:
+
+```sh
+cmake --build build/release --target newton_chain
+build/release/examples/solver/newton_chain
+```
+
+## How Python finds the extension
+
+The default build, or the explicit `litepgo_dev` target, creates
+`build/<preset>/python/litepgo/`, containing `_core` and links to the Python
+facade files. It registers that directory in `.venv` through `litepgo_dev.pth`.
+The most recently built registration is the default. CMake selects the active
+`VIRTUAL_ENV`, or the checkout's `.venv`.
+
+To select a build explicitly, including in subprocesses:
+
+```sh
+PYTHONPATH=build/release/python uv run --no-sync python examples/solver/newton_chain.py
+PYTHONPATH=build/release/python uv run --no-sync python -m pytest -q tests/python/test_api_examples.py
+```
+
+Editing an existing facade `.py` file takes effect immediately through the links.
+Rebuild `_core` after changing C++. Adding/removing a Python module requires
+building `litepgo_dev` to refresh the source links and environment registration.
+An ASan-only build cannot provide an importable extension for ordinary Python.
+
+## Sparse backends and optional features
+
+Eigen LDLT and SparseLU are always available. `AutoSparseSolver` selects the
+platform's positive-definite backend: Accelerate on macOS, oneMKL/PARDISO on
+x86-64 Linux when enabled, otherwise Eigen LDLT. `AutoIndefiniteSparseSolver`
+uses Accelerate LDLT, PARDISO LDLT, or Eigen SparseLU, respectively.
+See [linear algebra](linalg/index.md) for backend selection and
+[solvers](solver/index.md) for nonlinear algorithms.
+
+| CMake setting | Behavior |
+| --- | --- |
+| `LITEPGO_WITH_ACCELERATE` | Defaults on for macOS; system Accelerate framework |
+| `LITEPGO_WITH_MKL` | Defaults on for x86-64 Linux; pinned oneMKL wheels are cached in `build/_cache/` |
+| `LITEPGO_MKL_ROOT` | Use a local compatible oneMKL installation instead of downloading wheels |
+| `LITEPGO_WITH_IPC_TOOLKIT` | Defaults on; adds the optional `litepgo::ipctk` backend |
+| `LITEPGO_WITH_GMSH` | Defaults off; adds MSH I/O through fetched Gmsh sources |
+| `LITEPGO_BUILD_PYTHON` | Enables the nanobind extension; enabled by ordinary presets |
+| `LITEPGO_BUILD_TESTS` | Builds and registers the native/Python regression suites |
+
+For example, disable the optional IPC Toolkit backend while retaining native IPC:
+
+```sh
+cmake --preset release -DLITEPGO_WITH_IPC_TOOLKIT=OFF
+cmake --build --preset release
+```
+
+CMake pins and fetches Eigen, oneTBB, nanobind and other native dependencies.
+oneTBB is shared. MKL uses litepgo's TBB threading runtime; TBB controls bound
+its parallel work, while `MKL_NUM_THREADS` does not select that threading layer's
+parallelism. Cache locations and platform-specific paths belong in local presets.
+
+## Common setup failures
+
+- **`import litepgo` fails:** run `uv sync --locked`, configure a Python-enabled
+  preset, and build `litepgo_dev`. Confirm the interpreter is the checkout's `.venv`.
+- **An old API appears:** set `PYTHONPATH` to the intended build and rebuild `_core`.
+- **An example executable is missing:** build its named CMake target explicitly.
+- **An optional symbol is absent:** inspect `build_info()` and the module's
+  capability flag, such as `mesh.has_gmsh`; reconfigure and rebuild if needed.
+- **Initial configuration is slow:** dependency downloads/builds happen before
+  litepgo compilation. Later configurations reuse the caches.
+
+Next, [solve a complete constrained problem](quickstart.md).

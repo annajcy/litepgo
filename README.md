@@ -1,97 +1,77 @@
 # litepgo
 
-litepgo is a minimal adaptation of libpgo for geometry processing, finite
-element simulation, contact, and optimization. It provides a modular C++20
-library and Python bindings built with nanobind.
+litepgo is a C++20 library with Python bindings for finite-element simulation,
+geometry processing, contact, and parameter fitting. It is a minimal adaptation
+of libpgo. Both languages expose the same energy, response, and solver model.
 
-## What is included
+- **Geometry:** triangle/tet/hex meshes, OBJ and VEG I/O, surface extraction,
+  spatial queries, and point embedding.
+- **Simulation:** Neo-Hookean solids, Koiter StVK shells, prescribed plastic
+  fields, and native IPC contact.
+- **Optimization:** sparse energy assembly, constrained Newton, damped
+  Gauss–Newton, and analytic equilibrium sensitivities.
+- **Examples:** 26 matching C++/Python programs and four optional PyTorch fitting
+  programs, with formulations and API walkthroughs in the documentation.
 
-- Mesh data structures, OBJ/VEG I/O, surface extraction, and spatial queries.
-- Volumetric and shell FEM, including prescribed plastic fields and point embedding.
-- Scalar energies, vector responses, Newton and Gauss–Newton solvers.
-- Native IPC contact, with an optional IPC Toolkit backend.
-- Paired C++ and Python examples for simulation, fitting, and geometry processing.
-
-## Build and test
+## Build and verify
 
 Install Python 3.12, [uv](https://docs.astral.sh/uv/), CMake 3.28+, Ninja, and a
-C++20 compiler. From the repository root:
+C++20 compiler. From this checkout:
 
 ```sh
 uv sync --locked
-cmake --workflow --preset debug
-```
-
-After building, inspect the Python package and its configured backends:
-
-```sh
+cmake --workflow --preset release
 uv run --no-sync python -c "import litepgo; print(litepgo.build_info())"
 ```
 
-## Examples
+The workflow configures, builds, and runs C++ and Python tests. CMake fetches
+native dependencies and builds the Python extension; `uv sync` installs Python
+packages. See [build and environment setup](docs/guide/build.md) for individual
+steps, presets, optional backends, and selecting a Python build.
 
-CMake targets use the source filename as their name. For example, after the
-`debug` workflow above:
+## Run an example
+
+After configuring the release build:
 
 ```sh
-cmake --build build/debug --target custom_energy
-build/debug/examples/energy/scalar/custom_energy
-uv run --no-sync python examples/energy/scalar/custom_energy.py
+cmake --build build/release --target custom_energy litepgo_dev
+build/release/examples/energy/scalar/custom_energy
+PYTHONPATH=build/release/python uv run --no-sync python examples/energy/scalar/custom_energy.py
 ```
 
-The [example catalog](docs/examples.md) covers energy, solvers, FEM, contact,
-mesh processing, and spatial queries.
+Both programs check the same scalar-energy derivatives. Start with the
+[first complete solve](docs/guide/quickstart.md), or choose a task from the
+[example catalog](docs/examples.md).
 
-## Documentation
+## Read and build the documentation
 
-The documentation covers [build and development](docs/guide/build.md),
-[CMake modules](docs/guide/development.md), [mesh I/O](docs/api/mesh.md),
-[FEM](docs/api/fem.md), [contact](docs/api/contact.md), and
-[spatial queries and embedding](docs/api/spatial.md).
+The [documentation home](docs/index.md) gives the reading order. The
+[architecture guide](docs/guide/architecture.md) maps the system and its modules.
+The manual explains data conventions, mathematical models, and API composition; each example
+page includes its formulation, run commands, expected results, and complete source.
 
-The `uv` dependency group `docs` installs Node.js 24.19.0 and Corepack through
-[`nodejs-wheel`](https://pypi.org/project/nodejs-wheel/), Doxygen 1.18.0 through
-[`mlc-doxygen-bin`](https://pypi.org/project/mlc-doxygen-bin/), and pdoc. These
-versions and artifacts are locked in `uv.lock`. Corepack selects pnpm 11.25.0
-from `docs/package.json`; pnpm installs the VitePress dependencies from
-`docs/pnpm-lock.yaml`. No global Node.js, pnpm, or Doxygen installation is needed.
-The documentation launcher installs the locked dependencies automatically.
-The first Corepack invocation downloads the pinned pnpm version to its cache.
-The Python API generator imports the compiled extension, so build that first.
-From the repository root:
+Build and register the Python extension before generating API documentation:
 
 ```sh
 uv sync --locked
 cmake --preset release
-cmake --build --preset release --target _core
-uv run scripts/docs.py
+cmake --build build/release --target litepgo_dev
+uv run scripts/docs.py          # generate both API references and serve the site
 ```
-
-The default command is `dev`: it generates both API references and starts the
-local site.
-To build and preview the complete site:
 
 ```sh
-uv run scripts/docs.py build
-uv run scripts/docs.py preview
+uv run scripts/docs.py build    # write docs/.vitepress/dist/
+uv run scripts/docs.py preview  # serve the existing build
 ```
 
-Doxygen reads the public C++ headers, excluding bindings and internal `detail/`
-directories, and writes to the ignored `docs/public/reference/cpp/`. The site
-includes those pages under **C++ reference**. After editing headers, restart
-`dev` or rerun the build to regenerate them.
+The launcher installs locked documentation dependencies automatically. The `docs`
+uv group supplies Node.js/Corepack, Doxygen, and pdoc; Corepack selects the pinned
+pnpm version and pnpm installs VitePress, MathJax, and Mermaid from its lockfile. A global
+Node.js, pnpm, or Doxygen installation is unnecessary. Initial setup needs network
+access. Generated pages and dependencies are ignored by Git.
 
-Most header comments currently use ordinary `//` syntax, so the generated
-reference primarily provides declarations and source browsing. The handwritten
-pages explain API behavior and Python usage.
-
-The **Python reference** documents the public modules, nanobind signatures and
-docstrings, and compiled FEM template instances. Its contents reflect the
-active build, including platform-specific sparse solvers and optional backends.
-After changing bindings, rebuild `_core`, then restart `dev` or rerun the
-documentation build. `PYTHONPATH=build/<preset>/python` selects a
-particular configured build.
-
-The optional `litepgo.torch` reference is generated when PyTorch is installed;
-otherwise the generator reports that it was skipped. Install it with
-`uv pip install torch` if you need the adapter's API documentation.
+Python reference pages describe the active compiled build. Set
+`PYTHONPATH=build/<preset>/python` before running the launcher to select one.
+PyTorch is optional: `uv pip install torch` enables the Torch examples and their
+API reference. See [development](docs/development.md) for source organization,
+tests, bindings, and documentation maintenance.

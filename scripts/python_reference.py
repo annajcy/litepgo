@@ -20,7 +20,7 @@ def main() -> None:
     except ImportError as error:
         raise SystemExit(
             "Build the Python extension first: cmake --preset release && "
-            "cmake --build --preset release --target _core"
+            "cmake --build --preset release --target litepgo_dev"
         ) from error
     if not Path(litepgo.__file__).resolve().is_relative_to(root):
         raise SystemExit("litepgo was imported from another checkout; build this checkout or set PYTHONPATH.")

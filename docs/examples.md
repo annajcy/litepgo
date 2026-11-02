@@ -1,36 +1,80 @@
 # Example catalog
 
-Native cases have matching `.cpp` and `.py` files; the optional Torch fitting
-examples are Python-only. Each example keeps its setup and solve in its own file.
-The CMake target matches
-the filename stem. Executables mirror source directories under `build/<preset>/`.
-Run Python examples from the configured environment (`.venv/bin/python` or
-`PYTHONPATH=build/<preset>/python .venv/bin/python`).
+Every example page explains the problem, its mathematical formulation, the API
+construction, run commands, expected checks, and limitations. Full maintained
+source is embedded in expandable sections on that page. C++ targets match the
+filename stem; executable paths mirror `examples/` under `build/release/`.
 
-| Directory | What to learn | Starting case |
-| --- | --- | --- |
-| [energy/scalar/](https://github.com/annajcy/litepgo/tree/dev/examples/energy/scalar/) | Implement and combine scalar energies | `custom_energy`, `energy_composition` |
-| [energy/response/](https://github.com/annajcy/litepgo/tree/dev/examples/energy/response/) | Vector responses, Jacobians and batched force fitting | `custom_response`, `mesh_response` |
-| [solver/](https://github.com/annajcy/litepgo/tree/dev/examples/solver/) | Newton and Gauss–Newton on small problems | `newton_chain`, `gauss_newton_fit` |
-| [fem/equilibrium/](https://github.com/annajcy/litepgo/tree/dev/examples/fem/equilibrium/) | Elastic static equilibrium | `tet_p1_corner_pull`, `shell_saddle_pull` |
-| [fem/plasticity/](https://github.com/annajcy/litepgo/tree/dev/examples/fem/plasticity/) | Equilibrium with prescribed plastic fields | `tet_p1_plastic_twist`, `shell_plastic_field` |
-| [fem/fitting/](https://github.com/annajcy/litepgo/tree/dev/examples/fem/fitting/) | Material and plastic-state inverse problems | `volume_equilibrium_material_fit`, `shell_equilibrium_fp_fit` |
-| [fem/embedding/](https://github.com/annajcy/litepgo/tree/dev/examples/fem/embedding/) | Point location and displacement interpolation | `point_embedding` |
-| [contact/](https://github.com/annajcy/litepgo/tree/dev/examples/contact/) | FEM with contact | `tet_p1_box_stack` |
-| [mesh/](https://github.com/annajcy/litepgo/tree/dev/examples/mesh/) | Mesh optimization | `arap`, `laplacian_optimization` |
-| [spatial/](https://github.com/annajcy/litepgo/tree/dev/examples/spatial/) | Spatial-index queries | `spatial_query` |
+Start with [custom scalar energies](examples/energy.md#custom-scalar-energies),
+then the [Newton chain](examples/solvers.md#constrained-chain). For simulation,
+continue to [elastic equilibrium](examples/equilibrium.md), then
+[plastic fields](examples/plasticity.md) or [contact](examples/contact.md).
+Read [inverse problems](guide/solver/inverse.md) before choosing a fitting experiment.
 
-In FEM fitting names, `fixed_pose` means the displacement is supplied and held
-fixed; `equilibrium` means every parameter trial solves for displacement again.
-`material` fits constitutive parameters, while `fp` fits plastic stretches.
-Volume and shell names distinguish the model; basis-specific names distinguish
-Tet P1, Hex Q1 and Hex Hermite forward examples.
+## Prepare and run
+
+From the repository root, create the environment, configure release, and build
+an example and Python extension. For example:
 
 ```sh
-cmake --build build/release --target shell_equilibrium_fp_fit
-build/release/examples/fem/fitting/shell_equilibrium_fp_fit
-.venv/bin/python examples/fem/fitting/shell_equilibrium_fp_fit.py
+uv sync --locked
+cmake --preset release
+cmake --build build/release --target custom_energy litepgo_dev
+build/release/examples/energy/scalar/custom_energy
+PYTHONPATH=build/release/python uv run --no-sync python examples/energy/scalar/custom_energy.py
 ```
 
-See [FEM details](https://github.com/annajcy/litepgo/blob/dev/examples/fem/README.md), [energy APIs](https://github.com/annajcy/litepgo/blob/dev/examples/energy/README.md),
-[solver examples](https://github.com/annajcy/litepgo/blob/dev/examples/solver/README.md), and [mesh optimization](https://github.com/annajcy/litepgo/blob/dev/examples/mesh/README.md).
+All 26 native examples have Python counterparts. Four additional Torch programs
+are Python-only and require `uv pip install torch`. Other examples use only
+ordinary project dependencies. Asset inputs are bundled; generated-grid examples
+need no input files. Output paths and overwrite behavior are documented per case.
+A successful numerical run is indicated by exit status zero, not identical printed
+last digits on every platform.
+
+## Choose a task
+
+| Area | Program | What it teaches |
+| --- | --- | --- |
+| Energy | [`custom_energy`](examples/energy.md#custom-scalar-energies) | Fixed/dynamic scalar derivatives and sparse structure |
+| Energy | [`energy_composition`](examples/energy.md#energy-composition) | Weighted sums and affine derivative pullback |
+| Energy | [`custom_response`](examples/energy.md#custom-vector-responses) | Fixed/dynamic vector residuals and Jacobians |
+| Energy | [`mesh_response`](examples/energy.md#batched-material-force-fitting) | Batched fixed-pose material-force calibration |
+| Solvers | [`newton_chain`](examples/solvers.md#constrained-chain) | Hard constraints and a complete Newton solve |
+| Solvers | [`gauss_newton_fit`](examples/solvers.md#exponential-curve-fitting) | Analytic nonlinear least squares |
+| Mesh | [`laplacian_optimization`](examples/mesh.md#laplacian-smoothing-and-editing) | Edge/one-ring assembly, smoothing and editing |
+| Mesh | [`arap`](examples/mesh.md#arap-local-global-deformation) | Rotation fitting and constrained global solves |
+| Equilibrium | [`tet_p1_corner_pull`](examples/equilibrium.md#tet-p1-corner-pull) | Tetrahedral elastic equilibrium |
+| Equilibrium | [`hex_q1_corner_pull`](examples/equilibrium.md#hex-q1-corner-pull) | Trilinear hex equilibrium |
+| Equilibrium | [`hex_hermite_corner_pull`](examples/equilibrium.md#hex-hermite-corner-pull) | Physical derivative DOFs and high-order displacement |
+| Equilibrium | [`shell_saddle_pull`](examples/equilibrium.md#shell-saddle-pull) | Membrane/bending energy with soft corner loads |
+| Plasticity | [`tet_p1_plastic_twist`](examples/plasticity.md#tet-p1-plastic-twist) | Compatible plastic fields and incremental equilibrium |
+| Plasticity | [`hex_q1_plastic_twist`](examples/plasticity.md#hex-q1-plastic-twist) | Q1 plastic rest-state change |
+| Plasticity | [`hex_hermite_plastic_twist`](examples/plasticity.md#hex-hermite-plastic-twist) | C1 plastic fields and sampled Hermite output |
+| Plasticity | [`shell_plastic_field`](examples/plasticity.md#differential-shell-growth) | Incompatible per-face natural geometry |
+| Contact | [`tet_p1_box_stack`](examples/contact.md#pressed-tet-box-stack) | Boundary mapping, native IPC, and changing sparsity |
+| Spatial | [`spatial_query`](examples/spatial.md#spatial-hash-queries) | Point/region/filtered box-pair queries |
+| Spatial | [`point_embedding`](examples/spatial.md#point-embedding) | Location and interpolation for P1/Q1/Hermite |
+| Fitting | [`shell_fixed_pose_material_fit`](examples/fitting.md#fixed-pose-shell-material) | Shared shell material from fixed-pose forces |
+| Fitting | [`volume_fixed_pose_fp_fit`](examples/fitting.md#fixed-pose-volume-plastic-stretches) | Three diagonal solid plastic stretches |
+| Fitting | [`shell_fixed_pose_fp_fit`](examples/fitting.md#fixed-pose-shell-plastic-stretches) | Two in-plane shell plastic stretches |
+| Fitting | [`volume_equilibrium_material_fit`](examples/fitting.md#equilibrium-volume-material) | Material from equilibrium reaction experiments |
+| Fitting | [`shell_equilibrium_material_fit`](examples/fitting.md#equilibrium-shell-material) | Material-dependent state and reaction sensitivities |
+| Fitting | [`volume_equilibrium_fp_fit`](examples/fitting.md#equilibrium-volume-plastic-stretches) | Plastic stretches from shapes and reactions |
+| Fitting | [`shell_equilibrium_fp_fit`](examples/fitting.md#equilibrium-shell-plastic-stretches) | Shell natural geometry through equilibrium |
+| Torch | [`volume_equilibrium_material_fit_torch`](examples/torch.md#volume-material-with-l-bfgs) | Volume material recovery with native autograd |
+| Torch | [`shell_equilibrium_material_fit_torch`](examples/torch.md#shell-material-with-l-bfgs) | Shell material recovery with native autograd |
+| Torch | [`volume_equilibrium_fp_fit_torch`](examples/torch.md#volume-plastic-stretches-with-l-bfgs) | Three-stretch inverse equilibrium with L-BFGS |
+| Torch | [`shell_equilibrium_fp_fit_torch`](examples/torch.md#shell-plastic-stretches-with-l-bfgs) | Two-stretch shell inverse equilibrium with L-BFGS |
+
+## Read fitting names correctly
+
+`fixed_pose` holds displacement fixed and fits force predictions. `equilibrium`
+re-solves free displacement at every parameter trial and includes its sensitivity.
+`material` fits constitutive parameters; `fp` fits a restricted plastic-state
+parameterization. Volume and shell names select different constitutive/natural
+geometry models. `torch` selects the outer optimizer/autograd interface and does
+not change the inner equilibrium formulation.
+
+Examples with recovered synthetic parameters establish numerical correctness and
+local identifiability for those experiments. They do not establish uniqueness for
+arbitrary experimental data or supply a general plastic-evolution model.

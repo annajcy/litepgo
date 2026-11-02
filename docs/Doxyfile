@@ -3,7 +3,7 @@ PROJECT_BRIEF          = "Reference documentation for litepgo C++ APIs"
 OUTPUT_DIRECTORY       = public/reference/cpp
 HTML_OUTPUT            = .
 
-INPUT                  = ../cpp/litepgo
+INPUT                  = ../cpp/litepgo cpp-main.dox
 RECURSIVE              = YES
 FILE_PATTERNS          = *.hpp
 EXCLUDE_PATTERNS       = */bindings/* */detail/*
