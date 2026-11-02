@@ -60,9 +60,10 @@ cmake --build build/release --target newton_chain
 build/release/examples/solver/newton_chain
 ```
 
-On Windows append `.exe` to compiled example paths. The build copies the TBB DLL
-beside executables and the Python extension, so no extra runtime `PATH` setup is
-required.
+On Windows append `.exe` to compiled example paths. The build stages TBB and
+oneMKL DLLs beside executables and the Python extension, so no extra runtime
+`PATH` setup is required. Hard links share the large oneMKL kernels within a
+volume; builds on another volume use copies.
 
 ## How Python finds the extension
 
@@ -94,17 +95,17 @@ An ASan-only build cannot provide an importable extension for ordinary Python.
 
 Eigen LDLT and SparseLU are always available. `AutoSparseSolver` selects the
 platform's positive-definite backend: Accelerate on macOS, oneMKL/PARDISO on
-x86-64 Linux when enabled, otherwise Eigen LDLT. `AutoIndefiniteSparseSolver`
+x86-64 Linux and Windows when enabled, otherwise Eigen LDLT. `AutoIndefiniteSparseSolver`
 uses Accelerate LDLT, PARDISO LDLT, or Eigen SparseLU, respectively.
-The default Windows build uses the Eigen backends.
+Set `LITEPGO_WITH_MKL=OFF` to use the Eigen defaults on Linux or Windows.
 See [linear algebra](linalg/index.md) for backend selection and
 [solvers](solver/index.md) for nonlinear algorithms.
 
 | CMake setting | Behavior |
 | --- | --- |
 | `LITEPGO_WITH_ACCELERATE` | Defaults on for macOS; system Accelerate framework |
-| `LITEPGO_WITH_MKL` | Defaults on for x86-64 Linux; pinned oneMKL wheels are cached in `build/_cache/` |
-| `LITEPGO_MKL_ROOT` | Use a local compatible oneMKL installation instead of downloading wheels |
+| `LITEPGO_WITH_MKL` | Defaults on for x86-64 Linux and Windows; pinned oneMKL wheels are cached in `build/_cache/` |
+| `LITEPGO_MKL_ROOT` | Use a local oneMKL 2026.1 installation with `include/`, `lib/`, and (on Windows) `bin/` instead of downloading wheels |
 | `LITEPGO_WITH_IPC_TOOLKIT` | Defaults on; adds the optional `litepgo::ipctk` backend |
 | `LITEPGO_WITH_GMSH` | Defaults off; adds MSH I/O through fetched Gmsh sources |
 | `LITEPGO_BUILD_PYTHON` | Enables the nanobind extension; enabled by ordinary presets |

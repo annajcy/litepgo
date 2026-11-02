@@ -1,4 +1,4 @@
-# Windows loads TBB beside each executable/extension, without a caller-specific PATH.
+# Windows loads native DLLs beside each executable/extension without a custom PATH.
 add_custom_target(litepgo_runtime)
 add_dependencies(litepgo_runtime TBB::tbb)
 
@@ -9,8 +9,10 @@ function(litepgo_copy_windows_runtime directory)
         if(type STREQUAL "EXECUTABLE" OR type STREQUAL "MODULE_LIBRARY")
             add_dependencies(${target} litepgo_runtime)
             add_custom_command(TARGET litepgo_runtime POST_BUILD
-                COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${target}>"
-                COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:TBB::tbb>" "$<TARGET_FILE_DIR:${target}>"
+                COMMAND "${CMAKE_COMMAND}"
+                    "-Dlibraries=$<TARGET_FILE:TBB::tbb>;${LITEPGO_MKL_RUNTIME_DLLS}"
+                    "-Ddestination=$<TARGET_FILE_DIR:${target}>"
+                    -P "${PROJECT_SOURCE_DIR}/cmake/litepgo_copy_runtime.cmake"
                 VERBATIM)
         endif()
     endforeach()

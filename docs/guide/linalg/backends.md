@@ -22,6 +22,8 @@ aliases:
 | Neither | `EigenLDLT` | `EigenSparseLU` |
 
 Use `litepgo.build_info()` and module exports to inspect the active build.
+oneMKL/PARDISO is enabled by default on x86-64 Linux and Windows; macOS uses
+Accelerate. Disable `LITEPGO_WITH_MKL` to select the Eigen defaults instead.
 Automatic selection does not make a singular or badly scaled system solvable.
 For example, projecting local Hessians can help a forward Newton step, but
 [equilibrium sensitivities](../solver/equilibrium.md#differentiate-an-equilibrium-branch)
