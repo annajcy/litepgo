@@ -1,0 +1,112 @@
+#include "litepgo/energy/scalar/mesh_energy.hpp"
+#include <Eigen/Eigenvalues>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <map>
+#include <numeric>
+#include <stdexcept>
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_reduce.h>
+
+namespace litepgo::energy {
+namespace {
+void project_hessian(Eigen::Ref<BatchMatrix> hessian) {
+    if (hessian.rows() == 0)
+        return;
+    const Eigen::MatrixXd symmetric = 0.5 * hessian + 0.5 * hessian.transpose();
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> solver(symmetric);
+    if (solver.info() != Eigen::Success)
+        throw std::domain_error("MeshEnergy: local Hessian eigendecomposition failed");
+    hessian =
+        solver.eigenvectors() * solver.eigenvalues().cwiseMax(0.0).asDiagonal() * solver.eigenvectors().transpose();
+    if (!hessian.allFinite())
+        throw std::domain_error("MeshEnergy: non-finite projected Hessian");
+}
+} // namespace
+
+MeshEnergy::MeshEnergy(dof::EnergyAssembler assembler, Callback callback, int batch_size, Step step)
+    : FixedPatternEnergy(static_cast<int>(assembler.hessian_pattern().rows()), assembler.hessian_pattern()),
+      assembler_(std::move(assembler)), callback_(std::move(callback)), step_(std::move(step)) {
+    if (batch_size <= 0 || !callback_)
+        throw std::invalid_argument("MeshEnergy: invalid batch size or callback");
+    std::map<int, std::vector<int>> groups;
+    for (int e = 0; e < assembler_.num_elements(); ++e)
+        groups[static_cast<int>(assembler_.dof_indices(e).size())].push_back(e);
+    for (const auto& [size, ids] : groups)
+        for (std::size_t begin = 0; begin < ids.size(); begin += batch_size)
+            batches_.emplace_back(ids.begin() + begin, ids.begin() + std::min(ids.size(), begin + batch_size));
+    storage_.resize(batches_.size());
+    values_.resize(assembler_.num_elements());
+    views_.resize(assembler_.num_elements());
+}
+void MeshEnergy::gather(const std::vector<int>& ids, const ConstVecRef& x, BatchMatrix& result) const {
+    result.resize(ids.size(), assembler_.dof_indices(ids.front()).size());
+    for (std::size_t b = 0; b < ids.size(); ++b) {
+        const auto indices = assembler_.dof_indices(ids[b]);
+        for (std::size_t c = 0; c < indices.size(); ++c)
+            result(b, c) = x[indices[c]];
+    }
+}
+double MeshEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const {
+    tbb::parallel_for(std::size_t(0), batches_.size(), [&](std::size_t k) {
+        const auto& ids = batches_[k];
+        auto& data = storage_[k];
+        gather(ids, x, data.inputs);
+        const auto& inputs = data.inputs;
+        const Eigen::Index count = inputs.rows(), n = inputs.cols();
+        auto& g = data.gradient;
+        auto& H = data.hessian;
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        if (gradient)
+            g.setConstant(count, n, nan);
+        if (hessian)
+            H.setConstant(count * n, n, nan);
+        data.values = callback_(ids, inputs, gradient ? &g : nullptr, hessian ? &H : nullptr);
+        const auto& values = data.values;
+        if (values.size() != count || !values.allFinite() ||
+            (gradient && (g.rows() != count || g.cols() != n || !g.allFinite())) ||
+            (hessian && (H.rows() != count * n || H.cols() != n || !H.allFinite())))
+            throw std::logic_error("MeshEnergy: invalid batch outputs");
+        for (Eigen::Index b = 0; b < count; ++b) {
+            const int e = ids[b];
+            values_[e] = values[b];
+            if (hessian && kind == HessianKind::Projected)
+                project_hessian(H.middleRows(b * n, n));
+            if (gradient || hessian) {
+                const Eigen::Map<const Vec> local_g(gradient && n ? g.data() + b * n : nullptr, gradient ? n : 0);
+                const Eigen::Map<const BatchMatrix> local_H(hessian && n ? H.data() + b * n * n : nullptr,
+                                                            hessian ? n : 0, hessian ? n : 0);
+                views_[e] = dof::EnergyAssembler::ElementView(local_g, local_H);
+            }
+        }
+    });
+    assembler_.assemble(views_, gradient, hessian);
+    const double value = std::accumulate(values_.begin(), values_.end(), 0.);
+    if (!std::isfinite(value))
+        throw std::domain_error("MeshEnergy: non-finite energy sum");
+    return value;
+}
+double MeshEnergy::feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const {
+    if (!step_)
+        return 1.;
+    return tbb::parallel_reduce(
+        tbb::blocked_range<std::size_t>(0, batches_.size()), 1.,
+        [&](const auto& range, double bound) {
+            for (auto k = range.begin(); k < range.end(); ++k) {
+                const auto& ids = batches_[k];
+                auto& data = storage_[k];
+                gather(ids, x, data.inputs);
+                gather(ids, dx, data.delta);
+                const Vec steps = step_(ids, data.inputs, data.delta);
+                if (steps.size() != static_cast<Eigen::Index>(ids.size()) || !steps.allFinite() ||
+                    (steps.array() < 0).any() || (steps.array() > 1).any())
+                    throw std::logic_error("MeshEnergy: invalid batch steps");
+                bound = std::min(bound, steps.minCoeff());
+            }
+            return bound;
+        },
+        [](double a, double b) { return std::min(a, b); });
+}
+} // namespace litepgo::energy

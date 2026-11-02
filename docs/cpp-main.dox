@@ -1,0 +1,34 @@
+/**
+@mainpage litepgo C++ API
+
+litepgo is a C++20 library for geometry processing, finite-element elasticity,
+surface contact, and sparse optimization. This reference indexes the public
+headers. The <a href="../../index.html">user manual</a> explains numerical conventions,
+formulations, and complete paired C++/Python examples.
+
+@section cpp_modules Find a module
+
+- litepgo::mesh: topology, geometry, boundary extraction, and file I/O.
+- litepgo::dof: gather/scatter layouts, fixed/free reduction, and surface maps.
+- litepgo::energy: scalar objectives, vector responses, composition, and assembly.
+- litepgo::fem: fields, bases, quadrature, solid/shell models, and force responses.
+- litepgo::solver: constrained Newton, Gauss-Newton, and equilibrium sensitivity.
+- litepgo::linalg: sparse factorization backends.
+- litepgo::contact: native IPC and the optional IPC Toolkit backend.
+- litepgo::spatial: generic AABB spatial hashing.
+
+Fundamental types and build information live in the root litepgo namespace.
+Link the CMake module targets used by your application; I/O and the optional
+Toolkit target are separate from the base aggregate.
+
+@section cpp_contracts Before evaluating derivatives
+
+Unknowns are scalar vectors. Vertex coordinates are packed vertex-major xyz;
+material matrices are vectorized column-major. Refresh an energy/response's
+sparse pattern before standalone second/first derivative assembly, respectively.
+Keep borrowed C++ field inputs alive. Consult the manual for geometric domains,
+force signs, physical Hermite DOFs, and local integration measures.
+
+The source browser shows ordinary header comments as well as declarations.
+Generated pages are rebuilt from headers and should not be edited directly.
+*/
