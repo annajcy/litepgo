@@ -1,7 +1,7 @@
 """Weighted energies in reduced coordinates x = T z + offset.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/energy/scalar/energy_composition.py
+    uv run --no-sync python examples/energy/scalar/energy_composition.py
 """
 
 import numpy as np

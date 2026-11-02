@@ -9,7 +9,7 @@ Torch owns the outer tensor graph and optimizer.
 The diagram shows a forward call with gradients enabled, followed by backward.
 `energy` saves a copied energy gradient; `response` saves a copied sparse
 Jacobian. Backward uses these saved derivatives rather than evaluating the model
-again. Implementation lives in `python/litepgo/torch.py`.
+again. Implementation lives in `src/python/torch.py`.
 
 ```mermaid
 flowchart TB

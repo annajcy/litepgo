@@ -1,0 +1,101 @@
+#pragma once
+#include "detail/templates.hpp"
+#include "litepgo/dof/constant_dof_map.hpp"
+#include "litepgo/dof/element_dof_map.hpp"
+#include "litepgo/dof/vertex_dof_map.hpp"
+#include "litepgo/energy/response/mesh_response.hpp"
+#include "litepgo/fem/field/shared_field.hpp"
+#include "litepgo/fem/local/local_response.hpp"
+#include <memory>
+#include <nanobind/eigen/dense.h>
+#include <nanobind/eigen/sparse.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/shared_ptr.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
+#include <string>
+#include <utility>
+#include <vector>
+namespace nb = nanobind;
+using namespace nb::literals;
+
+namespace litepgo::fem::binding {
+using bindings::register_instance;
+using Fields = std::vector<std::shared_ptr<Field3D>>;
+template <class B, int Dim> void bind_basis(nb::module_& m, const char* name) {
+    using Coordinate = Eigen::Matrix<double, Dim, 1>;
+    nb::class_<B> cls(m, name);
+    cls.attr("num_basis_functions") = B::num_basis_functions;
+    cls.def_static(
+           "eval_N", [](const Coordinate& xi) { return Eigen::VectorXd(B::eval_N(xi)); }, "xi"_a)
+        .def_static(
+            "eval_dN_dxi", [](const Coordinate& xi) { return Eigen::MatrixXd(B::eval_dN_dxi(xi)); }, "xi"_a)
+        .def_static(
+            "eval_d2N_dxi2", [](const Coordinate& xi) { return Eigen::MatrixXd(B::eval_d2N_dxi2(xi)); }, "xi"_a,
+            "Second derivatives, upper triangle in row order: (11,12,22) or (11,12,13,22,23,33).")
+        .def_static(
+            "reference_node", [](int basis_index) { return Coordinate(B::reference_node(basis_index)); },
+            "basis_index"_a);
+}
+
+template <class Q> void bind_quadrature(nb::module_& m, const char* name) {
+    nb::class_<Q> cls(m, name);
+    cls.attr("num_points") = Q::num_points;
+    cls.def_static(
+           "points", [] { return Eigen::MatrixXd(Q::points()); }, "One reference point per row.")
+        .def_static("weights", [] { return Eigen::VectorXd(Q::weights()); });
+}
+
+inline nb::tuple value_and_derivatives(double value, bool gradient, const Eigen::VectorXd& g, bool hessian,
+                                       const Eigen::MatrixXd& H) {
+    return nb::make_tuple(value, gradient ? nb::cast(g) : nb::none(), hessian ? nb::cast(H) : nb::none());
+}
+
+inline std::string class_name(nb::handle cls) {
+    return nb::cast<std::string>(cls.attr("__name__"));
+}
+
+template <class M, class Local>
+void bind_force_local_response(nb::module_& m, const char* template_name, const char* doc) {
+    const nb::tuple key = nb::make_tuple(nb::type<M>());
+    const std::string name = std::string(template_name) + "[" + class_name(key[0]) + "]";
+    nb::class_<Local, LocalResponse3D>(m, name.c_str())
+        .def(nb::init<const Field3D&, const Field3D&, const Field3D&>(), "F"_a, "Fp"_a, "theta"_a,
+             nb::keep_alive<1, 2>(), nb::keep_alive<1, 3>(), nb::keep_alive<1, 4>(), doc);
+    register_instance(m, template_name, key, nb::type<Local>());
+}
+
+// Field types are erased: Python passes any Field3D, held through SharedField3D.
+
+inline std::vector<SharedField3D> shared(const Fields& fields) {
+    std::vector<SharedField3D> result;
+    result.reserve(fields.size());
+    for (const auto& field : fields)
+        result.emplace_back(field);
+    return result;
+}
+
+template <class ParameterMap, class Force, class Cls>
+void bind_force_init(Cls& cls, const char* fixed_name, const char* doc) {
+    cls.def(
+        "__init__",
+        [](Force* self, const ParameterMap& parameter_map, const dof::VertexDofMap& displacement_map,
+           const Fields& rest_position_fields, Vec displacement, const Fields& fixed, int batch_size) {
+            new (self) Force(parameter_map, displacement_map, shared(rest_position_fields), std::move(displacement),
+                             shared(fixed), batch_size);
+        },
+        "parameter_map"_a, "displacement_map"_a, "rest_position_fields"_a, "displacement"_a, nb::arg(fixed_name),
+        "batch_size"_a = 256, doc);
+}
+
+template <class Force, class M, class B, class Q>
+void bind_force(nb::module_& m, const char* template_name, const char* fixed_name, const char* doc) {
+    const nb::tuple key = nb::make_tuple(nb::type<M>(), nb::type<B>(), nb::type<Q>());
+    const std::string name = std::string(template_name) + "[" + class_name(key[0]) + ", " + class_name(key[1]) + ", " +
+                             class_name(key[2]) + "]";
+    auto cls = nb::class_<Force, energy::MeshResponse>(m, name.c_str());
+    bind_force_init<dof::ConstantDofMap, Force>(cls, fixed_name, doc);
+    bind_force_init<dof::ElementDofMap, Force>(cls, fixed_name, doc);
+    register_instance(m, template_name, key, nb::type<Force>());
+}
+} // namespace litepgo::fem::binding

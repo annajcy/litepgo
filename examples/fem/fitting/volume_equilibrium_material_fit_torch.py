@@ -3,8 +3,8 @@
 Run with the optional torch dependency installed. The FEM problem includes
 both displacement and direct material contributions to reaction derivatives.
 
-Setup: uv pip install --python .venv/bin/python torch
-Run: .venv/bin/python examples/fem/fitting/volume_equilibrium_material_fit_torch.py
+Setup: uv pip install torch
+Run: uv run --no-sync python examples/fem/fitting/volume_equilibrium_material_fit_torch.py
 Requires a built litepgo Python package. Uses CPU float64 and Torch L-BFGS.
 """
 

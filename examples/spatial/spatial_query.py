@@ -1,7 +1,7 @@
 """Point, region and filtered pair queries; mirrors spatial_query.cpp.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/spatial/spatial_query.py
+    uv run --no-sync python examples/spatial/spatial_query.py
 """
 
 from litepgo import spatial

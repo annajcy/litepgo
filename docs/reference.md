@@ -1,3 +1,9 @@
+---
+next:
+  text: Development
+  link: /development
+---
+
 # Generated API references
 
 Use the manual to learn model construction and numerical conventions. Use the
@@ -10,7 +16,7 @@ development launcher before the site starts.
 
 ## C++ reference
 
-Doxygen scans `cpp/litepgo/**/*.hpp`, excluding bindings and internal `detail/`
+Doxygen scans `src/cpp/**/*.hpp`, excluding bindings and internal `detail/`
 directories. It lists public declarations and provides source browsing. Many
 headers currently use ordinary `//` comments, so descriptive prose is fuller in
 the handwritten manual than in the generated symbol pages. Native template

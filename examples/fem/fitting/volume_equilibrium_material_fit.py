@@ -1,7 +1,7 @@
 """Fit volume material parameters from reactions using analytic equilibrium sensitivities.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/fem/fitting/volume_equilibrium_material_fit.py
+    uv run --no-sync python examples/fem/fitting/volume_equilibrium_material_fit.py
 """
 
 from pathlib import Path

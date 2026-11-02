@@ -94,6 +94,8 @@ def parse_results(stdout):
 
 def test_python_box_stack_matches_cpp(tmp_path):
     executable = EXAMPLES / "tet_p1_box_stack"
+    if sys.platform == "win32":
+        executable = executable.with_suffix(".exe")
     if not executable.exists():
         pytest.skip(f"{executable} is not built")
     script = REPO / "examples" / "contact" / "tet_p1_box_stack.py"

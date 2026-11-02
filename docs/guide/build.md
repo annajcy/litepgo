@@ -1,13 +1,15 @@
 # Build and environment setup
 
 This page builds the C++ library, the Python extension, and the regression suite
-from a source checkout. The documented automated test platforms are macOS and
-Linux. CMake configuration may download native dependencies on the first run.
+from a source checkout. CI tests Debug and Release builds on macOS, Linux, and
+Windows. CMake configuration may download native dependencies on the first run.
 
 ## Prerequisites and first build
 
 Install Python **3.12**, uv, **CMake 3.28 or newer**, Ninja, and a C++20 compiler.
 On macOS use the Xcode command-line tools; on Linux use a suitable GCC or Clang.
+On Windows install Visual Studio Build Tools with the C++ workload and run these
+commands from an x64 Native Tools Command Prompt or Developer PowerShell.
 From the repository root:
 
 ```sh
@@ -58,6 +60,10 @@ cmake --build build/release --target newton_chain
 build/release/examples/solver/newton_chain
 ```
 
+On Windows append `.exe` to compiled example paths. The build copies the TBB DLL
+beside executables and the Python extension, so no extra runtime `PATH` setup is
+required.
+
 ## How Python finds the extension
 
 The default build, or the explicit `litepgo_dev` target, creates
@@ -73,7 +79,13 @@ PYTHONPATH=build/release/python uv run --no-sync python examples/solver/newton_c
 PYTHONPATH=build/release/python uv run --no-sync python -m pytest -q tests/python/test_api_examples.py
 ```
 
-Editing an existing facade `.py` file takes effect immediately through the links.
+In PowerShell set `$env:PYTHONPATH = "build/release/python"` before the command
+instead of using a shell-variable prefix. Building `litepgo_dev` selects the
+default package without needing `PYTHONPATH`.
+
+Editing an existing facade `.py` file takes effect immediately through the links
+on Unix. Windows uses copies to avoid requiring symlink privileges; rebuild
+`litepgo_dev` after editing a facade there.
 Rebuild `_core` after changing C++. Adding/removing a Python module requires
 building `litepgo_dev` to refresh the source links and environment registration.
 An ASan-only build cannot provide an importable extension for ordinary Python.
@@ -84,6 +96,7 @@ Eigen LDLT and SparseLU are always available. `AutoSparseSolver` selects the
 platform's positive-definite backend: Accelerate on macOS, oneMKL/PARDISO on
 x86-64 Linux when enabled, otherwise Eigen LDLT. `AutoIndefiniteSparseSolver`
 uses Accelerate LDLT, PARDISO LDLT, or Eigen SparseLU, respectively.
+The default Windows build uses the Eigen backends.
 See [linear algebra](linalg/index.md) for backend selection and
 [solvers](solver/index.md) for nonlinear algorithms.
 

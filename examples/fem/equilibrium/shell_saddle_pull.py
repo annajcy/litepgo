@@ -1,7 +1,7 @@
 """Python mirror of shell_saddle_pull.cpp: pull a sheet's corners into a saddle and solve static equilibrium.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/fem/equilibrium/shell_saddle_pull.py
+    uv run --no-sync python examples/fem/equilibrium/shell_saddle_pull.py
 """
 
 import argparse

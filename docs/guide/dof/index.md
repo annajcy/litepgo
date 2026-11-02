@@ -26,7 +26,7 @@ flowchart TB
 
 `SurfaceKinematics` is a second consumer of DOF layouts: it holds a sparse map
 from simulation unknowns to surface positions. The module owns no constitutive
-law. Native headers are in `cpp/litepgo/dof/`; the Python facade is `litepgo.dof`.
+law. Native headers are in `src/cpp/dof/`; the Python facade is `litepgo.dof`.
 For vector responses, separate input/output maps define a rectangular Jacobian
 assembled by `ResponseAssembler`; the square energy reduction above is a separate path.
 The native assembly plans are used internally by the bound energy/response

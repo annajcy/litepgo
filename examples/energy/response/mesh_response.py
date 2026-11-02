@@ -1,7 +1,7 @@
 """Fit shared Neo-Hookean parameters from forces at a prescribed deformation, using batches.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/energy/response/mesh_response.py
+    uv run --no-sync python examples/energy/response/mesh_response.py
 """
 
 import argparse

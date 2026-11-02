@@ -3,7 +3,7 @@
 Material and geometry are fixed; synthetic observations contain no noise.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/fem/fitting/shell_equilibrium_fp_fit.py
+    uv run --no-sync python examples/fem/fitting/shell_equilibrium_fp_fit.py
 """
 
 import numpy as np

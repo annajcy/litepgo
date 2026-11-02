@@ -1,6 +1,6 @@
 # oneTBB is fetched at a pinned version and built as a shared library, so one
 # TBB runtime serves the whole process. The Python install ships it next to
-# _core (see cpp/litepgo/bindings/CMakeLists.txt).
+# _core (see src/binding/CMakeLists.txt).
 set(TBB_TEST OFF CACHE BOOL "" FORCE)
 set(TBB_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(TBB_STRICT OFF CACHE BOOL "" FORCE)

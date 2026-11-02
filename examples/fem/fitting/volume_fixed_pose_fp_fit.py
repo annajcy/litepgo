@@ -4,7 +4,7 @@ Python mirror of volume_fixed_pose_fp_fit.cpp. Geometry, displacement and materi
 parameters stay fixed; no equilibrium solve or plastic_matrix evolution is involved.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/fem/fitting/volume_fixed_pose_fp_fit.py
+    uv run --no-sync python examples/fem/fitting/volume_fixed_pose_fp_fit.py
 """
 
 from pathlib import Path

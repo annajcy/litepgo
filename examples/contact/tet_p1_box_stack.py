@@ -1,7 +1,7 @@
 """Python mirror of tet_p1_box_stack.cpp: press two tet boxes together and solve static equilibrium with contact.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/contact/tet_p1_box_stack.py
+    uv run --no-sync python examples/contact/tet_p1_box_stack.py
 """
 
 import argparse

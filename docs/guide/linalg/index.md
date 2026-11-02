@@ -23,7 +23,7 @@ flowchart TB
   api -. delegates to .-> backend["Eigen / Accelerate / PARDISO"]
 ```
 
-Native code is in `cpp/litepgo/linalg/`, with public solver headers under
+Native code is in `src/cpp/linalg/`, with public solver headers under
 `linalg/sparse_solver/`. Python exports the interface and concrete classes through
 `litepgo.linalg.sparse_solver`, also re-exported by `litepgo.linalg`.
 

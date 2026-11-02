@@ -3,8 +3,8 @@
 A small triangulated patch has prescribed boundary displacements and a free
 interior vertex. Thickness is fixed; observations are synthetic and noiseless.
 
-Setup: uv pip install --python .venv/bin/python torch
-Run: .venv/bin/python examples/fem/fitting/shell_equilibrium_material_fit_torch.py
+Setup: uv pip install torch
+Run: uv run --no-sync python examples/fem/fitting/shell_equilibrium_material_fit_torch.py
 Requires a built litepgo Python package. Uses CPU float64 and Torch L-BFGS.
 """
 

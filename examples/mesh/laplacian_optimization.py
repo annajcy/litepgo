@@ -1,7 +1,7 @@
 """Boundary-fixed smoothing and differential-coordinate mesh editing.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/mesh/laplacian_optimization.py
+    uv run --no-sync python examples/mesh/laplacian_optimization.py
 """
 
 import argparse

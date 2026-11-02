@@ -1,14 +1,16 @@
 """Make a CMake build of litepgo importable from its virtual environment.
 
-Symlinks the Python sources next to the compiled _core in the build tree, then
+Mirrors the Python sources next to the compiled _core in the build tree, then
 points a .pth file in the environment's site-packages at that build. Edits to
-existing .py files take effect immediately; adding or removing one needs a build.
+existing .py files take effect immediately on Unix. Windows copies the sources;
+rebuild litepgo_dev after editing them. Adding or removing files needs a build.
 """
 
 from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import sysconfig
@@ -19,7 +21,7 @@ PTH_NAME = "litepgo_dev.pth"
 
 
 def link_sources(source: Path, package: Path) -> None:
-    """Mirror source/*.py into package as symlinks, dropping links to deleted files."""
+    """Mirror Python sources, using copies on Windows to avoid symlink privileges."""
     wanted = {path.relative_to(source) for path in source.rglob("*.py")}
     for relative in wanted:
         link = package / relative
@@ -29,9 +31,12 @@ def link_sources(source: Path, package: Path) -> None:
         link.parent.mkdir(parents=True, exist_ok=True)
         if link.is_symlink() or link.exists():
             link.unlink()
-        link.symlink_to(target)
+        if os.name == "nt":
+            shutil.copy2(target, link)
+        else:
+            link.symlink_to(target)
     for link in package.rglob("*.py"):
-        if link.is_symlink() and link.relative_to(package) not in wanted:
+        if link.relative_to(package) not in wanted:
             link.unlink()
 
 
@@ -57,14 +62,14 @@ def check_import(package: Path) -> None:
     result = subprocess.run([sys.executable, "-c", script], cwd=sys.prefix, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"importing litepgo failed:\n{result.stderr}")
-    for found in result.stdout.split():
+    for found in result.stdout.splitlines():
         if not Path(found).parent.resolve().is_relative_to(package.resolve()):
             raise RuntimeError(f"another litepgo shadows this build: {found}. Uninstall it or use a fresh venv.")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path, required=True, help="python/litepgo in the checkout")
+    parser.add_argument("--source", type=Path, required=True, help="src/python in the checkout")
     parser.add_argument("--core", type=Path, required=True, help="compiled _core in the build tree")
     arguments = parser.parse_args()
     source = arguments.source.resolve()

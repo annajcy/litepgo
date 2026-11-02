@@ -1,7 +1,7 @@
 """Python mirror of hex_q1_plastic_twist.cpp: release and clamp a hex bar with a plastic twist Fp.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/fem/plasticity/hex_q1_plastic_twist.py
+    uv run --no-sync python examples/fem/plasticity/hex_q1_plastic_twist.py
 """
 
 import argparse

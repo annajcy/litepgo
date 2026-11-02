@@ -30,7 +30,7 @@ flowchart TB
 Arrows show construction and consumption. An `Energy` can also be passed directly
 to Newton without composition. A `Response` may represent a measurement; a caller
 subtracts observations before using it as a least-squares residual. Native code
-is under `cpp/litepgo/energy/`; Python uses `litepgo.energy`.
+is under `src/cpp/energy/`; Python uses `litepgo.energy`.
 
 ## Read this module
 

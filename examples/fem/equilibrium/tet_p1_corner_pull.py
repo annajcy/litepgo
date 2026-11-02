@@ -1,7 +1,7 @@
 """Python mirror of tet_p1_corner_pull.cpp: pull a tet box's corners and solve static equilibrium.
 
 Run from the repository root after building litepgo:
-    .venv/bin/python examples/fem/equilibrium/tet_p1_corner_pull.py
+    uv run --no-sync python examples/fem/equilibrium/tet_p1_corner_pull.py
 """
 
 import argparse
