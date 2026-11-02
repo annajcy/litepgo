@@ -1,0 +1,21 @@
+#include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_inputs.hpp"
+#include <concepts>
+#include <gtest/gtest.h>
+
+namespace litepgo::fem::test {
+
+static_assert(std::same_as<decltype(litepgo::fem::VolumetricMaterialInputs::F), Eigen::Matrix3d>);
+static_assert(std::same_as<decltype(litepgo::fem::VolumetricMaterialInputs::Fp), Eigen::Matrix3d>);
+static_assert(std::same_as<decltype(litepgo::fem::VolumetricMaterialInputs::theta), Eigen::VectorXd>);
+
+TEST(VolumetricMaterialInputs, NeoHookeanRejectsWrongParameterCountsBeforeIndexing) {
+    for (int n : {0, 1, 3}) {
+        litepgo::fem::VolumetricMaterialInputs inputs{Eigen::Matrix3d::Identity(), Eigen::Matrix3d::Identity(),
+                                                      Eigen::VectorXd::Ones(n)};
+        EXPECT_THROW(litepgo::fem::NeoHookean::eval_W(inputs), std::invalid_argument);
+        EXPECT_THROW(litepgo::fem::NeoHookean::eval_dW_dF(inputs), std::invalid_argument);
+    }
+}
+
+} // namespace litepgo::fem::test

@@ -1,7 +1,10 @@
 # Build trees
 /build/
 /out/
+/output/
 /compile_commands.json
+# Gmsh configure-time documentation output
+/cmake_options.texi
 CMakeUserPresets.json
 
 # Python
@@ -12,6 +15,7 @@ __pycache__/
 *.egg-info/
 .venv/
 .pytest_cache/
+.mypy_cache/
 dist/
 
 # Editors and OS
@@ -19,3 +23,4 @@ dist/
 .idea/
 .cache/
 .DS_Store
+.VSCodeCounter/

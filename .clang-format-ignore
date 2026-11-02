@@ -1,0 +1,2 @@
+# Preserve the vendored, generated IPC derivative sources.
+src/core/contact/detail/ipc_derivatives/**
