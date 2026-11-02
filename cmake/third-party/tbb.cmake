@@ -21,4 +21,6 @@ FetchContent_MakeAvailable(TBB)
 # oneTBB names its Debug build libtbb_debug.so.12. Keep libtbb.so.12 in every
 # configuration: oneMKL's threading layer needs that soname, and would otherwise
 # load a second TBB runtime from the system.
-set_target_properties(tbb PROPERTIES DEBUG_POSTFIX "")
+if(LITEPGO_WITH_MKL)
+    set_target_properties(tbb PROPERTIES DEBUG_POSTFIX "")
+endif()
