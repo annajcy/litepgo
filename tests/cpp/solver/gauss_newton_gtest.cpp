@@ -1,6 +1,6 @@
-#include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
 #include "litepgo/energy/response/dynamic_pattern_response.hpp"
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
+#include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
 #include <cmath>
 #include <functional>

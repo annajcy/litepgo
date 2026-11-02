@@ -1,7 +1,7 @@
 #pragma once
 
-#include "litepgo/contact/broad_phase/broad_phase.hpp"
 #include "litepgo/common/types.hpp"
+#include "litepgo/contact/broad_phase/broad_phase.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>

@@ -1,0 +1,2 @@
+# Preserve the vendored, generated IPC derivative sources.
+cpp/litepgo/contact/detail/ipc_derivatives/**
