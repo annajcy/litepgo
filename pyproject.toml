@@ -8,6 +8,11 @@ dependencies = ["numpy>=1.26", "scipy>=1.11"]
 
 [dependency-groups]
 dev = ["pytest>=8", "clang-format==20.1.8"]
+docs = [
+    "mlc-doxygen-bin==1.18.0",
+    "nodejs-wheel==24.19.0",
+    "pdoc>=15,<16",
+]
 
 [tool.uv]
 # uv sync only installs dependencies; CMake builds litepgo and registers it

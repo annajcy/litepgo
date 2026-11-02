@@ -18,7 +18,7 @@ def test_material_example(case):
     import sys
     from pathlib import Path
 
-    path = Path(__file__).resolve().parents[2] / f"example/fem/fitting/{case}_torch.py"
+    path = Path(__file__).resolve().parents[2] / f"examples/fem/fitting/{case}_torch.py"
     subprocess.run([sys.executable, str(path)], check=True, timeout=120)
 
 
@@ -28,7 +28,7 @@ def test_volume_material_equilibrium_end_to_end_gradcheck():
 
     path = (
         Path(__file__).resolve().parents[2]
-        / "example/fem/fitting/volume_equilibrium_material_fit.py"
+        / "examples/fem/fitting/volume_equilibrium_material_fit.py"
     )
     residual, _, _, _ = runpy.run_path(str(path))["make_problem"]()
     q = torch.tensor([0.2, 0.4], dtype=torch.float64, requires_grad=True)

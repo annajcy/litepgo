@@ -12,8 +12,8 @@ from litepgo import _core, dof, energy, mesh
 from litepgo import contact  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
-# The extension lives in build/<preset>/python/litepgo; the examples in build/<preset>/example/contact.
-EXAMPLES = Path(_core.__file__).parents[2] / "example" / "contact"
+# The extension lives in build/<preset>/python/litepgo; the examples in build/<preset>/examples/contact.
+EXAMPLES = Path(_core.__file__).parents[2] / "examples" / "contact"
 
 
 def two_triangles(height):
@@ -96,7 +96,7 @@ def test_python_box_stack_matches_cpp(tmp_path):
     executable = EXAMPLES / "tet_p1_box_stack"
     if not executable.exists():
         pytest.skip(f"{executable} is not built")
-    script = REPO / "example" / "contact" / "tet_p1_box_stack.py"
+    script = REPO / "examples" / "contact" / "tet_p1_box_stack.py"
     asset = REPO / "assets/box-tet.veg"
     cpp_out, py_out = tmp_path / "cpp.veg", tmp_path / "py.veg"
     cpp = subprocess.run([executable, asset, cpp_out], check=True, capture_output=True, text=True)

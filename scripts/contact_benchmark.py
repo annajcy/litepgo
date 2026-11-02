@@ -59,7 +59,7 @@ if not args.skip_build:
         subprocess.run(["cmake", "--build", str(BUILD), "--target", "contact_benchmark", "-j", "4"],
                        cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True)
 mesh = args.mesh.resolve()
-executable = BUILD / "example/contact/contact_benchmark"
+executable = BUILD / "examples/contact/contact_benchmark"
 metadata = {
     "platform": platform.platform(), "machine": platform.machine(),
     "cpu_count": os.cpu_count(), "git_head": command(["git", "rev-parse", "HEAD"]),
@@ -67,8 +67,8 @@ metadata = {
     "mesh_sha256": hashlib.sha256(mesh.read_bytes()).hexdigest(),
     "executable_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
     "source_sha256": {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
-                      for path in [ROOT / "example/contact/tet_p1_box_stack.cpp",
-                                   ROOT / "example/contact/contact_benchmark.hpp",
+                      for path in [ROOT / "examples/contact/tet_p1_box_stack.cpp",
+                                   ROOT / "examples/contact/contact_benchmark.hpp",
                                    ROOT / "cpp/litepgo/contact/ipc_contact_energy.cpp",
                                    ROOT / "cpp/litepgo/contact/ipctk_contact_energy.cpp",
                                    ROOT / "cpp/litepgo/spatial/spatial_hash.hpp",
