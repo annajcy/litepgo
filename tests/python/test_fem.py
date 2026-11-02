@@ -9,6 +9,7 @@ import pytest
 from litepgo import _core, dof, energy, fem, mesh
 
 ASSETS = Path(__file__).resolve().parents[2] / "assets"
+HERMITE_TEST_MESH = Path(__file__).resolve().parents[1] / "assets" / "box-hex.veg"
 # The extension lives in build/<preset>/python/litepgo; the examples in build/<preset>/examples/fem.
 EXAMPLES = Path(_core.__file__).parents[2] / "examples" / "fem"
 
@@ -201,6 +202,8 @@ def test_python_examples_match_cpp(tmp_path, name, suffix):
         pytest.skip(f"{executable} is not built")
     script = Path(__file__).resolve().parents[2] / "examples" / "fem" / "equilibrium" / f"{name}.py"
     asset = ASSETS / {"tet_p1_corner_pull": "box-tet.veg", "shell_saddle_pull": "shell.obj"}.get(name, "box-hex.veg")
+    if name == "hex_hermite_corner_pull":
+        asset = HERMITE_TEST_MESH
     cpp_out, py_out = tmp_path / f"cpp{suffix}", tmp_path / f"py{suffix}"
     cpp = subprocess.run([executable, asset, cpp_out], check=True, capture_output=True, text=True)
     py = subprocess.run([sys.executable, script, asset, py_out], check=True, capture_output=True, text=True)
@@ -258,7 +261,7 @@ def test_plastic_twist_examples(tmp_path, name, asset):
     script = Path(__file__).resolve().parents[2] / "examples" / "fem" / "plasticity" / f"{name}.py"
     input_mesh = ASSETS / asset
     if name == "hex_hermite_plastic_twist":
-        input_mesh = Path(__file__).resolve().parents[1] / "assets" / "box-hex.veg"
+        input_mesh = HERMITE_TEST_MESH
     cpp = subprocess.run([executable, input_mesh, tmp_path / "cpp.veg"], check=True, capture_output=True, text=True)
     py = subprocess.run(
         [sys.executable, script, input_mesh, tmp_path / "py.veg"], check=True, capture_output=True, text=True

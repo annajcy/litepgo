@@ -164,7 +164,11 @@ gtest_discover_tests(litepgo_contact_tests DISCOVERY_MODE PRE_TEST)
 # Run the standalone examples as loaded static-equilibrium regression tests.
 foreach(example tet_p1_corner_pull hex_q1_corner_pull hex_hermite_corner_pull shell_saddle_pull)
     add_dependencies(litepgo_tests ${example})
-    add_test(NAME FemEquilibrium.${example} COMMAND $<TARGET_FILE:${example}>)
+    set(equilibrium_input)
+    if(example STREQUAL "hex_hermite_corner_pull")
+        set(equilibrium_input "${PROJECT_SOURCE_DIR}/tests/assets/box-hex.veg")
+    endif()
+    add_test(NAME FemEquilibrium.${example} COMMAND $<TARGET_FILE:${example}> ${equilibrium_input})
 endforeach()
 
 # The plastic twist examples solve a released and a clamped bar with a plastic torsion Fp.
