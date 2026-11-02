@@ -3,7 +3,8 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: 'litepgo',
   description: 'Models, formulations, examples, and C++/Python API documentation',
-  cleanUrls: true,
+  base: process.env.DOCS_BASE || '/',
+  cleanUrls: false,
   markdown: {
     math: true,
     config(md) {

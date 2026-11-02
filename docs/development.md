@@ -141,3 +141,27 @@ uv run --locked --group docs --directory docs corepack pnpm exec node --test .vi
 After changing Mermaid or its theme component, also inspect the architecture
 page's two diagrams, light/dark switching, and navigation between module pages.
 A static site build does not execute client-side diagram rendering.
+
+## GitHub Pages
+
+The `Documentation` workflow builds the Python extension, generates the C++ and
+Python references, checks Markdown rendering, and uploads the complete static
+site. Pull requests only build; pushes to `main` deploy to
+[GitHub Pages](https://annajcy.github.io/litepgo/). Manual runs deploy only when
+the selected branch is `main`.
+
+Set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**
+when setting up the repository. Deployment uses the `github-pages` environment
+and GitHub's built-in token; no personal token or separate publishing branch is
+needed.
+
+CI sets `DOCS_BASE=/litepgo/` for the project URL. To check the same layout locally:
+
+```sh
+DOCS_BASE=/litepgo/ uv run scripts/docs.py build
+DOCS_BASE=/litepgo/ uv run scripts/docs.py preview
+```
+
+Open the preview's `/litepgo/` path. The site uses explicit `.html` links so pages
+work on static hosts without URL rewriting. API links and their return links
+must retain the same project prefix.

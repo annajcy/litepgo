@@ -45,7 +45,8 @@ Both programs check the same scalar-energy derivatives. Start with the
 
 ## Read and build the documentation
 
-The [documentation home](docs/index.md) gives the reading order. The
+Read the [online documentation](https://annajcy.github.io/litepgo/), or browse the
+[documentation sources](docs/index.md) for the reading order. The
 [architecture guide](docs/guide/architecture.md) maps the system and its modules.
 The manual explains data conventions, mathematical models, and API composition; each example
 page includes its formulation, run commands, expected results, and complete source.
@@ -75,3 +76,6 @@ Python reference pages describe the active compiled build. Set
 PyTorch is optional: `uv pip install torch` enables the Torch examples and their
 API reference. See [development](docs/development.md) for source organization,
 tests, bindings, and documentation maintenance.
+
+GitHub Actions builds the manual and both API references on pull requests and
+deploys successful `main` builds to GitHub Pages.
