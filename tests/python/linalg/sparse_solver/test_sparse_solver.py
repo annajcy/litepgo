@@ -176,10 +176,24 @@ def test_accelerate_absent_elsewhere():
         from litepgo.linalg.sparse_solver import AccelerateLLT  # noqa: F401
 
 
-@pytest.mark.skipif(sys.platform.startswith("linux"), reason="oneMKL is built on Linux")
+@pytest.mark.skipif(HAS_MKL, reason="oneMKL is enabled in this build")
 def test_pardiso_absent_elsewhere():
     with pytest.raises(ImportError):
         from litepgo.linalg.sparse_solver import PardisoLLT  # noqa: F401
+
+
+@pytest.mark.skipif(sys.platform != "win32" or not HAS_MKL, reason="Windows oneMKL runtime check")
+def test_pardiso_shares_the_native_tbb_runtime():
+    import ctypes
+
+    solver = la.PardisoLLT()
+    assert solver.compute(laplacian(30))
+    np.testing.assert_allclose(laplacian(30) @ solver.solve(np.ones(30)), np.ones(30), atol=1e-12)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
+    kernel32.GetModuleHandleW.restype = ctypes.c_void_p
+    assert kernel32.GetModuleHandleW("tbb12.dll")
+    assert not kernel32.GetModuleHandleW("tbb12_debug.dll")
 
 
 def test_parent_module_preserves_solver_exports():

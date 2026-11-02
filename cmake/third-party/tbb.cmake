@@ -18,9 +18,11 @@ FetchContent_Declare(
     SYSTEM
     EXCLUDE_FROM_ALL)
 FetchContent_MakeAvailable(TBB)
-# oneTBB names its Debug build libtbb_debug.so.12. Keep libtbb.so.12 in every
-# configuration: oneMKL's threading layer needs that soname, and would otherwise
-# load a second TBB runtime from the system.
+# oneMKL loads the release-named TBB library even in Debug builds.
 if(LITEPGO_WITH_MKL)
     set_target_properties(tbb PROPERTIES DEBUG_POSTFIX "")
+    if(WIN32)
+        # CMake supplies the correct library; suppress MSVC's tbb12_debug.lib pragma.
+        target_compile_definitions(tbb INTERFACE __TBB_NO_IMPLICIT_LINKAGE=1)
+    endif()
 endif()
