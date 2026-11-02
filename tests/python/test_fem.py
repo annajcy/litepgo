@@ -256,9 +256,12 @@ def test_plastic_twist_examples(tmp_path, name, asset):
     if not executable.exists():
         pytest.skip(f"{executable} is not built")
     script = Path(__file__).resolve().parents[2] / "examples" / "fem" / "plasticity" / f"{name}.py"
-    cpp = subprocess.run([executable, ASSETS / asset, tmp_path / "cpp.veg"], check=True, capture_output=True, text=True)
+    input_mesh = ASSETS / asset
+    if name == "hex_hermite_plastic_twist":
+        input_mesh = Path(__file__).resolve().parents[1] / "assets" / "box-hex.veg"
+    cpp = subprocess.run([executable, input_mesh, tmp_path / "cpp.veg"], check=True, capture_output=True, text=True)
     py = subprocess.run(
-        [sys.executable, script, ASSETS / asset, tmp_path / "py.veg"], check=True, capture_output=True, text=True
+        [sys.executable, script, input_mesh, tmp_path / "py.veg"], check=True, capture_output=True, text=True
     )
     # The C++ compiler may contract the examples' u_p arithmetic into fused multiply-adds, so the
     # mirrors agree to rounding rather than bit for bit.
