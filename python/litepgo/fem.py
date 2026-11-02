@@ -15,7 +15,7 @@ factor and does not differentiate equilibrium or plastic evolution.
 
 NeoHookean.eval_d2W_dF_dFp(F, Fp, theta) returns the analytic (9, 9)
 stress/plastic Jacobian at fixed F and theta, with both axes column-major.
-VolumetricFpForceLocalResponse3D[Material](F, Fp, theta) differentiates force
+`VolumetricFpForceLocalResponse3D[Material](F, Fp, theta)` differentiates force
 with respect to the Fp field's affine coefficients. VolumetricFemForceFpResponse
 [NeoHookean, TetP1Basis, TetCentroidQuadrature] takes the same arguments as the
 material mesh response but with fixed theta fields replacing Fp fields. Its
@@ -26,7 +26,7 @@ GaussLegendre3D[2] or GaussLegendre3D[4].
 Displacements and output forces use BasisDofTransform's physical DOF convention;
 Hermite uses 24 DOFs per vertex on positive axis-aligned affine reference boxes.
 
-ShellFemEnergy[KoiterStVK](map, rest, thickness, theta, Fp=[]) accepts optional
+`ShellFemEnergy[KoiterStVK](map, rest, thickness, theta, Fp=[])` accepts optional
 fixed per-face 3x3 plastic matrices. Only natural forms change; original positions,
 area weights and thickness stay fixed. Empty Fp preserves the supplied rest forms.
 It snapshots all inputs and differentiates displacement, unlike the Fp response.
@@ -53,7 +53,7 @@ rest_data, displacement, thickness, batch_size=256). It snapshots fixed inputs,
 caches pose kinematics and returns positive displacement-gradient force and its
 theta Jacobian. The output map is StencilDofMap; parameters use ConstantDofMap or
 ElementDofMap with [lambda_ps, mu] per block. Thickness is fixed.
-ShellMaterialForceLocalResponse2D[KoiterStVK](rest, u_local, thickness, theta)
+`ShellMaterialForceLocalResponse2D[KoiterStVK](rest, u_local, thickness, theta)`
 borrows a Field2D for theta and returns density per reference area; accumulate
 applies a caller-supplied weight. Python keeps theta alive.
 
@@ -61,7 +61,7 @@ ShellFemForceFpResponse[KoiterStVK] takes (parameter_map, displacement_map,
 rest_data, displacement, thickness, theta, batch_size=256). Fp is a column-major
 nine-vector shared globally or constant per face. The entire reference stencil
 is transformed by Fp; current positions, original area weights and thickness stay
-fixed. ShellFpForceLocalResponse2D[KoiterStVK](rest, u_local, thickness, Fp, theta)
+fixed. `ShellFpForceLocalResponse2D[KoiterStVK](rest, u_local, thickness, Fp, theta)`
 borrows a nine-component Field2D for Fp. Its Jacobian follows field coefficients;
 IdentityField2D gives the full nine-column vec(Fp) Jacobian. Both require det(Fp)>0.
 
