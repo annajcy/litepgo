@@ -10,8 +10,8 @@ def test_shell_fixed_pose_material_fit_python_matches_cpp():
     root = Path(__file__).resolve().parents[2]
     build = Path(_core.__file__).parents[2]
     results = []
-    for command in ([str(build / "example/fem/fitting/shell_fixed_pose_material_fit")],
-                    [sys.executable, str(root / "example/fem/fitting/shell_fixed_pose_material_fit.py")]):
+    for command in ([str(build / "examples/fem/fitting/shell_fixed_pose_material_fit")],
+                    [sys.executable, str(root / "examples/fem/fitting/shell_fixed_pose_material_fit.py")]):
         completed = subprocess.run(command, capture_output=True, text=True, timeout=60)
         assert completed.returncode == 0, completed.stdout + completed.stderr
         fields = dict(part.strip().split("=", 1) for part in completed.stdout.strip().split(","))

@@ -1,0 +1,17 @@
+{
+  "name": "litepgo-doc",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "dev": "corepack pnpm reference && vitepress dev --host 127.0.0.1",
+    "build": "corepack pnpm reference && vitepress build",
+    "preview": "vitepress preview --host 127.0.0.1",
+    "reference:cpp": "mkdir -p public/reference/cpp && uv run --locked --group docs doxygen Doxyfile",
+    "reference:python": "uv run --locked --group docs python ../scripts/python_reference.py",
+    "reference": "corepack pnpm reference:cpp && corepack pnpm reference:python"
+  },
+  "devDependencies": {
+    "vitepress": "1.6.4"
+  }
+}

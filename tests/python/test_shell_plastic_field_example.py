@@ -11,8 +11,8 @@ def test_shell_plastic_field_equilibrium_obj(tmp_path):
     build = Path(_core.__file__).parents[2]
     outputs = []
     for name, command in (
-        ("cpp", [str(build / "example/fem/plasticity/shell_plastic_field")]),
-        ("python", [sys.executable, str(root / "example/fem/plasticity/shell_plastic_field.py")]),
+        ("cpp", [str(build / "examples/fem/plasticity/shell_plastic_field")]),
+        ("python", [sys.executable, str(root / "examples/fem/plasticity/shell_plastic_field.py")]),
     ):
         output = tmp_path / name
         run = subprocess.run([*command, str(output)], capture_output=True, text=True, timeout=120)

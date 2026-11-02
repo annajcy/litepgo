@@ -9,8 +9,8 @@ import pytest
 from litepgo import _core, dof, energy, fem, mesh
 
 ASSETS = Path(__file__).resolve().parents[2] / "assets"
-# The extension lives in build/<preset>/python/litepgo; the examples in build/<preset>/example/fem.
-EXAMPLES = Path(_core.__file__).parents[2] / "example" / "fem"
+# The extension lives in build/<preset>/python/litepgo; the examples in build/<preset>/examples/fem.
+EXAMPLES = Path(_core.__file__).parents[2] / "examples" / "fem"
 
 NEO_HOOKEAN_THETA = np.array([2.0, 3.0])
 
@@ -174,7 +174,7 @@ def test_energy_rejects_bad_fields():
         Energy(rest_map, X, [np.eye(3)] * n, constant_fields(NEO_HOOKEAN_THETA, n))
 
 
-# example/fem/**/*.py mirror the C++ examples line by line. They solve with AutoSparseSolver, whose
+# examples/fem/**/*.py mirror the C++ examples line by line. They solve with AutoSparseSolver, whose
 # threaded factorizations (PARDISO, Accelerate) need not repeat bit for bit, so the mirrors agree
 # to rounding: exact counts and connectivity, values to their printed digits, positions to 1e-10.
 
@@ -197,7 +197,7 @@ def test_python_examples_match_cpp(tmp_path, name, suffix):
     executable = EXAMPLES / "equilibrium" / name
     if not executable.exists():
         pytest.skip(f"{executable} is not built")
-    script = Path(__file__).resolve().parents[2] / "example" / "fem" / "equilibrium" / f"{name}.py"
+    script = Path(__file__).resolve().parents[2] / "examples" / "fem" / "equilibrium" / f"{name}.py"
     asset = ASSETS / {"tet_p1_corner_pull": "box-tet.veg", "shell_saddle_pull": "shell.obj"}.get(name, "box-hex.veg")
     cpp_out, py_out = tmp_path / f"cpp{suffix}", tmp_path / f"py{suffix}"
     cpp = subprocess.run([executable, asset, cpp_out], check=True, capture_output=True, text=True)
@@ -219,7 +219,7 @@ def test_python_examples_match_cpp(tmp_path, name, suffix):
         np.testing.assert_allclose(py_mesh.positions, cpp_mesh.positions, rtol=0, atol=1e-10)
 
 
-# example/fem/plasticity: the plastic displacement u_p twists the bar by 90 degrees and Fp is
+# examples/fem/plasticity: the plastic displacement u_p twists the bar by 90 degrees and Fp is
 # DeformationGradientField3D(u_p, X). u_p is interpolated in the displacement space (C1 Hermite for the
 # Hermite example), so the released bar takes the shape X + u_p stress-free. Clamped, it keeps residual
 # stress.
@@ -251,7 +251,7 @@ def test_plastic_twist_examples(tmp_path, name, asset):
     executable = EXAMPLES / "plasticity" / name
     if not executable.exists():
         pytest.skip(f"{executable} is not built")
-    script = Path(__file__).resolve().parents[2] / "example" / "fem" / "plasticity" / f"{name}.py"
+    script = Path(__file__).resolve().parents[2] / "examples" / "fem" / "plasticity" / f"{name}.py"
     cpp = subprocess.run([executable, ASSETS / asset, tmp_path / "cpp.veg"], check=True, capture_output=True, text=True)
     py = subprocess.run(
         [sys.executable, script, ASSETS / asset, tmp_path / "py.veg"], check=True, capture_output=True, text=True
@@ -404,7 +404,7 @@ def test_basis_dof_transform_maps_physical_hermite_dofs():
 def test_volume_equilibrium_material_fit_python_matches_cpp():
     import re
 
-    script = ASSETS.parent / "example/fem/fitting/volume_equilibrium_material_fit.py"
+    script = ASSETS.parent / "examples/fem/fitting/volume_equilibrium_material_fit.py"
     outputs = []
     for command in ([str(EXAMPLES / "fitting" / "volume_equilibrium_material_fit")], [sys.executable, str(script)]):
         completed = subprocess.run(command, capture_output=True, text=True)

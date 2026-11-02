@@ -1,0 +1,27 @@
+PROJECT_NAME           = "litepgo C++ API"
+PROJECT_BRIEF          = "Reference documentation for litepgo C++ APIs"
+OUTPUT_DIRECTORY       = public/reference/cpp
+HTML_OUTPUT            = .
+
+INPUT                  = ../cpp/litepgo
+RECURSIVE              = YES
+FILE_PATTERNS          = *.hpp
+EXCLUDE_PATTERNS       = */bindings/* */detail/*
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+FULL_PATH_NAMES        = NO
+STRIP_FROM_PATH        = ../cpp
+SEARCH_INCLUDES        = NO
+SOURCE_BROWSER         = YES
+
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+GENERATE_XML           = NO
+GENERATE_TREEVIEW      = YES
+SEARCHENGINE           = YES
+HAVE_DOT               = NO
+
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO

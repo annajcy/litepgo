@@ -11,8 +11,8 @@ def test_cpp_python_api_examples(folder, name):
     root = Path(__file__).resolve().parents[2]
     build = Path(_core.__file__).parents[2]
     outputs = []
-    for command in ([str(build / "example" / folder / name)],
-                    [sys.executable, str(root / "example" / folder / f"{name}.py")]):
+    for command in ([str(build / "examples" / folder / name)],
+                    [sys.executable, str(root / "examples" / folder / f"{name}.py")]):
         result = subprocess.run(command, capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, result.stdout + result.stderr
         outputs.append(result.stdout.strip())
@@ -22,7 +22,7 @@ def test_cpp_python_api_examples(folder, name):
 @pytest.fixture(scope="module")
 def api_modules():
     import importlib.util
-    root = Path(__file__).resolve().parents[2] / "example"
+    root = Path(__file__).resolve().parents[2] / "examples"
     modules = []
     for folder, name in [("energy/scalar", "custom_energy"), ("energy/response", "custom_response")]:
         spec = importlib.util.spec_from_file_location(name, root / folder / f"{name}.py")
