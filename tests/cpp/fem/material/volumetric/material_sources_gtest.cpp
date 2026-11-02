@@ -194,10 +194,11 @@ TEST(MaterialSources, SameQuadratureAcceptsDifferentActiveDofCounts) {
     EXPECT_TRUE(direct_hessian.isApprox(expected_direct_hessian, 1e-13));
     const Eigen::Matrix<double, 9, 1> identity =
         Eigen::Map<const Eigen::Matrix<double, 9, 1>>(Eigen::Matrix3d::Identity().eval().data());
-    check_fd(
+    check_fd<9>(
         X_field, identity,
-        [&](const Eigen::Matrix<double, 9, 1>& x) {
-            return MaterialSources{IdentityField3D(x), nodal.Fp, nodal.theta};
+        [&](const Eigen::Matrix<double, 9, 1>& x)
+            -> MaterialSources<IdentityField3D, IdentityField3D, IdentityField3D> {
+            return {IdentityField3D(x), nodal.Fp, nodal.theta};
         },
         [&](const auto& fields) { return bind_energy<VolumetricMaterialLocalEnergyF3D<NeoHookean>>(fields); });
 }
