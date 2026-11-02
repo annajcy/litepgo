@@ -27,7 +27,7 @@ flowchart TB
 
 Arrows identify supplied inputs or delegated solves. The module does not own
 geometry or materials; callers build those through model factories. Native code
-is in `src/cpp/solver/`; Python uses `litepgo.solver`. The
+is in `src/core/solver/`; Python uses `litepgo.solver`. The
 [inverse-problem guide](inverse.md) explains how state and force derivatives form
 an observation Jacobian.
 

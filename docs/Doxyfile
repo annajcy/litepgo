@@ -3,7 +3,7 @@ PROJECT_BRIEF          = "Reference documentation for litepgo C++ APIs"
 OUTPUT_DIRECTORY       = public/reference/cpp
 HTML_OUTPUT            = .
 
-INPUT                  = ../src/cpp cpp-main.dox
+INPUT                  = ../src/core cpp-main.dox
 RECURSIVE              = YES
 FILE_PATTERNS          = *.hpp
 EXCLUDE_PATTERNS       = */detail/*
@@ -11,7 +11,7 @@ EXTRACT_ALL            = YES
 EXTRACT_PRIVATE        = NO
 EXTRACT_STATIC         = NO
 FULL_PATH_NAMES        = NO
-STRIP_FROM_PATH        = ../src/cpp
+STRIP_FROM_PATH        = ../src/core
 SEARCH_INCLUDES        = NO
 SOURCE_BROWSER         = YES
 

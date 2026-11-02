@@ -1,4 +1,4 @@
-"""Nonlinear solvers, mirroring src/cpp/solver.
+"""Nonlinear solvers, mirroring src/core/solver.
 
 Gauss-Newton accepts a Response and uses sparse damped normal equations for damped steps.
 Jacobian patterns are updated at current iterates; symbolic analysis is reused

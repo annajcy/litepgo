@@ -85,7 +85,7 @@ API contracts and examples.
 | [Spatial](spatial.md) | Generic AABB indexing and overlap queries | Contact broad phase and FEM point location |
 | [Torch](torch.md) | Optional first-order autograd bridge | Python optimizers |
 
-Native module sources live under `src/cpp/<module>/`; public Python facades
+Native module sources live under `src/core/<module>/`; public Python facades
 live under `src/python/`. Common types and `build_info()` are exported in the
 root `litepgo` namespace, rather than through a `litepgo.common` Python module.
 

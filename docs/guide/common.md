@@ -21,7 +21,7 @@ flowchart TB
 ```
 
 The public headers are `common/types.hpp` and `common/build_info.hpp` under
-`src/cpp/`. Their public names live in `litepgo`, not a nested `common`
+`src/core/`. Their public names live in `litepgo`, not a nested `common`
 namespace. Python exposes `litepgo.build_info()`; it uses NumPy/SciPy arrays
 instead of separate Python classes named `Vec` or `SpMat`.
 

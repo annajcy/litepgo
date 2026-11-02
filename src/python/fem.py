@@ -1,4 +1,4 @@
-"""Finite elements, mirroring src/cpp/fem.
+"""Finite elements, mirroring src/core/fem.
 
 C++ class templates are Template objects: ``T[args]`` returns the bound
 instantiation, with the C++ template arguments in order. Basis, quadrature and

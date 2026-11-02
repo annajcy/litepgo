@@ -22,7 +22,7 @@ flowchart TB
   overlap --> result["Original box IDs / unique pairs"]
 ```
 
-Native implementation is the header `src/cpp/spatial/spatial_hash.hpp`;
+Native implementation is the header `src/core/spatial/spatial_hash.hpp`;
 Python uses `litepgo.spatial`. Triangle distances, inverse element maps, and CCD
 are performed by consumers, not by this generic box index.
 

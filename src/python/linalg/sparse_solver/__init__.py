@@ -1,4 +1,4 @@
-"""Sparse linear solvers, mirroring src/cpp/linalg/sparse_solver.
+"""Sparse linear solvers, mirroring src/core/linalg/sparse_solver.
 
 Solvers take scipy.sparse matrices. AccelerateLLT and AccelerateLDLT exist only
 in builds with Apple Accelerate, PardisoLLT and PardisoLDLT only in builds with

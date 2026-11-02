@@ -1,4 +1,4 @@
-"""Mesh connectivity, double-precision geometry, and file I/O, mirroring src/cpp/mesh.
+"""Mesh connectivity, double-precision geometry, and file I/O, mirroring src/core/mesh.
 
 Array properties return independent copies; construct a new mesh to change geometry.
 """

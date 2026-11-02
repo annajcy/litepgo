@@ -183,7 +183,7 @@ def compare_serial():
                 assert old_env[key] == new_env[key], (case, key)
             assert (old / 'build.txt').read_bytes() == (new / 'build.txt').read_bytes(), case
             for source, digest in old_env['source_sha256'].items():
-                if source != 'src/cpp/contact/ipc_contact_energy.cpp':
+                if source != 'src/core/contact/ipc_contact_energy.cpp':
                     assert new_env['source_sha256'][source] == digest, (case, source)
             before = json.loads((old / 'summary.json').read_text())
             after = json.loads((new / 'summary.json').read_text())
