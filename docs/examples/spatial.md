@@ -32,7 +32,7 @@ or element-containment tests.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target spatial_query litepgo_dev
+cmake --build build/release --target spatial_query litepgo_python
 build/release/examples/spatial/spatial_query
 PYTHONPATH=build/release/python uv run --no-sync python examples/spatial/spatial_query.py
 ```
@@ -83,7 +83,7 @@ uniform boundary sampling.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target point_embedding litepgo_dev
+cmake --build build/release --target point_embedding litepgo_python
 build/release/examples/fem/embedding/point_embedding
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/embedding/point_embedding.py
 ```

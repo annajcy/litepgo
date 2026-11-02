@@ -59,7 +59,7 @@ the guide; it is not an exact-arithmetic robustness guarantee.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target tet_p1_box_stack litepgo_dev
+cmake --build build/release --target tet_p1_box_stack litepgo_python
 build/release/examples/contact/tet_p1_box_stack
 PYTHONPATH=build/release/python uv run --no-sync python examples/contact/tet_p1_box_stack.py
 ```

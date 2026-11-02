@@ -19,7 +19,7 @@ an example and Python extension. For example:
 ```sh
 uv sync --locked
 cmake --preset release
-cmake --build build/release --target custom_energy litepgo_dev
+cmake --build build/release --target custom_energy litepgo_python
 build/release/examples/energy/scalar/custom_energy
 PYTHONPATH=build/release/python uv run --no-sync python examples/energy/scalar/custom_energy.py
 ```

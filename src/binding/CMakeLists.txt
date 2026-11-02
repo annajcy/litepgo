@@ -1,4 +1,4 @@
-nanobind_add_module(_core NB_STATIC
+nanobind_add_module(litepgo_binding NB_STATIC
     module.cpp
     contact/broad_phase/broad_phase.cpp
     contact/broad_phase/spatial_hash.cpp
@@ -82,27 +82,28 @@ nanobind_add_module(_core NB_STATIC
     solver/static_equilibrium_response.cpp
     spatial/spatial_hash.cpp
 )
-target_link_libraries(_core PRIVATE litepgo::contact litepgo::solver litepgo::fem litepgo::io litepgo::warnings)
-target_include_directories(_core PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(litepgo_binding PRIVATE litepgo::contact litepgo::solver litepgo::fem litepgo::io litepgo::warnings)
+target_include_directories(litepgo_binding PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # The build tree holds an importable package: _core is built into it, and
-# litepgo_dev links the Python sources beside it and registers it with the
+# litepgo_python links the Python sources beside it and registers it with the
 # virtual environment through a .pth file. TBB uses the build rpath on Unix;
 # cmake/litepgo_windows_runtime.cmake copies it beside the extension on Windows.
-set_target_properties(_core PROPERTIES
+set_target_properties(litepgo_binding PROPERTIES
+    OUTPUT_NAME _core
     LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/python/litepgo"
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/python/litepgo")
 
-add_custom_target(litepgo_dev ALL
+add_custom_target(litepgo_python ALL
     COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/litepgo_dev.py"
-            --source "${PROJECT_SOURCE_DIR}/src/python" --core "$<TARGET_FILE:_core>"
-    DEPENDS _core
+            --source "${PROJECT_SOURCE_DIR}/src/python" --core "$<TARGET_FILE:litepgo_binding>"
+    DEPENDS litepgo_binding
     COMMENT "Registering this litepgo build with ${Python_EXECUTABLE}"
     VERBATIM)
 
 if(LITEPGO_WITH_GMSH)
-    target_link_libraries(_core PRIVATE litepgo::io_gmsh)
+    target_link_libraries(litepgo_binding PRIVATE litepgo::io_gmsh)
 endif()
 if(LITEPGO_WITH_IPC_TOOLKIT)
-    target_link_libraries(_core PRIVATE litepgo::ipctk)
+    target_link_libraries(litepgo_binding PRIVATE litepgo::ipctk)
 endif()

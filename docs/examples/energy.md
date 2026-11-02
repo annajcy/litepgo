@@ -41,7 +41,7 @@ and structure.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target custom_energy litepgo_dev
+cmake --build build/release --target custom_energy litepgo_python
 build/release/examples/energy/scalar/custom_energy
 PYTHONPATH=build/release/python uv run --no-sync python examples/energy/scalar/custom_energy.py
 ```
@@ -87,7 +87,7 @@ this isolates composition and the affine chain rule.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target energy_composition litepgo_dev
+cmake --build build/release --target energy_composition litepgo_python
 build/release/examples/energy/scalar/energy_composition
 PYTHONPATH=build/release/python uv run --no-sync python examples/energy/scalar/energy_composition.py
 ```
@@ -133,7 +133,7 @@ updates, and the recovered state. A declared entry may still have value zero.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target custom_response litepgo_dev
+cmake --build build/release --target custom_response litepgo_python
 build/release/examples/energy/response/custom_response
 PYTHONPATH=build/release/python uv run --no-sync python examples/energy/response/custom_response.py
 ```
@@ -190,7 +190,7 @@ without timing repetitions; timing results are machine-dependent.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target mesh_response litepgo_dev
+cmake --build build/release --target mesh_response litepgo_python
 build/release/examples/energy/response/mesh_response
 PYTHONPATH=build/release/python uv run --no-sync python examples/energy/response/mesh_response.py
 ```

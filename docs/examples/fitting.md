@@ -74,7 +74,7 @@ there is no inner equilibrium solve or unknown thickness.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target shell_fixed_pose_material_fit litepgo_dev
+cmake --build build/release --target shell_fixed_pose_material_fit litepgo_python
 build/release/examples/fem/fitting/shell_fixed_pose_material_fit
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/fitting/shell_fixed_pose_material_fit.py
 ```
@@ -125,7 +125,7 @@ principal plastic axes are assumed known.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target volume_fixed_pose_fp_fit litepgo_dev
+cmake --build build/release --target volume_fixed_pose_fp_fit litepgo_python
 build/release/examples/fem/fitting/volume_fixed_pose_fp_fit
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/fitting/volume_fixed_pose_fp_fit.py
 ```
@@ -171,7 +171,7 @@ No inner displacement solve, thickness fit, or plastic evolution occurs.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target shell_fixed_pose_fp_fit litepgo_dev
+cmake --build build/release --target shell_fixed_pose_fp_fit litepgo_python
 build/release/examples/fem/fitting/shell_fixed_pose_fp_fit
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/fitting/shell_fixed_pose_fp_fit.py
 ```
@@ -216,7 +216,7 @@ has only two parameters; it does not identify general spatial material fields.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target volume_equilibrium_material_fit litepgo_dev
+cmake --build build/release --target volume_equilibrium_material_fit litepgo_python
 build/release/examples/fem/fitting/volume_equilibrium_material_fit
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/fitting/volume_equilibrium_material_fit.py
 ```
@@ -263,7 +263,7 @@ optimized.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target shell_equilibrium_material_fit litepgo_dev
+cmake --build build/release --target shell_equilibrium_material_fit litepgo_python
 build/release/examples/fem/fitting/shell_equilibrium_material_fit
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/fitting/shell_equilibrium_material_fit.py
 ```
@@ -304,7 +304,7 @@ plastic principal axes and does not assume a full nine-entry matrix is identifia
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target volume_equilibrium_fp_fit litepgo_dev
+cmake --build build/release --target volume_equilibrium_fp_fit litepgo_python
 build/release/examples/fem/fitting/volume_equilibrium_fp_fit
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/fitting/volume_equilibrium_fp_fit.py
 ```
@@ -346,7 +346,7 @@ plastic evolution is fitted.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target shell_equilibrium_fp_fit litepgo_dev
+cmake --build build/release --target shell_equilibrium_fp_fit litepgo_python
 build/release/examples/fem/fitting/shell_equilibrium_fp_fit
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/fitting/shell_equilibrium_fp_fit.py
 ```

@@ -57,7 +57,7 @@ in all axes and exactly the eight expected bounding-box corners.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target tet_p1_corner_pull litepgo_dev
+cmake --build build/release --target tet_p1_corner_pull litepgo_python
 build/release/examples/fem/equilibrium/tet_p1_corner_pull
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/equilibrium/tet_p1_corner_pull.py
 ```
@@ -94,7 +94,7 @@ The output surface connects deformed corner positions.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target hex_q1_corner_pull litepgo_dev
+cmake --build build/release --target hex_q1_corner_pull litepgo_python
 build/release/examples/fem/equilibrium/hex_q1_corner_pull
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/equilibrium/hex_q1_corner_pull.py
 ```
@@ -134,7 +134,7 @@ output is demonstrated by the Hermite plastic-twist case.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target hex_hermite_corner_pull litepgo_dev
+cmake --build build/release --target hex_hermite_corner_pull litepgo_python
 build/release/examples/fem/equilibrium/hex_hermite_corner_pull
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/equilibrium/hex_hermite_corner_pull.py
 ```
@@ -188,7 +188,7 @@ clamped shell boundary directors or provide self-contact.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target shell_saddle_pull litepgo_dev
+cmake --build build/release --target shell_saddle_pull litepgo_python
 build/release/examples/fem/equilibrium/shell_saddle_pull
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/equilibrium/shell_saddle_pull.py
 ```

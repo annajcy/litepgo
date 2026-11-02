@@ -37,7 +37,7 @@ jobs:
       - name: Build and register the Python API
         run: |
           cmake --preset release -DLITEPGO_BUILD_TESTS=OFF
-          cmake --build build/release --target litepgo_dev --parallel 2
+          cmake --build build/release --target litepgo_python --parallel 2
       - name: Build the manual and C++/Python API references
         run: uv run scripts/docs.py build
       - name: Check Markdown rendering and generated API entry points

@@ -46,7 +46,7 @@ rotation invariant, and neither objective prevents collisions or inversion.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target laplacian_optimization litepgo_dev
+cmake --build build/release --target laplacian_optimization litepgo_python
 build/release/examples/mesh/laplacian_optimization
 PYTHONPATH=build/release/python uv run --no-sync python examples/mesh/laplacian_optimization.py
 ```
@@ -101,7 +101,7 @@ volume-preservation, injectivity, or collision guarantee.
 ### Run and inspect
 
 ```sh
-cmake --build build/release --target arap litepgo_dev
+cmake --build build/release --target arap litepgo_python
 build/release/examples/mesh/arap
 PYTHONPATH=build/release/python uv run --no-sync python examples/mesh/arap.py
 ```
