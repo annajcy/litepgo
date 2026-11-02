@@ -3,15 +3,14 @@
 #include "litepgo/linalg/sparse_solver/pardiso_ldlt.hpp"
 #include "litepgo/linalg/sparse_solver/pardiso_llt.hpp"
 
-#include <dlfcn.h>
 #include <gtest/gtest.h>
-#include <link.h>
 #include <oneapi/tbb/global_control.h>
 #include <oneapi/tbb/info.h>
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/version.h>
 
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -19,6 +18,15 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+#if defined(_WIN32)
+#include <windows.h>
+
+#include <tlhelp32.h>
+#else
+#include <dlfcn.h>
+#include <link.h>
+#endif
 
 namespace litepgo::linalg::test {
 
@@ -50,8 +58,34 @@ SpMat laplacian_3d(int n) {
 }
 
 // User plus system CPU time, in clock ticks, of every thread of this process.
-std::map<int, long> thread_cpu_ticks() {
-    std::map<int, long> ticks;
+std::map<std::uint64_t, std::uint64_t> thread_cpu_ticks() {
+    std::map<std::uint64_t, std::uint64_t> ticks;
+#if defined(_WIN32)
+    const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    EXPECT_NE(snapshot, INVALID_HANDLE_VALUE);
+    if (snapshot == INVALID_HANDLE_VALUE)
+        return ticks;
+    THREADENTRY32 entry{};
+    entry.dwSize = sizeof(entry);
+    BOOL more = Thread32First(snapshot, &entry);
+    EXPECT_TRUE(more);
+    for (; more; more = Thread32Next(snapshot, &entry)) {
+        if (entry.th32OwnerProcessID != GetCurrentProcessId())
+            continue;
+        const HANDLE thread = OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, entry.th32ThreadID);
+        if (thread == nullptr)
+            continue; // The worker may have exited after the snapshot.
+        FILETIME created{}, exited{}, kernel{}, user{};
+        const BOOL timed = GetThreadTimes(thread, &created, &exited, &kernel, &user);
+        EXPECT_TRUE(timed);
+        if (timed) {
+            const auto time = [](FILETIME t) { return (std::uint64_t(t.dwHighDateTime) << 32) | t.dwLowDateTime; };
+            ticks[entry.th32ThreadID] = time(kernel) + time(user);
+        }
+        CloseHandle(thread);
+    }
+    CloseHandle(snapshot);
+#else
     for (const auto& entry : std::filesystem::directory_iterator("/proc/self/task")) {
         std::ifstream file(entry.path() / "stat");
         std::string stat;
@@ -68,6 +102,7 @@ std::map<int, long> thread_cpu_ticks() {
         fields >> utime >> stime;
         ticks[std::stoi(entry.path().filename().string())] = utime + stime;
     }
+#endif
     return ticks;
 }
 
@@ -76,7 +111,7 @@ std::map<int, long> thread_cpu_ticks() {
 template <class Work> int busy_threads(Work&& work) {
     // Let workers spinning after earlier parallel work go to sleep.
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    const std::map<int, long> before = thread_cpu_ticks();
+    const auto before = thread_cpu_ticks();
     work();
     int busy = 0;
     for (const auto& [thread, ticks] : thread_cpu_ticks()) {
@@ -134,6 +169,18 @@ TYPED_TEST(PardisoThreading, FactorsInParallelWhenAllowed) {
 // MKL's threading layer must bind to the TBB runtime litepgo uses, not a second
 // copy such as a system libtbb, or tbb::global_control would not reach it.
 TEST(PardisoThreading, SharesLitepgoTbbRuntime) {
+    PardisoLLT solver;
+    ASSERT_TRUE(solver.compute(laplacian_3d(8)));
+#if defined(_WIN32)
+    HMODULE litepgo_tbb = nullptr;
+    ASSERT_TRUE(
+        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           reinterpret_cast<LPCWSTR>(&TBB_runtime_version), &litepgo_tbb));
+    ASSERT_NE(GetModuleHandleW(L"tbb12.dll"), nullptr);
+    EXPECT_EQ(litepgo_tbb, GetModuleHandleW(L"tbb12.dll"));
+    EXPECT_EQ(GetModuleHandleW(L"tbb12_debug.dll"), nullptr);
+    EXPECT_NE(GetModuleHandleW(L"mkl_tbb_thread.3.dll"), nullptr);
+#else
     std::vector<std::string> tbb_runtimes;
     dl_iterate_phdr(
         [](dl_phdr_info* info, size_t, void* data) {
@@ -154,6 +201,7 @@ TEST(PardisoThreading, SharesLitepgoTbbRuntime) {
     if (threading_layer != nullptr) {
         dlclose(threading_layer);
     }
+#endif
 }
 
 } // namespace litepgo::linalg::test
