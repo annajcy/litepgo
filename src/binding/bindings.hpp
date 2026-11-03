@@ -14,6 +14,7 @@ void bind_obj(nanobind::module_& m);
 void bind_veg(nanobind::module_& m);
 void bind_msh(nanobind::module_& m);
 void bind_self_intersections(nanobind::module_& m);
+void bind_isotropic_remesh(nanobind::module_& m);
 } // namespace litepgo::mesh::binding
 
 namespace litepgo::dof::binding {

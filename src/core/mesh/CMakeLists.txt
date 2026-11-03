@@ -21,7 +21,7 @@ if(LITEPGO_WITH_GMSH)
 endif()
 
 if(LITEPGO_WITH_CGAL)
-    add_library(litepgo_mesh_cgal STATIC detail/cgal_surface_mesh.cpp self_intersections.cpp)
+    add_library(litepgo_mesh_cgal STATIC detail/cgal_surface_mesh.cpp self_intersections.cpp isotropic_remesh.cpp)
     add_library(litepgo::mesh_cgal ALIAS litepgo_mesh_cgal)
     target_link_libraries(litepgo_mesh_cgal PUBLIC litepgo::mesh PRIVATE CGAL::CGAL litepgo::warnings)
     target_compile_definitions(litepgo_mesh_cgal PUBLIC LITEPGO_HAS_CGAL=1)

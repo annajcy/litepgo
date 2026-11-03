@@ -56,7 +56,7 @@ jobs:
       - name: Configure, build, and test all backends (GoogleTest and pytest)
         run: cmake --workflow --preset ${{ matrix.preset }}-all
       - name: Verify optional backends are enabled
-        run: uv run --no-sync python -c "from litepgo import build_info, contact, mesh; assert mesh.has_gmsh; assert hasattr(contact, 'IPCTKContactEnergy'); assert build_info()['ipc_toolkit_version']"
+        run: uv run --no-sync python -c "from litepgo import build_info, contact, mesh; assert mesh.has_gmsh; assert mesh.has_cgal; assert hasattr(contact, 'IPCTKContactEnergy'); assert build_info()['ipc_toolkit_version']"
       - name: Verify the Windows PARDISO backend is enabled
         if: runner.os == 'Windows'
         run: uv run --no-sync python -c "from litepgo.linalg.sparse_solver import AutoSparseSolver, PardisoLLT; assert AutoSparseSolver is PardisoLLT"

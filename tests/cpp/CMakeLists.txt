@@ -166,6 +166,7 @@ gtest_discover_tests(litepgo_mesh_tests DISCOVERY_MODE PRE_TEST)
 if(TARGET litepgo::mesh_cgal)
     add_executable(litepgo_mesh_cgal_tests
         mesh/cgal_surface_mesh_gtest.cpp
+        mesh/isotropic_remesh_gtest.cpp
         mesh/self_intersections_gtest.cpp
     )
     target_link_libraries(litepgo_mesh_cgal_tests PRIVATE

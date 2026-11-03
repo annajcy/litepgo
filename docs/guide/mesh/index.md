@@ -29,6 +29,27 @@ boundary IDs connect to the [DOF module](../dof/index.md), and shell stencils co
 [FEM](../fem/index.md). Native sources are in `src/core/mesh/`; Python imports
 these operations through `litepgo.mesh`.
 
+## CGAL surface processing
+
+Configure with `-DLITEPGO_WITH_CGAL=ON` to enable triangle surface queries and
+remeshing. In C++, link `litepgo::mesh_cgal` and include
+`<litepgo/mesh/self_intersections.hpp>` or `<litepgo/mesh/isotropic_remesh.hpp>`.
+In Python, check `litepgo.mesh.has_cgal` for availability.
+
+- `has_self_intersections(mesh)` reports crossings, overlapping faces, and
+  degenerate triangles. Contact confined to a shared indexed vertex or edge is
+  allowed.
+- `isotropic_remesh(mesh, target_edge_length, num_iter, constrained_vertices)`
+  returns a new triangle mesh. It preserves open boundary edges and the
+  positions of specified input vertices. Target edge length and iteration count
+  must be positive. Input faces must be nondegenerate and compatible with an
+  oriented surface mesh. A protected boundary edge longer than
+  `4/3 * target_edge_length` causes an error. Vertex and face indices may change.
+  In Python, pass all arguments after `mesh` by keyword.
+
+See the [constrained remeshing example](../../examples/mesh.md#constrained-isotropic-remeshing)
+for both languages.
+
 ## Read this module
 
 | Topic | Read |

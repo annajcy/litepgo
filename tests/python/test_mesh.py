@@ -77,6 +77,26 @@ def test_has_self_intersections_requires_cgal():
     with pytest.raises(RuntimeError, match="LITEPGO_WITH_CGAL=ON"):
         mesh.has_self_intersections(data)
 
+
+def test_isotropic_remesh():
+    positions = np.array([[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0.2, 0.2, 0]])
+    cells = np.array([[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]], dtype=np.int32)
+    data = mesh.TriangleMesh(positions, cells)
+    if not mesh.has_cgal:
+        with pytest.raises(RuntimeError, match="LITEPGO_WITH_CGAL=ON"):
+            mesh.isotropic_remesh(data, target_edge_length=0.8, num_iter=5)
+        return
+
+    result = mesh.isotropic_remesh(
+        data, target_edge_length=0.8, num_iter=5, constrained_vertices=np.array([4], dtype=np.int64)
+    )
+    assert np.count_nonzero(np.all(result.positions == positions[4], axis=1)) == 1
+    assert not mesh.has_self_intersections(result)
+    np.testing.assert_array_equal(data.positions, positions)
+    np.testing.assert_array_equal(data.cells, cells)
+    with pytest.raises(ValueError, match="protected boundary edge"):
+        mesh.isotropic_remesh(data, target_edge_length=0.5, num_iter=5)
+
 @pytest.mark.parametrize('name', ['box-tet.veg', 'box-hex.veg'])
 def test_veg_against_independent_text_parse(name):
     lines = [line.strip() for line in (ASSETS / name).read_text().splitlines() if line.strip() and not line.lstrip().startswith('#')]
