@@ -27,7 +27,7 @@ signatures are visible independently of which Python instantiations are bound.
 pdoc imports the selected compiled package. It documents public facade modules,
 nanobind signatures/docstrings, and concrete FEM template instances. Platform
 sparse backends and optional IPC Toolkit exports reflect that build. The
-`litepgo.torch` module is included when PyTorch is installed.
+`litepgo.torch` module is always included; PyTorch is installed by `uv sync --locked`.
 
 Build `litepgo_python` before generation to compile `_core` and register the Python
 facades. An absent extension produces a build command;

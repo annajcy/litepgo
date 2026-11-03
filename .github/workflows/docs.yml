@@ -47,6 +47,7 @@ jobs:
           test -f docs/.vitepress/dist/reference/cpp/index.html
           test -f docs/.vitepress/dist/reference/python/index.html
           test -f docs/.vitepress/dist/reference/python/litepgo.html
+          test -f docs/.vitepress/dist/reference/python/litepgo/torch.html
       - name: Upload the Pages site
         uses: actions/upload-pages-artifact@v4
         with:

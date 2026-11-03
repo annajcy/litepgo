@@ -1,4 +1,4 @@
-"""Optional CPU float64, first-order PyTorch adapters for Energy and Response.
+"""CPU float64, first-order PyTorch adapters for Energy and Response.
 
 Only the explicit tensor input is differentiable. Callbacks and model configuration
 must remain fixed during evaluation. Sparse Jacobians are saved per forward call.

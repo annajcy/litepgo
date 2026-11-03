@@ -27,11 +27,11 @@ inline BuildInfo build_info() {
     info.tbb_header_version = TBB_VERSION_STRING;
     info.tbb_runtime_version = TBB_runtime_version();
     info.sparse_backends = {"EigenLDLT", "EigenSparseLU"};
-#if defined(LITEPGO_HAS_ACCELERATE)
+#if defined(LITEPGO_CONFIGURED_ACCELERATE)
     info.sparse_backends.push_back("AccelerateLLT");
     info.sparse_backends.push_back("AccelerateLDLT");
 #endif
-#if defined(LITEPGO_HAS_MKL)
+#if defined(LITEPGO_CONFIGURED_MKL)
     info.sparse_backends.push_back("PardisoLLT");
     info.sparse_backends.push_back("PardisoLDLT");
 #endif

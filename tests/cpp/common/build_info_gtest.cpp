@@ -18,11 +18,11 @@ TEST(BuildInfo, ReportsPinnedDependencies) {
 
 TEST(BuildInfo, ListsTheCompiledSparseBackends) {
     std::vector<std::string> expected = {"EigenLDLT", "EigenSparseLU"};
-#if defined(LITEPGO_HAS_ACCELERATE)
+#if defined(LITEPGO_CONFIGURED_ACCELERATE)
     expected.push_back("AccelerateLLT");
     expected.push_back("AccelerateLDLT");
 #endif
-#if defined(LITEPGO_HAS_MKL)
+#if defined(LITEPGO_CONFIGURED_MKL)
     expected.push_back("PardisoLLT");
     expected.push_back("PardisoLDLT");
 #endif
