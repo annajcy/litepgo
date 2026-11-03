@@ -16,7 +16,7 @@ together. Run commands below from its root.
 | --- | --- |
 | `src/core/` | C++ public modules and their implementations |
 | `src/binding/` | nanobind registrations |
-| `src/python/` | Public Python facades and optional Torch adapters |
+| `src/python/` | Public Python facades and Torch adapters |
 | `examples/` | Standalone paired programs and Python-only Torch examples |
 | `tests/cpp/`, `tests/python/` | Unit and integration/regression tests |
 | `docs/` | User manual, formulations, example explanations, and site configuration |
@@ -36,17 +36,21 @@ C++20 requirements, and required libraries.
 | `litepgo::common` | None; fundamental types and build information |
 | `litepgo::spatial` | common |
 | `litepgo::linalg` | common |
+| `litepgo::linalg_accelerate` | linalg; enabled with `LITEPGO_WITH_ACCELERATE` on macOS |
+| `litepgo::linalg_mkl` | linalg; enabled with `LITEPGO_WITH_MKL` on x86-64 Linux/Windows |
 | `litepgo::mesh` | common |
 | `litepgo::dof` | common, linalg, mesh |
 | `litepgo::energy` | common, dof, linalg |
 | `litepgo::fem` | common, dof, energy, mesh, spatial |
-| `litepgo::solver` | common, dof, energy, linalg |
+| `litepgo::solver` | common, dof, energy, linalg, configured sparse backend |
 | `litepgo::contact` | common, energy, mesh, spatial |
 | `litepgo::mesh_gmsh` | mesh; optional |
 | `litepgo::contact_ipctk` | contact; optional |
 
 `litepgo::core` is an INTERFACE aggregate of the nine base modules, including
-OBJ/VEG I/O through `mesh`. Gmsh I/O and the IPC Toolkit backend are optional
+OBJ/VEG I/O through `mesh` and the configured sparse backend through `solver`.
+The base `linalg` target supplies Eigen solvers; Accelerate and oneMKL are separate
+targets. Gmsh I/O and the IPC Toolkit backend are optional
 extensions. There is no single `liblitepgo.a` to link
 manually. The module dependency graph is checked for cycles.
 
@@ -130,7 +134,8 @@ Use `PYTHONPATH=build/<preset>/python` to select the package being documented.
 
 Doxygen reads public headers and excludes bindings/internal detail headers. pdoc
 reads public Python modules and explicitly includes bound FEM template instances.
-The optional Torch page is omitted with a message when PyTorch is unavailable.
+PyTorch is a locked default Python dependency, and pdoc always includes
+`litepgo.torch` alongside the native API facades.
 Generated `docs/public/reference/` and `.vitepress/dist/` are ignored.
 
 Keep one authoritative explanation per topic in `docs/`. The source under

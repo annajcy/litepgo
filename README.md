@@ -70,8 +70,8 @@ access. Generated pages and dependencies are ignored by Git.
 
 Python reference pages describe the active compiled build. Set
 `PYTHONPATH=build/<preset>/python` before running the launcher to select one.
-PyTorch is optional: `uv pip install torch` enables the Torch examples and their
-API reference. See [development](docs/development.md) for source organization,
+PyTorch is included in the locked Python dependencies, and the API reference
+always includes `litepgo.torch`. See [development](docs/development.md) for source organization,
 tests, bindings, and documentation maintenance.
 
 GitHub Actions builds the manual and both API references on pull requests and
