@@ -8,16 +8,25 @@ Run: uv run --no-sync python examples/fem/fitting/volume_equilibrium_material_fi
 Requires a built litepgo Python package. Uses CPU float64 and Torch L-BFGS.
 """
 
+import argparse
+from pathlib import Path
+
 import numpy as np
 import torch
 from litepgo import torch as lp_torch
-from pathlib import Path
 from litepgo import energy, dof, fem, mesh, solver
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "input", nargs="?", type=Path,
+        default=Path(__file__).resolve().parents[3] / "assets/box-tet.veg",
+        help="rest tetrahedral VEG mesh",
+    )
+    args = parser.parse_args()
     # Build the mesh, FEM model and prescribed boundary displacement.
-    rest = mesh.read_veg(Path(__file__).resolve().parents[3] / "assets/box-tet.veg")
+    rest = mesh.read_veg(args.input)
     topology = rest.topology
     positions = rest.positions.ravel()
     mapping = dof.VertexDofMap(topology, 3)

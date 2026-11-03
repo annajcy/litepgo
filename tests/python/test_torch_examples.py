@@ -18,8 +18,12 @@ def test_material_example(case):
     import sys
     from pathlib import Path
 
-    path = Path(__file__).resolve().parents[2] / f"examples/fem/fitting/{case}_torch.py"
-    subprocess.run([sys.executable, str(path)], check=True, timeout=120)
+    root = Path(__file__).resolve().parents[2]
+    path = root / f"examples/fem/fitting/{case}_torch.py"
+    command = [sys.executable, str(path)]
+    if case.startswith("volume_"):
+        command.append(str(root / "tests/assets/box-tet.veg"))
+    subprocess.run(command, check=True, timeout=120)
 
 
 def test_volume_material_equilibrium_end_to_end_gradcheck():
