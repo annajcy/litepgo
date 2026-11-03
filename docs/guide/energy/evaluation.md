@@ -73,4 +73,4 @@ $$
 $$
 
 This is how contact positions are connected to simulation displacement DOFs.
-See the [composition example](../../examples/energy.md#energy-composition).
+See the [composition example](../../examples/energy/energy-composition.md).

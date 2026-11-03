@@ -65,6 +65,6 @@ loss.backward()
 np.testing.assert_allclose(x.grad.numpy(), [1., 2.])
 ```
 
-The [four Torch fitting examples](../examples/torch.md) use L-BFGS with analytic
-response Jacobians. The native [fitting examples](../examples/fitting.md) explain
+The [four Torch fitting examples](../examples/torch/index.md) use L-BFGS with analytic
+response Jacobians. The native [fitting examples](../examples/fitting/index.md) explain
 the same experiments and their formulations in detail.

@@ -47,7 +47,7 @@ elastic = Energy(mapping, rest, [0.1] * mapping.num_elements,
 
 Here `nodes` is the `(n,3)` rest-position array and `topology` its triangle
 connectivity. Import NumPy and `dof`, `fem`, `mesh` from litepgo. The
-[shell equilibrium example](../../examples/equilibrium.md#shell-saddle-pull)
+[shell equilibrium example](../../examples/equilibrium/shell-saddle-pull.md)
 contains the complete file-backed setup, solve, and output.
 
 Topology must be consistently wound and edge-manifold. Duplicate faces,

@@ -27,7 +27,7 @@ potential = energy.WeightedEnergySum([
 
 Here `volume` is the rest volume mesh, `num_dofs` the displacement-vector length,
 and `elastic`/`pulling` energies on those same DOFs. The
-[two-box example](../../examples/contact.md) gives the complete construction and
+[two-box example](../../examples/contact/tet-p1-box-stack.md) gives the complete construction and
 boundary conditions. For Hermite vertex maps, pass `dofs_per_vertex=24`; to sample
 between corners, use the [embedding path](../fem/embedding.md).
 
@@ -55,6 +55,6 @@ squared penetration on the other side. Use `positive_side=False` for an upper
 plate and compose it with the same displacement map as self-contact. The
 penalty permits penetration and has no collision step bound.
 
-The [plate compression example](../../examples/contact.md#compression-between-penalty-plates)
+The [plate compression example](../../examples/contact/tet-p1-plate-compression.md)
 combines elasticity, IPC self-contact, and both plate penalties in a
 `WeightedEnergySum`.

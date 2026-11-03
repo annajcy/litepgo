@@ -79,15 +79,58 @@ export default defineConfig({
       ] },
       { text: 'Examples', collapsed: true, items: [
         { text: 'Catalog and run instructions', link: '/examples' },
-        { text: 'Energies and responses', link: '/examples/energy' },
-        { text: 'Newton and Gauss–Newton', link: '/examples/solvers' },
-        { text: 'Laplacian and ARAP', link: '/examples/mesh' },
-        { text: 'Elastic equilibrium', link: '/examples/equilibrium' },
-        { text: 'Prescribed plastic fields', link: '/examples/plasticity' },
-        { text: 'Contact', link: '/examples/contact' },
-        { text: 'Spatial queries and embedding', link: '/examples/spatial' },
-        { text: 'Material and plastic fitting', link: '/examples/fitting' },
-        { text: 'PyTorch fitting', link: '/examples/torch' }
+        { text: 'Energies and responses', link: '/examples/energy/', collapsed: true, items: [
+          { text: 'Custom scalar energies', link: '/examples/energy/custom-energy' },
+          { text: 'Energy composition', link: '/examples/energy/energy-composition' },
+          { text: 'Custom vector responses', link: '/examples/energy/custom-response' },
+          { text: 'Batched material-force fitting', link: '/examples/energy/mesh-response' }
+        ] },
+        { text: 'Newton and Gauss–Newton', link: '/examples/solvers/', collapsed: true, items: [
+          { text: 'Constrained chain', link: '/examples/solvers/newton-chain' },
+          { text: 'Exponential curve fitting', link: '/examples/solvers/gauss-newton-fit' }
+        ] },
+        { text: 'Mesh optimization', link: '/examples/mesh/', collapsed: true, items: [
+          { text: 'Laplacian smoothing and editing', link: '/examples/mesh/laplacian-optimization' },
+          { text: 'ARAP local-global deformation', link: '/examples/mesh/arap' }
+        ] },
+        { text: 'Mesh processing', link: '/examples/mesh-processing/', collapsed: true, items: [
+          { text: 'Constrained isotropic remeshing', link: '/examples/mesh-processing/constrained-remesh' }
+        ] },
+        { text: 'Elastic equilibrium', link: '/examples/equilibrium/', collapsed: true, items: [
+          { text: 'Tet P1 corner pull', link: '/examples/equilibrium/tet-p1-corner-pull' },
+          { text: 'Hex Q1 corner pull', link: '/examples/equilibrium/hex-q1-corner-pull' },
+          { text: 'Hex Hermite corner pull', link: '/examples/equilibrium/hex-hermite-corner-pull' },
+          { text: 'Shell saddle pull', link: '/examples/equilibrium/shell-saddle-pull' }
+        ] },
+        { text: 'Prescribed plastic fields', link: '/examples/plasticity/', collapsed: true, items: [
+          { text: 'Tet P1 plastic twist', link: '/examples/plasticity/tet-p1-plastic-twist' },
+          { text: 'Hex Q1 plastic twist', link: '/examples/plasticity/hex-q1-plastic-twist' },
+          { text: 'Hex Hermite plastic twist', link: '/examples/plasticity/hex-hermite-plastic-twist' },
+          { text: 'Differential shell growth', link: '/examples/plasticity/shell-plastic-field' }
+        ] },
+        { text: 'Contact', link: '/examples/contact/', collapsed: true, items: [
+          { text: 'Pressed tet box stack', link: '/examples/contact/tet-p1-box-stack' },
+          { text: 'Compression between penalty plates', link: '/examples/contact/tet-p1-plate-compression' }
+        ] },
+        { text: 'Spatial queries and embedding', link: '/examples/spatial/', collapsed: true, items: [
+          { text: 'Spatial hash queries', link: '/examples/spatial/spatial-query' },
+          { text: 'Point embedding', link: '/examples/spatial/point-embedding' }
+        ] },
+        { text: 'Material and plastic fitting', link: '/examples/fitting/', collapsed: true, items: [
+          { text: 'Fixed-pose shell material', link: '/examples/fitting/shell-fixed-pose-material-fit' },
+          { text: 'Fixed-pose volume plastic stretches', link: '/examples/fitting/volume-fixed-pose-fp-fit' },
+          { text: 'Fixed-pose shell plastic stretches', link: '/examples/fitting/shell-fixed-pose-fp-fit' },
+          { text: 'Equilibrium volume material', link: '/examples/fitting/volume-equilibrium-material-fit' },
+          { text: 'Equilibrium shell material', link: '/examples/fitting/shell-equilibrium-material-fit' },
+          { text: 'Equilibrium volume plastic stretches', link: '/examples/fitting/volume-equilibrium-fp-fit' },
+          { text: 'Equilibrium shell plastic stretches', link: '/examples/fitting/shell-equilibrium-fp-fit' }
+        ] },
+        { text: 'PyTorch fitting', link: '/examples/torch/', collapsed: true, items: [
+          { text: 'Volume material with L-BFGS', link: '/examples/torch/volume-equilibrium-material-fit-torch' },
+          { text: 'Shell material with L-BFGS', link: '/examples/torch/shell-equilibrium-material-fit-torch' },
+          { text: 'Volume plastic stretches with L-BFGS', link: '/examples/torch/volume-equilibrium-fp-fit-torch' },
+          { text: 'Shell plastic stretches with L-BFGS', link: '/examples/torch/shell-equilibrium-fp-fit-torch' }
+        ] }
       ] },
       { text: 'Reference and development', items: [
         { text: 'About the API references', link: '/reference' },

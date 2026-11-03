@@ -144,7 +144,7 @@ pose. `VolumetricFemForceFpResponse` varies column-packed plastic coefficients a
 a fixed pose. They expose $f=\partial E/\partial u$ and the mixed derivatives
 $\partial f/\partial\theta$ or $\partial f/\partial\operatorname{vec}F_p$.
 They do not solve equilibrium. See [inverse problems](../solver/inverse.md) for total
-derivatives through a solve and [plasticity examples](../../examples/plasticity.md)
+derivatives through a solve and [plasticity examples](../../examples/plasticity/index.md)
 for prescribed-field equilibria.
 
 ## Feasibility and scope

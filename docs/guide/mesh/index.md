@@ -47,7 +47,7 @@ In Python, check `litepgo.mesh.has_cgal` for availability.
   `4/3 * target_edge_length` causes an error. Vertex and face indices may change.
   In Python, pass all arguments after `mesh` by keyword.
 
-See the [constrained remeshing example](../../examples/mesh.md#constrained-isotropic-remeshing)
+See the [constrained remeshing example](../../examples/mesh-processing/constrained-remesh.md)
 for both languages.
 
 ## Read this module

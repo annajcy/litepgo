@@ -70,4 +70,4 @@ C++ supplies an explicit sparse solver, while Python defaults to
 
 [Core concepts](concepts.md) defines packing, force signs, and sparse patterns.
 [Solvers](solver/index.md) explains convergence and failure statuses.
-The [solver examples](../examples/solvers.md) also introduce nonlinear least squares.
+The [solver examples](../examples/solvers/index.md) also introduce nonlinear least squares.
