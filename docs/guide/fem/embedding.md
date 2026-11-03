@@ -74,7 +74,7 @@ ordering and rest geometry. The displacement basis can differ from geometry:
 Hermite displacement with Q1 box geometry is supported. The builder pulls
 interpolation through physical Hermite scales. It rejects invalid element IDs,
 reference coordinates, dimensions, and unsupported geometry. Empty point sets
-produce a zero-row map. The [embedding example](../../examples/spatial.md#point-embedding)
+produce a zero-row map. The [embedding example](../../examples/spatial/point-embedding.md)
 constructs all of these inputs and compares the result to direct interpolation.
 
 For exact volume boundary vertices, prefer `extract_surface_with_vertices` and

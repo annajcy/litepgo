@@ -49,5 +49,5 @@ explicitly. Corner-only surface extraction does not visualize higher-order
 Hermite deformation between vertices; use [boundary sampling](../fem/embedding.md).
 
 For objectives acting directly on vertex positions, read the
-[Laplacian and ARAP examples](../../examples/mesh.md). Those examples use generated
+[Laplacian and ARAP examples](../../examples/mesh/index.md). Those examples use generated
 geometry and explicitly define their energies through `MeshEnergy`.

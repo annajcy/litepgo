@@ -57,7 +57,7 @@ u_field = fem.InterpolatedField3D[fem.HexHermiteBasis](coefficients)
 ```
 
 Here `X_field` is the element's fixed coordinate field, `e` the element index,
-and `u` the global physical-DOF vector. The [embedding example](../../examples/spatial.md)
+and `u` the global physical-DOF vector. The [embedding example](../../examples/spatial/point-embedding.md)
 shows a complete construction and checks the interpolated values independently.
 
 ## Supported rest geometry

@@ -31,5 +31,5 @@ Defaults are `max_iterations=50`, `max_trial_steps=20`, and
 iterations, and evaluations. Convergence means $\|J^Tr\|_\infty$ is small;
 it does not require zero residual. Normal equations square the spectral condition
 number before damping, so scale parameters and observations appropriately.
-The [curve-fit example](../../examples/solvers.md#exponential-curve-fitting) supplies
+The [curve-fit example](../../examples/solvers/gauss-newton-fit.md) supplies
 a complete residual implementation.

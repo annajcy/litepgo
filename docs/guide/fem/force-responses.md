@@ -44,7 +44,7 @@ value, B = force.eval(theta, need_jacobian=True)
 ```
 
 `value` has displacement-gradient force rows, and `B` has material-parameter
-columns. The [batched force example](../../examples/energy.md#batched-material-force-fitting)
+columns. The [batched force example](../../examples/energy/mesh-response.md)
 provides a complete synthetic observation and fitting loop.
 
 ## Local force-response pullbacks

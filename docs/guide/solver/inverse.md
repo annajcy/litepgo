@@ -49,7 +49,7 @@ $$
 | Residual fitted by a native optimizer | Analytic residual Jacobian | [Gauss–Newton](gauss-newton.md) |
 | Residual fitted through autograd | Analytic vector-Jacobian product | [Torch adapters](../torch.md) |
 
-The [fitting examples](../../examples/fitting.md) state complete experiments,
+The [fitting examples](../../examples/fitting/index.md) state complete experiments,
 parameter choices, and validation checks.
 
 ## Parameterizations and identifiability
@@ -78,5 +78,5 @@ varying identification, and yield evolution require their own models.
 The [Torch module](../torch.md) connects these responses to autograd using
 their analytic Jacobians. Its guide explains the forward/backward data flow,
 CPU/dtype requirements, a complete runnable example, and exception behavior.
-The [four Torch fitting examples](../../examples/torch.md) use the same native
+The [four Torch fitting examples](../../examples/torch/index.md) use the same native
 models and equilibrium derivatives with an L-BFGS outer optimizer.

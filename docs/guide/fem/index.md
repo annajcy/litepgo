@@ -63,6 +63,6 @@ fields or interpreting a force. The shared [packing conventions](../concepts.md)
 apply to both branches.
 
 Start with the [complete one-tet energy](volume.md#complete-one-tet-energy), or run
-an [equilibrium example](../../examples/equilibrium.md). Higher-order Hermite
+an [equilibrium example](../../examples/equilibrium/index.md). Higher-order Hermite
 displacement requires the physical-DOF transform even when the rest geometry
 uses ordinary Q1 fields.

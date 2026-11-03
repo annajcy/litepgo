@@ -27,7 +27,7 @@ is appropriate only if the complete finite segment is feasible.
 C++ overrides `eval_values(x, gradient*, hessian*, kind)` and, for a dynamic
 energy, `refresh_pattern(x)` returning an optional sparse pattern. Private hooks
 belong to the derived class; callers use the validated public API. The
-[custom-energy example](../../examples/energy.md#custom-scalar-energies) includes
+[custom-energy example](../../examples/energy/custom-energy.md) includes
 complete implementations in both languages.
 
 ## Implement a vector response
@@ -43,6 +43,6 @@ r, J = response.eval(x, need_jacobian=True)  # J has shape (m, n)
 
 For standalone derivatives, refresh the pattern first. A dynamic response's
 rows/columns remain fixed while structural entries may change. The
-[response example](../../examples/energy.md#custom-vector-responses) demonstrates
+[response example](../../examples/energy/custom-response.md) demonstrates
 both branches and a solve. C++ writes into the supplied sparse output without
 changing its pattern.
