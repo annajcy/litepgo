@@ -53,6 +53,12 @@ jobs:
         with:
           path: build/_cache
           key: ${{ runner.os }}-onemkl-2026.1.0
+      - name: Check Windows Debug spatial output capture
+        if: runner.os == 'Windows' && matrix.preset == 'debug'
+        run: |
+          cmake --preset debug-all
+          cmake --build --preset debug-all --target spatial_query
+          uv run --no-sync python -c "import subprocess; expected = 'region_hits=1, point_hits=2, pairs=1\n'; outputs = [subprocess.check_output(['build/debug-all/examples/spatial/spatial_query.exe'], text=True, timeout=60) for _ in range(50)]; assert outputs == [expected] * 50, repr(outputs)"
       - name: Configure, build, and test all backends (GoogleTest and pytest)
         run: cmake --workflow --preset ${{ matrix.preset }}-all
       - name: Verify optional backends are enabled
