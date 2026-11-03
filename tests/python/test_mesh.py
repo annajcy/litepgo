@@ -54,6 +54,29 @@ def test_gmsh_disabled(tmp_path):
         with pytest.raises(RuntimeError, match='LITEPGO_WITH_GMSH'):
             mesh.read_msh(tmp_path / 'absent.msh')
 
+@pytest.mark.skipif(not mesh.has_cgal, reason="CGAL disabled")
+@pytest.mark.parametrize(
+    "extra_vertices, second_face, expected",
+    [
+        pytest.param([[0, -1, 0]], [1, 0, 3], False, id="shared-edge"),
+        pytest.param(
+            [[0.5, 0.5, -1], [0.5, 0.5, 1], [0.5, 1.5, 0]], [3, 4, 5], True, id="crossing"
+        ),
+        pytest.param([[0.5, 0.5, 0]], [1, 0, 3], True, id="shared-edge-overlap"),
+    ],
+)
+def test_has_self_intersections(extra_vertices, second_face, expected):
+    positions = np.array([[0, 0, 0], [2, 0, 0], [0, 2, 0], *extra_vertices], dtype=np.float64)
+    cells = np.array([[0, 1, 2], second_face], dtype=np.int32)
+    assert mesh.has_self_intersections(mesh.TriangleMesh(positions, cells)) is expected
+
+
+@pytest.mark.skipif(mesh.has_cgal, reason="CGAL enabled")
+def test_has_self_intersections_requires_cgal():
+    data = mesh.TriangleMesh(np.empty((0, 3)), np.empty((0, 3), dtype=np.int32))
+    with pytest.raises(RuntimeError, match="LITEPGO_WITH_CGAL=ON"):
+        mesh.has_self_intersections(data)
+
 @pytest.mark.parametrize('name', ['box-tet.veg', 'box-hex.veg'])
 def test_veg_against_independent_text_parse(name):
     lines = [line.strip() for line in (ASSETS / name).read_text().splitlines() if line.strip() and not line.lstrip().startswith('#')]
