@@ -36,8 +36,8 @@ jobs:
           key: Linux-onemkl-2026.1.0
       - name: Build and register the Python API
         run: |
-          cmake --preset release -DLITEPGO_BUILD_TESTS=OFF
-          cmake --build build/release --target litepgo_python --parallel 2
+          cmake --preset release-all -DLITEPGO_BUILD_TESTS=OFF
+          cmake --build build/release-all --target litepgo_python --parallel 2
       - name: Build the manual and C++/Python API references
         run: uv run scripts/docs.py build
       - name: Check Markdown rendering and generated API entry points

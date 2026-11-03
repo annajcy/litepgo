@@ -7,8 +7,8 @@ DOFs. FEM and contact perform additional geometric validity checks.
 ## Module architecture
 
 The native `mesh` module owns topology, mesh data, boundary extraction, and
-triangle shell-stencil construction. Its Python facade also exposes file I/O;
-native I/O is linked through separate `io` / optional `io_gmsh` targets.
+triangle shell-stencil construction, and OBJ/VEG file I/O. Its Python facade
+exposes the same operations. Optional MSH support uses `litepgo::mesh_gmsh`.
 Arrows below show construction and derived-geometry data flow.
 
 ```mermaid

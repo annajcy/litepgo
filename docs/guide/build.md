@@ -1,8 +1,8 @@
 # Build and environment setup
 
 This page builds the C++ library, the Python extension, and the regression suite
-from a source checkout. CI tests Debug and Release builds on macOS, Linux, and
-Windows. CMake configuration may download native dependencies on the first run.
+from a source checkout. CI tests `debug-all` and `release-all` on macOS, Linux,
+and Windows. CMake configuration may download native dependencies on the first run.
 
 ## Prerequisites and first build
 
@@ -50,6 +50,23 @@ The workflow presets are `release`, `debug`, and `asan`. Configure/build/test
 presets also exist for `relwithdebinfo`. Build directories are
 `build/<preset>/`. Keep machine-specific overrides in the ignored
 `CMakeUserPresets.json`.
+
+Each configuration also has an `-all` variant: `debug-all`, `release-all`,
+`relwithdebinfo-all`, and `asan-all`. Each supplies configure, build, test, and
+workflow presets. These enable Gmsh and IPC Toolkit, plus Accelerate on macOS
+or oneMKL on x86-64 Linux/Windows; unavailable platform backends remain disabled.
+The sanitizer presets require a GCC/Clang-compatible toolchain and keep Python
+disabled.
+
+To run the same full-feature Release workflow as CI:
+
+```sh
+cmake --workflow --preset release-all
+```
+
+It uses `build/release-all/`, independently of the ordinary `release` build.
+The documentation CI also uses `release-all` so its API references include the
+optional native backends.
 
 Examples are CMake targets named after their source stem and are excluded from
 the default build unless a test depends on them. Build a particular example
@@ -106,15 +123,16 @@ See [linear algebra](linalg/index.md) for backend selection and
 | `LITEPGO_WITH_ACCELERATE` | Defaults on for macOS; system Accelerate framework |
 | `LITEPGO_WITH_MKL` | Defaults on for x86-64 Linux and Windows; pinned oneMKL wheels are cached in `build/_cache/` |
 | `LITEPGO_MKL_ROOT` | Use a local oneMKL 2026.1 installation with `include/`, `lib/`, and (on Windows) `bin/` instead of downloading wheels |
-| `LITEPGO_WITH_IPC_TOOLKIT` | Defaults on; adds the optional `litepgo::ipctk` backend |
+| `LITEPGO_WITH_IPC_TOOLKIT` | Defaults off; adds the optional `litepgo::contact_ipctk` backend |
 | `LITEPGO_WITH_GMSH` | Defaults off; adds MSH I/O through fetched Gmsh sources |
 | `LITEPGO_BUILD_PYTHON` | Enables the nanobind extension; enabled by ordinary presets |
 | `LITEPGO_BUILD_TESTS` | Builds and registers the native/Python regression suites |
 
-For example, disable the optional IPC Toolkit backend while retaining native IPC:
+Native IPC is available in the default build. To enable the optional IPC Toolkit
+backend:
 
 ```sh
-cmake --preset release -DLITEPGO_WITH_IPC_TOOLKIT=OFF
+cmake --preset release -DLITEPGO_WITH_IPC_TOOLKIT=ON
 cmake --build --preset release
 ```
 
