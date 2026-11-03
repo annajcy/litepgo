@@ -9,6 +9,10 @@ from litepgo import _core
 def test_cpp_python_query_examples_match(folder,name):
     root = Path(__file__).resolve().parents[2]
     executable = Path(_core.__file__).parents[2]/'examples'/folder/name
-    cpp = subprocess.check_output([str(executable)],text=True)
-    python = subprocess.check_output([sys.executable,str(root/'examples'/folder/(name+'.py'))],text=True)
-    assert cpp == python
+    if sys.platform == 'win32':
+        executable = executable.with_suffix('.exe')
+    python = subprocess.check_output([sys.executable,str(root/'examples'/folder/(name+'.py'))],text=True,timeout=60)
+    assert python
+    for _ in range(5):
+        cpp = subprocess.check_output([str(executable)],text=True,timeout=60)
+        assert cpp == python
