@@ -6,7 +6,7 @@ optimizes displacement, so connect the two with an affine map. Check
 
 ## Connect contact to displacement DOFs
 
-The constructor is `IPCContactEnergy(surface, options, broad_phase, planes=[])`.
+The constructor is `IPCContactEnergy(surface, options, broad_phase)`.
 The broad phase is required; `None`/null is rejected. Both languages retain shared
 ownership of the backend. A typical volume boundary setup is:
 
@@ -44,3 +44,17 @@ $$
 Set stiffness $\kappa$ through the energy weight. Contact Hessian sparsity
 changes with active candidates; standalone calls must update the pattern.
 Newton handles updates for the composed potential.
+
+
+## Add a plane penalty
+
+`PlanePenaltyEnergy(num_vertices, axis, height, stiffness, positive_side=True)`
+acts on packed vertex positions. The axis is 0, 1, or 2 for x, y, or z. The
+energy is zero on the allowed side and grows as half the stiffness times
+squared penetration on the other side. Use `positive_side=False` for an upper
+plate and compose it with the same displacement map as self-contact. The
+penalty permits penetration and has no collision step bound.
+
+The [plate compression example](../../examples/contact.md#compression-between-penalty-plates)
+combines elasticity, IPC self-contact, and both plate penalties in a
+`WeightedEnergySum`.

@@ -51,8 +51,6 @@ Vec translate_b(Vec x, const Eigen::Vector3d& delta) {
 
 TEST(IPCContactEnergy, RejectsInvalidConfiguration) {
     static_assert(!std::is_constructible_v<IPCContactEnergy, const mesh::TriangleMesh&, IPCContactOptions>);
-    static_assert(
-        !std::is_constructible_v<IPCContactEnergy, const mesh::TriangleMesh&, IPCContactOptions, std::vector<Plane>>);
     const mesh::TriangleMesh surface = two_triangles(0.5);
     EXPECT_THROW(IPCContactEnergy(surface, options(1), nullptr), std::invalid_argument);
     EXPECT_THROW(IPCContactEnergy(surface, IPCContactOptions{}, std::make_shared<SpatialHash>()),
@@ -62,9 +60,6 @@ TEST(IPCContactEnergy, RejectsInvalidConfiguration) {
     IPCContactOptions no_ccd_budget = options(1.0);
     no_ccd_budget.ccd_max_iterations = 0;
     EXPECT_THROW(IPCContactEnergy(surface, no_ccd_budget, std::make_shared<SpatialHash>()), std::invalid_argument);
-    EXPECT_THROW(IPCContactEnergy(surface, options(1.0), std::make_shared<SpatialHash>(),
-                                  {Plane{Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero()}}),
-                 std::invalid_argument);
     EXPECT_THROW(IPCContactEnergy(mesh::TriangleMesh{Vec(), mesh::TriangleTopology(0, {})}, options(1.0),
                                   std::make_shared<SpatialHash>()),
                  std::invalid_argument);
@@ -200,35 +195,8 @@ TEST(IPCContactEnergy, RejectsInfeasibleStates) {
     EXPECT_THROW(energy.max_feasible_step(crossing, Vec::Zero(18)), std::domain_error);
 }
 
-TEST(IPCContactEnergy, PlanesRepelVerticesAndRejectThoseBehind) {
-    // B alone above the ground z = 0: vertex 3 at height 0.5 is the only active one.
-    Vec positions = two_triangles(0.5).positions.tail(9);
-    const mesh::TriangleMesh triangle{positions, mesh::TriangleTopology(3, {{0, 1, 2}})};
-    IPCContactEnergy energy(triangle, options(1.0), std::make_shared<SpatialHash>(),
-                            {Plane{Eigen::Vector3d::Zero(), Eigen::Vector3d(0, 0, 2)}});
-    EXPECT_EQ(energy.num_active_pairs(positions), 1);
-    EXPECT_NEAR(energy.min_active_distance(positions), 0.5, 1e-14);
-    EXPECT_LT(energy.eval_gradient(positions)[2], 0.0);
-    energy.update_pattern(positions);
-    energy::test::expect_derivatives_match(energy, positions, 1e-5);
-
-    const Vec down = (Vec(9) << 0, 0, -1, 0, 0, -1, 0, 0, -1).finished();
-    const double alpha = energy.max_feasible_step(positions, down);
-    EXPECT_GT(alpha, 0.0);
-    EXPECT_LT(alpha, 0.5);
-    const Plane ground{Eigen::Vector3d::Zero(), Eigen::Vector3d::UnitZ()};
-    const IPCContactEnergy thick(triangle, options(1.0, 0.2), std::make_shared<SpatialHash>(), {ground});
-    const double thick_alpha = thick.max_feasible_step(positions, down);
-    EXPECT_GT(thick_alpha, 0.0);
-    EXPECT_GT(thick.min_active_distance(positions + thick_alpha * down), 0.2);
-
-    positions[2] = -3; // far behind the plane, beyond dhat
-    EXPECT_THROW(energy.eval_value(positions), std::domain_error);
-    EXPECT_THROW(energy.max_feasible_step(positions, Vec::Zero(9)), std::domain_error);
-}
-
 // Displacement DOFs u drive the surface through E(u) = B(X + W u), with X and W
-// from a SurfaceKinematics. Triangle A is a static obstacle; B's vertices 3, 4, 5 take
+// from a SurfaceKinematics. Triangle A is fixed by the displacement map; B's vertices 3, 4, 5 take
 // simulation vertices 2, 1, 0, before an unrelated DOF u[9].
 TEST(IPCContactEnergy, ComposesWithASurfaceKinematics) {
     auto barrier =
@@ -317,13 +285,6 @@ TEST(IPCContactEnergy, ACCDBudgetToleranceAndFastCrossing) {
     for (int i = 0; i < 6; ++i)
         common.segment<3>(3 * i) = Eigen::Vector3d(100, -40, 3);
     EXPECT_EQ(e.max_feasible_step(surface.positions, common), 1);
-    // End exactly on the plane must also shorten the step.
-    mesh::TriangleMesh tri{surface.positions.tail(9), mesh::TriangleTopology(3, {{0, 1, 2}})};
-    IPCContactEnergy plane(tri, options(1), std::make_shared<SpatialHash>(), {Plane{}});
-    Vec down = Vec::Zero(9);
-    for (int i = 0; i < 3; ++i)
-        down[3 * i + 2] = -0.5;
-    EXPECT_NEAR(plane.max_feasible_step(tri.positions, down), 0.8, 1e-14);
 }
 
 TEST(IPCContactEnergy, NearParallelMollifierDerivatives) {
@@ -448,7 +409,7 @@ TEST(IPCContactEnergy, CoplanarOverlapAndEdgeCrossing) {
         EXPECT_NO_THROW(e.max_feasible_step(x + (t * i / 20) * dx, Vec::Zero(18)));
 }
 
-// Many disjoint copies supply enough independent VF, EE, mollifier and plane
+// Many disjoint copies supply enough independent VF, EE, and mollifier
 // work to exercise scheduling, while contacts within each copy share vertices.
 TEST(IPCContactEnergy, BitwiseDeterministicAcrossThreadCounts) {
     for (int fixture = 0; fixture < 3; ++fixture) {
@@ -470,8 +431,7 @@ TEST(IPCContactEnergy, BitwiseDeterministicAcrossThreadCounts) {
             faces.push_back({6 * c + 3, 6 * c + 4, 6 * c + 5});
         }
         mesh::TriangleMesh surface{x, mesh::TriangleTopology(6 * copies, faces)};
-        IPCContactEnergy e(surface, options(3, 0.05), std::make_shared<SpatialHash>(),
-                           {Plane{Eigen::Vector3d(0, 0, -3), Eigen::Vector3d::UnitZ()}});
+        IPCContactEnergy e(surface, options(3, 0.05), std::make_shared<SpatialHash>());
         ASSERT_GT(e.num_active_pairs(x), copies);
         for (auto kind : {energy::HessianKind::Exact, energy::HessianKind::Projected}) {
             double value, value_only, step;
@@ -568,14 +528,11 @@ TEST(IPCContactEnergy, ParallelErrorsPropagateAndAllowRecovery) {
 }
 
 TEST(IPCContactEnergy, RequestedDerivativeOrdersAgree) {
-    for (int fixture = 0; fixture < 3; ++fixture) {
+    for (int fixture = 0; fixture < 2; ++fixture) {
         auto surface = two_triangles(0.5);
         if (fixture == 1)
             surface.positions << -1, 0, 0, 1, 0, 0, 0, -4, -2, -0.7, -0.004, 0.2, 0.8, 0.008, 0.2, 0, 4, 2;
-        std::vector<Plane> planes;
-        if (fixture == 2)
-            planes.push_back({Eigen::Vector3d(0, 0, -0.2), Eigen::Vector3d::UnitZ()});
-        IPCContactEnergy e(surface, options(0.7, 0.05), std::make_shared<SpatialHash>(), planes);
+        IPCContactEnergy e(surface, options(0.7, 0.05), std::make_shared<SpatialHash>());
         const Vec x = surface.positions;
         e.update_pattern(x);
         Vec g;

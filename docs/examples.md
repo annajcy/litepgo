@@ -53,6 +53,7 @@ last digits on every platform.
 | Plasticity | [`hex_hermite_plastic_twist`](examples/plasticity.md#hex-hermite-plastic-twist) | C1 plastic fields and sampled Hermite output |
 | Plasticity | [`shell_plastic_field`](examples/plasticity.md#differential-shell-growth) | Incompatible per-face natural geometry |
 | Contact | [`tet_p1_box_stack`](examples/contact.md#pressed-tet-box-stack) | Boundary mapping, native IPC, and changing sparsity |
+| Contact | [`tet_p1_plate_compression`](examples/contact.md#compression-between-penalty-plates) | Elasticity, IPC self-contact, and two one-sided plate penalties |
 | Spatial | [`spatial_query`](examples/spatial.md#spatial-hash-queries) | Point/region/filtered box-pair queries |
 | Spatial | [`point_embedding`](examples/spatial.md#point-embedding) | Location and interpolation for P1/Q1/Hermite |
 | Fitting | [`shell_fixed_pose_material_fit`](examples/fitting.md#fixed-pose-shell-material) | Shared shell material from fixed-pose forces |

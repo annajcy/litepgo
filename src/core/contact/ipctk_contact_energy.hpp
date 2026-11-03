@@ -10,26 +10,23 @@
 
 namespace litepgo::contact {
 
-// IPC's clamped log barrier between the triangles of a surface and static planes
+// IPC's clamped log barrier for self-contact on a triangle surface
 // [Li et al. 2020], evaluated by IPC Toolkit. x holds the surface vertices'
 // positions in vertex-major xyz order. The stiffness is 1: scale the energy by its
 // weight in a WeightedEnergySum.
 //
 // The active set at x is every vertex-face, edge-edge (mollified near parallel),
-// edge-vertex, vertex-vertex and plane-vertex pair closer than min_distance + dhat;
+// edge-vertex and vertex-vertex pair closer than min_distance + dhat;
 // primitives sharing a vertex never pair. The Hessian pattern holds a dense 3x3
 // block for every two vertices of an active pair, so it changes with the active
 // set; an active pair outside the current pattern is a std::logic_error.
 //
 // A state is feasible when the surface does not intersect itself, every pair is
-// farther apart than min_distance, and every vertex is more than min_distance in
-// front of every plane. eval() throws std::domain_error at an active pair within
-// min_distance or a vertex not that far in front of a plane; it does not search
-// for intersections between distant primitives.
+// farther apart than min_distance. eval() throws std::domain_error for an active
+// pair within min_distance.
 // max_feasible_step() first checks all of x's feasibility (std::domain_error), then
 // returns the earliest conservative impact time over Tight-Inclusion CCD queries of
-// IPC Toolkit's candidates, which also keeps min_distance, capped
-// for each vertex at the same fraction (0.8) of its reach to min_distance from a plane.
+// IPC Toolkit's candidates, which also keeps min_distance.
 //
 // Pairs are evaluated in a fixed order, so results are deterministic.
 class IPCTKContactEnergy final : public energy::DynamicPatternEnergy {
@@ -38,7 +35,7 @@ class IPCTKContactEnergy final : public energy::DynamicPatternEnergy {
     // Its positions are the rest geometry, which IPC Toolkit uses for the edge-edge
     // mollifier threshold.
     // dhat must be finite and positive, min_distance finite and non-negative.
-    IPCTKContactEnergy(const mesh::TriangleMesh& surface, IPCTKContactOptions options, std::vector<Plane> planes = {});
+    IPCTKContactEnergy(const mesh::TriangleMesh& surface, IPCTKContactOptions options);
     ~IPCTKContactEnergy() override;
 
     int num_vertices() const {

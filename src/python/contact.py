@@ -1,4 +1,4 @@
-"""Native IPC surface contact and optional IPC Toolkit backend.
+"""IPC self-contact, optional IPC Toolkit, and a one-sided plane penalty.
 
 Energies act on vertex-major xyz positions, with unit stiffness. Call
 update_pattern(x) before Hessian assembly. Compose with AffineMappedEnergy and
@@ -11,10 +11,10 @@ from litepgo import _core
 
 BroadPhase = _core.contact.BroadPhase
 SpatialHash = _core.contact.SpatialHash
-Plane = _core.contact.Plane
+PlanePenaltyEnergy = _core.contact.PlanePenaltyEnergy
 IPCContactOptions = _core.contact.IPCContactOptions
 IPCContactEnergy = _core.contact.IPCContactEnergy
-__all__ = ["BroadPhase", "SpatialHash", "Plane", "IPCContactOptions", "IPCContactEnergy"]
+__all__ = ["BroadPhase", "SpatialHash", "PlanePenaltyEnergy", "IPCContactOptions", "IPCContactEnergy"]
 
 if hasattr(_core.contact, "IPCTKContactEnergy"):
     IPCTKContactOptions = _core.contact.IPCTKContactOptions
