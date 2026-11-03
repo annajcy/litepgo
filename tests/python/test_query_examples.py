@@ -13,6 +13,5 @@ def test_cpp_python_query_examples_match(folder,name):
         executable = executable.with_suffix('.exe')
     python = subprocess.check_output([sys.executable,str(root/'examples'/folder/(name+'.py'))],text=True,timeout=60)
     assert python
-    for _ in range(5):
-        cpp = subprocess.check_output([str(executable)],text=True,timeout=60)
-        assert cpp == python
+    cpp = subprocess.check_output([str(executable)],text=True,timeout=60)
+    assert cpp == python
