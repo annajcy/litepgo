@@ -1,6 +1,5 @@
 #include "litepgo/contact/ipctk_contact_energy.hpp"
 
-#include <Eigen/Geometry>
 #include <ipc/candidates/candidates.hpp>
 #include <ipc/ccd/tight_inclusion_ccd.hpp>
 #include <ipc/collision_mesh.hpp>
@@ -80,20 +79,6 @@ Eigen::MatrixXi face_rows(const mesh::TriangleTopology& topology) {
     return faces;
 }
 
-using Hyperplane = Eigen::Hyperplane<double, 3>;
-
-std::vector<Hyperplane> checked_planes(const std::vector<Plane>& planes) {
-    std::vector<Hyperplane> result;
-    for (const Plane& plane : planes) {
-        const double length = plane.normal.norm();
-        if (!plane.point.allFinite() || !std::isfinite(length) || length == 0.0) {
-            throw std::invalid_argument("IPCTKContactEnergy planes require a finite point and a finite nonzero normal");
-        }
-        result.emplace_back(plane.normal / length, plane.point);
-    }
-    return result;
-}
-
 // Adds block (3a.., 3b..) of a pair's local Hessian into the stored entries of
 // vertex block (va, vb). The pattern stores whole 3x3 blocks, so each column of
 // the block holds three consecutive rows.
@@ -117,21 +102,13 @@ void add_block(SpMat& hessian, const ipc::MatrixMax12d& local, int a, int b, int
 
 } // namespace
 
-// Planes are kept out of IPC Toolkit's mesh: v1.6.1 gathers plane-vertex
-// candidates within (dhat + min_distance) / 2, the inflation radius meant for two
-// inflated primitives, which drops vertices between half and all of that reach and
-// makes the barrier jump. Plane-vertex pairs and their CCD are handled here instead.
 struct IPCTKContactEnergy::Impl {
     ipc::CollisionMesh mesh;
-    std::vector<Hyperplane> planes;
     ipc::BarrierPotential barrier;
     ipc::TightInclusionCCD ccd;
     double dhat;
     double min_distance;
 
-    // The active pairs at V, sorted by vertex ids within each kind, then the
-    // plane-vertex pairs by plane and vertex. IPC Toolkit merges per-thread
-    // results, so its own order may vary between runs.
     ipc::NormalCollisions collisions(const Eigen::MatrixXd& V) const {
         ipc::NormalCollisions result;
         result.build(mesh, V, dhat, min_distance);
@@ -144,28 +121,7 @@ struct IPCTKContactEnergy::Impl {
         by_vertices(result.ev_collisions);
         by_vertices(result.ee_collisions);
         by_vertices(result.fv_collisions);
-        for (const Hyperplane& plane : planes) {
-            for (Eigen::Index v = 0; v < V.rows(); ++v) {
-                if (plane.signedDistance(V.row(v).transpose()) < dhat + min_distance) {
-                    result.pv_collisions.emplace_back(plane, static_cast<ipc::index_t>(v), 1.0,
-                                                      Eigen::SparseVector<double>());
-                }
-            }
-        }
         return result;
-    }
-
-    // Throws std::domain_error unless every vertex is more than min_distance in
-    // front of every plane.
-    void check_planes(const Eigen::MatrixXd& V) const {
-        for (const Hyperplane& plane : planes) {
-            for (Eigen::Index v = 0; v < V.rows(); ++v) {
-                if (!(plane.signedDistance(V.row(v).transpose()) > min_distance)) {
-                    throw std::domain_error("IPCTKContactEnergy: vertex " + std::to_string(v) +
-                                            " is not more than min_distance in front of a plane");
-                }
-            }
-        }
     }
 
     // The smallest squared distance among the active pairs (+infinity if none).
@@ -178,14 +134,13 @@ struct IPCTKContactEnergy::Impl {
     }
 };
 
-IPCTKContactEnergy::IPCTKContactEnergy(const mesh::TriangleMesh& surface, IPCTKContactOptions options,
-                                       std::vector<Plane> planes)
+IPCTKContactEnergy::IPCTKContactEnergy(const mesh::TriangleMesh& surface, IPCTKContactOptions options)
     : DynamicPatternEnergy(checked_num_dofs(surface),
                            SpMat(3 * surface.topology.num_vertices(), 3 * surface.topology.num_vertices())),
       rest_positions_(surface.positions), options_(checked_options(options)) {
     impl_ = std::make_unique<const Impl>(Impl{
         ipc::CollisionMesh(vertex_rows(surface.positions), unique_edges(surface.topology), face_rows(surface.topology)),
-        checked_planes(planes), ipc::BarrierPotential(options_.dhat, 1.0),
+        ipc::BarrierPotential(options_.dhat, 1.0),
         ipc::TightInclusionCCD(options_.ccd_tolerance, options_.ccd_max_iterations), options_.dhat,
         options_.min_distance});
 }
@@ -239,7 +194,6 @@ double IPCTKContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMa
     }
     const Impl& impl = *impl_;
     const Eigen::MatrixXd V = vertex_rows(x);
-    impl.check_planes(V);
     const ipc::NormalCollisions active = impl.collisions(V);
     const Eigen::MatrixXi& edges = impl.mesh.edges();
     const Eigen::MatrixXi& faces = impl.mesh.faces();
@@ -310,7 +264,6 @@ double IPCTKContactEnergy::feasible_step(const ConstVecRef& x, const ConstVecRef
     }
     const Impl& impl = *impl_;
     const Eigen::MatrixXd V0 = vertex_rows(x);
-    impl.check_planes(V0);
     if (!(impl.min_squared_distance(impl.collisions(V0), V0) > impl.min_distance * impl.min_distance)) {
         throw std::domain_error("IPCTKContactEnergy: a contact pair is within min_distance");
     }
@@ -340,18 +293,6 @@ double IPCTKContactEnergy::feasible_step(const ConstVecRef& x, const ConstVecRef
             return earliest;
         },
         [](double a, double b) { return std::min(a, b); });
-    // A vertex's signed distance to a plane is linear along the step: stop the same
-    // fraction short of reaching min_distance as Tight-Inclusion stops short of impact.
-    for (const Hyperplane& plane : impl.planes) {
-        for (Eigen::Index v = 0; v < V0.rows(); ++v) {
-            const double start = plane.signedDistance(V0.row(v).transpose());
-            const double end = plane.signedDistance(V1.row(v).transpose());
-            if (end < impl.min_distance) {
-                const double reach = (start - impl.min_distance) / (start - end);
-                step = std::min(step, ipc::TightInclusionCCD::DEFAULT_CONSERVATIVE_RESCALING * reach);
-            }
-        }
-    }
     return std::clamp(step, 0.0, 1.0);
 }
 

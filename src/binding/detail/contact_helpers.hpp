@@ -5,10 +5,7 @@
 
 #include <nanobind/eigen/dense.h>
 #include <nanobind/stl/shared_ptr.h>
-#include <nanobind/stl/vector.h>
 #include <type_traits>
-
-#include <vector>
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -17,13 +14,11 @@ namespace litepgo::contact::binding {
 template <class ContactEnergy, class Options> void bind_backend(nb::module_& m, const char* energy_name) {
     auto cls = nb::class_<ContactEnergy, energy::Energy>(m, energy_name);
     if constexpr (std::is_same_v<ContactEnergy, IPCContactEnergy>) {
-        cls.def(nb::init<const mesh::TriangleMesh&, Options, std::shared_ptr<const BroadPhase>, std::vector<Plane>>(),
-                "surface"_a, "options"_a, "broad_phase"_a, "planes"_a = std::vector<Plane>(),
-                "Native IPC barrier; a non-null broad phase is required and retained.");
+        cls.def(nb::init<const mesh::TriangleMesh&, Options, std::shared_ptr<const BroadPhase>>(), "surface"_a,
+                "options"_a, "broad_phase"_a, "Native IPC self-contact barrier with a required broad phase.");
     } else {
-        cls.def(nb::init<const mesh::TriangleMesh&, Options, std::vector<Plane>>(), "surface"_a, "options"_a,
-                "planes"_a = std::vector<Plane>(),
-                "IPC barrier of a triangle surface and static planes, over the surface vertices' positions.");
+        cls.def(nb::init<const mesh::TriangleMesh&, Options>(), "surface"_a, "options"_a,
+                "IPC Toolkit self-contact barrier over surface vertex positions.");
     }
     cls.def_prop_ro("num_vertices", &ContactEnergy::num_vertices)
         .def_prop_ro(

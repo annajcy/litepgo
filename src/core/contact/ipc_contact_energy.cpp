@@ -25,13 +25,12 @@ struct Pair {
     Ids ids{-1, -1, -1, -1};
     Feature feature;
     double epsilon = 0;
-    int plane = -1;
     double weight = 1;
     int count() const {
-        return plane >= 0 ? 1 : (epsilon > 0 ? 4 : feature.n);
+        return epsilon > 0 ? 4 : feature.n;
     }
     auto key() const {
-        return std::tuple{plane, epsilon > 0, feature.n, feature.line_line, ids};
+        return std::tuple{epsilon > 0, feature.n, feature.line_line, ids};
     }
 };
 int checked_size(const mesh::TriangleMesh& surface) {
@@ -84,15 +83,12 @@ struct IPCContactEnergy::Impl {
     std::vector<std::array<int, 3>> faces;
     std::vector<std::array<int, 2>> edges;
     std::vector<double> edge_lengths_squared;
-    std::vector<Plane> planes;
     int nv;
     IPCContactOptions options;
     std::shared_ptr<const BroadPhase> broad_phase_;
 
-    Impl(const mesh::TriangleMesh& surface, IPCContactOptions o, std::vector<Plane> input,
-         std::shared_ptr<const BroadPhase> broad_phase)
-        : planes(std::move(input)), nv(surface.topology.num_vertices()), options(o),
-          broad_phase_(std::move(broad_phase)) {
+    Impl(const mesh::TriangleMesh& surface, IPCContactOptions o, std::shared_ptr<const BroadPhase> broad_phase)
+        : nv(surface.topology.num_vertices()), options(o), broad_phase_(std::move(broad_phase)) {
         if (!broad_phase_)
             throw std::invalid_argument("IPCContactEnergy requires a non-null broad phase");
         std::set<std::array<int, 3>> unique;
@@ -121,12 +117,6 @@ struct IPCContactEnergy::Impl {
         } catch (const std::domain_error&) {
             throw std::invalid_argument("IPCContactEnergy: degenerate or unrepresentable rest triangle");
         }
-        for (auto& p : planes) {
-            double length = p.normal.stableNorm();
-            if (!p.point.allFinite() || !p.normal.allFinite() || !std::isfinite(length) || length <= 0)
-                throw std::invalid_argument("IPCContactEnergy planes require finite points and nonzero finite normals");
-            p.normal /= length;
-        }
     }
     void check_geometry(const ConstVecRef& x) const {
         for (auto f : faces) {
@@ -136,14 +126,6 @@ struct IPCContactEnergy::Impl {
             if (!(area > 0) || !std::isfinite(area))
                 throw std::domain_error("IPCContactEnergy: degenerate or unrepresentable triangle");
         }
-    }
-    void check_planes(const ConstVecRef& x) const {
-        for (const auto& p : planes)
-            for (int v = 0; v < nv; ++v) {
-                const double d = p.normal.dot(x.segment<3>(3 * v) - p.point);
-                if (!std::isfinite(d) || !(d > options.min_distance))
-                    throw std::domain_error("IPCContactEnergy: plane distance must exceed min_distance");
-            }
     }
     Candidates candidates(const ConstVecRef& x, const Vec* dx, double inflation, bool intersections = false) const {
         return broad_phase(x, dx, inflation, edges, faces, intersections, *broad_phase_);
@@ -179,15 +161,6 @@ struct IPCContactEnergy::Impl {
             else
                 pairs.push_back(reduced(ids, f));
         }
-        for (int i = 0; i < static_cast<int>(planes.size()); ++i)
-            for (int v = 0; v < nv; ++v) {
-                if (planes[i].normal.dot(x.segment<3>(3 * v) - planes[i].point) < reach) {
-                    Pair p;
-                    p.ids[0] = v;
-                    p.plane = i;
-                    pairs.push_back(p);
-                }
-            }
         std::sort(pairs.begin(), pairs.end(), [](const Pair& a, const Pair& b) { return a.key() < b.key(); });
         std::vector<Pair> merged;
         for (const auto& pair : pairs) {
@@ -198,15 +171,6 @@ struct IPCContactEnergy::Impl {
         }
         return merged;
     }
-    double squared_distance(const Points& p, const Pair& pair) const {
-        if (pair.plane < 0)
-            return distance(p, pair.feature);
-        const auto& plane = planes[pair.plane];
-        double d = 0;
-        for (int k = 0; k < 3; ++k)
-            d += plane.normal[k] * (p[0][k] - plane.point[k]);
-        return d * d;
-    }
     double potential(const Points& p, const Pair& pair, LocalGradient* gradient = nullptr,
                      LocalHessian* hessian = nullptr) const {
         if (gradient)
@@ -214,7 +178,7 @@ struct IPCContactEnergy::Impl {
         if (hessian)
             hessian->setZero();
         const double h = options.dhat * (options.dhat + 2 * options.min_distance);
-        const double d = squared_distance(p, pair) - options.min_distance * options.min_distance;
+        const double d = distance(p, pair.feature) - options.min_distance * options.min_distance;
         if (!(d > 0) || !std::isfinite(d))
             throw std::domain_error("IPCContactEnergy: contact distance must exceed min_distance");
         if (d >= h)
@@ -231,18 +195,7 @@ struct IPCContactEnergy::Impl {
         if (gradient || hessian) {
             LocalGradient gd;
             LocalHessian Hd;
-            if (pair.plane < 0) {
-                distance_derivatives(p, pair.feature, gd, hessian ? &Hd : nullptr);
-            } else {
-                const auto& plane = planes[pair.plane];
-                const double signed_distance = plane.normal.dot(Eigen::Map<const V>(p[0].data()) - plane.point);
-                gd.setZero();
-                gd.head<3>() = 2 * signed_distance * plane.normal;
-                if (hessian) {
-                    Hd.setZero();
-                    Hd.topLeftCorner<3, 3>() = 2 * plane.normal * plane.normal.transpose();
-                }
-            }
+            distance_derivatives(p, pair.feature, gd, hessian ? &Hd : nullptr);
             const double first = -2 * delta * log_d - delta * delta / d;
             const LocalGradient gb = first * gd;
             if (gradient)
@@ -339,10 +292,10 @@ struct IPCContactEnergy::Impl {
 };
 
 IPCContactEnergy::IPCContactEnergy(const mesh::TriangleMesh& surface, IPCContactOptions options,
-                                   std::shared_ptr<const BroadPhase> broad_phase, std::vector<Plane> planes)
+                                   std::shared_ptr<const BroadPhase> broad_phase)
     : DynamicPatternEnergy(checked_size(surface), SpMat(surface.positions.size(), surface.positions.size())),
       rest_positions_(surface.positions), options_(checked_options(options)),
-      impl_(std::make_unique<const Impl>(surface, options_, std::move(planes), std::move(broad_phase))) {}
+      impl_(std::make_unique<const Impl>(surface, options_, std::move(broad_phase))) {}
 IPCContactEnergy::~IPCContactEnergy() = default;
 int IPCContactEnergy::num_active_pairs(const ConstVecRef& x) const {
     return static_cast<int>(impl_->active(x).size());
@@ -350,7 +303,7 @@ int IPCContactEnergy::num_active_pairs(const ConstVecRef& x) const {
 double IPCContactEnergy::min_active_distance(const ConstVecRef& x) const {
     double d = INFINITY;
     for (const auto& pair : impl_->active(x))
-        d = std::min(d, impl_->squared_distance(points(x, pair.ids), pair));
+        d = std::min(d, distance(points(x, pair.ids), pair.feature));
     return std::sqrt(d);
 }
 SpMat IPCContactEnergy::pattern_at(const ConstVecRef& x) const {
@@ -368,7 +321,6 @@ SpMat IPCContactEnergy::pattern_at(const ConstVecRef& x) const {
 double IPCContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian,
                                      energy::HessianKind kind) const {
     check_x(x, num_dofs());
-    impl_->check_planes(x);
     auto pairs = impl_->active(x);
     double value = 0;
     // Each task owns one slot; only the fixed-order assembly below reduces values.
@@ -461,10 +413,9 @@ double IPCContactEnergy::feasible_step(const ConstVecRef& x, const ConstVecRef& 
     check_x(x, num_dofs());
     check_x(dx, num_dofs());
     impl_->check_geometry(x);
-    impl_->check_planes(x);
     // Check initial proximity even when no swept candidate would survive filtering.
     for (const auto& p : impl_->active(x))
-        if (!(impl_->squared_distance(points(x, p.ids), p) > options_.min_distance * options_.min_distance))
+        if (!(distance(points(x, p.ids), p.feature) > options_.min_distance * options_.min_distance))
             throw std::domain_error("IPCContactEnergy: contact distance must exceed min_distance");
     auto initial = impl_->candidates(x, nullptr, 0, true);
     impl_->check_intersections(x, initial);
@@ -479,15 +430,6 @@ double IPCContactEnergy::feasible_step(const ConstVecRef& x, const ConstVecRef& 
     double step = 1;
     for (double candidate : steps)
         step = std::min(step, candidate);
-    for (const auto& p : impl_->planes)
-        for (int v = 0; v < num_vertices(); ++v) {
-            const double start = p.normal.dot(x.segment<3>(3 * v) - p.point),
-                         velocity = p.normal.dot(dx.segment<3>(3 * v));
-            if (!std::isfinite(velocity))
-                throw std::domain_error("IPCContactEnergy: non-finite plane motion");
-            if (velocity < 0 && start + velocity <= options_.min_distance)
-                step = std::min(step, 0.8 * (start - options_.min_distance) / (-velocity));
-        }
     return step;
 }
 } // namespace litepgo::contact
