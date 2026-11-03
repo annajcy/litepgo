@@ -5,15 +5,6 @@
 
 A simplified version of [libpgo](https://github.com/bohanwang/libpgo).
 
-- **Geometry:** triangle/tet/hex meshes, OBJ and VEG I/O, surface extraction,
-  spatial queries, and point embedding.
-- **Simulation:** Neo-Hookean solids, Koiter StVK shells, prescribed plastic
-  fields, and native IPC contact.
-- **Optimization:** sparse energy assembly, constrained Newton, damped
-  Gauss–Newton, and analytic equilibrium sensitivities.
-- **Examples:** 26 matching C++/Python programs and four optional PyTorch fitting
-  programs, with formulations and API walkthroughs in the documentation.
-
 ## Build and verify
 
 Install Python 3.12, [uv](https://docs.astral.sh/uv/), CMake 3.28+, Ninja, and a
