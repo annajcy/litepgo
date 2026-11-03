@@ -82,7 +82,7 @@ nanobind_add_module(litepgo_binding NB_STATIC
     solver/static_equilibrium_response.cpp
     spatial/spatial_hash.cpp
 )
-target_link_libraries(litepgo_binding PRIVATE litepgo::contact litepgo::solver litepgo::fem litepgo::io litepgo::warnings)
+target_link_libraries(litepgo_binding PRIVATE litepgo::contact litepgo::solver litepgo::fem litepgo::mesh litepgo::warnings)
 target_include_directories(litepgo_binding PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # The build tree holds an importable package: _core is built into it, and
@@ -102,8 +102,8 @@ add_custom_target(litepgo_python ALL
     VERBATIM)
 
 if(LITEPGO_WITH_GMSH)
-    target_link_libraries(litepgo_binding PRIVATE litepgo::io_gmsh)
+    target_link_libraries(litepgo_binding PRIVATE litepgo::mesh_gmsh)
 endif()
 if(LITEPGO_WITH_IPC_TOOLKIT)
-    target_link_libraries(litepgo_binding PRIVATE litepgo::ipctk)
+    target_link_libraries(litepgo_binding PRIVATE litepgo::contact_ipctk)
 endif()

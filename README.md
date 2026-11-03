@@ -1,5 +1,8 @@
 # litepgo
 
+[![CI](https://github.com/annajcy/litepgo/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/annajcy/litepgo/actions/workflows/ci.yml)
+[![Docs](https://github.com/annajcy/litepgo/actions/workflows/docs.yml/badge.svg?branch=main)](https://annajcy.github.io/litepgo/)
+
 A simplified version of [libpgo](https://github.com/bohanwang/libpgo).
 
 - **Geometry:** triangle/tet/hex meshes, OBJ and VEG I/O, surface extraction,
@@ -27,6 +30,11 @@ native dependencies and builds the Python extension; `uv sync` installs Python
 packages. See [build and environment setup](docs/guide/build.md) for individual
 steps, presets, optional backends, and selecting a Python build.
 
+Use `cmake --workflow --preset release-all` to enable Gmsh, IPC Toolkit, and all
+platform-supported sparse backends. Matching `debug-all`, `relwithdebinfo-all`,
+and `asan-all` presets are also available. Native CI runs `debug-all` and
+`release-all` on all three platforms.
+
 ## Run an example
 
 After configuring the release build:
@@ -53,8 +61,8 @@ Build and register the Python extension before generating API documentation:
 
 ```sh
 uv sync --locked
-cmake --preset release
-cmake --build build/release --target litepgo_python
+cmake --preset release-all -DLITEPGO_BUILD_TESTS=OFF
+cmake --build build/release-all --target litepgo_python
 uv run scripts/docs.py          # generate both API references and serve the site
 ```
 

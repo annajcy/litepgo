@@ -42,12 +42,12 @@ C++20 requirements, and required libraries.
 | `litepgo::fem` | common, dof, energy, mesh, spatial |
 | `litepgo::solver` | common, dof, energy, linalg |
 | `litepgo::contact` | common, energy, mesh, spatial |
-| `litepgo::io` | mesh |
-| `litepgo::io_gmsh` | io; optional |
-| `litepgo::ipctk` | contact; optional |
+| `litepgo::mesh_gmsh` | mesh; optional |
+| `litepgo::contact_ipctk` | contact; optional |
 
-`litepgo::core` is an INTERFACE aggregate of the nine base modules. I/O and
-the Toolkit backend are separate. There is no single `liblitepgo.a` to link
+`litepgo::core` is an INTERFACE aggregate of the nine base modules, including
+OBJ/VEG I/O through `mesh`. Gmsh I/O and the IPC Toolkit backend are optional
+extensions. There is no single `liblitepgo.a` to link
 manually. The module dependency graph is checked for cycles.
 
 `litepgo_binding` builds the native extension, whose Python module name remains
@@ -63,7 +63,7 @@ project(my_app LANGUAGES CXX)
 # Replace this absolute path with the litepgo source checkout on your machine.
 add_subdirectory(/absolute/path/to/litepgo litepgo)
 add_executable(my_app main.cpp)
-target_link_libraries(my_app PRIVATE litepgo::fem litepgo::solver litepgo::io)
+target_link_libraries(my_app PRIVATE litepgo::fem litepgo::solver litepgo::mesh)
 ```
 
 Use `#include <litepgo/...hpp>` in `main.cpp`. Domain C++ namespaces are

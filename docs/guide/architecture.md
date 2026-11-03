@@ -62,10 +62,10 @@ depending on a material model or contact implementation. An application can
 therefore use a custom objective with Newton, or combine FEM and contact in the
 same objective.
 
-The `litepgo::core` target aggregates the nine base modules. Geometry I/O is
-provided by `litepgo::io`; optional Gmsh I/O extends it with `litepgo::io_gmsh`.
-The optional IPC Toolkit backend is `litepgo::ipctk`, which extends contact.
-These targets are separate from the base aggregate.
+The `litepgo::core` target aggregates the nine base modules, including OBJ/VEG
+I/O through `litepgo::mesh`. Optional Gmsh I/O extends mesh with `litepgo::mesh_gmsh`.
+The optional IPC Toolkit backend is `litepgo::contact_ipctk`, which extends contact.
+Both optional extensions are separate from the base aggregate.
 
 ## Responsibilities and public entry points
 
@@ -75,7 +75,7 @@ API contracts and examples.
 | Module | Owns | Main consumer |
 | --- | --- | --- |
 | [Common](common.md) | Shared numerical types and build capabilities | Every native module |
-| [Mesh](mesh/index.md) | Topology, positions, surface extraction, shell stencils; I/O through separate targets | DOF maps and model construction |
+| [Mesh](mesh/index.md) | Topology, positions, surface extraction, shell stencils, and geometry I/O | DOF maps and model construction |
 | [DOF](dof/index.md) | Gather/scatter layouts, assembly plans, fixed/free reduction, surface maps | Energy/response assembly and solvers |
 | [Linalg](linalg/index.md) | Sparse patterns and direct factorization backends | Nonlinear solves and sensitivities |
 | [Energy](energy/index.md) | Scalar/vector interfaces, local batching, composition | Model implementations and solvers |

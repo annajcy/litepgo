@@ -186,7 +186,7 @@ add_dependencies(litepgo_tests tet_p1_box_stack)
 add_test(NAME ContactEquilibrium.tet_p1_box_stack COMMAND $<TARGET_FILE:tet_p1_box_stack>)
 if(LITEPGO_WITH_IPC_TOOLKIT)
     target_sources(litepgo_contact_tests PRIVATE contact/ipctk_contact_energy_gtest.cpp)
-    target_link_libraries(litepgo_contact_tests PRIVATE litepgo::ipctk)
+    target_link_libraries(litepgo_contact_tests PRIVATE litepgo::contact_ipctk)
 endif()
 
 add_dependencies(litepgo_tests spatial_query point_embedding)
