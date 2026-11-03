@@ -25,21 +25,17 @@ orders contributions deterministically across thread counts.
 `max_feasible_step` uses swept candidates and additive conservative advancement.
 `ccd_tolerance` is a **time-increment** stopping tolerance, and
 `ccd_max_iterations` limits work per pair. On exhaustion/stalling the algorithm
-returns the last conservative bound, not an unchecked full step. Plane steps use
-an analytic signed-distance bound with a 0.8 safety factor. Plane normals are
-normalized and their positive side is feasible.
+returns the last conservative bound.
 
 ## Validity, diagnostics, and optional backend
 
 The surface must be nonempty, have nondegenerate unique triangles, and use every
 vertex. Start from a feasible nonintersecting state. `eval` rejects active
-separations at/below `min_distance` and invalid plane positions, but is not a full
-intersection query; the step method additionally checks initial edge–face
+separations at/below `min_distance`. The step method additionally checks initial edge–face
 intersections. Shared-vertex primitives are excluded. Degenerate trial triangles
 are rejected.
 
-`num_active_pairs(p)` counts merged active stencils, including vertex–plane
-terms. `min_active_distance(p)` returns the smallest distance $d$ among them,
+`num_active_pairs(p)` counts merged active self-contact stencils. `min_active_distance(p)` returns the smallest distance $d$ among them,
 or positive infinity if none are active. It does not subtract `min_distance`.
 Here $d_{\min}$ denotes `options.min_distance` and $\hat d$ denotes `options.dhat`.
 The feasible active interval is $d_{\min}<d<d_{\min}+\hat d$, equivalently

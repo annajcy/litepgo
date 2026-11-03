@@ -20,7 +20,7 @@ flowchart TB
   active --> barrier["Barrier and edge mollifier terms"]
   barrier --> assembled["Energy, gradient and Hessian"]
   motion["Positions and search direction"] --> swept["Swept broad-phase candidates"]
-  swept --> ccd["Native ACCD and plane bounds"]
+  swept --> ccd["Native ACCD"]
   ccd --> step["Feasible step for Newton"]
 ```
 

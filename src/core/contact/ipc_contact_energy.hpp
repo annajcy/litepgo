@@ -17,7 +17,7 @@ namespace litepgo::contact {
 // Update the dynamic pattern before evaluating a Hessian at a new active set.
 //
 // Requires nonempty, nondegenerate triangles, no duplicate faces, and every
-// vertex used by a face. Planes are normalized and enforce their positive side.
+// vertex used by a face.
 // eval rejects active distances <= min_distance; max_feasible_step additionally
 // rejects initial surface intersections. Swept AABBs and additive conservative
 // advancement bound the step, returning the last safe bound on exhaustion.
@@ -26,7 +26,7 @@ class IPCContactEnergy final : public energy::DynamicPatternEnergy {
   public:
     // A non-null backend is required; the energy shares ownership of it.
     IPCContactEnergy(const mesh::TriangleMesh& surface, IPCContactOptions options,
-                     std::shared_ptr<const BroadPhase> broad_phase, std::vector<Plane> planes = {});
+                     std::shared_ptr<const BroadPhase> broad_phase);
     ~IPCContactEnergy() override;
     int num_vertices() const {
         return num_dofs() / 3;

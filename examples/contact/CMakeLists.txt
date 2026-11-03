@@ -13,3 +13,9 @@ if(LITEPGO_WITH_IPC_TOOLKIT)
         LITEPGO_ASSETS_DIR="${PROJECT_SOURCE_DIR}/assets"
         LITEPGO_OUTPUT_DIR="${PROJECT_SOURCE_DIR}/output")
 endif()
+
+add_executable(tet_p1_plate_compression tet_p1_plate_compression.cpp)
+target_link_libraries(tet_p1_plate_compression PRIVATE litepgo::contact litepgo::solver litepgo::fem litepgo::mesh litepgo::warnings)
+target_compile_definitions(tet_p1_plate_compression PRIVATE
+    LITEPGO_ASSETS_DIR="${PROJECT_SOURCE_DIR}/assets"
+    LITEPGO_OUTPUT_DIR="${PROJECT_SOURCE_DIR}/output")

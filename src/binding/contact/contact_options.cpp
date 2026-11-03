@@ -1,6 +1,6 @@
 #include "litepgo/contact/contact_options.hpp"
 #include "bindings.hpp"
-#include <nanobind/eigen/dense.h>
+#include "litepgo/contact/plane_penalty_energy.hpp"
 
 #include <limits>
 
@@ -27,15 +27,9 @@ template <class Options> void bind_contact_options(nb::module_& m, const char* o
 
 void bind_contact_contact_options(nb::module_& m) {
 
-    nb::class_<Plane>(m, "Plane")
-        .def(
-            "__init__",
-            [](Plane* self, const Eigen::Vector3d& point, const Eigen::Vector3d& normal) {
-                new (self) Plane{point, normal};
-            },
-            "point"_a, "normal"_a, "A static plane; vertices stay on the side the normal points to.")
-        .def_rw("point", &Plane::point)
-        .def_rw("normal", &Plane::normal);
+    nb::class_<PlanePenaltyEnergy, energy::Energy>(m, "PlanePenaltyEnergy")
+        .def(nb::init<int, int, double, double, bool>(), "num_vertices"_a, "axis"_a, "height"_a, "stiffness"_a,
+             "positive_side"_a = true, "One-sided quadratic penalty on vertex-major xyz positions.");
 
     bind_contact_options<IPCContactOptions>(m, "IPCContactOptions");
 #ifdef LITEPGO_HAS_IPC_TOOLKIT

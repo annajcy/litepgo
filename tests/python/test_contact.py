@@ -60,21 +60,34 @@ def test_barrier_rejects_infeasible_states():
         thick.eval_value(surface.positions.ravel())
 
 
-def test_planes_and_feasible_steps():
-    surface = two_triangles(0.5)
-    triangle = mesh.TriangleMesh(surface.positions[3:], np.array([[0, 1, 2]], dtype=np.int32))
-    ground = contact.Plane(point=np.zeros(3), normal=np.array([0, 0, 1.0]))
-    barrier = contact.IPCContactEnergy(triangle, contact.IPCContactOptions(dhat=1.0), contact.SpatialHash(), [ground])
-    x = triangle.positions.ravel()
-    assert barrier.num_active_pairs(x) == 1
-    down = np.tile([0, 0, -1.0], 3)
-    assert 0 < barrier.max_feasible_step(x, down) < 0.5
-    assert barrier.max_feasible_step(x, -down) == 1.0
+@pytest.mark.parametrize("positive_side, active_dof", [(True, 0), (False, 6)])
+def test_plane_penalty_value_gradient_and_fixed_hessian(positive_side, active_dof):
+    penalty = contact.PlanePenaltyEnergy(3, axis=0, height=1.0, stiffness=4.0, positive_side=positive_side)
+    x = np.array([0.5, 8.0, -2.0, 1.0, -4.0, 2.0, 1.5, 3.0, 0.0])
+    assert penalty.eval_value(x) == 0.5
+    gradient = np.zeros(9)
+    gradient[active_dof] = 4.0 * (x[active_dof] - 1.0)
+    np.testing.assert_array_equal(penalty.eval_gradient(x), gradient)
+    diagonal = np.zeros(9)
+    diagonal[active_dof] = 4.0
+    np.testing.assert_array_equal(penalty.eval_hessian(x).toarray(), np.diag(diagonal))
+
+    cleared = x.copy()
+    cleared[active_dof] = 1.0
+    assert penalty.eval_value(cleared) == 0
+    assert penalty.eval_hessian(cleared).nnz == 3
+    np.testing.assert_array_equal(penalty.eval_hessian(cleared).toarray(), np.zeros((9, 9)))
+    assert penalty.max_feasible_step(cleared, x - cleared) == 1.0
+
+
+def test_plane_penalty_rejects_invalid_axis():
+    with pytest.raises(ValueError, match="axis"):
+        contact.PlanePenaltyEnergy(1, axis=3, height=0.0, stiffness=1.0)
 
 
 def test_barrier_composes_with_a_surface_kinematics():
     barrier = contact.IPCContactEnergy(two_triangles(0.5), contact.IPCContactOptions(dhat=1.0), contact.SpatialHash())
-    # A is a static obstacle; B's vertices take simulation vertices 0, 1, 2.
+    # A is fixed by the displacement map; B's vertices take simulation vertices 0, 1, 2.
     kinematics = dof.SurfaceKinematics(barrier.rest_positions, sp.eye(18, 9, k=-9, format="csc"))
     np.testing.assert_array_equal(kinematics.displacement_map.toarray(), sp.eye(18, 9, k=-9).toarray())
     mapped = energy.AffineMappedEnergy(barrier, kinematics.displacement_map, kinematics.rest_positions.ravel())
@@ -151,8 +164,10 @@ def test_native_broad_phase_injection_and_lifetime(backend_factory):
     assert isinstance(backend, contact.BroadPhase)
     with pytest.raises(TypeError):
         contact.BroadPhase()
+    with pytest.raises(TypeError):
+        contact.IPCContactEnergy(surface, options, backend, [])
     energies = [contact.IPCContactEnergy(surface, options, contact.SpatialHash()),
-                contact.IPCContactEnergy(surface, options, backend, []),
+                contact.IPCContactEnergy(surface, options, backend),
                 contact.IPCContactEnergy(surface, options, broad_phase=backend)]
     del backend
     gc.collect()

@@ -7,6 +7,7 @@ add_library(litepgo_contact STATIC
     detail/ipc_derivatives/point_plane.cpp
     detail/ipc_derivatives/point_point.cpp
     ipc_contact_energy.cpp
+    plane_penalty_energy.cpp
 )
 add_library(litepgo::contact ALIAS litepgo_contact)
 target_link_libraries(litepgo_contact

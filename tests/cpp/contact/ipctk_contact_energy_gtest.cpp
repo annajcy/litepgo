@@ -51,8 +51,6 @@ TEST(IPCTKContactEnergy, RejectsInvalidConfiguration) {
     IPCTKContactOptions no_ccd_budget = options(1.0);
     no_ccd_budget.ccd_max_iterations = 0;
     EXPECT_THROW(IPCTKContactEnergy(surface, no_ccd_budget), std::invalid_argument);
-    EXPECT_THROW(IPCTKContactEnergy(surface, options(1.0), {Plane{Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero()}}),
-                 std::invalid_argument);
     EXPECT_THROW(IPCTKContactEnergy(mesh::TriangleMesh{Vec(), mesh::TriangleTopology(0, {})}, options(1.0)),
                  std::invalid_argument);
 }
@@ -187,34 +185,8 @@ TEST(IPCTKContactEnergy, RejectsInfeasibleStates) {
     EXPECT_THROW(energy.max_feasible_step(crossing, Vec::Zero(18)), std::domain_error);
 }
 
-TEST(IPCTKContactEnergy, PlanesRepelVerticesAndRejectThoseBehind) {
-    // B alone above the ground z = 0: vertex 3 at height 0.5 is the only active one.
-    Vec positions = two_triangles(0.5).positions.tail(9);
-    const mesh::TriangleMesh triangle{positions, mesh::TriangleTopology(3, {{0, 1, 2}})};
-    IPCTKContactEnergy energy(triangle, options(1.0), {Plane{Eigen::Vector3d::Zero(), Eigen::Vector3d(0, 0, 2)}});
-    EXPECT_EQ(energy.num_active_pairs(positions), 1);
-    EXPECT_NEAR(energy.min_active_distance(positions), 0.5, 1e-14);
-    EXPECT_LT(energy.eval_gradient(positions)[2], 0.0);
-    energy.update_pattern(positions);
-    energy::test::expect_derivatives_match(energy, positions, 1e-5);
-
-    const Vec down = (Vec(9) << 0, 0, -1, 0, 0, -1, 0, 0, -1).finished();
-    const double alpha = energy.max_feasible_step(positions, down);
-    EXPECT_GT(alpha, 0.0);
-    EXPECT_LT(alpha, 0.5);
-    const Plane ground{Eigen::Vector3d::Zero(), Eigen::Vector3d::UnitZ()};
-    const IPCTKContactEnergy thick(triangle, options(1.0, 0.2), {ground});
-    const double thick_alpha = thick.max_feasible_step(positions, down);
-    EXPECT_GT(thick_alpha, 0.0);
-    EXPECT_GT(thick.min_active_distance(positions + thick_alpha * down), 0.2);
-
-    positions[2] = -3; // far behind the plane, beyond dhat
-    EXPECT_THROW(energy.eval_value(positions), std::domain_error);
-    EXPECT_THROW(energy.max_feasible_step(positions, Vec::Zero(9)), std::domain_error);
-}
-
 // Displacement DOFs u drive the surface through E(u) = B(X + W u), with X and W
-// from a SurfaceKinematics. Triangle A is a static obstacle; B's vertices 3, 4, 5 take
+// from a SurfaceKinematics. Triangle A is fixed by the displacement map; B's vertices 3, 4, 5 take
 // simulation vertices 2, 1, 0, before an unrelated DOF u[9].
 TEST(IPCTKContactEnergy, ComposesWithASurfaceKinematics) {
     auto barrier = std::make_shared<IPCTKContactEnergy>(two_triangles(0.5), options(1.0));
