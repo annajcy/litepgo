@@ -19,7 +19,8 @@
                 "LITEPGO_WITH_ACCELERATE": "ON",
                 "LITEPGO_WITH_MKL": "ON",
                 "LITEPGO_WITH_IPC_TOOLKIT": "ON",
-                "LITEPGO_WITH_GMSH": "ON"
+                "LITEPGO_WITH_GMSH": "ON",
+                "LITEPGO_WITH_CGAL": "ON"
             }
         },
         {

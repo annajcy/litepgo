@@ -21,7 +21,7 @@ native dependencies and builds the Python extension; `uv sync` installs Python
 packages. See [build and environment setup](docs/guide/build.md) for individual
 steps, presets, optional backends, and selecting a Python build.
 
-Use `cmake --workflow --preset release-all` to enable Gmsh, IPC Toolkit, and all
+Use `cmake --workflow --preset release-all` to enable CGAL, Gmsh, IPC Toolkit, and all
 platform-supported sparse backends. Matching `debug-all`, `relwithdebinfo-all`,
 and `asan-all` presets are also available. Native CI runs `debug-all` and
 `release-all` on all three platforms.

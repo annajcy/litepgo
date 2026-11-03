@@ -22,6 +22,9 @@ write_veg = _native.write_veg
 read_msh = _native.read_msh
 write_msh = _native.write_msh
 has_gmsh = _native.has_gmsh
+has_cgal = _native.has_cgal
+has_self_intersections = _native.has_self_intersections
+isotropic_remesh = _native.isotropic_remesh
 
 ExtractedSurface = _native.ExtractedSurface
 extract_surface_with_vertices = _native.extract_surface_with_vertices
@@ -44,4 +47,7 @@ __all__ = ["ExtractedSurface", "extract_surface_with_vertices",
     "read_msh",
     "write_msh",
     "has_gmsh",
+    "has_cgal",
+    "has_self_intersections",
+    "isotropic_remesh",
 ]

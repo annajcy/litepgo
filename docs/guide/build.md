@@ -53,7 +53,7 @@ presets also exist for `relwithdebinfo`. Build directories are
 
 Each configuration also has an `-all` variant: `debug-all`, `release-all`,
 `relwithdebinfo-all`, and `asan-all`. Each supplies configure, build, test, and
-workflow presets. These enable Gmsh and IPC Toolkit, plus Accelerate on macOS
+workflow presets. These enable CGAL, Gmsh, and IPC Toolkit, plus Accelerate on macOS
 or oneMKL on x86-64 Linux/Windows; unavailable platform backends remain disabled.
 The sanitizer presets require a GCC/Clang-compatible toolchain and keep Python
 disabled.
@@ -125,8 +125,14 @@ See [linear algebra](linalg/index.md) for backend selection and
 | `LITEPGO_MKL_ROOT` | Use a local oneMKL 2026.1 installation with `include/`, `lib/`, and (on Windows) `bin/` instead of downloading wheels |
 | `LITEPGO_WITH_IPC_TOOLKIT` | Defaults off; adds the optional `litepgo::contact_ipctk` backend |
 | `LITEPGO_WITH_GMSH` | Defaults off; adds MSH I/O through fetched Gmsh sources |
+| `LITEPGO_WITH_CGAL` | Defaults off; fetches CGAL 6.2.1 and Boost 1.92.0 headers for the mesh module |
 | `LITEPGO_BUILD_PYTHON` | Enables the nanobind extension; enabled by ordinary presets |
 | `LITEPGO_BUILD_TESTS` | Builds and registers the native/Python regression suites |
+
+To opt into CGAL, configure with `cmake --preset release -DLITEPGO_WITH_CGAL=ON`.
+CMake downloads and verifies both pinned archives. CGAL uses Boost.Multiprecision
+for exact arithmetic, so this build needs no system Boost, GMP, or MPFR packages.
+In Python, `litepgo.mesh.has_cgal` reports the compiled setting.
 
 Native IPC is available in the default build. To enable the optional IPC Toolkit
 backend:

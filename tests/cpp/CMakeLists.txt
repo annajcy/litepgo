@@ -163,6 +163,18 @@ target_link_libraries(litepgo_mesh_tests PRIVATE
 add_dependencies(litepgo_tests litepgo_mesh_tests)
 gtest_discover_tests(litepgo_mesh_tests DISCOVERY_MODE PRE_TEST)
 
+if(TARGET litepgo::mesh_cgal)
+    add_executable(litepgo_mesh_cgal_tests
+        mesh/cgal_surface_mesh_gtest.cpp
+        mesh/isotropic_remesh_gtest.cpp
+        mesh/self_intersections_gtest.cpp
+    )
+    target_link_libraries(litepgo_mesh_cgal_tests PRIVATE
+        litepgo::mesh_cgal CGAL::CGAL litepgo::warnings GTest::gtest_main)
+    add_dependencies(litepgo_tests litepgo_mesh_cgal_tests)
+    gtest_discover_tests(litepgo_mesh_cgal_tests DISCOVERY_MODE PRE_TEST)
+endif()
+
 add_executable(litepgo_contact_tests
     contact/ipc_contact_energy_gtest.cpp
     contact/broad_phase/broad_phase_gtest.cpp
