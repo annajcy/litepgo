@@ -43,6 +43,7 @@ last digits on every platform.
 | Solvers | [`gauss_newton_fit`](examples/solvers.md#exponential-curve-fitting) | Analytic nonlinear least squares |
 | Mesh | [`laplacian_optimization`](examples/mesh.md#laplacian-smoothing-and-editing) | Edge/one-ring assembly, smoothing and editing |
 | Mesh | [`arap`](examples/mesh.md#arap-local-global-deformation) | Rotation fitting and constrained global solves |
+| Mesh | [`constrained_remesh`](examples/mesh.md#constrained-isotropic-remeshing) | CGAL remeshing with fixed positions, protected boundaries, and a self-intersection check |
 | Equilibrium | [`tet_p1_corner_pull`](examples/equilibrium.md#tet-p1-corner-pull) | Tetrahedral elastic equilibrium |
 | Equilibrium | [`hex_q1_corner_pull`](examples/equilibrium.md#hex-q1-corner-pull) | Trilinear hex equilibrium |
 | Equilibrium | [`hex_hermite_corner_pull`](examples/equilibrium.md#hex-hermite-corner-pull) | Physical derivative DOFs and high-order displacement |

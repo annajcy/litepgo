@@ -53,7 +53,7 @@ presets also exist for `relwithdebinfo`. Build directories are
 
 Each configuration also has an `-all` variant: `debug-all`, `release-all`,
 `relwithdebinfo-all`, and `asan-all`. Each supplies configure, build, test, and
-workflow presets. These enable Gmsh and IPC Toolkit, plus Accelerate on macOS
+workflow presets. These enable CGAL, Gmsh, and IPC Toolkit, plus Accelerate on macOS
 or oneMKL on x86-64 Linux/Windows; unavailable platform backends remain disabled.
 The sanitizer presets require a GCC/Clang-compatible toolchain and keep Python
 disabled.

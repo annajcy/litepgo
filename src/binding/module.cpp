@@ -19,6 +19,7 @@ NB_MODULE(_core, m) {
     litepgo::mesh::binding::bind_veg(mesh);
     litepgo::mesh::binding::bind_msh(mesh);
     litepgo::mesh::binding::bind_self_intersections(mesh);
+    litepgo::mesh::binding::bind_isotropic_remesh(mesh);
 
     nb::module_ dof = m.def_submodule("dof");
     dof.doc() = "Degree-of-freedom maps and reductions (src/core/dof)";
