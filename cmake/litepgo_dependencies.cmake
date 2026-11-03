@@ -1,6 +1,11 @@
 # Third-party dependencies. Fetched sources are pinned so every build sees the same code.
 include(FetchContent)
 
+option(LITEPGO_WITH_CGAL "Enable the optional CGAL mesh backend" OFF)
+if(LITEPGO_WITH_CGAL)
+    include(cmake/third-party/cgal.cmake)
+endif()
+
 include(cmake/third-party/eigen.cmake)
 include(cmake/third-party/tbb.cmake)
 include(cmake/third-party/accelerate.cmake)
