@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
     for (int e = 0; e < topology.num_cells(); ++e)
         rest_position_fields.emplace_back(rest_position_map.gather(e, rest_positions));
     const fem::IdentityField3D Fp_field(Eigen::Matrix3d::Identity().reshaped());
-    const fem::IdentityField3D theta_field(Eigen::Vector2d(2, 3));
+    const fem::IdentityField3D theta_field(Eigen::Vector2d(0.5, 0.75));
     auto elastic =
         std::make_shared<fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature, XField,
                                                   fem::IdentityField3D, fem::IdentityField3D>>(
@@ -87,14 +87,14 @@ int main(int argc, char** argv) {
     const auto& surface = extracted.mesh;
     const SpMat W = dof::build_vertex_displacement_map(extracted.vertices, num_dofs);
     contact::IPCContactOptions contact_options;
-    contact_options.dhat = 0.04 * height;
+    contact_options.dhat = 0.004 * height;
     auto barrier =
         std::make_shared<contact::IPCContactEnergy>(surface, contact_options, std::make_shared<contact::SpatialHash>());
     const dof::SurfaceKinematics kinematics(surface.positions, W);
     const int n = surface.topology.num_vertices();
-    auto bottom_plate = std::make_shared<contact::PlanePenaltyEnergy>(n, 2, bottom + 0.1 * height, 20.0);
-    auto top_plate = std::make_shared<contact::PlanePenaltyEnergy>(n, 2, bottom + 1.9 * height + gap, 20.0, false);
-    const double kappa = 1e4;
+    auto bottom_plate = std::make_shared<contact::PlanePenaltyEnergy>(n, 2, bottom + 0.2 * height, 20.0);
+    auto top_plate = std::make_shared<contact::PlanePenaltyEnergy>(n, 2, bottom + 1.8 * height + gap, 20.0, false);
+    const double kappa = 1e7;
     energy::WeightedEnergySum potential({
         {elastic, 1},
         {std::make_shared<energy::AffineMappedEnergy>(barrier, W, kinematics.rest_positions()), kappa},

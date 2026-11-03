@@ -43,12 +43,40 @@ Files are `rest.obj`, `noisy.obj`, `smoothed.obj`, `handles.obj`, and `edited.ob
 rerunning replaces them. Uniform smoothing can shrink geometry. Editing is not
 rotation invariant, and neither objective prevents collisions or inversion.
 
+![Original tetrahedral box, box with a raised ripple on top, and box after smoothing at the same view and scale](./images/laplacian_optimization.png)
+
+The Python volume example uses the 827-tetrahedron box in `assets/box-tet.veg`.
+It raises a ripple on the top face by up to 32% of the box height, holds the
+side and bottom faces fixed, and smooths displacements relative to the rest
+mesh. The plot shows the exterior at the same scale in all three states and
+colors it by displacement from rest. VEG files contain the full volume.
+
 ### Run and inspect
 
 ```sh
 cmake --build build/release --target laplacian_optimization litepgo_python
 build/release/examples/mesh/laplacian_optimization
 PYTHONPATH=build/release/python uv run --no-sync python examples/mesh/laplacian_optimization.py
+```
+
+Pass either example's output directory to the separate plot script. It reads
+`rest.obj`, `noisy.obj`, and `smoothed.obj` and writes
+`laplacian_optimization.png` in that directory.
+
+```sh
+uv sync --locked --group plot
+PYTHONPATH=build/release/python uv run --no-sync python examples/mesh/plot_laplacian_optimization.py \
+  output/python/laplacian_optimization
+```
+
+To reproduce the volume figure, use the tetrahedral input and a separate output
+directory.
+
+```sh
+PYTHONPATH=build/release/python uv run --no-sync python examples/mesh/laplacian_optimization.py \
+  output/python/laplacian_optimization_volume --volume assets/box-tet.veg
+PYTHONPATH=build/release/python uv run --no-sync python examples/mesh/plot_laplacian_optimization.py \
+  output/python/laplacian_optimization_volume
 ```
 
 ::: details Complete Python source — `laplacian_optimization.py`
@@ -98,12 +126,34 @@ decrease, and update size. An optional output-directory argument replaces
 and `edited.obj`. This is a local alternating solution, with no global-optimality,
 volume-preservation, injectivity, or collision guarantee.
 
+![Rest and ARAP-deformed tetrahedral box with fixed and moved end faces](./images/arap_volume.png)
+
+The Python volume example fits rotations using all tetrahedral edges. It fixes
+one x end face and rotates the other 60° around x while lifting it by a quarter
+of the box width. The program exports the full tetrahedral states as VEG and
+their boundaries as OBJ.
+
 ### Run and inspect
 
 ```sh
 cmake --build build/release --target arap litepgo_python
 build/release/examples/mesh/arap
 PYTHONPATH=build/release/python uv run --no-sync python examples/mesh/arap.py
+```
+
+The plot script reads `rest.obj` and `edited.obj` from either language's output
+directory. It uses the same view and scale in both panels and marks the two
+handle edges or end faces.
+
+```sh
+uv sync --locked --group plot
+PYTHONPATH=build/release/python uv run --no-sync python examples/mesh/plot_arap.py output/python/arap
+```
+
+```sh
+PYTHONPATH=build/release/python uv run --no-sync python examples/mesh/arap.py \
+  output/python/arap_volume --volume assets/box-tet.veg
+PYTHONPATH=build/release/python uv run --no-sync python examples/mesh/plot_arap.py output/python/arap_volume
 ```
 
 ::: details Complete Python source — `arap.py`

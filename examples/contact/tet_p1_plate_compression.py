@@ -56,7 +56,7 @@ def main():
         for e in range(topology.num_cells)
     ]
     Fp_field = fem.IdentityField3D(np.eye(3).ravel(order="F"))
-    theta_field = fem.IdentityField3D(np.array([2.0, 3.0]))
+    theta_field = fem.IdentityField3D(np.array([0.5, 0.75]))
     elastic = fem.VolumetricFemEnergy[
         fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
     ](
@@ -78,16 +78,16 @@ def main():
     extracted = mesh.extract_surface_with_vertices(stack)
     surface = extracted.mesh
     W = dof.build_vertex_displacement_map(extracted.vertices, num_dofs)
-    contact_options = contact.IPCContactOptions(dhat=0.04 * height)
+    contact_options = contact.IPCContactOptions(dhat=0.004 * height)
     barrier = contact.IPCContactEnergy(surface, contact_options, contact.SpatialHash())
     kinematics = dof.SurfaceKinematics(surface.positions, W)
     rest_surface = kinematics.rest_positions.ravel()
     n = surface.topology.num_vertices
-    bottom_plate = contact.PlanePenaltyEnergy(n, axis=2, height=bottom + 0.1 * height, stiffness=20.0)
+    bottom_plate = contact.PlanePenaltyEnergy(n, axis=2, height=bottom + 0.2 * height, stiffness=20.0)
     top_plate = contact.PlanePenaltyEnergy(
-        n, axis=2, height=bottom + 1.9 * height + gap, stiffness=20.0, positive_side=False
+        n, axis=2, height=bottom + 1.8 * height + gap, stiffness=20.0, positive_side=False
     )
-    kappa = 1e4
+    kappa = 1e7
     potential = energy.WeightedEnergySum([
         (elastic, 1.0),
         (energy.AffineMappedEnergy(barrier, W, rest_surface), kappa),
