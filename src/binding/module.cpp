@@ -11,6 +11,11 @@ NB_MODULE(_core, m) {
 
     nb::module_ mesh = m.def_submodule("mesh");
     mesh.doc() = "Mesh connectivity, geometry, and file I/O (src/core/mesh)";
+#ifdef LITEPGO_HAS_CGAL
+    mesh.attr("has_cgal") = true;
+#else
+    mesh.attr("has_cgal") = false;
+#endif
     litepgo::mesh::binding::bind_mesh_mesh_topology(mesh);
     litepgo::mesh::binding::bind_mesh_mesh_data(mesh);
     litepgo::mesh::binding::bind_extract_surface(mesh);
