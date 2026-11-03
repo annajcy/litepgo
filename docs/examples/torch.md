@@ -1,7 +1,7 @@
 # PyTorch fitting through native responses
 
-Install the optional dependency with `uv pip install torch` after creating the
-project environment. These four Python-only programs contain their own setup,
+`uv sync --locked` installs PyTorch with the project environment.
+These four Python-only programs contain their own setup,
 residual, optimizer closure, and checks. They use CPU float64 one-dimensional
 tensors and do not import another example.
 

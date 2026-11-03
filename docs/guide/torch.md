@@ -1,6 +1,6 @@
 # Torch autograd adapters
 
-`litepgo.torch` is an optional Python module connecting an `Energy` or `Response`
+`litepgo.torch` is a Python module connecting an `Energy` or `Response`
 to PyTorch autograd. It supplies a derivative bridge around an existing model;
 Torch owns the outer tensor graph and optimizer.
 
@@ -33,8 +33,9 @@ derivatives.
 
 ## Use the adapter
 
-Install PyTorch with `uv pip install torch`. Importing the base package does not
-require it. `litepgo.torch.energy(E, x)` and `.response(R, x)` accept **CPU
+`uv sync --locked` installs PyTorch with the project's default Python dependencies.
+The Python API reference always includes this module.
+`litepgo.torch.energy(E, x)` and `.response(R, x)` accept **CPU
 float64 one-dimensional** tensors. The backward rules are
 
 $$

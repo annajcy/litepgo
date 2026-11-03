@@ -25,8 +25,8 @@ PYTHONPATH=build/release/python uv run --no-sync python examples/energy/scalar/c
 ```
 
 All 26 native examples have Python counterparts. Four additional Torch programs
-are Python-only and require `uv pip install torch`. Other examples use only
-ordinary project dependencies. Asset inputs are bundled; generated-grid examples
+are Python-only; `uv sync --locked` installs their PyTorch dependency along with
+the other project dependencies. Asset inputs are bundled; generated-grid examples
 need no input files. Output paths and overwrite behavior are documented per case.
 A successful numerical run is indicated by exit status zero, not identical printed
 last digits on every platform.

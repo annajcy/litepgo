@@ -1,15 +1,9 @@
 # litepgo
 
-A simplified version of [libpgo](https://github.com/bohanwang/libpgo).
+[![CI](https://github.com/annajcy/litepgo/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/annajcy/litepgo/actions/workflows/ci.yml)
+[![Docs](https://github.com/annajcy/litepgo/actions/workflows/docs.yml/badge.svg?branch=main)](https://annajcy.github.io/litepgo/)
 
-- **Geometry:** triangle/tet/hex meshes, OBJ and VEG I/O, surface extraction,
-  spatial queries, and point embedding.
-- **Simulation:** Neo-Hookean solids, Koiter StVK shells, prescribed plastic
-  fields, and native IPC contact.
-- **Optimization:** sparse energy assembly, constrained Newton, damped
-  Gauss–Newton, and analytic equilibrium sensitivities.
-- **Examples:** 26 matching C++/Python programs and four optional PyTorch fitting
-  programs, with formulations and API walkthroughs in the documentation.
+A simplified version of [libpgo](https://github.com/bohanwang/libpgo).
 
 ## Build and verify
 
@@ -26,6 +20,11 @@ The workflow configures, builds, and runs C++ and Python tests. CMake fetches
 native dependencies and builds the Python extension; `uv sync` installs Python
 packages. See [build and environment setup](docs/guide/build.md) for individual
 steps, presets, optional backends, and selecting a Python build.
+
+Use `cmake --workflow --preset release-all` to enable Gmsh, IPC Toolkit, and all
+platform-supported sparse backends. Matching `debug-all`, `relwithdebinfo-all`,
+and `asan-all` presets are also available. Native CI runs `debug-all` and
+`release-all` on all three platforms.
 
 ## Run an example
 
@@ -53,8 +52,8 @@ Build and register the Python extension before generating API documentation:
 
 ```sh
 uv sync --locked
-cmake --preset release
-cmake --build build/release --target litepgo_python
+cmake --preset release-all -DLITEPGO_BUILD_TESTS=OFF
+cmake --build build/release-all --target litepgo_python
 uv run scripts/docs.py          # generate both API references and serve the site
 ```
 
@@ -71,8 +70,8 @@ access. Generated pages and dependencies are ignored by Git.
 
 Python reference pages describe the active compiled build. Set
 `PYTHONPATH=build/<preset>/python` before running the launcher to select one.
-PyTorch is optional: `uv pip install torch` enables the Torch examples and their
-API reference. See [development](docs/development.md) for source organization,
+PyTorch is included in the locked Python dependencies, and the API reference
+always includes `litepgo.torch`. See [development](docs/development.md) for source organization,
 tests, bindings, and documentation maintenance.
 
 GitHub Actions builds the manual and both API references on pull requests and

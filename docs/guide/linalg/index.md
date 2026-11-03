@@ -27,6 +27,11 @@ Native code is in `src/core/linalg/`, with public solver headers under
 `linalg/sparse_solver/`. Python exports the interface and concrete classes through
 `litepgo.linalg.sparse_solver`, also re-exported by `litepgo.linalg`.
 
+In CMake, `litepgo::linalg` contains the common interface and Eigen solvers.
+`litepgo::linalg_accelerate` and `litepgo::linalg_mkl` add platform backends,
+each depending on the base target. See [backend selection](backends.md#cmake-targets)
+for availability and automatic solver aliases.
+
 ## Read this module
 
 | Topic | Read |

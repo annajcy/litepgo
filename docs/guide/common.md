@@ -61,3 +61,8 @@ Use these capabilities when choosing a backend instead of assuming that the
 host platform implies a particular configured feature. Link `litepgo::common`
 for these headers in a native application; higher-level module targets already
 propagate it.
+
+In C++, `build_info()` reports the backends configured for the litepgo build.
+Using a backend still requires its [CMake target](linalg/backends.md#cmake-targets);
+linking only `litepgo::linalg` selects the Eigen automatic aliases even when the
+build also provides an Accelerate or oneMKL target.

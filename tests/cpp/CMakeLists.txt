@@ -139,8 +139,19 @@ add_executable(litepgo_linalg_tests
 )
 target_link_libraries(litepgo_linalg_tests PRIVATE
     litepgo::linalg litepgo::warnings GTest::gtest_main)
+foreach(backend accelerate mkl)
+    if(TARGET litepgo::linalg_${backend})
+        target_link_libraries(litepgo_linalg_tests PRIVATE litepgo::linalg_${backend})
+    endif()
+endforeach()
 add_dependencies(litepgo_tests litepgo_linalg_tests)
 gtest_discover_tests(litepgo_linalg_tests DISCOVERY_MODE PRE_TEST)
+
+# Exercise base-only linkage even when platform backends are configured.
+add_executable(litepgo_linalg_base_tests linalg/sparse_solver/sparse_solver_gtest.cpp)
+target_link_libraries(litepgo_linalg_base_tests PRIVATE litepgo::linalg litepgo::warnings GTest::gtest_main)
+add_dependencies(litepgo_tests litepgo_linalg_base_tests)
+gtest_discover_tests(litepgo_linalg_base_tests DISCOVERY_MODE PRE_TEST TEST_PREFIX "LinalgBase.")
 
 add_executable(litepgo_mesh_tests
     mesh/extract_surface_gtest.cpp
@@ -186,7 +197,7 @@ add_dependencies(litepgo_tests tet_p1_box_stack)
 add_test(NAME ContactEquilibrium.tet_p1_box_stack COMMAND $<TARGET_FILE:tet_p1_box_stack>)
 if(LITEPGO_WITH_IPC_TOOLKIT)
     target_sources(litepgo_contact_tests PRIVATE contact/ipctk_contact_energy_gtest.cpp)
-    target_link_libraries(litepgo_contact_tests PRIVATE litepgo::ipctk)
+    target_link_libraries(litepgo_contact_tests PRIVATE litepgo::contact_ipctk)
 endif()
 
 add_dependencies(litepgo_tests spatial_query point_embedding)

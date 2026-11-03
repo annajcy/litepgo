@@ -16,5 +16,6 @@ int main() {
     if (hits != std::vector<std::size_t>{0} || point != std::vector<std::size_t>{0, 1} ||
         pairs != std::vector<BoxPair>{{0, 1}})
         throw std::runtime_error("Unexpected spatial query result");
-    std::cout << "region_hits=" << hits.size() << ", point_hits=" << point.size() << ", pairs=" << pairs.size() << '\n';
+    std::cout << "region_hits=" << hits.size() << ", point_hits=" << point.size() << ", pairs=" << pairs.size()
+              << std::endl;
 }

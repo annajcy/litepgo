@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import importlib
-import importlib.util
 import inspect
 from pathlib import Path
 import pkgutil
-import sys
 
 from pdoc import doc, render
 
@@ -29,10 +27,6 @@ def main() -> None:
     for info in pkgutil.walk_packages(litepgo.__path__, "litepgo."):
         if any(part.startswith("_") for part in info.name.split(".")):
             continue
-        # shortcut: Torch docs require the optional torch package; install it to include that adapter.
-        if info.name == "litepgo.torch" and importlib.util.find_spec("torch") is None:
-            print("Skipping optional litepgo.torch documentation: torch is not installed.", file=sys.stderr)
-            continue
         modules[info.name] = doc.Module(importlib.import_module(info.name))
 
     # Package __all__ exports symbols, so supply public submodules for pdoc's navigation.
@@ -52,6 +46,9 @@ def main() -> None:
             )
 
     assert isinstance(modules["litepgo.energy"].get("Energy.eval"), doc.Function), "Missing native methods"
+    assert all(
+        isinstance(modules["litepgo.torch"].get(name), doc.Function) for name in ("energy", "response")
+    ), "Missing Torch adapters"
     assert any(
         name.startswith("VolumetricFemEnergy[") and isinstance(member, doc.Class)
         for name, member in modules["litepgo.fem"].members.items()

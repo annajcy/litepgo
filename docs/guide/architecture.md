@@ -13,7 +13,7 @@ The arrows below show how an application reaches an implementation.
 ```mermaid
 flowchart TB
   accTitle: Language layers and native implementations
-  accDescr: C++ applications call native modules directly. Python facades and optional Torch adapters call the same modules through the nanobind extension.
+  accDescr: C++ applications call native modules directly. Python facades and Torch adapters call the same modules through the nanobind extension.
   cppApp["C++ application"] --> native["Native C++ modules"]
   pyApp["Python application"] --> facade["litepgo Python facades"]
   torchApp["PyTorch optimizer"] --> torchAdapter["litepgo.torch adapters"]
@@ -62,10 +62,13 @@ depending on a material model or contact implementation. An application can
 therefore use a custom objective with Newton, or combine FEM and contact in the
 same objective.
 
-The `litepgo::core` target aggregates the nine base modules. Geometry I/O is
-provided by `litepgo::io`; optional Gmsh I/O extends it with `litepgo::io_gmsh`.
-The optional IPC Toolkit backend is `litepgo::ipctk`, which extends contact.
-These targets are separate from the base aggregate.
+The `litepgo::core` target aggregates the nine base modules, including OBJ/VEG
+I/O through `litepgo::mesh`. The solver links the configured sparse backend:
+`litepgo::linalg_accelerate` on macOS or `litepgo::linalg_mkl` on x86-64
+Linux/Windows by default. Both extend the Eigen-based `litepgo::linalg` target.
+Optional Gmsh I/O extends mesh with `litepgo::mesh_gmsh`.
+The optional IPC Toolkit backend is `litepgo::contact_ipctk`, which extends contact.
+Both optional extensions are separate from the base aggregate.
 
 ## Responsibilities and public entry points
 
@@ -75,7 +78,7 @@ API contracts and examples.
 | Module | Owns | Main consumer |
 | --- | --- | --- |
 | [Common](common.md) | Shared numerical types and build capabilities | Every native module |
-| [Mesh](mesh/index.md) | Topology, positions, surface extraction, shell stencils; I/O through separate targets | DOF maps and model construction |
+| [Mesh](mesh/index.md) | Topology, positions, surface extraction, shell stencils, and geometry I/O | DOF maps and model construction |
 | [DOF](dof/index.md) | Gather/scatter layouts, assembly plans, fixed/free reduction, surface maps | Energy/response assembly and solvers |
 | [Linalg](linalg/index.md) | Sparse patterns and direct factorization backends | Nonlinear solves and sensitivities |
 | [Energy](energy/index.md) | Scalar/vector interfaces, local batching, composition | Model implementations and solvers |
@@ -83,7 +86,7 @@ API contracts and examples.
 | [Solver](solver/index.md) | Newton, Gauss–Newton and equilibrium response | Forward and inverse applications |
 | [Contact](contact/index.md) | Surface barrier energy, collision broad phase and feasible steps | A composed total potential |
 | [Spatial](spatial.md) | Generic AABB indexing and overlap queries | Contact broad phase and FEM point location |
-| [Torch](torch.md) | Optional first-order autograd bridge | Python optimizers |
+| [Torch](torch.md) | First-order autograd bridge | Python optimizers |
 
 Native module sources live under `src/core/<module>/`; public Python facades
 live under `src/python/`. Common types and `build_info()` are exported in the
