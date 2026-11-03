@@ -3,7 +3,7 @@
 An inverse problem chooses parameters so model predictions match observations.
 The distinction between **a fixed pose** and **an equilibrium pose** determines
 which Jacobian is correct. Both kinds use `Response` objects and can be fitted
-with the native Gauss–Newton solver or the optional Torch adapters.
+with the native Gauss–Newton solver or the Torch adapters.
 
 ## Architecture of an inverse evaluation
 
@@ -75,7 +75,7 @@ varying identification, and yield evolution require their own models.
 
 ## Use a Torch optimizer
 
-The optional [Torch module](../torch.md) connects these responses to autograd using
+The [Torch module](../torch.md) connects these responses to autograd using
 their analytic Jacobians. Its guide explains the forward/backward data flow,
 CPU/dtype requirements, a complete runnable example, and exception behavior.
 The [four Torch fitting examples](../../examples/torch.md) use the same native

@@ -13,6 +13,16 @@
         {"name": "release", "inherits": "base", "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"}},
         {"name": "relwithdebinfo", "inherits": "base", "cacheVariables": {"CMAKE_BUILD_TYPE": "RelWithDebInfo"}},
         {
+            "name": "all-options",
+            "hidden": true,
+            "cacheVariables": {
+                "LITEPGO_WITH_ACCELERATE": "ON",
+                "LITEPGO_WITH_MKL": "ON",
+                "LITEPGO_WITH_IPC_TOOLKIT": "ON",
+                "LITEPGO_WITH_GMSH": "ON"
+            }
+        },
+        {
             "name": "asan",
             "inherits": "debug",
             "cacheVariables": {
@@ -21,20 +31,32 @@
                 "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
                 "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
             }
-        }
+        },
+        {"name": "debug-all", "inherits": ["all-options", "debug"]},
+        {"name": "release-all", "inherits": ["all-options", "release"]},
+        {"name": "relwithdebinfo-all", "inherits": ["all-options", "relwithdebinfo"]},
+        {"name": "asan-all", "inherits": ["all-options", "asan"]}
     ],
     "buildPresets": [
         {"name": "debug", "configurePreset": "debug"},
         {"name": "release", "configurePreset": "release"},
         {"name": "relwithdebinfo", "configurePreset": "relwithdebinfo"},
-        {"name": "asan", "configurePreset": "asan"}
+        {"name": "asan", "configurePreset": "asan"},
+        {"name": "debug-all", "configurePreset": "debug-all"},
+        {"name": "release-all", "configurePreset": "release-all"},
+        {"name": "relwithdebinfo-all", "configurePreset": "relwithdebinfo-all"},
+        {"name": "asan-all", "configurePreset": "asan-all"}
     ],
     "testPresets": [
         {"name": "base", "hidden": true, "output": {"outputOnFailure": true}, "execution": {"noTestsAction": "error"}},
         {"name": "debug", "inherits": "base", "configurePreset": "debug"},
         {"name": "release", "inherits": "base", "configurePreset": "release"},
         {"name": "relwithdebinfo", "inherits": "base", "configurePreset": "relwithdebinfo"},
-        {"name": "asan", "inherits": "base", "configurePreset": "asan"}
+        {"name": "asan", "inherits": "base", "configurePreset": "asan"},
+        {"name": "debug-all", "inherits": "base", "configurePreset": "debug-all"},
+        {"name": "release-all", "inherits": "base", "configurePreset": "release-all"},
+        {"name": "relwithdebinfo-all", "inherits": "base", "configurePreset": "relwithdebinfo-all"},
+        {"name": "asan-all", "inherits": "base", "configurePreset": "asan-all"}
     ],
     "workflowPresets": [
         {
@@ -59,6 +81,38 @@
                 {"type": "configure", "name": "asan"},
                 {"type": "build", "name": "asan"},
                 {"type": "test", "name": "asan"}
+            ]
+        },
+        {
+            "name": "debug-all",
+            "steps": [
+                {"type": "configure", "name": "debug-all"},
+                {"type": "build", "name": "debug-all"},
+                {"type": "test", "name": "debug-all"}
+            ]
+        },
+        {
+            "name": "release-all",
+            "steps": [
+                {"type": "configure", "name": "release-all"},
+                {"type": "build", "name": "release-all"},
+                {"type": "test", "name": "release-all"}
+            ]
+        },
+        {
+            "name": "relwithdebinfo-all",
+            "steps": [
+                {"type": "configure", "name": "relwithdebinfo-all"},
+                {"type": "build", "name": "relwithdebinfo-all"},
+                {"type": "test", "name": "relwithdebinfo-all"}
+            ]
+        },
+        {
+            "name": "asan-all",
+            "steps": [
+                {"type": "configure", "name": "asan-all"},
+                {"type": "build", "name": "asan-all"},
+                {"type": "test", "name": "asan-all"}
             ]
         }
     ]

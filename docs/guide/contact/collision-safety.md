@@ -47,7 +47,8 @@ $0<d-d_{\min}<\hat d$. Use mapped surface positions rather than volume
 displacement for these methods.
 
 `IPCTKContactEnergy` / `IPCTKContactOptions` are separate optional bindings,
-linked in C++ with `litepgo::ipctk`. They use the Toolkit's CCD behavior rather
+enabled with `LITEPGO_WITH_IPC_TOOLKIT=ON` and linked in C++ with
+`litepgo::contact_ipctk`. They use the Toolkit's CCD behavior rather
 than native ACCD. Native derivatives contain a vendored subset of analytical
 IPC routines with their own retained license; native feature selection remains
 independent. Floating-point predicates/ACCD have numerical limits at extreme

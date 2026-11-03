@@ -1,6 +1,6 @@
 import pytest
 
-torch = pytest.importorskip("torch")
+import torch
 from litepgo import torch as bridge
 
 

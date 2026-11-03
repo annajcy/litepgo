@@ -30,7 +30,7 @@ vertex IDs, needed for displacement maps without point-location roundoff.
 | MSH | `read_msh`, `write_msh` | Optional Gmsh backend; homogeneous tet4/hex8; ASCII MSH 4.1 output |
 
 C++ I/O headers are `litepgo/mesh/io/obj.hpp`, `veg.hpp`, and optional `msh.hpp`.
-Link `litepgo::io`, and `litepgo::io_gmsh` for MSH. Python exposes
+Link `litepgo::mesh`, and `litepgo::mesh_gmsh` for MSH. Python exposes
 `mesh.has_gmsh` to test the configured capability. Configure
 `LITEPGO_WITH_GMSH=ON` to build it; the backend owns a serialized Gmsh session and
 rejects an already initialized external session.

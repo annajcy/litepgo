@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from scipy import sparse
 
-torch = pytest.importorskip("torch")
+import torch
 from litepgo import dof, energy, solver
 from litepgo import torch as bridge
 
