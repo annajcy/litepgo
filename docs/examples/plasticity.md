@@ -56,12 +56,26 @@ plastic shape while clamping the top prevents full relaxation. The program also
 writes `<stem>_rest.obj`. This validates a prescribed elastic rest-state change,
 not a return-mapping plasticity algorithm.
 
+![Tet P1 box in its initial, free-top, and clamped-top states at the same view and scale](./images/tet_p1_plastic_twist.png)
+
+The orange top face rotates 90° when released. When clamped, its orientation
+stays fixed and the interior deforms to accommodate the prescribed plastic field.
+
 ### Run and inspect
 
 ```sh
 cmake --build build/release --target tet_p1_plastic_twist litepgo_python
 build/release/examples/fem/plasticity/tet_p1_plastic_twist
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/plasticity/tet_p1_plastic_twist.py
+```
+
+To regenerate the comparison, pass the output stem to the plotting script.
+It reads the three OBJ files and writes `<stem>.png`.
+
+```sh
+uv sync --locked --group plot
+PYTHONPATH=build/release/python uv run --no-sync python examples/fem/plasticity/plot_tet_p1_plastic_twist.py \
+  output/python/plastic_twist/tet_p1_plastic_twist
 ```
 
 ::: details Complete Python source — `tet_p1_plastic_twist.py`
@@ -191,12 +205,23 @@ an output directory, defaulting to `output/shell_plastic_field/` in C++ and
 `equilibrium.obj`. A planar natural stencil stays zero-curvature under its local
 affine transform; this example does not prescribe an out-of-plane buckling branch.
 
+![Plan view of the initial strip and its curved growth equilibrium, with the clamped vertices marked](./images/shell_plastic_field.png)
+
 ### Run and inspect
 
 ```sh
 cmake --build build/release --target shell_plastic_field litepgo_python
 build/release/examples/fem/plasticity/shell_plastic_field
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/plasticity/shell_plastic_field.py
+```
+
+Render the two OBJ files in plan view to show the in-plane curvature at the
+same scale.
+
+```sh
+uv sync --locked --group plot
+PYTHONPATH=build/release/python uv run --no-sync python examples/fem/plasticity/plot_shell_plastic_field.py \
+  output/python/shell_plastic_field
 ```
 
 ::: details Complete Python source — `shell_plastic_field.py`

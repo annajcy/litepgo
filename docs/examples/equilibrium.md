@@ -185,12 +185,22 @@ and finite elastic/pulling energies. Input must be a nonempty flat xy sheet
 with the four expected corners. Springs are soft loads; they do not impose
 clamped shell boundary directors or provide self-contact.
 
+![Initial flat sheet and saddle equilibrium with a shared signed z-displacement color scale](./images/shell_saddle_pull.png)
+
 ### Run and inspect
 
 ```sh
 cmake --build build/release --target shell_saddle_pull litepgo_python
 build/release/examples/fem/equilibrium/shell_saddle_pull
 PYTHONPATH=build/release/python uv run --no-sync python examples/fem/equilibrium/shell_saddle_pull.py
+```
+
+Render the initial and deformed OBJs with a shared view and color scale.
+
+```sh
+uv sync --locked --group plot
+PYTHONPATH=build/release/python uv run --no-sync python examples/fem/equilibrium/plot_shell_saddle_pull.py \
+  assets/shell.obj output/python/shell_saddle_pull.obj
 ```
 
 ::: details Complete Python source — `shell_saddle_pull.py`

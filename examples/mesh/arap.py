@@ -9,6 +9,8 @@ import argparse
 import numpy as np
 from litepgo import dof, energy, mesh, solver
 
+from volume_mesh import end_faces, read_volume
+
 
 def rotations(x, rest, edges):
     covariance = np.zeros((len(x), 3, 3))
@@ -39,21 +41,27 @@ def main():
     parser.add_argument(
         "output", nargs="?", type=Path, default=Path("output/python/arap")
     )
+    parser.add_argument("--volume", type=Path, help="tetrahedral VEG mesh with planar x end faces")
     args = parser.parse_args()
-    n = 9
-    rest = np.array(
-        [[j / (n - 1), i / (n - 1), 0.0] for i in range(n) for j in range(n)]
-    )
-    faces = []
-    for i in range(n - 1):
-        for j in range(n - 1):
-            a = i * n + j
-            faces.extend([[a, a + 1, a + n + 1], [a, a + n + 1, a + n]])
-    edges = sorted(
-        {tuple(sorted((f[k], f[(k + 1) % 3]))) for f in faces for k in range(3)}
-    )
+    volume = None
+    if args.volume:
+        volume, edges = read_volume(args.volume)
+        rest = volume.positions
+    else:
+        n = 9
+        rest = np.array(
+            [[j / (n - 1), i / (n - 1), 0.0] for i in range(n) for j in range(n)]
+        )
+        faces = []
+        for i in range(n - 1):
+            for j in range(n - 1):
+                a = i * n + j
+                faces.extend([[a, a + 1, a + n + 1], [a, a + n + 1, a + n]])
+        edges = sorted(
+            {tuple(sorted((f[k], f[(k + 1) % 3]))) for f in faces for k in range(3)}
+        )
     edge_vertices = np.array(edges)
-    edge_map = dof.StencilDofMap(n * n, edges, 3)
+    edge_map = dof.StencilDofMap(len(rest), edges, 3)
     edge_hessian = np.kron([[1.0, -1.0], [-1.0, 1.0]], np.eye(3))
     angle = np.pi / 3
     R = np.array(
@@ -63,12 +71,23 @@ def main():
             [-np.sin(angle), 0.0, np.cos(angle)],
         ]
     )
+    if volume is not None:
+        # Rotate the volume about its longitudinal x axis.
+        c, s = np.cos(angle), np.sin(angle)
+        R = np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
     rigid = rest @ R.T + [0.3, -0.2, 0.7]
     assert objective(rigid, rest, edges, rotations(rigid, rest, edges)) < 1e-24
     x = rest.copy()
-    right = np.arange(n) * n + n - 1
-    x[right] = (rest[right] - [1.0, 0.5, 0.0]) @ R.T + [0.8, 0.5, 0.5]
-    handles = np.concatenate([np.arange(n) * n, right])
+    left, right = end_faces(rest)
+    width = np.ptp(rest[:, 0])
+    center = rest[right].mean(axis=0)
+    if volume is None:
+        x[right] = (rest[right] - center) @ R.T + center + width * np.array([-0.2, 0.0, 0.5])
+    else:
+        fraction = (rest[:, 0] - rest[:, 0].min()) / width
+        moved = (rest - center) @ R.T + center + width * np.array([0.0, 0.0, 0.25])
+        x += fraction[:, None] * (moved - rest)
+    handles = np.concatenate([left, right])
     fixed_dofs = (3 * handles[:, None] + np.arange(3)).ravel()
     # DofReduction stores indices; prescribed values come from the initial x.
     fixed = dof.DofReduction(x.size, fixed_dofs.tolist())
@@ -116,13 +135,19 @@ def main():
     else:
         raise RuntimeError("ARAP did not converge within 1000 local/global iterations")
     np.testing.assert_array_equal(x[handles], initial[handles])
-    assert value < first and np.linalg.norm(x[n * n // 2] - rest[n * n // 2]) > 0.05
+    free = np.setdiff1d(np.arange(len(rest)), handles)
+    assert value < first and np.max(np.linalg.norm(x[free] - rest[free], axis=1)) > 0.05 * width
     args.output.mkdir(parents=True, exist_ok=True)
-    topology = mesh.TriangleTopology(n * n, np.array(faces, dtype=np.int32))
+    if volume is None:
+        topology = mesh.TriangleTopology(len(rest), np.array(faces, dtype=np.int32))
     for name, positions in [("rest", rest), ("handles", initial), ("edited", x)]:
-        mesh.write_obj(
-            args.output / f"{name}.obj", mesh.TriangleMesh(positions, topology)
-        )
+        if volume is None:
+            surface = mesh.TriangleMesh(positions, topology)
+        else:
+            deformed = mesh.TetMesh(positions, volume.topology)
+            mesh.write_veg(args.output / f"{name}.veg", deformed)
+            surface = mesh.extract_surface(deformed)
+        mesh.write_obj(args.output / f"{name}.obj", surface)
     print(
         f"ARAP: {iteration + 1} iterations, energy {first:g} -> {value:g}, max update={change:g}"
     )

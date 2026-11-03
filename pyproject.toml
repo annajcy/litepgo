@@ -8,6 +8,7 @@ dependencies = ["numpy>=1.26", "scipy>=1.11", "torch>=2.5"]
 
 [dependency-groups]
 dev = ["pytest>=8", "clang-format==20.1.8"]
+plot = ["matplotlib>=3.8"]
 docs = [
     "mlc-doxygen-bin==1.18.0",
     "nodejs-wheel==24.19.0",
