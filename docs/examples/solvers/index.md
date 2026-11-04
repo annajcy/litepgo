@@ -9,4 +9,5 @@ All commands run from the repository root after [configuring the release build](
 ## Examples
 
 - [Constrained chain](./newton-chain.md). Hard constraints and a complete Newton solve.
+- [TBB thread limits](./thread-limit.md). Python scoped limits and C++ runtime/arena controls.
 - [Exponential curve fitting](./gauss-newton-fit.md). Analytic nonlinear least squares.

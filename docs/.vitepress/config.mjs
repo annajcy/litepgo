@@ -87,6 +87,7 @@ export default defineConfig({
         ] },
         { text: 'Newton and Gauss–Newton', link: '/examples/solvers/', collapsed: true, items: [
           { text: 'Constrained chain', link: '/examples/solvers/newton-chain' },
+          { text: 'TBB thread limits', link: '/examples/solvers/thread-limit' },
           { text: 'Exponential curve fitting', link: '/examples/solvers/gauss-newton-fit' }
         ] },
         { text: 'Mesh optimization', link: '/examples/mesh/', collapsed: true, items: [
