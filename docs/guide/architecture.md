@@ -28,7 +28,8 @@ provide array and sparse-matrix interfaces; `fem.Template` selects concrete
 instantiations already compiled into `_core`.
 
 `litepgo.torch` is a Python integration layer. It evaluates a native model and
-uses its gradient or Jacobian in backward. It does not trace the C++ solver's
+uses a saved energy gradient or calls the response VJP in backward; response
+forward-mode AD calls its JVP. It does not trace the C++ solver's
 iterations into a Torch graph. C++ users link individual CMake targets; Python
 users import the corresponding facade modules.
 

@@ -6,30 +6,33 @@ Torch owns the outer tensor graph and optimizer.
 
 ## Module architecture
 
-The diagram shows a forward call with gradients enabled, followed by backward.
-`energy` saves a copied energy gradient; `response` saves a copied sparse
-Jacobian. Backward uses these saved derivatives rather than evaluating the model
-again. Implementation lives in `src/python/torch.py`.
+The response adapter copies the input and retains the model. Forward requests
+only values; backward calls `eval_vjp(saved_x, upstream)`. Forward-mode AD
+calls `eval_jvp(saved_x, tangent)`. Before either product, the adapter updates
+the model's pattern at the saved point, including when several forwards share
+one model. No response Jacobian is saved. The energy adapter is unchanged:
+it saves the energy gradient for backward.
 
 ```mermaid
 flowchart TB
-  accTitle: Torch forward evaluation and analytic backward
-  accDescr: A tensor is copied to NumPy for native model evaluation. Forward returns tensor values and saves analytic derivatives. The loss supplies an upstream derivative and backward applies the saved gradient or Jacobian transpose.
-  tensor["CPU float64 tensor"] --> adapter["litepgo.torch adapter"]
-  adapter --> model["Energy or Response evaluation"]
-  model --> value["Value returned to the Torch graph"]
-  model --> saved["Saved gradient or sparse Jacobian"]
-  value --> loss["Torch loss and upstream derivative"]
-  saved --> backward["Analytic backward product"]
-  loss --> backward
-  backward --> grad["Gradient of the explicit input tensor"]
+  accTitle: Response values and derivative products
+  accDescr: Forward saves an input copy and model. Reverse AD requests a VJP and forward AD requests a JVP at the saved input.
+  input["CPU float64 tensor"] --> forward["Response eval_value"]
+  input --> saved["Saved input copy and model"]
+  forward --> value["Output tensor"]
+  saved --> vjp["Backward: eval_vjp"]
+  saved --> jvp["Forward AD: eval_jvp"]
+  upstream["Loss gradient"] --> vjp
+  tangent["Input tangent"] --> jvp
 ```
 
-An equilibrium model is a `solver.StaticEquilibriumResponse`, so its native
-Jacobian already includes the inner equilibrium sensitivity. The adapter applies
-the same vector-Jacobian product as for any other response. See
-[inverse problems](solver/inverse.md) for the distinction between fixed-pose and total
-derivatives.
+A `StaticEquilibriumResponse` uses its adjoint VJP and directional JVP.
+Each product currently re-solves equilibrium; the adapter does not cache
+linearizations. Other responses can implement direct products or use the
+explicit-Jacobian fallback. Wrapping an equilibrium response inside a custom
+residual does not automatically forward its fast paths: that residual must
+implement its own product hooks to avoid the fallback.
+See [inverse problems](solver/inverse.md) for fixed-pose versus total derivatives.
 
 ## Use the adapter
 
@@ -43,9 +46,11 @@ $$
 $$
 
 Only the explicit tensor argument is differentiable. The model/callback
-configuration stays fixed; C++ evaluation does not trace Python callbacks into a
+configuration must stay fixed from forward until all derivative calls finish; C++ evaluation does not trace Python callbacks into a
 Torch graph. The adapter supports first-order derivatives, without GPU execution,
-batched tensor inputs, or double backward.
+batched tensor inputs, or double backward. Response forward-mode AD is supported
+through `torch.autograd.forward_ad`; `torch.func` transforms and Energy
+forward-mode AD are not supported by this adapter.
 Domain errors propagate to the Torch optimizer; the adapter does not implement
 Gauss–Newton's rejection and retry of infeasible trial residuals.
 
@@ -66,5 +71,19 @@ np.testing.assert_allclose(x.grad.numpy(), [1., 2.])
 ```
 
 The [four Torch fitting examples](../examples/torch/index.md) use L-BFGS with analytic
-response Jacobians. The native [fitting examples](../examples/fitting/index.md) explain
+response derivatives. The native [fitting examples](../examples/fitting/index.md) explain
 the same experiments and their formulations in detail.
+
+
+For a response `R`, compute a directional derivative without reverse AD:
+
+```python
+from litepgo.torch import response as torch_response
+
+with torch.autograd.forward_ad.dual_level():
+    dual = torch.autograd.forward_ad.make_dual(x, torch.ones_like(x))
+    value, jvp = torch.autograd.forward_ad.unpack_dual(torch_response(R, dual))
+```
+
+The saved input is a copy, but the model is a retained reference, not a snapshot.
+Derivative exceptions propagate. Repeated backward calls recompute products.

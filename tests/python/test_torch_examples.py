@@ -37,5 +37,7 @@ def test_volume_material_equilibrium_end_to_end_gradcheck():
     residual, _, _, _ = runpy.run_path(str(path))["make_problem"]()
     q = torch.tensor([0.2, 0.4], dtype=torch.float64, requires_grad=True)
     assert torch.autograd.gradcheck(
-        lambda q: bridge.response(residual, q), (q,), eps=1e-4, atol=1e-6, rtol=1e-4
+        # Backward now re-solves the system; allow solver roundoff between calls.
+        lambda q: bridge.response(residual, q), (q,), eps=1e-4, atol=1e-6, rtol=1e-4,
+        nondet_tol=1e-12
     )

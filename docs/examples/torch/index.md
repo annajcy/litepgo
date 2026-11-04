@@ -17,7 +17,8 @@ r(p)=S^{-1}(y(p)-y_{\rm obs}),\qquad
 $$
 
 `litepgo.torch.response(residual, parameters)` evaluates native values and saves
-its analytic sparse Jacobian for backward. A closure calls `zero_grad`, evaluates
+the input for backward, which calls the residual VJP. These examples implement
+explicit residual Jacobians, so their VJP uses the default Jacobian fallback. A closure calls `zero_grad`, evaluates
 the loss, then `backward`; `torch.optim.LBFGS` can call it repeatedly during line
 search. The native equilibrium sensitivity uses
 $K_{ff}U_f=-B_f$, and reaction derivatives use $B+KU$.
