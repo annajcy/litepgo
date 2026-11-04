@@ -22,8 +22,8 @@ is refreshed automatically at current iterates.
 
 **Expected result.** The linear residual vanishes at $(1,2)$, with four
 Jacobian entries. The nonlinear solve goes from $(-1,-1)$ to $(1,1)$,
-with three active Jacobian entries. Assertions check dimensions, structural
-updates, and the recovered state. A declared entry may still have value zero.
+with three active Jacobian entries. `tests/python/test_api_examples.py` checks
+dimensions, structural updates, and the recovered state. A declared entry may still have value zero.
 
 ## Run and inspect
 

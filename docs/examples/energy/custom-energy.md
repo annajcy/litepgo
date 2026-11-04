@@ -28,8 +28,8 @@ arrays. A second refresh at the same state reports no structural change.
 
 **Expected result.** At $(1,1)$, $E_0=0.5$, $E_1=5$, and
 $\nabla E_1=(9,9)$. The stored Hessian count follows `2 -> 4 -> 2` as the
-active branch changes. Printed values and assertions check both derivatives
-and structure.
+active branch changes. The program prints values and structure;
+`tests/python/test_api_examples.py` checks derivatives and pattern transitions.
 
 ## Run and inspect
 

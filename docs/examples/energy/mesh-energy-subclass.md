@@ -36,7 +36,7 @@ For larger models using the same subclass API,
 see the [Laplacian](../mesh/laplacian-optimization.md) and [ARAP](../mesh/arap.md)
 examples for that style.
 
-**Checks and expected result.** Both programs independently verify global energy,
+**Checks and expected result.** Tests independently verify global energy,
 gradient, and Hessian using an incidence matrix. Equal tension in springs in
 series gives $t=36/13$ and equilibrium positions
 
@@ -44,8 +44,8 @@ $$
 x=(0,31/13,69/13,7).
 $$
 
-They verify these positions, unchanged endpoints, and zero free-node gradient.
-Both print `mesh energy subclass: 3 springs, shared-node assembly and fixed-end equilibrium verified`.
+Tests verify these positions, unchanged endpoints, and zero free-node gradient.
+Both print `mesh energy subclass: 3 springs, shared-node assembly and fixed-end equilibrium`.
 No mesh assets or output files are required.
 
 ## Run and inspect
@@ -67,3 +67,7 @@ PYTHONPATH=build/release/python uv run --no-sync python examples/energy/scalar/m
 <<< ../../../examples/energy/scalar/mesh_energy_subclass.cpp
 
 :::
+
+Independent assembly formulas, finite differences, and solution checks are in
+`tests/python/test_mesh_subclass_examples.py`; the runnable example focuses on
+the subclass and solver calls.

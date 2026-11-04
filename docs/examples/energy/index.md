@@ -1,8 +1,8 @@
 # Scalar energies and vector responses
 
 These programs explain energy and response APIs, assembly, and a small equilibrium solve.
-They generate their own data and write no meshes. A zero exit means their numerical
-checks passed. The [energy/response guide](../../guide/energy/index.md) defines
+They generate their own data and write no meshes. The runnable programs show API calls and report results; independent analytic
+checks live in the test suite. The [energy/response guide](../../guide/energy/index.md) defines
 sparse patterns, batch hook shapes, and ownership.
 
 All commands run from the repository root after [configuring the release build](../../guide/build.md). Python commands explicitly select that build. Expand the source sections for complete programs, including imports, setup, checks, and output handling.

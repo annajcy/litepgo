@@ -10,20 +10,33 @@ def test_thread_limit_example():
     root = Path(__file__).resolve().parents[2]
     result = subprocess.run(
         [sys.executable, str(root / "examples/solver/thread_limit.py")],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True,
+        text=True,
+        timeout=60,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.count("equilibrium=") == 3
     assert "previous TBB policy restored" in result.stdout
 
 
-@pytest.mark.parametrize("folder,name", [("energy/scalar", "custom_energy"), ("energy/scalar", "mesh_energy_subclass"), ("energy/response", "custom_response"), ("energy/response", "mesh_response"), ("energy/response", "mesh_response_subclass")])
+@pytest.mark.parametrize(
+    "folder,name",
+    [
+        ("energy/scalar", "custom_energy"),
+        ("energy/scalar", "mesh_energy_subclass"),
+        ("energy/response", "custom_response"),
+        ("energy/response", "mesh_response"),
+        ("energy/response", "mesh_response_subclass"),
+    ],
+)
 def test_cpp_python_api_examples(folder, name):
     root = Path(__file__).resolve().parents[2]
     build = Path(_core.__file__).parents[2]
     outputs = []
-    for command in ([str(build / "examples" / folder / name)],
-                    [sys.executable, str(root / "examples" / folder / f"{name}.py")]):
+    for command in (
+        [str(build / "examples" / folder / name)],
+        [sys.executable, str(root / "examples" / folder / f"{name}.py")],
+    ):
         result = subprocess.run(command, capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, result.stdout + result.stderr
         outputs.append(result.stdout.strip())
@@ -33,25 +46,35 @@ def test_cpp_python_api_examples(folder, name):
 @pytest.fixture(scope="module")
 def api_modules():
     import importlib.util
+
     root = Path(__file__).resolve().parents[2] / "examples"
     modules = []
-    for folder, name in [("energy/scalar", "custom_energy"), ("energy/response", "custom_response")]:
-        spec = importlib.util.spec_from_file_location(name, root / folder / f"{name}.py")
+    for folder, name in [
+        ("energy/scalar", "custom_energy"),
+        ("energy/response", "custom_response"),
+    ]:
+        spec = importlib.util.spec_from_file_location(
+            name, root / folder / f"{name}.py"
+        )
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         modules.append(module)
     return modules
 
 
-@pytest.mark.parametrize("x,value,g,H", [
-    ([1., 1.], 5., [9., 9.], [[13., 12.], [12., 13.]]),
-    ([2., -1.], 2.75, [3., 0.], [[4., 3.], [3., 4.]]),
-    ([-2., 1.], 2.5, [-2., 1.], [[1., 0.], [0., 1.]]),
-    ([1., -1.], 1., [1., -1.], [[1., 0.], [0., 1.]]),
-])
+@pytest.mark.parametrize(
+    "x,value,g,H",
+    [
+        ([1.0, 1.0], 5.0, [9.0, 9.0], [[13.0, 12.0], [12.0, 13.0]]),
+        ([2.0, -1.0], 2.75, [3.0, 0.0], [[4.0, 3.0], [3.0, 4.0]]),
+        ([-2.0, 1.0], 2.5, [-2.0, 1.0], [[1.0, 0.0], [0.0, 1.0]]),
+        ([1.0, -1.0], 1.0, [1.0, -1.0], [[1.0, 0.0], [0.0, 1.0]]),
+    ],
+)
 def test_energy_example_independent_analytic_values(api_modules, x, value, g, H):
     import numpy as np
     from litepgo import energy
+
     obj = api_modules[0].Coupled()
     x = np.array(x)
     assert obj.eval_value(x) == value
@@ -68,19 +91,23 @@ def test_energy_example_independent_analytic_values(api_modules, x, value, g, H)
             np.testing.assert_array_equal(hessian.toarray(), H)
     # Fixed energy has a different target: independently check all outputs.
     fixed = api_modules[0].Quadratic()
-    delta = x - [1., 2.]
-    assert fixed.eval_value(x) == .5 * delta @ delta
+    delta = x - [1.0, 2.0]
+    assert fixed.eval_value(x) == 0.5 * delta @ delta
     np.testing.assert_array_equal(fixed.eval_gradient(x), delta)
     np.testing.assert_array_equal(fixed.eval_hessian(x).toarray(), np.eye(2))
 
 
-@pytest.mark.parametrize("x,value,J", [
-    ([2., -1.], [1., 1.], [[1., 0.], [4., 1.]]),
-    ([-2., 1.], [-3., -1.], [[1., 0.], [0., 1.]]),
-    ([0., 3.], [-1., 1.], [[1., 0.], [0., 1.]]),
-])
+@pytest.mark.parametrize(
+    "x,value,J",
+    [
+        ([2.0, -1.0], [1.0, 1.0], [[1.0, 0.0], [4.0, 1.0]]),
+        ([-2.0, 1.0], [-3.0, -1.0], [[1.0, 0.0], [0.0, 1.0]]),
+        ([0.0, 3.0], [-1.0, 1.0], [[1.0, 0.0], [0.0, 1.0]]),
+    ],
+)
 def test_response_example_independent_analytic_values(api_modules, x, value, J):
     import numpy as np
+
     obj = api_modules[1].NonlinearResidual()
     x = np.array(x)
     np.testing.assert_array_equal(obj.eval_value(x), value)
@@ -89,14 +116,21 @@ def test_response_example_independent_analytic_values(api_modules, x, value, J):
     np.testing.assert_array_equal(actual, value)
     np.testing.assert_array_equal(jacobian.toarray(), J)
     fixed = api_modules[1].LinearResidual()
-    np.testing.assert_array_equal(fixed.eval_jacobian(x).toarray(), [[1., 0.], [0., 1.], [1., 1.]])
-    np.testing.assert_array_equal(fixed.eval_value(x), [x[0]-1, x[1]-2, x[0]+x[1]-3])
+    np.testing.assert_array_equal(
+        fixed.eval_jacobian(x).toarray(), [[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]
+    )
+    np.testing.assert_array_equal(
+        fixed.eval_value(x), [x[0] - 1, x[1] - 2, x[0] + x[1] - 3]
+    )
 
 
 def test_example_pattern_errors_and_zeroing(api_modules):
     import numpy as np
-    for obj, method in [(api_modules[0].Coupled(), "eval_hessian"),
-                        (api_modules[1].NonlinearResidual(), "eval_jacobian")]:
+
+    for obj, method in [
+        (api_modules[0].Coupled(), "eval_hessian"),
+        (api_modules[1].NonlinearResidual(), "eval_jacobian"),
+    ]:
         evaluate = getattr(obj, method)
         with pytest.raises(RuntimeError, match="outside pattern"):
             evaluate(np.ones(2))
@@ -109,3 +143,16 @@ def test_example_pattern_errors_and_zeroing(api_modules):
         assert not obj.update_pattern(-np.ones(2))
         with pytest.raises(RuntimeError, match="outside pattern"):
             evaluate(np.ones(2))
+
+
+def test_custom_response_example_fit(api_modules):
+    import numpy as np
+    from litepgo import solver
+
+    result = solver.gauss_newton_solve(
+        api_modules[1].NonlinearResidual(),
+        -np.ones(2),
+        solver.GaussNewtonOptions(gradient_tolerance=1e-9),
+    )
+    assert result.status == solver.GaussNewtonStatus.Converged
+    np.testing.assert_allclose(result.x, np.ones(2), atol=1e-8)
