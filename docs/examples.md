@@ -24,7 +24,7 @@ build/release/examples/energy/scalar/custom_energy
 PYTHONPATH=build/release/python uv run --no-sync python examples/energy/scalar/custom_energy.py
 ```
 
-All cataloged native examples have Python counterparts. Six additional Torch programs
+All cataloged native examples have Python counterparts. Seven additional Torch programs
 are Python-only; `uv sync --locked` installs their PyTorch dependency along with
 the other project dependencies. Asset inputs are bundled; generated-grid examples
 need no input files. Output paths and overwrite behavior are documented per case.
@@ -66,6 +66,7 @@ last digits on every platform.
 | Fitting | [`shell_equilibrium_material_fit`](examples/fitting/shell-equilibrium-material-fit.md) | Material-dependent state and reaction sensitivities |
 | Fitting | [`volume_equilibrium_fp_fit`](examples/fitting/volume-equilibrium-fp-fit.md) | Plastic stretches from shapes and reactions |
 | Fitting | [`shell_equilibrium_fp_fit`](examples/fitting/shell-equilibrium-fp-fit.md) | Shell natural geometry through equilibrium |
+| Torch | [`neural_neohookean`](examples/torch/neural-neohookean.md) | Learn an invariant energy and validate stress, tangent, and equilibrium |
 | Torch | [`torch_neohookean`](examples/torch/torch-neohookean.md) | Torch density, native FEM assembly, and derivative comparison |
 | Torch | [`torch_equilibrium_response`](examples/torch/torch-equilibrium-response.md) | Physical theta/Fp Jacobians and equilibrium JVP/VJP |
 | Torch | [`volume_equilibrium_material_fit_torch`](examples/torch/volume-equilibrium-material-fit-torch.md) | Volume material recovery with native autograd |
