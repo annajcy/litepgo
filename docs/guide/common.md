@@ -66,3 +66,52 @@ In C++, `build_info()` reports the backends configured for the litepgo build.
 Using a backend still requires its [CMake target](linalg/backends.md#cmake-targets);
 linking only `litepgo::linalg` selects the Eigen automatic aliases even when the
 build also provides an Accelerate or oneMKL target.
+
+## Limiting TBB parallelism
+
+By default litepgo adds no thread limit: TBB chooses concurrency from the logical
+CPUs available to the process, subject to the host application's existing TBB
+controls. This is a concurrency allowance, not a guarantee of full CPU usage.
+
+```python
+import litepgo
+
+with litepgo.tbb_thread_limit(4):
+    # Put assembly and the complete solve inside this scope.
+    result = solver.solve(...)
+```
+
+The argument must be a positive Python integer; booleans are rejected. The limit
+is installed on entering the context and removed on exit, including exceptions.
+Nested or overlapping limits take the minimum. This affects all threads sharing
+the same TBB runtime, including other libraries; it is not Python-thread-local.
+Use a fresh context manager for each `with` statement.
+
+The limit covers litepgo's TBB work and its MKL/PARDISO backend. This build uses
+MKL's TBB threading layer, so `MKL_NUM_THREADS` and `OMP_NUM_THREADS` do not set
+its parallelism. Accelerate and independent NumPy/SciPy or OpenMP thread pools
+are outside this control. TBB limits active workers to at most `threads - 1`
+(with TBB's enqueue exception); external application threads are not capped,
+so this is not a limit on the total number of process threads.
+
+C++ callers can use TBB directly. Keep the control alive for the desired scope:
+
+```cpp
+#include <tbb/global_control.h>
+#include <tbb/task_arena.h>
+
+tbb::global_control limit(tbb::global_control::max_allowed_parallelism, 4);
+// Assembly and solve here share the runtime-wide limit.
+```
+
+For a limit on work executed in a particular arena, wrap the whole operation:
+
+```cpp
+tbb::task_arena arena(4);
+arena.execute([&] {
+    // Assembly, factorization, and solve here use this arena.
+});
+```
+
+An arena still respects the runtime's global worker limit. The Python context
+manager implements `global_control`, not arena-local execution.
