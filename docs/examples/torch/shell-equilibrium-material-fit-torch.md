@@ -10,7 +10,7 @@ material parameters directly from `(0.7,1.2)`. Invalid parameter trials raise an
 error; the adapter does not retry them on behalf of L-BFGS.
 
 **API walkthrough.** `ShellFemEnergy` and `ShellFemForceMaterialResponse` supply
-the equilibrium factory and fixed-pose partial. `StaticEquilibriumResponse`
+the state and fixed-pose derivative hooks of a `ParametricEnergy` model. `StaticEquilibriumResponse`
 provides state sensitivity, and the residual selects fixed rows of $B+KU$.
 L-BFGS differentiates `0.5 * lp_torch.response(...).square().sum()` through the
 native Jacobian.

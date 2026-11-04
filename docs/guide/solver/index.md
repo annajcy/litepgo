@@ -10,7 +10,7 @@ Newton accepts a nonnegative tolerance; Gauss–Newton requires a positive one.
 The module contains two nonlinear algorithms and one differentiable equilibrium
 wrapper. Each algorithm consumes an abstract energy/response and delegates sparse
 systems to [linalg](../linalg/index.md). `StaticEquilibriumResponse` calls Newton for the
-state and solves an additional exact stiffness system when a Jacobian is requested.
+state and uses exact stiffness solves for Jacobians and JVP/VJP products.
 
 ```mermaid
 flowchart TB
@@ -18,7 +18,7 @@ flowchart TB
   accDescr: Newton consumes Energy and Gauss-Newton consumes a residual Response. StaticEquilibriumResponse builds an Energy, invokes Newton, and uses exact stiffness for sensitivities. All sparse factorizations are delegated to linalg.
   energy["Energy and fixed DOFs"] --> newton["newton_solve"]
   residual["Residual Response"] --> gauss["gauss_newton_solve"]
-  factory["Energy factory and force partial"] --> equilibrium["StaticEquilibriumResponse"]
+  model["ParametricEnergy model"] --> equilibrium["StaticEquilibriumResponse"]
   equilibrium -->|forward state| newton
   newton -->|Hessian systems| linear["linalg SparseSolver"]
   gauss -->|damped normal systems| linear
@@ -26,7 +26,7 @@ flowchart TB
 ```
 
 Arrows identify supplied inputs or delegated solves. The module does not own
-geometry or materials; callers build those through model factories. Native code
+geometry or materials; callers configure those in their energy models. Native code
 is in `src/core/solver/`; Python uses `litepgo.solver`. The
 [inverse-problem guide](inverse.md) explains how state and force derivatives form
 an observation Jacobian.

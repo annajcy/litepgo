@@ -14,8 +14,8 @@ optimizer fits the observation residual. Value-only trials can skip Jacobian wor
 ```mermaid
 flowchart TB
   accTitle: Equilibrium inverse-problem evaluation
-  accDescr: Parameters build an energy and its fixed-pose force partial. Newton finds equilibrium; exact stiffness and the partial produce state sensitivity. State and reaction observations form a scaled residual and total Jacobian for the outer optimizer.
-  parameters["Parameter vector"] --> factory["Energy factory"]
+  accDescr: A ParametricEnergy supplies state and parameter derivatives. Newton finds equilibrium; exact stiffness and the partial produce state sensitivity. State and reaction observations form a scaled residual and total Jacobian for the outer optimizer.
+  parameters["Parameter vector"] --> factory["ParametricEnergy.energy_at(p)"]
   factory --> state["Newton equilibrium state"]
   parameters --> partial["Fixed-pose force partial B"]
   state --> partial

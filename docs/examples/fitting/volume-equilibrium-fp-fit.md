@@ -8,9 +8,9 @@ plastic stretches with truth `(1.04,0.97,1.02)`, starting from identity in log
 coordinates. Observe both free displacements and fixed-DOF reactions at equilibrium.
 Each observation block is divided by its fixed target norm, floored at $10^{-8}$.
 
-**API walkthrough.** `VolumetricFemForceFpResponse` supplies the nine-column
+**API walkthrough.** A `PlasticModel` groups state and parameter derivative hooks on one `ParametricEnergy`. `VolumetricFemForceFpResponse` supplies the nine-column
 fixed-pose derivative. Select columns 0/4/8 and apply $e^p$ to obtain $B_p$.
-`StaticEquilibriumResponse(3,...)` solves $K_{ff}U_f=-B_{p,f}$.
+`StaticEquilibriumResponse(model,...)` solves $K_{ff}U_f=-B_{p,f}$.
 Stack free rows of $U$ and fixed rows of $B_p+KU$ to form the total
 observation Jacobian for the outer `FixedPatternResponse`.
 

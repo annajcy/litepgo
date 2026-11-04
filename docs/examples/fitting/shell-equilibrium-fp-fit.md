@@ -8,9 +8,9 @@ $F_p=\operatorname{diag}(e^{p_0},e^{p_1},1)$ with truth `(1.06,0.95)`, starting
 at identity. Observe the free center displacement and 24 boundary reactions,
 normalized by separate fixed target norms.
 
-**API walkthrough.** Rebuild `ShellFemEnergy` with the per-face natural-state
+**API walkthrough.** A `PlasticModel` groups state and parameter derivative hooks on one `ParametricEnergy`. Rebuild `ShellFemEnergy` with the per-face natural-state
 matrices for each trial. `ShellFemForceFpResponse` plus columns 0/4 and exponential
-factors supplies $B_p$. `StaticEquilibriumResponse(2,...)` supplies $U$.
+factors supplies $B_p$. `StaticEquilibriumResponse(model,...)` supplies $U$.
 The combined Jacobian stacks $U_f$ and $(B_p+KU)_c$, not merely the
 fixed-pose plastic-force partial.
 

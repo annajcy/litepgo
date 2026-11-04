@@ -24,12 +24,13 @@ K_{ff}\frac{\partial u_f^*}{\partial p}=-B_f,\qquad
 \frac{\partial u_c^*}{\partial p}=0.
 $$
 
-`StaticEquilibriumResponse(num_parameters, fixed, initial, options, make_energy,
-partial)` implements this map from parameters to full displacement:
+`StaticEquilibriumResponse(model, fixed, initial, options)` takes one
+[ParametricEnergy](../energy/parametric.md) defining the total potential.
 
-- `make_energy(p)` creates the **total** potential for those parameters.
-- `partial(p, u)` returns sparse $B$ at the supplied fixed displacement,
-  including parameter-dependent loads if the model has them.
+- `model.energy_at(p)` supplies the Energy for Newton.
+- `model.force_at(u)` supplies the gradient and its parameter derivatives,
+  including parameter-dependent loads.
+
 - Every evaluation starts from the same `initial` vector. Fixed values come
   from that vector. Value-only requests skip the sensitivity solve.
 - Jacobian requests use the exact, unshifted $K_{ff}$, factorized once for all
@@ -39,7 +40,7 @@ partial)` implements this map from parameters to full displacement:
 from litepgo import solver
 
 equilibrium = solver.StaticEquilibriumResponse(
-    num_parameters, fixed, initial, options, make_energy, partial)
+    model, fixed, initial, options)
 u, du_dp = equilibrium.eval(p, need_jacobian=True)
 ```
 
@@ -48,7 +49,7 @@ free stiffness. Forward nonconvergence or sensitivity-solve failure throws;
 no approximate derivative is returned. Branch switches, singular states, and
 parameter-dependent prescribed boundary data are outside this contract.
 Convergence does not certify mechanical stability; the sensitivity solve accepts
-indefinite nonsingular stiffness. Callbacks and captured data must be deterministic.
+indefinite nonsingular stiffness. Model evaluation must be deterministic.
 
 ## Directional and adjoint derivatives
 
@@ -57,13 +58,13 @@ indefinite nonsingular stiffness. Callbacks and captured data must be determinis
 with zeros at fixed DOFs. `eval_vjp(p, w)` solves the adjoint equation
 `K^T lambda = w_free` and returns `-B^T lambda_full`, extending the
 adjoint with zeros at fixed DOFs. Here `K` is the exact equilibrium Hessian
-and `B = partial(p, u)`. Since the energy Hessian is symmetric, both paths
+and `B = model.force_at(u).eval_jacobian(p)`. Since the energy Hessian is symmetric, both paths
 use the existing direct stiffness solver.
 
 Each product evaluates equilibrium from the configured initial state and uses
 one derivative right-hand-side solve, without forming the numerical state
-Jacobian. Calls do not cache equilibrium states or factorizations. The explicit
-parameter partial and declared state-Jacobian sparsity pattern remain allocated.
+Jacobian. Calls do not cache equilibrium states or factorizations. Parameter products delegate to the model without requiring explicit `B`.
+The declared state-Jacobian sparsity pattern remains allocated.
 The explicit Jacobian interface and Gauss–Newton behavior are unchanged.
 
 ## Reactions and combined measurements
