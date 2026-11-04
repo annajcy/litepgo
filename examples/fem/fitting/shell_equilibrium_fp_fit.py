@@ -76,13 +76,33 @@ def main():
     # Re-solve free DOFs for every parameter trial; boundary values stay prescribed.
     def experiment(log_stretches, load, need_jacobian):
         initial = load * prescribed
+
+        class PlasticModel(energy.ParametricEnergy):
+            def __init__(self):
+                prototype = self.potential(log_stretches)
+                super().__init__(
+                    prototype.hessian_pattern, np.ones((prototype.num_dofs, n))
+                )
+
+            def potential(self, p):
+                return (make_energy)(p)
+
+            def eval_state_values(self, u, p, need_gradient, hessian_kind):
+                potential = self.potential(p)
+                potential.update_pattern(u)
+                return potential.eval(u, gradient=need_gradient, hessian=hessian_kind)
+
+            def eval_parameter_jacobian(self, u, p):
+                return (force_parameter_jacobian)(p, u)
+
+            def eval_feasible_step(self, u, p, du):
+                return self.potential(p).max_feasible_step(u, du)
+
         equilibrium = solver.StaticEquilibriumResponse(
-            n,
+            PlasticModel(),
             fixed,
             initial,
             solver.NewtonOptions(gradient_tolerance=1e-13, max_iterations=100),
-            make_energy,
-            force_parameter_jacobian,
         )
         displacement, J = equilibrium.eval(log_stretches, need_jacobian=need_jacobian)
         elastic = make_energy(log_stretches)

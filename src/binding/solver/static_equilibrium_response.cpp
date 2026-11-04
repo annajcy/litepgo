@@ -2,7 +2,6 @@
 #include "bindings.hpp"
 #include <nanobind/eigen/dense.h>
 #include <nanobind/eigen/sparse.h>
-#include <nanobind/stl/function.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <utility>
 namespace nb = nanobind;
@@ -15,19 +14,15 @@ struct StaticEquilibriumGC {
         if (!nb::inst_ready(self))
             return 0;
         const auto* response = nb::inst_ptr<StaticEquilibriumResponse>(self);
-        nb::handle make_energy = nb::find(response->make_energy_);
-        nb::handle partial = nb::find(response->partial_);
-        Py_VISIT(make_energy.ptr());
-        Py_VISIT(partial.ptr());
+        nb::handle model = nb::find(response->model_.get());
+        Py_VISIT(model.ptr());
         return 0;
     }
     static int clear(PyObject* self) {
         if (!nb::inst_ready(self))
             return 0;
         auto* response = nb::inst_ptr<StaticEquilibriumResponse>(self);
-        // Empty both members before releasing callbacks, which may run Python finalizers.
-        auto make_energy = std::exchange(response->make_energy_, {});
-        auto partial = std::exchange(response->partial_, {});
+        auto model = std::exchange(response->model_, {});
         return 0;
     }
 };
@@ -36,8 +31,7 @@ void bind_static_equilibrium_response(nb::module_& m) {
                                   {Py_tp_clear, reinterpret_cast<void*>(StaticEquilibriumGC::clear)},
                                   {0, nullptr}};
     nb::class_<StaticEquilibriumResponse, energy::Response>(m, "StaticEquilibriumResponse", nb::type_slots(slots))
-        .def(nb::init<int, dof::DofReduction, Vec, NewtonOptions, StaticEquilibriumResponse::MakeEnergy,
-                      StaticEquilibriumResponse::Partial>(),
-             "num_parameters"_a, "fixed"_a, "initial"_a, "options"_a, "make_energy"_a, "partial"_a);
+        .def(nb::init<std::shared_ptr<energy::ParametricEnergy>, dof::DofReduction, Vec, NewtonOptions>(), "model"_a,
+             "fixed"_a, "initial"_a, "options"_a);
 }
 } // namespace litepgo::solver::binding

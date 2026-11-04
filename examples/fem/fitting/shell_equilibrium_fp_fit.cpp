@@ -1,3 +1,4 @@
+#include <functional>
 // Recover shared positive diagonal shell Fp from equilibrium shapes and reactions.
 // Build: cmake --build build/release --target shell_equilibrium_fp_fit
 // Run: build/release/examples/fem/fitting/shell_equilibrium_fp_fit
@@ -91,7 +92,39 @@ int main() {
             solver::NewtonOptions options;
             options.gradient_tolerance = 1e-13;
             options.max_iterations = 100;
-            solver::StaticEquilibriumResponse equilibrium(n, fixed, initial, options, make_energy, partial);
+            // One analytic model supplies both state and parameter derivatives.
+            class PlasticModel final : public energy::ParametricEnergy {
+                using Factory = std::function<std::shared_ptr<energy::Energy>(const Vec&)>;
+                using Partial = std::function<SpMat(const Vec&, const Vec&)>;
+
+              public:
+                PlasticModel(Factory factory, Partial partial, const Vec& sample)
+                    : ParametricEnergy(factory(sample)->hessian_pattern(),
+                                       Eigen::MatrixXd::Ones(factory(sample)->num_dofs(), sample.size()).sparseView()),
+                      factory_(std::move(factory)), partial_(std::move(partial)) {}
+
+              private:
+                double eval_state_values(const ConstVecRef& u, const ConstVecRef& p, Vec* g, SpMat* K,
+                                         energy::HessianKind kind) const override {
+                    auto potential = factory_(p);
+                    potential->update_pattern(u);
+                    return potential->eval(u, g, K, kind);
+                }
+                void eval_parameter_jacobian(const ConstVecRef& u, const ConstVecRef& p, SpMat& B) const override {
+                    const SpMat source = partial_(p, u);
+                    for (int c = 0; c < B.outerSize(); ++c)
+                        for (SpMat::InnerIterator it(B, c); it; ++it)
+                            it.valueRef() = source.coeff(it.row(), c);
+                }
+                double eval_feasible_step(const ConstVecRef& u, const ConstVecRef& p,
+                                          const ConstVecRef& du) const override {
+                    return factory_(p)->max_feasible_step(u, du);
+                }
+                Factory factory_;
+                Partial partial_;
+            };
+            auto model = std::make_shared<PlasticModel>(make_energy, partial, p);
+            solver::StaticEquilibriumResponse equilibrium(model, fixed, initial, options);
             SpMat J = equilibrium.jacobian_pattern();
             const Vec u = equilibrium.eval(p, derivatives ? &J : nullptr);
             const auto elastic = make_energy(p);

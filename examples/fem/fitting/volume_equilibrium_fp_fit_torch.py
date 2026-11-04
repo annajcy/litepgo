@@ -19,7 +19,9 @@ from litepgo import dof, energy, fem, mesh, solver
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "input", nargs="?", type=Path,
+        "input",
+        nargs="?",
+        type=Path,
         default=Path(__file__).resolve().parents[3] / "assets/box-tet.veg",
         help="rest tetrahedral VEG mesh",
     )
@@ -90,13 +92,34 @@ def main():
     # Solve equilibrium before measuring reactions; free DOFs move with the parameters.
     def experiment(log_stretches, load, need_jacobian):
         initial = load * prescribed
+
+        class PlasticModel(energy.ParametricEnergy):
+            def __init__(self):
+                prototype = self.potential(log_stretches)
+                super().__init__(
+                    prototype.hessian_pattern,
+                    np.ones((prototype.num_dofs, num_parameters)),
+                )
+
+            def potential(self, p):
+                return (make_energy)(p)
+
+            def eval_state_values(self, u, p, need_gradient, hessian_kind):
+                potential = self.potential(p)
+                potential.update_pattern(u)
+                return potential.eval(u, gradient=need_gradient, hessian=hessian_kind)
+
+            def eval_parameter_jacobian(self, u, p):
+                return (force_parameter_jacobian)(p, u)
+
+            def eval_feasible_step(self, u, p, du):
+                return self.potential(p).max_feasible_step(u, du)
+
         equilibrium = solver.StaticEquilibriumResponse(
-            num_parameters,
+            PlasticModel(),
             fixed,
             initial,
             solver.NewtonOptions(gradient_tolerance=1e-11, max_iterations=100),
-            make_energy,
-            force_parameter_jacobian,
         )
         displacement, state_jacobian = equilibrium.eval(
             log_stretches, need_jacobian=need_jacobian

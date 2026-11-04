@@ -49,17 +49,37 @@ def main():
     # Solve equilibrium before measuring reactions; free DOFs move with the parameters.
     def experiment(theta, load, need_jacobian):
         initial = load * prescribed
+
+        class MaterialModel(energy.ParametricEnergy):
+            def __init__(self):
+                prototype = self.potential(theta)
+                super().__init__(
+                    prototype.hessian_pattern, np.ones((prototype.num_dofs, 2))
+                )
+
+            def potential(self, p):
+                return ElasticEnergy(
+                    mapping, rest, thickness, [p] * mapping.num_elements
+                )
+
+            def eval_state_values(self, u, p, need_gradient, hessian_kind):
+                potential = self.potential(p)
+                potential.update_pattern(u)
+                return potential.eval(u, gradient=need_gradient, hessian=hessian_kind)
+
+            def eval_parameter_jacobian(self, u, p):
+                return ForceParameterResponse(
+                    dof.ConstantDofMap(topology, 2), mapping, rest, u, thickness
+                ).eval_jacobian(p)
+
+            def eval_feasible_step(self, u, p, du):
+                return self.potential(p).max_feasible_step(u, du)
+
         equilibrium = solver.StaticEquilibriumResponse(
-            2,
+            MaterialModel(),
             fixed,
             initial,
             solver.NewtonOptions(gradient_tolerance=1e-12, max_iterations=100),
-            lambda parameters: ElasticEnergy(
-                mapping, rest, thickness, [parameters] * mapping.num_elements
-            ),
-            lambda parameters, displacement: ForceParameterResponse(
-                dof.ConstantDofMap(topology, 2), mapping, rest, displacement, thickness
-            ).eval_jacobian(parameters),
         )
         displacement, jacobian = equilibrium.eval(theta, need_jacobian=need_jacobian)
         elastic = ElasticEnergy(
