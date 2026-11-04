@@ -13,6 +13,8 @@ struct StaticEquilibriumGC;
 // Fixed indices AND values are independent of p. Callbacks must be deterministic.
 // make_energy supplies the total potential; partial supplies d(grad_u potential)/dp
 // at fixed u, including parameter-dependent loads. Both may throw on invalid p.
+// JVP/VJP use one directional/adjoint solve without forming the state Jacobian.
+// The parameter partial and declared Jacobian pattern are still stored explicitly.
 // Derivatives require an isolated equilibrium and use the exact, unshifted Hessian.
 class StaticEquilibriumResponse final : public energy::FixedPatternResponse {
   public:
@@ -24,6 +26,9 @@ class StaticEquilibriumResponse final : public energy::FixedPatternResponse {
   private:
     friend struct binding::StaticEquilibriumGC; // Python GC visits and clears the owned callbacks.
     Vec eval_values(const ConstVecRef& p, SpMat* J) const override;
+    Vec eval_jvp_values(const ConstVecRef& p, const ConstVecRef& v) const override;
+    Vec eval_vjp_values(const ConstVecRef& p, const ConstVecRef& w) const override;
+    Vec evaluate(const ConstVecRef& p, SpMat* J, const Vec* direction, bool transpose) const;
     dof::DofReduction fixed_;
     Vec initial_;
     NewtonOptions options_;
