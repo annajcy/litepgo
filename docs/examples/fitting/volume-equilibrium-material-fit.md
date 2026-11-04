@@ -15,14 +15,22 @@ $10^{-8}$. Its derivative includes both $B+KU$ and the exponential factors.
 **API walkthrough.** `make_energy(theta)` reconstructs material snapshots.
 `VolumetricFemForceMaterialResponse` provides $B$ at each solved state.
 `StaticEquilibriumResponse(2,...)` performs the inner displacement solve and
-analytic sensitivity. The outer `FixedPatternResponse` selects/sums loaded
-reaction rows, normalizes them, and calls Gauss–Newton.
+analytic sensitivity. `reaction` selects/sums loaded reaction rows. `MaterialResidual` normalizes
+them; Python composes it with `ExpResponse(2)` before calling Gauss–Newton.
+The C++ residual applies the same exponential chain rule explicitly.
 
 **Expected result.** Recover `(2,3)` and predict a held-out compression of
-$-0.07H$. The program checks fixed values, equilibrium convergence, and the
-material scaling identity $(dR/d\theta)\theta=R$, then prints parameter,
-residual, prediction errors, and forward-solve count. The observation/Jacobian
+$-0.07H$. The program prints parameter, residual, prediction errors, and forward-solve
+count. Tests check fixed values, equilibrium convergence, and the material
+scaling identity $(dR/d\theta)\theta=R$. The observation/Jacobian
 has only two parameters; it does not identify general spatial material fields.
+
+## Reading the example
+
+Read `Problem` for the energy/response factories, `make_geometry` for boundary
+setup, `reaction` for one equilibrium experiment, and `make_problem` for the
+normalized residual. `main` only fits and reports a held-out prediction. The C++
+version uses the same stages with a local two-experiment measurement callback.
 
 ## Run and inspect
 

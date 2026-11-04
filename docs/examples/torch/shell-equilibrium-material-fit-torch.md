@@ -9,18 +9,21 @@ components at plane-stress truth `(2,3)`, scaled by their target norm. Optimize
 material parameters directly from `(0.7,1.2)`. Invalid parameter trials raise an
 error; the adapter does not retry them on behalf of L-BFGS.
 
+**Shared model.** This driver imports the model and residual from
+[the native Python example](../fitting/shell-equilibrium-material-fit.md); that page contains the
+complete setup. The source below focuses on the Torch optimizer.
+
 **API walkthrough.** `ShellFemEnergy` and `ShellFemForceMaterialResponse` supply
 the energy and fixed-pose response factories. `StaticEquilibriumResponse`
 provides state sensitivity, and the residual selects fixed rows of $B+KU$.
 L-BFGS differentiates `0.5 * lp_torch.response(...).square().sum()` through the
-native Jacobian.
+native response VJP (using the residual’s explicit-Jacobian fallback).
 
 **Expected result.** Recover `(2,3)`, small residual and gradient, and correct
-predictions at load factor 0.6. The program also checks finite-difference
-state/reaction derivatives, local identifiability, fixed values, and equilibrium.
+predictions at load factor 0.6. Tests cover finite-difference state/reaction derivatives, local identifiability,
+fixed values, and equilibrium.
 Geometry and thickness remain fixed. The [native shell material case](../fitting/shell-equilibrium-material-fit.md)
-states the boundary field explicitly; its complete definition is also in the
-source below.
+states the boundary field explicitly.
 
 ## Run and inspect
 

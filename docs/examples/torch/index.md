@@ -1,9 +1,10 @@
 # PyTorch fitting through native responses
 
 `uv sync --locked` installs PyTorch with the project environment.
-These four Python-only programs contain their own setup,
-residual, optimizer closure, and checks. They use CPU float64 one-dimensional
-tensors and do not import another example.
+These four Python-only drivers import the physical setup and residual from
+the adjacent native Python fitting example. They show the Torch-specific part:
+CPU float64 parameter tensors, the L-BFGS closure, and backward. Keep both
+files together when copying a driver. Numerical checks live in the test suite.
 
 ## Objective and backward rule
 
@@ -17,7 +18,7 @@ r(p)=S^{-1}(y(p)-y_{\rm obs}),\qquad
 $$
 
 `litepgo.torch.response(residual, parameters)` evaluates native values and saves
-the input for backward, which calls the residual VJP. These examples implement
+the input for backward, which calls the residual VJP. The four L-BFGS fitting drivers implement
 explicit residual Jacobians, so their VJP uses the default Jacobian fallback. A closure calls `zero_grad`, evaluates
 the loss, then `backward`; `torch.optim.LBFGS` can call it repeatedly during line
 search. The native equilibrium sensitivity uses
@@ -33,6 +34,8 @@ explained in [fitting examples](../fitting/index.md).
 All commands run from the repository root after [configuring the release build](../../guide/build.md). Python commands explicitly select that build. Expand the source sections for complete programs, including imports, setup, checks, and output handling.
 
 ## Examples
+
+
 
 - [Volume material with L-BFGS](./volume-equilibrium-material-fit-torch.md). Volume material recovery with native autograd.
 - [Shell material with L-BFGS](./shell-equilibrium-material-fit-torch.md). Shell material recovery with native autograd.

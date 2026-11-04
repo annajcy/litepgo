@@ -22,9 +22,15 @@ provides predictions/Jacobians. A `FixedPatternResponse` wrapper subtracts and
 scales targets, rejecting invalid material trials, then passes to Gauss–Newton.
 
 **Expected result.** Both parameters recover `(2,3)`. The program prints relative
-parameter/force errors and $\sigma_{\min}/\sigma_{\max}$, requiring a ratio
-above $10^{-6}$. At fixed pose Koiter force is linear in these parameters;
+parameter/force errors. Tests require $\sigma_{\min}/\sigma_{\max}>10^{-6}$. At fixed pose Koiter force is linear in these parameters;
 there is no inner equilibrium solve or unknown thickness.
+
+## Reading the example
+
+Read `make_problem` for the mesh, prescribed pose, and synthetic target;
+`Residual` (or `MaterialResidual`) for normalization; then `main` for fitting
+and reporting. Numerical derivative and identifiability checks live in
+`tests/python/test_fitting_example_derivatives.py`.
 
 ## Run and inspect
 

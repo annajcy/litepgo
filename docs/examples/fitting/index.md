@@ -1,8 +1,9 @@
 # Material and plastic-state identification
 
 These seven programs fit synthetic noiseless observations. They print recovery,
-residual, and validation diagnostics and do not write meshes. A zero exit means
-the program's convergence/recovery checks passed. Read the formulation below
+residual, and held-out prediction errors and do not write meshes. A zero exit
+means the solver converged. Recovery thresholds, finite differences, and rank
+checks are enforced in the test suite. Read the formulation below
 before selecting an experiment: fixed-pose force fitting and equilibrium fitting
 use different derivatives.
 
