@@ -149,7 +149,14 @@ orientation-preserving volumetric material interface, not a plastic evolution la
 
 The [Neo-Hookean comparison](../examples/torch/torch-neohookean.md) is a complete
 working example. Replacing its callable with a neural density is supported for
-fixed network weights. Optimizing those weights through equilibrium still needs
+fixed network weights. The [neural material example](../examples/torch/neural-neohookean.md)
+trains an invariant MLP on native energy/stress samples and checks independent
+loading paths, tangent stiffness, and equilibrium. An optional directional tangent
+loss demonstrates that aggregate accuracy can improve while one component's
+maximum error increases. This is a workflow example, not a guarantee of material
+stability or extrapolation accuracy.
+
+Optimizing those weights through equilibrium still needs
 an explicit parameter-to-weight mapping and a corresponding `Response`; capturing a module does not make its weights
 implicit inputs to `litepgo.torch.energy` or the native solver.
 
@@ -241,9 +248,23 @@ Compose the force response with `ExpResponse` or `LogDiagonalFpResponse` to
 optimize transformed parameters. For independent element blocks, use
 `ElementwiseResponse` for the transform. The energy factory must use the same
 transform to construct its field list. These force responses do not convert
-captured `nn.Module` weights into implicit inputs; training those still requires
-an explicit mapping from optimization inputs to weights.
+captured `nn.Module` weights into implicit inputs; training those through equilibrium still requires
+an explicit mapping from optimization inputs to weights. Direct training on
+constitutive samples uses ordinary Torch optimizers, as shown in the
+[neural Neo-Hookean example](../examples/torch/neural-neohookean.md), which then
+uses frozen weights in native FEM equilibrium solves.
 
 See [the complete equilibrium example](../examples/torch/torch-equilibrium-response.md)
 and `tests/python/test_torch_fem_response.py` for native comparisons, finite
 differences, and tests that forbid explicit Jacobians while evaluating products.
+
+## Configuration lifetime and scale
+
+Treat geometry, fixed fields, and captured material configuration as immutable
+after construction; rebuild objects when they change. Native volumetric Python
+FEM shares field objects, whereas Torch FEM snapshots their centroid samples.
+Mutating a custom field's captured data is not a portable update mechanism.
+
+Equilibrium JVP/VJP avoid numerical Jacobian assembly, but the declared dense
+free-state-by-parameter sparsity pattern is still allocated. Large parameter
+fields or network-weight equilibrium training need a lazy pattern design first.

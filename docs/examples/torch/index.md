@@ -9,9 +9,15 @@ the adjacent native Python fitting example. They show the Torch-specific part:
 CPU float64 parameter tensors, the L-BFGS closure, and backward. Keep both
 files together when copying a driver. Numerical checks live in the test suite.
 
-## Objective and backward rule
+For a learned constitutive model, start with the
+[neural Neo-Hookean example](./neural-neohookean.md): ordinary Torch optimizers
+train network weights on energy/stress samples, then native FEM evaluates the
+frozen model. Its optional directional tangent comparison illustrates both the
+accuracy gains and the remaining componentwise errors.
 
-Each experiment builds a native differentiable observation $y(p)$, with
+## Objective and backward rule for the four fitting drivers
+
+Each of the four L-BFGS fitting drivers builds a native differentiable observation $y(p)$, with
 fixed training scale $S$, and minimizes
 
 $$
@@ -28,7 +34,7 @@ search. The native equilibrium sensitivity uses
 $K_{ff}U_f=-B_f$, and reaction derivatives use $B+KU$.
 No unrolled differentiation of Newton iterations is performed.
 
-Only the explicit tensor input is differentiable. Model captures remain fixed.
+For these native-response optimizer bridges, only the explicit tensor input is differentiable. Model captures remain fixed.
 There is no GPU, tensor batch dimension, or double-backward support. These are
 noise-free recovery tests, not general optimizers with statistical guarantees.
 They print diagnostics and write no meshes. The matching native formulations are
@@ -37,6 +43,8 @@ explained in [fitting examples](../fitting/index.md).
 All commands run from the repository root after [configuring the release build](../../guide/build.md). Python commands explicitly select that build. Expand the source sections for complete programs, including imports, setup, checks, and output handling.
 
 ## Examples
+
+- [Learn a neural material](./neural-neohookean.md). Train an invariant energy on native Neo-Hookean samples and evaluate stress, tangent, and FEM equilibrium.
 
 - [Force responses through equilibrium](./torch-equilibrium-response.md). Explicit Jacobians and direct JVP/VJP for physical theta and Fp.
 
