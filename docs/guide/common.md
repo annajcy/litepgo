@@ -69,6 +69,9 @@ build also provides an Accelerate or oneMKL target.
 
 ## Limiting TBB parallelism
 
+See the runnable [thread limit example](../examples/solvers/thread-limit.md)
+for a complete Newton solve with nested limits and exception cleanup.
+
 By default litepgo adds no thread limit: TBB chooses concurrency from the logical
 CPUs available to the process, subject to the host application's existing TBB
 controls. This is a concurrency allowance, not a guarantee of full CPU usage.

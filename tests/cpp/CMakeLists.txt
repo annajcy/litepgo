@@ -1,5 +1,7 @@
 # Test executables link only the modules exercised by their source files.
 add_custom_target(litepgo_tests ALL)
+add_dependencies(litepgo_tests thread_limit)
+add_test(NAME TbbThreadLimitExample COMMAND thread_limit)
 
 add_executable(litepgo_solver_tests
     solver/static_equilibrium_response_gtest.cpp

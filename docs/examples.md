@@ -40,6 +40,7 @@ last digits on every platform.
 | Energy | [`custom_response`](examples/energy/custom-response.md) | Fixed/dynamic vector residuals and Jacobians |
 | Energy | [`mesh_response`](examples/energy/mesh-response.md) | Batched fixed-pose material-force calibration |
 | Solvers | [`newton_chain`](examples/solvers/newton-chain.md) | Hard constraints and a complete Newton solve |
+| Solvers | [`thread_limit`](examples/solvers/thread-limit.md) | Scoped TBB limits, nesting, and exception cleanup |
 | Solvers | [`gauss_newton_fit`](examples/solvers/gauss-newton-fit.md) | Analytic nonlinear least squares |
 | Mesh | [`laplacian_optimization`](examples/mesh/laplacian-optimization.md) | Edge/one-ring assembly, smoothing and editing |
 | Mesh | [`arap`](examples/mesh/arap.md) | Rotation fitting and constrained global solves |

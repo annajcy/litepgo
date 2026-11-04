@@ -6,6 +6,17 @@ import pytest
 from litepgo import _core
 
 
+def test_thread_limit_example():
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, str(root / "examples/solver/thread_limit.py")],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.count("equilibrium=") == 3
+    assert "previous TBB policy restored" in result.stdout
+
+
 @pytest.mark.parametrize("folder,name", [("energy/scalar", "custom_energy"), ("energy/response", "custom_response"), ("energy/response", "mesh_response")])
 def test_cpp_python_api_examples(folder, name):
     root = Path(__file__).resolve().parents[2]
