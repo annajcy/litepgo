@@ -54,8 +54,6 @@ def make_problem():
         ]
 
         def make_energy(parameters):
-            nonlocal solves
-            solves += 1
             return ElasticEnergy(
                 mapping,
                 geometry,
@@ -73,9 +71,34 @@ def make_problem():
             )
             return response.eval_jacobian(parameters)
 
+        class MaterialModel(energy.ParametricEnergy):
+            def __init__(self):
+                prototype = self.potential(theta)
+                super().__init__(
+                    prototype.hessian_pattern, np.ones((prototype.num_dofs, 2))
+                )
+
+            def potential(self, p):
+                return (make_energy)(p)
+
+            def eval_state_values(self, u, p, need_gradient, hessian_kind):
+                potential = self.potential(p)
+                potential.update_pattern(u)
+                return potential.eval(u, gradient=need_gradient, hessian=hessian_kind)
+
+            def eval_parameter_jacobian(self, u, p):
+                return (force_parameter_jacobian)(p, u)
+
+            def eval_feasible_step(self, u, p, du):
+                return self.potential(p).max_feasible_step(u, du)
+
         equilibrium = solver.StaticEquilibriumResponse(
-            2, fixed, initial, options, make_energy, force_parameter_jacobian
+            MaterialModel(),
+            fixed,
+            initial,
+            options,
         )
+        solves += 1
         displacement, J = equilibrium.eval(theta, need_jacobian=need_jacobian)
         if not np.array_equal(displacement[fixed_dofs], initial[fixed_dofs]):
             raise RuntimeError("Prescribed displacement changed")

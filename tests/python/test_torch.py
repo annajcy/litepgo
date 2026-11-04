@@ -1,3 +1,4 @@
+from parametric_fixtures import FormulaModel
 import numpy as np
 import pytest
 from scipy import sparse
@@ -41,12 +42,15 @@ def test_energy_and_response_gradcheck_and_snapshots():
 
 def test_equilibrium_gradcheck_fixed_dofs_and_failure():
     model = solver.StaticEquilibriumResponse(
-        2,
+        FormulaModel(
+            2,
+            (dof.DofReduction(2, [0])).num_dofs,
+            lambda p: energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p),
+            lambda p, u: -sparse.eye(2, format="csc"),
+        ),
         dof.DofReduction(2, [0]),
         np.array([0.4, 0.0]),
         solver.NewtonOptions(gradient_tolerance=1e-12),
-        lambda p: energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p),
-        lambda p, u: -sparse.eye(2, format="csc"),
     )
     p = torch.tensor([2.0, 3.0], dtype=torch.float64, requires_grad=True)
     assert torch.autograd.gradcheck(lambda p: bridge.response(model, p), (p,))
@@ -82,35 +86,35 @@ def test_direct_products_skip_explicit_jacobian():
 
         def eval_values(self, x, need_jacobian):
             assert not need_jacobian, "explicit Jacobian requested"
-            return x*x
+            return x * x
 
         def eval_jvp_values(self, x, dx):
             self.products.append("jvp")
-            return 2*x*dx
+            return 2 * x * dx
 
         def eval_vjp_values(self, x, gy):
             self.products.append("vjp")
-            return 2*x*gy
+            return 2 * x * gy
 
     model = Direct()
-    x = torch.tensor([.3, .7], dtype=torch.float64, requires_grad=True)
+    x = torch.tensor([0.3, 0.7], dtype=torch.float64, requires_grad=True)
     value = bridge.response(model, x)
     assert model.products == []
     value.sum().backward(retain_graph=True)
-    torch.testing.assert_close(x.grad, 2*x)
+    torch.testing.assert_close(x.grad, 2 * x)
     assert model.products == ["vjp"]
-    torch.testing.assert_close(torch.autograd.grad(value.sum(), x)[0], 2*x)
+    torch.testing.assert_close(torch.autograd.grad(value.sum(), x)[0], 2 * x)
     assert model.products == ["vjp", "vjp"]
     model.products.clear()
     with torch.no_grad():
         bridge.response(model, x)
     assert model.products == []
-    tangent = torch.tensor([.2, -.4], dtype=torch.float64)
+    tangent = torch.tensor([0.2, -0.4], dtype=torch.float64)
     # Forward AD must work even with reverse AD disabled.
     with torch.no_grad():
         primal, product = forward_product(model, x.detach(), tangent)
-    torch.testing.assert_close(primal, x*x)
-    torch.testing.assert_close(product, 2*x*tangent)
+    torch.testing.assert_close(primal, x * x)
+    torch.testing.assert_close(product, 2 * x * tangent)
     assert model.products == ["jvp"]
     assert torch.autograd.gradcheck(
         lambda x: bridge.response(model, x), (x,), check_forward_ad=True
@@ -121,8 +125,8 @@ def test_dynamic_products_restore_saved_point_and_input_copy():
     from test_dynamic_response import Piecewise
 
     model = Piecewise()
-    a = torch.tensor([.3, .4], dtype=torch.float64, requires_grad=True)
-    b = torch.tensor([-.3, .4], dtype=torch.float64, requires_grad=True)
+    a = torch.tensor([0.3, 0.4], dtype=torch.float64, requires_grad=True)
+    b = torch.tensor([-0.3, 0.4], dtype=torch.float64, requires_grad=True)
     saved_a = a.detach().clone()
     ya, yb = bridge.response(model, a), bridge.response(model, b)
     model.update_pattern(b.detach().numpy())
@@ -133,10 +137,14 @@ def test_dynamic_products_restore_saved_point_and_input_copy():
         model.update_pattern(point.numpy())
         expected = model.eval_jacobian(point.numpy()).T @ np.ones(2)
         np.testing.assert_allclose(actual.numpy(), expected)
-        tangent = torch.tensor([.5, -.2], dtype=torch.float64)
-        model.update_pattern(-point.numpy())  # Deliberately leave the opposite active pattern.
+        tangent = torch.tensor([0.5, -0.2], dtype=torch.float64)
+        model.update_pattern(
+            -point.numpy()
+        )  # Deliberately leave the opposite active pattern.
         _, product = forward_product(model, point, tangent)
-        np.testing.assert_allclose(product.numpy(), model.eval_jvp(point.numpy(), tangent.numpy()))
+        np.testing.assert_allclose(
+            product.numpy(), model.eval_jvp(point.numpy(), tangent.numpy())
+        )
 
 
 def test_equilibrium_forward_ad_and_product_errors():
@@ -147,22 +155,29 @@ def test_equilibrium_forward_ad_and_product_errors():
         return -sparse.eye(2, format="csc")
 
     model = solver.StaticEquilibriumResponse(
-        2, dof.DofReduction(2, [0]), np.array([.4, 0.]),
+        FormulaModel(
+            2,
+            (dof.DofReduction(2, [0])).num_dofs,
+            lambda p: energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p),
+            partial,
+        ),
+        dof.DofReduction(2, [0]),
+        np.array([0.4, 0.0]),
         solver.NewtonOptions(gradient_tolerance=1e-12),
-        lambda p: energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p), partial,
     )
-    x = torch.tensor([2., 3.], dtype=torch.float64, requires_grad=True)
+    x = torch.tensor([2.0, 3.0], dtype=torch.float64, requires_grad=True)
     y = bridge.response(model, x)
     assert not calls
     y.sum().backward()
     assert len(calls) == 1
     _, product = forward_product(model, x.detach(), torch.ones_like(x))
-    torch.testing.assert_close(product, torch.tensor([0., 1.], dtype=torch.float64))
+    torch.testing.assert_close(product, torch.tensor([0.0, 1.0], dtype=torch.float64))
     assert len(calls) == 2
 
     class Failure(Square):
         def eval_vjp_values(self, x, gy):
             raise ValueError("product failure")
+
         def eval_jvp_values(self, x, dx):
             raise ValueError("product failure")
 
@@ -184,14 +199,14 @@ def test_graph_retains_model_until_graph_is_released():
     gc.collect()
     assert reference() is not None
     y.sum().backward()
-    torch.testing.assert_close(x.grad, 2*x)
+    torch.testing.assert_close(x.grad, 2 * x)
     del y
     gc.collect()
     assert reference() is None
 
 
 def test_rectangular_mesh_products_and_noncontiguous_tensors():
-    A = np.array([[1., 2.], [-3., 4.], [5., 0.]])
+    A = np.array([[1.0, 2.0], [-3.0, 4.0], [5.0, 0.0]])
 
     class Rectangular(energy.MeshResponse):
         def __init__(self):

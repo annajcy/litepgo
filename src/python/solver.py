@@ -4,13 +4,11 @@ Gauss-Newton accepts a Response and uses sparse damped normal equations for damp
 Jacobian patterns are updated at current iterates; symbolic analysis is reused
 while the structure is unchanged. Trials evaluate only the residual vector.
 
-StaticEquilibriumResponse(num_parameters, fixed, initial, options, make_energy, partial)
-returns equilibrium displacement and its direct parameter Jacobian. make_energy(p)
-returns the total Energy; partial(p, u) returns its sparse gradient/parameter
-Jacobian at fixed u. Fixed DOFs and values must be parameter-independent.
-Each call starts from initial; sensitivities use the exact unshifted Hessian.
-eval_jvp and eval_vjp use directional and adjoint solves without forming the
-state Jacobian; partial(p, u) and the declared sparsity pattern remain explicit.
+StaticEquilibriumResponse(model, fixed, initial, options) takes a ParametricEnergy.
+Its energy_at(p) view supplies Newton; force_at(u) supplies parameter derivatives.
+Fixed DOFs and values must be parameter-independent. Each call starts from initial;
+sensitivities use the exact unshifted Hessian. JVP/VJP delegate parameter products
+to the model and need not construct either numerical Jacobian. Patterns remain explicit.
 Nonconverged equilibria raise ValueError. See examples/fem/fitting/volume_equilibrium_material_fit.py.
 
 """

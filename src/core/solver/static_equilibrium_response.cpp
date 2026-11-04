@@ -18,15 +18,14 @@ SpMat state_pattern(int parameters, const dof::DofReduction& fixed) {
     return pattern;
 }
 } // namespace
-StaticEquilibriumResponse::StaticEquilibriumResponse(int num_parameters, dof::DofReduction fixed, Vec initial,
-                                                     NewtonOptions options, MakeEnergy make_energy, Partial partial)
-    : energy::FixedPatternResponse(state_pattern(num_parameters, fixed)), fixed_(std::move(fixed)),
-      initial_(std::move(initial)), options_(options), make_energy_(std::move(make_energy)),
-      partial_(std::move(partial)) {
-    if (initial_.size() != fixed_.num_dofs() || !initial_.allFinite() || !make_energy_ || !partial_ ||
+StaticEquilibriumResponse::StaticEquilibriumResponse(std::shared_ptr<energy::ParametricEnergy> model,
+                                                     dof::DofReduction fixed, Vec initial, NewtonOptions options)
+    : energy::FixedPatternResponse(state_pattern(model ? model->num_parameters() : 0, fixed)), fixed_(std::move(fixed)),
+      initial_(std::move(initial)), options_(options), model_(std::move(model)) {
+    if (model_->num_dofs() != fixed_.num_dofs() || initial_.size() != fixed_.num_dofs() || !initial_.allFinite() ||
         !std::isfinite(options_.gradient_tolerance) || options_.gradient_tolerance < 0 || options_.max_iterations < 0 ||
         options_.max_line_search_steps < 1 || !(options_.line_search_shrink > 0 && options_.line_search_shrink < 1))
-        throw std::invalid_argument("StaticEquilibriumResponse: invalid initial state, options or callbacks");
+        throw std::invalid_argument("StaticEquilibriumResponse: invalid model, initial state or options");
 }
 Vec StaticEquilibriumResponse::eval_values(const ConstVecRef& p, SpMat* J) const {
     return evaluate(p, J, nullptr, false);
@@ -41,9 +40,9 @@ Vec StaticEquilibriumResponse::eval_vjp_values(const ConstVecRef& p, const Const
 }
 Vec StaticEquilibriumResponse::evaluate(const ConstVecRef& p, SpMat* J, const Vec* direction, bool transpose) const {
     const Vec parameters = p;
-    auto potential = make_energy_(parameters);
-    if (!potential || potential->num_dofs() != num_outputs())
-        throw std::invalid_argument("StaticEquilibriumResponse: incompatible energy");
+    if (!model_)
+        throw std::logic_error("StaticEquilibriumResponse: cleared model");
+    auto potential = model_->energy_at(parameters);
     linalg::AutoIndefiniteSparseSolver linear_solver;
     const auto result = newton_solve(*potential, fixed_, initial_, options_, linear_solver);
     if (result.status != NewtonStatus::Converged)
@@ -51,11 +50,8 @@ Vec StaticEquilibriumResponse::evaluate(const ConstVecRef& p, SpMat* J, const Ve
     if (direction && fixed_.num_free() == 0)
         return Vec::Zero(transpose ? num_inputs() : num_outputs());
     if ((J || direction) && fixed_.num_free() > 0) {
-        SpMat B = partial_(parameters, result.x);
-        B.makeCompressed();
-        if (B.rows() != num_outputs() || B.cols() != num_inputs() ||
-            !Eigen::Map<const Vec>(B.valuePtr(), B.nonZeros()).allFinite())
-            throw std::invalid_argument("StaticEquilibriumResponse: invalid residual parameter Jacobian");
+        auto force = model_->force_at(result.x);
+        force->update_pattern(parameters);
         potential->update_pattern(result.x);
         const SpMat K = fixed_.reduce(potential->eval_hessian(result.x, energy::HessianKind::Exact));
         if (!linear_solver.compute(K))
@@ -70,13 +66,15 @@ Vec StaticEquilibriumResponse::evaluate(const ConstVecRef& p, SpMat* J, const Ve
         };
         if (direction) {
             // K is the symmetric exact energy Hessian, so its factorization also solves K^T.
-            const Vec rhs = transpose ? fixed_.reduce(*direction) : -fixed_.reduce(Vec(B * *direction));
+            const Vec rhs =
+                transpose ? fixed_.reduce(*direction) : -fixed_.reduce(force->eval_jvp(parameters, *direction));
             Vec full = Vec::Zero(num_outputs());
             fixed_.expand(solve(rhs), full);
             if (transpose)
-                return -B.transpose() * full;
+                return -force->eval_vjp(parameters, full);
             return full;
         }
+        const SpMat B = force->eval_jacobian(parameters);
         for (int c = 0; c < num_inputs(); ++c) {
             const Vec rhs = -fixed_.reduce(Vec(B.col(c)));
             const Vec sensitivity = solve(rhs);

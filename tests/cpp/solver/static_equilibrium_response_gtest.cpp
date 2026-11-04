@@ -1,3 +1,4 @@
+#include "../testing/parametric_formula.hpp"
 #include "litepgo/energy/scalar/quadratic_energy.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
@@ -37,7 +38,8 @@ TEST(StaticEquilibriumResponse, FemDisplacementAndReactionMatchResolveFiniteDiff
     solver::NewtonOptions options;
     options.gradient_tolerance = 1e-12;
     options.max_iterations = 100;
-    StaticEquilibriumResponse response(2, fixed, initial, options, make_energy, partial);
+    StaticEquilibriumResponse response(
+        std::make_shared<testing::FormulaModel>(2, fixed.num_dofs(), make_energy, partial), fixed, initial, options);
     const Vec p = Eigen::Vector2d(2, 3);
     SpMat J = response.jacobian_pattern();
     const Vec u = response.eval(p, &J);
@@ -87,40 +89,53 @@ TEST(StaticEquilibriumResponse, ValidationFailureAndFullyFixedStates) {
     const auto partial = [](const Vec&, const Vec&) -> SpMat { return (-Eigen::Matrix2d::Identity()).sparseView(); };
     const Vec p = Eigen::Vector2d(2, 3), initial = Eigen::Vector2d(.3, .4);
     const dof::DofReduction free(2, {}), fixed(2, {0, 1});
-    EXPECT_THROW(StaticEquilibriumResponse(0, free, initial, options, make_energy, partial), std::invalid_argument);
-    EXPECT_THROW(StaticEquilibriumResponse(2, free, Vec::Zero(3), options, make_energy, partial),
-                 std::invalid_argument);
-    StaticEquilibriumResponse all_fixed(2, fixed, initial, options, make_energy, partial);
+    EXPECT_THROW(
+        StaticEquilibriumResponse(std::make_shared<testing::FormulaModel>(0, free.num_dofs(), make_energy, partial),
+                                  free, initial, options),
+        std::invalid_argument);
+    EXPECT_THROW(
+        StaticEquilibriumResponse(std::make_shared<testing::FormulaModel>(2, free.num_dofs(), make_energy, partial),
+                                  free, Vec::Zero(3), options),
+        std::invalid_argument);
+    StaticEquilibriumResponse all_fixed(
+        std::make_shared<testing::FormulaModel>(2, fixed.num_dofs(), make_energy, partial), fixed, initial, options);
     EXPECT_EQ(all_fixed.eval_value(p), initial);
     EXPECT_EQ(all_fixed.eval_jacobian(p).nonZeros(), 0);
     EXPECT_TRUE(all_fixed.eval_jvp(p, p).isZero());
     EXPECT_TRUE(all_fixed.eval_vjp(p, p).isZero());
-    StaticEquilibriumResponse valid(2, free, initial, options, make_energy, partial);
+    StaticEquilibriumResponse valid(std::make_shared<testing::FormulaModel>(2, free.num_dofs(), make_energy, partial),
+                                    free, initial, options);
     EXPECT_TRUE(valid.eval_value(p).isApprox(p, 1e-12));
     EXPECT_TRUE(Eigen::MatrixXd(valid.eval_jacobian(p)).isApprox(Eigen::Matrix2d::Identity(), 1e-12));
     options.max_iterations = 0;
-    StaticEquilibriumResponse unfinished(2, free, initial, options, make_energy, partial);
+    StaticEquilibriumResponse unfinished(
+        std::make_shared<testing::FormulaModel>(2, free.num_dofs(), make_energy, partial), free, initial, options);
     EXPECT_THROW(unfinished.eval_value(p), std::domain_error);
     EXPECT_THROW(unfinished.eval_jvp(p, p), std::domain_error);
     EXPECT_THROW(unfinished.eval_vjp(p, p), std::domain_error);
     options.max_iterations = 50;
-    StaticEquilibriumResponse bad_partial(2, free, initial, options, make_energy,
-                                          [](const Vec&, const Vec&) { return SpMat(1, 2); });
+    StaticEquilibriumResponse bad_partial(
+        std::make_shared<testing::FormulaModel>(2, free.num_dofs(), make_energy,
+                                                [](const Vec&, const Vec&) { return SpMat(1, 2); }),
+        free, initial, options);
     EXPECT_THROW(bad_partial.eval_jacobian(p), std::invalid_argument);
     EXPECT_THROW(bad_partial.eval_jvp(p, p), std::invalid_argument);
     EXPECT_THROW(bad_partial.eval_vjp(p, p), std::invalid_argument);
     StaticEquilibriumResponse null_energy(
-        2, free, initial, options, [](const Vec&) { return std::shared_ptr<energy::Energy>{}; }, partial);
+        std::make_shared<testing::FormulaModel>(
+            2, free.num_dofs(), [](const Vec&) { return std::shared_ptr<energy::Energy>{}; }, partial),
+        free, initial, options);
     EXPECT_THROW(null_energy.eval_value(p), std::invalid_argument);
     EXPECT_THROW(null_energy.eval_jvp(p, p), std::invalid_argument);
     EXPECT_THROW(null_energy.eval_vjp(p, p), std::invalid_argument);
-    StaticEquilibriumResponse singular(
-        2, free, initial, options,
-        [](const Vec&) -> std::shared_ptr<energy::Energy> {
-            Eigen::Matrix2d K = Eigen::Vector2d(1, 0).asDiagonal();
-            return std::make_shared<energy::QuadraticEnergy>(K.sparseView());
-        },
-        partial);
+    StaticEquilibriumResponse singular(std::make_shared<testing::FormulaModel>(
+                                           2, free.num_dofs(),
+                                           [](const Vec&) -> std::shared_ptr<energy::Energy> {
+                                               Eigen::Matrix2d K = Eigen::Vector2d(1, 0).asDiagonal();
+                                               return std::make_shared<energy::QuadraticEnergy>(K.sparseView());
+                                           },
+                                           partial),
+                                       free, initial, options);
     EXPECT_THROW(singular.eval_jacobian(p), std::exception);
     EXPECT_THROW(singular.eval_jvp(p, p), std::exception);
     EXPECT_THROW(singular.eval_vjp(p, p), std::exception);
@@ -134,12 +149,13 @@ TEST(StaticEquilibriumResponse, InterleavedFixedDofsMatchResolveFiniteDifference
     const Vec initial = Eigen::Vector3d(0, .8, 0);
     solver::NewtonOptions options;
     options.gradient_tolerance = 1e-12;
-    StaticEquilibriumResponse response(
-        2, fixed, initial, options,
-        [&](const Vec& p) -> std::shared_ptr<energy::Energy> {
-            return std::make_shared<energy::QuadraticEnergy>(K.sparseView(), -A * p);
-        },
-        [&](const Vec&, const Vec&) -> SpMat { return (-A).sparseView(); });
+    StaticEquilibriumResponse response(std::make_shared<testing::FormulaModel>(
+                                           2, fixed.num_dofs(),
+                                           [&](const Vec& p) -> std::shared_ptr<energy::Energy> {
+                                               return std::make_shared<energy::QuadraticEnergy>(K.sparseView(), -A * p);
+                                           },
+                                           [&](const Vec&, const Vec&) -> SpMat { return (-A).sparseView(); }),
+                                       fixed, initial, options);
     const Vec p = Eigen::Vector2d(.6, -1.1);
     SpMat J = response.jacobian_pattern();
     const Vec u = response.eval(p, &J);
@@ -160,5 +176,80 @@ TEST(StaticEquilibriumResponse, InterleavedFixedDofsMatchResolveFiniteDifference
             EXPECT_LT((Vec(J.col(c)) - (up - um) / (2 * h)).norm(), 1e-9);
         }
     }
+}
+} // namespace litepgo::solver::test
+
+namespace litepgo::solver::test {
+namespace {
+class CoupledModel final : public energy::ParametricEnergy {
+  public:
+    CoupledModel()
+        : ParametricEnergy(Eigen::Matrix2d::Identity().sparseView(), Eigen::Matrix<double, 2, 3>::Ones().sparseView()) {
+    }
+    bool forbid_jacobian = false;
+    bool direct = false;
+    Eigen::Matrix<double, 2, 3> A = (Eigen::Matrix<double, 2, 3>() << 1, 2, -1, 3, -2, .5).finished();
+
+  private:
+    double eval_state_values(const ConstVecRef& u, const ConstVecRef& p, Vec* g, SpMat* K,
+                             energy::HessianKind) const override {
+        if (g)
+            *g = u - A * p;
+        if (K)
+            K->coeffs().setOnes();
+        return .5 * u.squaredNorm() - u.dot(A * p);
+    }
+    void eval_parameter_jacobian(const ConstVecRef&, const ConstVecRef&, SpMat& B) const override {
+        if (forbid_jacobian)
+            throw std::logic_error("explicit B requested");
+        for (int c = 0; c < B.outerSize(); ++c)
+            for (SpMat::InnerIterator it(B, c); it; ++it)
+                it.valueRef() = -A(it.row(), c);
+    }
+    Vec eval_parameter_jvp(const ConstVecRef& u, const ConstVecRef& p, const ConstVecRef& v) const override {
+        if (direct)
+            return -A * v;
+        return ParametricEnergy::eval_parameter_jvp(u, p, v);
+    }
+    Vec eval_parameter_vjp(const ConstVecRef& u, const ConstVecRef& p, const ConstVecRef& w) const override {
+        if (direct)
+            return -A.transpose() * w;
+        return ParametricEnergy::eval_parameter_vjp(u, p, w);
+    }
+};
+} // namespace
+TEST(ParametricEnergy, ViewsAndEquilibriumProducts) {
+    auto model = std::make_shared<CoupledModel>();
+    Vec p = Eigen::Vector3d(.2, -.7, .4), u = Eigen::Vector2d(.3, .6);
+    const Vec saved_p = p, saved_u = u;
+    auto potential = model->energy_at(p);
+    auto force = model->force_at(u);
+    p.setZero();
+    u.setZero();
+    EXPECT_TRUE(potential->eval_gradient(saved_u).isApprox(force->eval_value(saved_p)));
+    EXPECT_TRUE(force->eval_jvp(saved_p, saved_p).isApprox(-model->A * saved_p));
+    EXPECT_TRUE(force->eval_vjp(saved_p, saved_u).isApprox(-model->A.transpose() * saved_u));
+    StaticEquilibriumResponse eq(model, dof::DofReduction(2, {1}), saved_u, {.gradient_tolerance = 1e-12});
+    const SpMat J = eq.eval_jacobian(saved_p);
+    model->direct = true;
+    model->forbid_jacobian = true;
+    EXPECT_TRUE(eq.eval_jvp(saved_p, saved_p).isApprox(J * saved_p));
+    EXPECT_TRUE(eq.eval_vjp(saved_p, saved_u).isApprox(J.transpose() * saved_u));
+    EXPECT_THROW(eq.eval_jacobian(saved_p), std::logic_error);
+    EXPECT_TRUE(eq.eval_vjp(saved_p, saved_u).isApprox(J.transpose() * saved_u));
+    std::weak_ptr<CoupledModel> owner = model;
+    model.reset();
+    EXPECT_FALSE(owner.expired());
+    EXPECT_TRUE(potential->eval_gradient(saved_u).isApprox(force->eval_value(saved_p)));
+}
+TEST(ParametricEnergy, RequiresSharedOwnershipAndChecksInputs) {
+    CoupledModel stack;
+    EXPECT_THROW(stack.energy_at(Vec::Zero(3)), std::bad_weak_ptr);
+    auto model = std::make_shared<CoupledModel>();
+    EXPECT_THROW(model->energy_at(Vec::Zero(2)), std::invalid_argument);
+    EXPECT_THROW(model->force_at(Vec::Zero(3)), std::invalid_argument);
+    EXPECT_THROW(
+        StaticEquilibriumResponse(nullptr, dof::DofReduction(2, {}), Vec::Zero(2), {.gradient_tolerance = 1e-12}),
+        std::invalid_argument);
 }
 } // namespace litepgo::solver::test

@@ -1,3 +1,4 @@
+#include <functional>
 // Fit volume material parameters from reactions using analytic equilibrium sensitivities.
 // Build: cmake --build build/release --target volume_equilibrium_material_fit
 // Run: build/release/examples/fem/fitting/volume_equilibrium_material_fit
@@ -71,17 +72,48 @@ int main() {
                     std::vector<Field>(geometry.size(), Field(Eigen::Matrix3d::Identity().reshaped())));
                 return response.eval_jacobian(parameters);
             };
-            solver::StaticEquilibriumResponse equilibrium(
-                2, fixed, initial, options,
+            // One analytic model supplies both state and parameter derivatives.
+            class MaterialModel final : public energy::ParametricEnergy {
+                using Factory = std::function<std::shared_ptr<energy::Energy>(const Vec&)>;
+                using Partial = std::function<SpMat(const Vec&, const Vec&)>;
+
+              public:
+                MaterialModel(Factory factory, Partial partial, const Vec& sample)
+                    : ParametricEnergy(factory(sample)->hessian_pattern(),
+                                       Eigen::MatrixXd::Ones(factory(sample)->num_dofs(), sample.size()).sparseView()),
+                      factory_(std::move(factory)), partial_(std::move(partial)) {}
+
+              private:
+                double eval_state_values(const ConstVecRef& u, const ConstVecRef& p, Vec* g, SpMat* K,
+                                         energy::HessianKind kind) const override {
+                    auto potential = factory_(p);
+                    potential->update_pattern(u);
+                    return potential->eval(u, g, K, kind);
+                }
+                void eval_parameter_jacobian(const ConstVecRef& u, const ConstVecRef& p, SpMat& B) const override {
+                    const SpMat source = partial_(p, u);
+                    for (int c = 0; c < B.outerSize(); ++c)
+                        for (SpMat::InnerIterator it(B, c); it; ++it)
+                            it.valueRef() = source.coeff(it.row(), c);
+                }
+                double eval_feasible_step(const ConstVecRef& u, const ConstVecRef& p,
+                                          const ConstVecRef& du) const override {
+                    return factory_(p)->max_feasible_step(u, du);
+                }
+                Factory factory_;
+                Partial partial_;
+            };
+            auto model = std::make_shared<MaterialModel>(
                 [&](const Vec& parameters) -> std::shared_ptr<energy::Energy> {
-                    ++solves;
                     return std::make_shared<Elastic>(
                         map, geometry,
                         std::vector<Field>(geometry.size(), Field(Eigen::Matrix3d::Identity().reshaped())),
                         std::vector<Field>(geometry.size(), Field(parameters)));
                 },
-                partial);
+                partial, theta);
+            solver::StaticEquilibriumResponse equilibrium(model, fixed, initial, options);
             SpMat J = equilibrium.jacobian_pattern();
+            ++solves;
             const Vec displacement = equilibrium.eval(theta, derivative ? &J : nullptr);
             for (int i : fixed_dofs)
                 if (displacement[i] != initial[i])
