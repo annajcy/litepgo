@@ -1,7 +1,8 @@
 """CPU float64, first-order PyTorch adapters for Energy and Response.
 
 Only the explicit tensor input is differentiable. Callbacks and model configuration
-must remain fixed during evaluation. Sparse Jacobians are saved per forward call.
+must remain fixed from forward through differentiation. Response products are
+evaluated at a saved input copy; no response Jacobian is saved.
 """
 
 import numpy as np
@@ -39,21 +40,24 @@ class _Energy(torch.autograd.Function):
 
 class _Response(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x, model, need_gradient):
-        values = _input(x)
-        if need_gradient:
-            model.update_pattern(values)
-            value, jacobian = model.eval(values, need_jacobian=True)
-            ctx.jacobian = jacobian.copy()
-        else:
-            value = model.eval_value(values)
+    def forward(ctx, x, model):
+        ctx.values = _input(x)
+        ctx.model = model
+        value = model.eval_value(ctx.values)
         return torch.from_numpy(np.array(value, copy=True))
 
     @staticmethod
     @once_differentiable
     def backward(ctx, upstream):
-        gradient = ctx.jacobian.T @ upstream.detach().numpy()
-        return torch.from_numpy(np.array(gradient, copy=True)), None, None
+        ctx.model.update_pattern(ctx.values)
+        gradient = ctx.model.eval_vjp(ctx.values, _input(upstream))
+        return torch.from_numpy(np.array(gradient, copy=True)), None
+
+    @staticmethod
+    def jvp(ctx, tangent, _model):
+        ctx.model.update_pattern(ctx.values)
+        product = ctx.model.eval_jvp(ctx.values, _input(tangent))
+        return torch.from_numpy(np.array(product, copy=True))
 
 
 def energy(potential, x):
@@ -64,7 +68,7 @@ def energy(potential, x):
 
 
 def response(model, x):
-    """Evaluate a Response, including static equilibrium; differentiate x only."""
+    """Evaluate a Response; reverse/forward AD use its VJP/JVP, differentiating x only."""
     if not isinstance(x, torch.Tensor):
         raise TypeError("expected a torch.Tensor")
-    return _Response.apply(x, model, torch.is_grad_enabled() and x.requires_grad)
+    return _Response.apply(x, model)
