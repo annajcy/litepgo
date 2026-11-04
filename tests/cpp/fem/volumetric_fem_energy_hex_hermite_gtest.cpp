@@ -1,4 +1,4 @@
-#include "../../../cpp/testing/element_formula_energy.hpp"
+#include "../testing/element_formula_energy.hpp"
 
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
@@ -27,7 +27,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace litepgo::example::test {
+namespace litepgo::fem::test {
 
 inline mesh::HexTopology hex_hermite_topology() {
     // Shared face at X = 1: vertices 1, 2, 5, 6 reuse all 24 physical DOFs per vertex.
@@ -42,7 +42,7 @@ inline Vec hex_hermite_rest_positions() {
     return X_nodes.reshaped<Eigen::RowMajor>();
 }
 
-inline auto make_hex_hermite_corner_pull(const Vec& rest_positions) {
+inline auto make_hex_hermite_energy(const Vec& rest_positions) {
     const auto topology = hex_hermite_topology();
     const dof::VertexDofMap rest_position_map(topology, 3), displacement_map(topology, 24);
     using XField = fem::InterpolatedField3D<fem::HexQ1Basis>;
@@ -71,7 +71,7 @@ Vec affine_dofs(const Vec& X_nodes, const Eigen::Matrix3d& A, const Eigen::Vecto
 }
 } // namespace
 
-TEST(HexHermiteExample, ReproducesAffineDisplacementAndVolumeWeightedEnergy) {
+TEST(HexHermiteFemEnergy, ReproducesAffineDisplacementAndVolumeWeightedEnergy) {
     const Vec X_nodes = hex_hermite_rest_positions();
     const auto topology = hex_hermite_topology();
     const dof::VertexDofMap geometry_map(topology, 3), displacement_map(topology, 24);
@@ -79,7 +79,7 @@ TEST(HexHermiteExample, ReproducesAffineDisplacementAndVolumeWeightedEnergy) {
     A << 0.1, 0.02, -0.03, 0.04, -0.05, 0.02, 0.01, 0.03, 0.08;
     const Eigen::Vector3d b(0.2, -0.1, 0.3);
     const Vec x = affine_dofs(X_nodes, A, b);
-    auto energy = make_hex_hermite_corner_pull(X_nodes);
+    auto energy = make_hex_hermite_energy(X_nodes);
     EXPECT_DOUBLE_EQ(energy.eval_value(Vec::Zero(x.size())), 0);
     EXPECT_NEAR(energy.eval_value(x),
                 18 * fem::NeoHookean::eval_W(
@@ -101,7 +101,7 @@ TEST(HexHermiteExample, ReproducesAffineDisplacementAndVolumeWeightedEnergy) {
     }
 }
 
-TEST(HexHermiteExample, SharedFacesHaveContinuousValuesAndPhysicalGradientsInAllDirections) {
+TEST(HexHermiteFemEnergy, SharedFacesHaveContinuousValuesAndPhysicalGradientsInAllDirections) {
     for (int normal = 0; normal < 3; ++normal) {
         SCOPED_TRACE(normal);
         std::vector<mesh::HexTopology::Cell> cells(2);
@@ -154,9 +154,9 @@ TEST(HexHermiteExample, SharedFacesHaveContinuousValuesAndPhysicalGradientsInAll
     }
 }
 
-TEST(HexHermiteExample, PhysicalDofGradientAndHessianMatchFiniteDifferences) {
+TEST(HexHermiteFemEnergy, PhysicalDofGradientAndHessianMatchFiniteDifferences) {
     const Vec X_nodes = hex_hermite_rest_positions();
-    auto energy = make_hex_hermite_corner_pull(X_nodes);
+    auto energy = make_hex_hermite_energy(X_nodes);
     Vec x = affine_dofs(X_nodes, 0.1 * Eigen::Matrix3d::Identity());
     for (int j = 0; j < x.size(); ++j)
         x[j] += 0.005 * std::sin(0.7 * j + 0.3);
@@ -203,7 +203,7 @@ TEST(HexHermiteExample, PhysicalDofGradientAndHessianMatchFiniteDifferences) {
     EXPECT_LT((Eigen::MatrixXd(h_only) - H).norm(), 1e-13 * (1 + H.norm()));
 }
 
-TEST(HexHermiteExample, RejectsUnsupportedGeometryAndIncorrectDofShapes) {
+TEST(HexHermiteFemEnergy, RejectsUnsupportedGeometryAndIncorrectDofShapes) {
     for (int which = 0; which < 6; ++which) {
         SCOPED_TRACE(which);
         Vec X_nodes = hex_hermite_rest_positions();
@@ -221,9 +221,9 @@ TEST(HexHermiteExample, RejectsUnsupportedGeometryAndIncorrectDofShapes) {
             X_nodes[3 * 6] += 0.1;
         if (which == 5)
             X_nodes[0] = std::numeric_limits<double>::quiet_NaN();
-        EXPECT_THROW(make_hex_hermite_corner_pull(X_nodes), std::invalid_argument);
+        EXPECT_THROW(make_hex_hermite_energy(X_nodes), std::invalid_argument);
     }
-    EXPECT_THROW(make_hex_hermite_corner_pull(Vec::Zero(35)), std::invalid_argument);
+    EXPECT_THROW(make_hex_hermite_energy(Vec::Zero(35)), std::invalid_argument);
     const dof::VertexDofMap map(hex_hermite_topology(), 3);
     Eigen::MatrixXd nodes = map.gather(0, hex_hermite_rest_positions());
     const fem::BasisDofTransform<fem::HexHermiteBasis> transform{fem::InterpolatedField3D<fem::HexQ1Basis>(nodes)};
@@ -237,9 +237,9 @@ TEST(HexHermiteExample, RejectsUnsupportedGeometryAndIncorrectDofShapes) {
     EXPECT_THROW(large.to_coefficients(Eigen::MatrixXd::Constant(8, 24, 1e250)), std::domain_error);
 }
 
-TEST(HexHermiteExample, FeasibleStepMapsPhysicalDerivativeDofsAndChecksAllQuadraturePoints) {
+TEST(HexHermiteFemEnergy, FeasibleStepMapsPhysicalDerivativeDofsAndChecksAllQuadraturePoints) {
     const Vec X = hex_hermite_rest_positions(), zero = Vec::Zero(288);
-    auto energy = make_hex_hermite_corner_pull(X);
+    auto energy = make_hex_hermite_energy(X);
     EXPECT_EQ(energy.max_feasible_step(zero, zero), 1);
     EXPECT_EQ(energy.max_feasible_step(zero, affine_dofs(X, 0.1 * Eigen::Matrix3d::Identity())), 1);
     const Eigen::Matrix3d dF = Eigen::Vector3d(-4, -4, 0).asDiagonal();
@@ -254,7 +254,7 @@ TEST(HexHermiteExample, FeasibleStepMapsPhysicalDerivativeDofsAndChecksAllQuadra
     EXPECT_THROW(energy.max_feasible_step(affine_dofs(X, -Eigen::Matrix3d::Identity()), zero), std::domain_error);
 }
 
-TEST(HexHermiteExample, BasisTransformsUsePhysicalDofLayoutAndIndependentPullbacks) {
+TEST(HexHermiteFemEnergy, BasisTransformsUsePhysicalDofLayoutAndIndependentPullbacks) {
     static_assert(fem::BasisDofTransform<fem::TetP1Basis>::dofs_per_vertex == 3);
     static_assert(fem::BasisDofTransform<fem::HexQ1Basis>::dofs_per_vertex == 3);
     static_assert(fem::BasisDofTransform<fem::HexHermiteBasis>::dofs_per_vertex == 24);
@@ -281,7 +281,7 @@ TEST(HexHermiteExample, BasisTransformsUsePhysicalDofLayoutAndIndependentPullbac
     EXPECT_THROW(nodal.to_coefficients(Eigen::MatrixXd::Zero(8, 24)), std::invalid_argument);
 }
 
-TEST(HexHermiteExample, AcceptsHermiteReferenceFieldsRepresentingAffineBoxes) {
+TEST(HexHermiteFemEnergy, AcceptsHermiteReferenceFieldsRepresentingAffineBoxes) {
     const auto topology = hex_hermite_topology();
     const dof::VertexDofMap rest_position_map(topology, 3), displacement_map(topology, 24);
     const Vec positions = hex_hermite_rest_positions();
@@ -306,7 +306,7 @@ TEST(HexHermiteExample, AcceptsHermiteReferenceFieldsRepresentingAffineBoxes) {
     fem::VolumetricFemEnergy<fem::NeoHookean, fem::HexHermiteBasis, fem::GaussLegendre3D<4>, XField,
                              fem::IdentityField3D, fem::IdentityField3D>
         energy(displacement_map, std::move(fields), {Fp, Fp}, {theta, theta});
-    auto reference = make_hex_hermite_corner_pull(positions);
+    auto reference = make_hex_hermite_energy(positions);
     const Vec u = affine_dofs(positions, 0.1 * Eigen::Matrix3d::Identity());
     EXPECT_NEAR(energy.eval_value(u), reference.eval_value(u), 1e-11);
     EXPECT_TRUE(energy.eval_gradient(u).isApprox(reference.eval_gradient(u), 1e-11));
@@ -315,11 +315,11 @@ TEST(HexHermiteExample, AcceptsHermiteReferenceFieldsRepresentingAffineBoxes) {
     EXPECT_NEAR(energy.max_feasible_step(u, direction), reference.max_feasible_step(u, direction), 1e-12);
 }
 
-TEST(HexHermiteExample, CachedKinematicsMatchesUncachedAcrossChangingDisplacements) {
+TEST(HexHermiteFemEnergy, CachedKinematicsMatchesUncachedAcrossChangingDisplacements) {
     const Vec positions = hex_hermite_rest_positions();
     const auto topology = hex_hermite_topology();
     const dof::VertexDofMap rest_map(topology, 3), map(topology, 24);
-    auto cached = make_hex_hermite_corner_pull(positions);
+    auto cached = make_hex_hermite_energy(positions);
     litepgo::testing::ElementFormulaEnergy uncached(
         map,
         [&](int e, const Eigen::MatrixXd& u, Vec* g, Eigen::MatrixXd* H) {
@@ -361,4 +361,4 @@ TEST(HexHermiteExample, CachedKinematicsMatchesUncachedAcrossChangingDisplacemen
     }
 }
 
-} // namespace litepgo::example::test
+} // namespace litepgo::fem::test

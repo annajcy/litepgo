@@ -84,7 +84,7 @@ ctest --test-dir build/release --output-on-failure
 ```
 
 `litepgo_tests` is a build target, not an executable. Native executables are
-`litepgo_<module>_tests` plus `litepgo_examples_tests`. CTest also registers
+`litepgo_<module>_tests`. CTest also registers
 standalone regression examples and pytest. For a focused check:
 
 ```sh

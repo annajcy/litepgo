@@ -21,7 +21,7 @@
 #include <limits>
 #include <stdexcept>
 
-namespace litepgo::example::test {
+namespace litepgo::fem::test {
 
 inline Vec tet_p1_rest_positions() {
     // Two positively oriented tets share a face; their volumes are 1/6 and 1/3.
@@ -30,7 +30,7 @@ inline Vec tet_p1_rest_positions() {
     return rest_positions.reshaped<Eigen::RowMajor>();
 }
 
-inline auto make_tet_p1_corner_pull(const Vec& rest_positions) {
+inline auto make_tet_p1_energy(const Vec& rest_positions) {
     const mesh::TetTopology topology(5, {{0, 1, 2, 3}, {0, 2, 1, 4}});
     const dof::VertexDofMap rest_position_map(topology, 3);
     using XField = fem::InterpolatedField3D<fem::TetP1Basis>;
@@ -47,9 +47,9 @@ inline auto make_tet_p1_corner_pull(const Vec& rest_positions) {
         std::vector<fem::IdentityField3D>(topology.num_cells(), theta_field));
 }
 
-TEST(TetP1Example, GradientAndHessianMatchFiniteDifferences) {
+TEST(TetP1FemEnergy, GradientAndHessianMatchFiniteDifferences) {
     const Vec X_nodes = tet_p1_rest_positions();
-    auto energy = make_tet_p1_corner_pull(X_nodes);
+    auto energy = make_tet_p1_energy(X_nodes);
     ASSERT_EQ(X_nodes.size(), 15);
     for (int state : {0, 1, 2}) {
         SCOPED_TRACE(state);
@@ -111,24 +111,24 @@ TEST(TetP1Example, GradientAndHessianMatchFiniteDifferences) {
     }
 }
 
-TEST(TetP1Example, ConstructionRejectsInvalidGeometry) {
+TEST(TetP1FemEnergy, ConstructionRejectsInvalidGeometry) {
     for (double scale : {0., -1., 1e200}) {
         SCOPED_TRACE(scale);
         const Vec X_nodes = scale * tet_p1_rest_positions();
-        EXPECT_THROW(make_tet_p1_corner_pull(X_nodes), std::invalid_argument);
+        EXPECT_THROW(make_tet_p1_energy(X_nodes), std::invalid_argument);
     }
-    EXPECT_THROW(make_tet_p1_corner_pull(Vec::Zero(14)), std::invalid_argument);
+    EXPECT_THROW(make_tet_p1_energy(Vec::Zero(14)), std::invalid_argument);
     for (double bad : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
                        -std::numeric_limits<double>::infinity()}) {
         Vec X_nodes = tet_p1_rest_positions();
         X_nodes[0] = bad;
-        EXPECT_THROW(make_tet_p1_corner_pull(X_nodes), std::invalid_argument);
+        EXPECT_THROW(make_tet_p1_energy(X_nodes), std::invalid_argument);
     }
 }
 
-TEST(TetP1Example, FeasibleStepBoundsTheWholeSegmentAndUsesBothElements) {
+TEST(TetP1FemEnergy, FeasibleStepBoundsTheWholeSegmentAndUsesBothElements) {
     const Vec X = tet_p1_rest_positions(), zero = Vec::Zero(X.size());
-    auto energy = make_tet_p1_corner_pull(X);
+    auto energy = make_tet_p1_energy(X);
     EXPECT_EQ(energy.max_feasible_step(zero, zero), 1);
     EXPECT_EQ(energy.max_feasible_step(zero, 0.1 * X), 1);
     Vec direction = zero;
@@ -147,8 +147,8 @@ TEST(TetP1Example, FeasibleStepBoundsTheWholeSegmentAndUsesBothElements) {
     EXPECT_THROW(energy.max_feasible_step(-X, zero), std::domain_error);
 }
 
-TEST(TetP1Example, NewtonRelaxesTheFreeVerticesWithFeasibleSteps) {
-    auto energy = make_tet_p1_corner_pull(tet_p1_rest_positions());
+TEST(TetP1FemEnergy, NewtonRelaxesTheFreeVerticesWithFeasibleSteps) {
+    auto energy = make_tet_p1_energy(tet_p1_rest_positions());
     Vec u = Vec::Zero(15);
     u[11] = 0.3;
     u[14] = -0.2;
@@ -165,7 +165,7 @@ TEST(TetP1Example, NewtonRelaxesTheFreeVerticesWithFeasibleSteps) {
     EXPECT_TRUE(result.x.head(9).isZero(0));
 }
 
-TEST(TetP1Example, VolumetricFemEnergyRejectsIncompatibleMapsAndFields) {
+TEST(TetP1FemEnergy, VolumetricFemEnergyRejectsIncompatibleMapsAndFields) {
     const mesh::TetTopology topology(5, {{0, 1, 2, 3}, {0, 2, 1, 4}});
     const dof::VertexDofMap rest_position_map(topology, 3), wrong_width(topology, 2);
     const dof::VertexDofMap wrong_count(mesh::TetTopology(5, {{0, 1, 2, 3}}), 3);
@@ -188,7 +188,7 @@ TEST(TetP1Example, VolumetricFemEnergyRejectsIncompatibleMapsAndFields) {
     EXPECT_THROW((Fem(rest_position_map, X, {Fp, theta}, {theta, theta})), std::invalid_argument);
 }
 
-TEST(TetP1Example, VolumetricFemEnergyAcceptsInterpolatedFixedFields) {
+TEST(TetP1FemEnergy, VolumetricFemEnergyAcceptsInterpolatedFixedFields) {
     const mesh::TetTopology topology(5, {{0, 1, 2, 3}, {0, 2, 1, 4}});
     const dof::VertexDofMap map(topology, 3);
     Eigen::MatrixXd plastic(4, 9), parameters(4, 2);
@@ -233,4 +233,4 @@ TEST(TetP1Example, VolumetricFemEnergyAcceptsInterpolatedFixedFields) {
     EXPECT_DOUBLE_EQ(energy.max_feasible_step(u, -2 * positions), reference.max_feasible_step(u, -2 * positions));
 }
 
-} // namespace litepgo::example::test
+} // namespace litepgo::fem::test

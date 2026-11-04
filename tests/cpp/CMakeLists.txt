@@ -50,12 +50,16 @@ add_executable(litepgo_fem_tests
     fem/kinematics/basis_dof_transform_gtest.cpp
     fem/basis/1d/linear_lagrange_basis_gtest.cpp
     fem/shell_fem_energy_gtest.cpp
+    fem/shell_fem_energy_regression_gtest.cpp
     fem/shell_fem_force_material_response_gtest.cpp
     fem/shell_fem_force_fp_response_gtest.cpp
     fem/local/local_energy_gtest.cpp
     fem/local/local_response_gtest.cpp
     fem/volumetric_fem_force_response_gtest.cpp
     fem/volumetric_fem_force_material_response_gtest.cpp
+    fem/volumetric_fem_energy_hex_q1_gtest.cpp
+    fem/volumetric_fem_energy_hex_hermite_gtest.cpp
+    fem/volumetric_fem_energy_tet_p1_gtest.cpp
     fem/material/volumetric/volumetric_material_force_local_response_gtest.cpp
     fem/local/dof_derivatives_gtest.cpp
     fem/kinematics/deformation_gradient_kinematics_gtest.cpp
@@ -81,7 +85,7 @@ add_executable(litepgo_fem_tests
     fem/material/volumetric/tet_p1_integration_gtest.cpp
 )
 target_link_libraries(litepgo_fem_tests PRIVATE
-    litepgo::fem litepgo::warnings GTest::gtest_main)
+    litepgo::solver litepgo::fem litepgo::warnings GTest::gtest_main)
 add_dependencies(litepgo_tests litepgo_fem_tests)
 gtest_discover_tests(litepgo_fem_tests DISCOVERY_MODE PRE_TEST)
 
@@ -109,17 +113,6 @@ target_link_libraries(litepgo_spatial_tests PRIVATE
     litepgo::spatial litepgo::warnings GTest::gtest_main)
 add_dependencies(litepgo_tests litepgo_spatial_tests)
 gtest_discover_tests(litepgo_spatial_tests DISCOVERY_MODE PRE_TEST)
-
-add_executable(litepgo_examples_tests
-    ../example/fem/equilibrium/hex_q1_corner_pull_gtest.cpp
-    ../example/fem/equilibrium/hex_hermite_corner_pull_gtest.cpp
-    ../example/fem/equilibrium/tet_p1_corner_pull_gtest.cpp
-    ../example/fem/equilibrium/shell_saddle_pull_gtest.cpp
-)
-target_link_libraries(litepgo_examples_tests PRIVATE
-    litepgo::solver litepgo::fem litepgo::warnings GTest::gtest_main)
-add_dependencies(litepgo_tests litepgo_examples_tests)
-gtest_discover_tests(litepgo_examples_tests DISCOVERY_MODE PRE_TEST)
 
 add_executable(litepgo_common_tests
     common/build_info_gtest.cpp
