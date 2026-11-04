@@ -220,3 +220,6 @@ __all__ = [
     "ShellFpForceLocalResponse2D",
     "ShellFemForceFpResponse",
 ]
+
+LogDiagonalFpResponse = _native.LogDiagonalFpResponse
+__all__ += ["LogDiagonalFpResponse"]

@@ -1,6 +1,8 @@
 add_library(litepgo_energy STATIC
     parametric/parametric_energy.cpp
     response/mesh_response.cpp
+    response/composed_response.cpp
+    response/elementwise_response.cpp
     response/response.cpp
     scalar/affine_mapped_energy.cpp
     scalar/dynamic_pattern_energy.cpp

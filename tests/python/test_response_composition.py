@@ -1,0 +1,191 @@
+import gc
+import weakref
+
+import numpy as np
+import pytest
+from litepgo import dof, energy, fem, mesh
+
+
+def topology():
+    return mesh.TetTopology(5, np.array([[0, 1, 2, 3], [1, 2, 3, 4]], dtype=np.int32))
+
+
+def check_products(response, x):
+    response.update_pattern(x)
+    J = response.eval_jacobian(x).toarray()
+    v = np.linspace(0.2, 0.7, len(x))
+    w = np.linspace(-0.3, 0.8, response.num_outputs)
+    np.testing.assert_allclose(response.eval_jvp(x, v), J @ v, atol=1e-11)
+    np.testing.assert_allclose(response.eval_vjp(x, w), J.T @ w, atol=1e-11)
+    h = 1e-6
+    numerical = (response.eval_value(x + h * v) - response.eval_value(x - h * v)) / (
+        2 * h
+    )
+    np.testing.assert_allclose(J @ v, numerical, rtol=1e-6, atol=1e-8)
+
+
+@pytest.mark.parametrize("size", [2, 3])
+def test_native_transforms(size):
+    x = np.linspace(-0.2, 0.3, size)
+    transform = fem.LogDiagonalFpResponse(size)
+    expected = np.eye(3)
+    expected[np.arange(size), np.arange(size)] = np.exp(x)
+    np.testing.assert_allclose(
+        transform.eval_value(x).reshape(3, 3, order="F"), expected
+    )
+    for response in [transform, energy.ExpResponse(size)]:
+        check_products(response, x)
+        for bad in [np.full(size, 1000.0), np.full(size, -1000.0)]:
+            with pytest.raises(ValueError):
+                response.eval_value(bad)
+        check_products(response, x)
+    with pytest.raises(ValueError):
+        fem.LogDiagonalFpResponse(1)
+    with pytest.raises(ValueError):
+        energy.ExpResponse(0)
+
+
+@pytest.mark.parametrize("shared", [True, False])
+def test_elementwise_values_and_shared_vjp(shared):
+    mapping = (dof.ConstantDofMap if shared else dof.ElementDofMap)(topology(), 2)
+    response = energy.ElementwiseResponse(mapping, energy.ExpResponse(2))
+    x = np.linspace(-0.2, 0.3, mapping.num_dofs)
+    expected = np.tile(np.exp(x), 2) if shared else np.exp(x)
+    np.testing.assert_allclose(response.eval_value(x), expected)
+    np.testing.assert_allclose(
+        response.eval_vjp(x, np.ones(4)), (2 if shared else 1) * np.exp(x)
+    )
+    check_products(response, x)
+    with pytest.raises(ValueError):
+        energy.ElementwiseResponse(mapping, energy.ExpResponse(3))
+
+
+def test_direct_products_do_not_request_child_jacobians():
+    class Direct(energy.FixedPatternResponse):
+        def __init__(self):
+            super().__init__(np.eye(2))
+
+        def eval_values(self, x, need_jacobian):
+            if need_jacobian:
+                raise AssertionError("explicit Jacobian requested")
+            return x * x
+
+        def eval_jvp_values(self, x, v):
+            return 2 * x * v
+
+        def eval_vjp_values(self, x, w):
+            return 2 * x * w
+
+    local = energy.ComposedResponse(Direct(), Direct())
+    response = energy.ElementwiseResponse(dof.ConstantDofMap(topology(), 2), local)
+    x = np.array([0.3, -0.5])
+    np.testing.assert_allclose(response.eval_jvp(x, np.ones(2)), np.tile(4 * x**3, 2))
+    np.testing.assert_allclose(response.eval_vjp(x, np.ones(4)), 8 * x**3)
+    with pytest.raises(AssertionError, match="explicit"):
+        response.eval_jacobian(x)
+    np.testing.assert_allclose(response.eval_vjp(x, np.ones(4)), 8 * x**3)
+
+    torch = pytest.importorskip("torch")
+    from litepgo import torch as bridge
+
+    parameters = torch.tensor(x, dtype=torch.float64, requires_grad=True)
+    bridge.response(response, parameters).sum().backward()
+    np.testing.assert_allclose(parameters.grad.numpy(), 8 * x**3)
+    with torch.autograd.forward_ad.dual_level():
+        dual = torch.autograd.forward_ad.make_dual(
+            parameters.detach(), torch.ones_like(parameters)
+        )
+        tangent = torch.autograd.forward_ad.unpack_dual(
+            bridge.response(response, dual)
+        ).tangent
+        np.testing.assert_allclose(tangent.numpy(), np.tile(4 * x**3, 2))
+
+
+def test_dynamic_children_and_external_pattern_updates():
+    class Dynamic(energy.DynamicPatternResponse):
+        def __init__(self):
+            super().__init__(np.eye(2))
+
+        def pattern_at(self, x):
+            return np.array([[1.0, 0.0], [float(x[0] > 0), 1.0]])
+
+        def eval_values(self, x, need_jacobian):
+            y = np.array([x[0], x[1] + max(x[0], 0.0) ** 2])
+            J = np.array([[1.0, 0.0], [2 * max(x[0], 0.0), 1.0]])
+            return (y, J) if need_jacobian else y
+
+    child = Dynamic()
+    composed = energy.ComposedResponse(child, energy.ExpResponse(2))
+    x = np.array([0.3, -0.4])
+    assert not composed.has_fixed_pattern
+    with pytest.raises(RuntimeError, match="update_pattern"):
+        composed.eval_jacobian(x)
+    check_products(composed, x)
+    child.update_pattern(-np.ones(2))
+    check_products(composed, x)
+    element = energy.ElementwiseResponse(dof.ElementDofMap(topology(), 2), child)
+    check_products(element, np.array([0.2, 0.3, -0.4, 0.5]))
+    assert element.has_fixed_pattern
+    with pytest.raises(ValueError):
+        energy.ComposedResponse(energy.ExpResponse(3), energy.ExpResponse(2))
+
+
+@pytest.mark.parametrize("kind", ["composed", "elementwise"])
+def test_child_lifetime_and_cycles(kind):
+    class Child(energy.FixedPatternResponse):
+        def __init__(self):
+            super().__init__(np.eye(2))
+
+        def eval_values(self, x, need_jacobian):
+            return (x, np.eye(2)) if need_jacobian else x
+
+    child = Child()
+    if kind == "composed":
+        owner = energy.ComposedResponse(child, energy.ExpResponse(2))
+    else:
+        owner = energy.ElementwiseResponse(dof.ConstantDofMap(topology(), 2), child)
+    child.owner = owner
+    ref = weakref.ref(child)
+    del child
+    gc.collect()
+    owner.eval_value(np.ones(2))
+    assert ref() is not None
+    del owner
+    gc.collect()
+    assert ref() is None
+
+
+def test_empty_mesh():
+    empty = mesh.TetTopology(0, np.empty((0, 4), dtype=np.int32))
+    obj = energy.ElementwiseResponse(
+        dof.ConstantDofMap(empty, 2), energy.ExpResponse(2)
+    )
+    assert obj.eval_value(np.zeros(2)).size == 0
+    assert obj.eval_jacobian(np.zeros(2)).shape == (0, 2)
+    np.testing.assert_array_equal(obj.eval_vjp(np.zeros(2), np.empty(0)), np.zeros(2))
+
+
+
+
+def test_composition_reuses_dynamic_child_at_different_inputs():
+    class Flip(energy.DynamicPatternResponse):
+        def __init__(self):
+            super().__init__(np.eye(2))
+
+        def pattern_at(self, x):
+            return np.array([[1.0, 0.0], [float(x[0] > 0), 1.0]])
+
+        def eval_values(self, x, need_jacobian):
+            y = np.array([-x[0], x[1] + max(x[0], 0.0) ** 2])
+            J = np.array([[-1.0, 0.0], [2 * max(x[0], 0.0), 1.0]])
+            return (y, J) if need_jacobian else y
+
+    child = Flip()
+    obj = energy.ComposedResponse(child, child)
+    for x in [np.array([0.3, 0.4]), np.array([-0.3, 0.4])]:
+        # Flip composed with itself is (x0, x1+x0²), on either side of zero.
+        obj.update_pattern(x)
+        np.testing.assert_allclose(
+            obj.eval_jacobian(x).toarray(), [[1.0, 0.0], [2 * x[0], 1.0]]
+        )
+        check_products(obj, x)

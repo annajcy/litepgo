@@ -87,3 +87,8 @@ __all__ += ["MeshEnergy", "MeshResponse"]
 
 ParametricEnergy = _native.ParametricEnergy
 __all__ += ["ParametricEnergy"]
+
+ComposedResponse = _native.ComposedResponse
+ElementwiseResponse = _native.ElementwiseResponse
+ExpResponse = _native.ExpResponse
+__all__ += ["ComposedResponse", "ElementwiseResponse", "ExpResponse"]
