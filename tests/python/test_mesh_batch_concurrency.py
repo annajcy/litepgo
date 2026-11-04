@@ -35,8 +35,8 @@ def test_batch_workers_gil_exception_and_recovery():
             visit(ids, x)
             return (x, np.ones_like(x)) if need_j else x
 
-        E = energy.MeshEnergy(mapping, e, batch_size=1, step=step)
-        R = energy.MeshResponse(mapping, mapping, r, batch_size=1)
+        E = energy.CustomMeshEnergy(mapping, e, batch_size=1, step=step)
+        R = energy.CustomMeshResponse(mapping, mapping, r, batch_size=1)
         x = np.ones(1)
         for operation, expected in [
             (lambda: E.eval_value(x), 32),

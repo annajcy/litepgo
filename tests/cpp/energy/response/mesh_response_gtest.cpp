@@ -18,7 +18,7 @@ Eigen::Matrix<double, 4, 2> local_matrix() {
     return A;
 }
 } // namespace
-TEST(MeshResponse, SharedParametersAndOutputsAccumulate) {
+TEST(CustomMeshResponse, SharedParametersAndOutputsAccumulate) {
     int derivatives = 0;
     auto r = formula_response(dof::ConstantDofMap(topology, 2), dof::VertexDofMap(topology, 1),
                               [&](int e, const Vec& x, Eigen::MatrixXd* J) -> Vec {
@@ -46,7 +46,7 @@ TEST(MeshResponse, SharedParametersAndOutputsAccumulate) {
     EXPECT_TRUE(Eigen::MatrixXd(J).isApprox(expected));
     EXPECT_EQ(J.nonZeros(), 10);
 }
-TEST(MeshResponse, IndependentParameterBlocks) {
+TEST(CustomMeshResponse, IndependentParameterBlocks) {
     auto r = formula_response(dof::ElementDofMap(topology, 2), dof::VertexDofMap(topology, 1),
                               [](int, const Vec& x, Eigen::MatrixXd* J) -> Vec {
                                   if (J)
@@ -60,7 +60,7 @@ TEST(MeshResponse, IndependentParameterBlocks) {
     EXPECT_TRUE(Eigen::MatrixXd(r.eval_jacobian(x)).isApprox(expected));
     EXPECT_TRUE(r.eval_value(x).isApprox(expected * x));
 }
-TEST(MeshResponse, MatrixGatherPreservesRowMajorSlotsAndZeros) {
+TEST(CustomMeshResponse, MatrixGatherPreservesRowMajorSlotsAndZeros) {
     auto r = formula_response(dof::VertexDofMap(topology, 2), dof::ElementDofMap(topology, 1),
                               [](int, const Eigen::MatrixXd& x, Eigen::MatrixXd* J) -> Vec {
                                   EXPECT_EQ(x.rows(), 4);
@@ -80,7 +80,7 @@ TEST(MeshResponse, MatrixGatherPreservesRowMajorSlotsAndZeros) {
     EXPECT_EQ(J.nonZeros(), 16);
     EXPECT_TRUE(J.coeffs().isZero());
 }
-TEST(MeshResponse, RejectsInvalidLocalResultsAndCountMismatch) {
+TEST(CustomMeshResponse, RejectsInvalidLocalResultsAndCountMismatch) {
     const dof::ConstantDofMap input(topology, 2);
     const dof::VertexDofMap output(topology, 1);
     auto wrong = formula_response(input, output, [](int, const Vec&, Eigen::MatrixXd*) { return Vec::Zero(3).eval(); });
@@ -96,7 +96,7 @@ TEST(MeshResponse, RejectsInvalidLocalResultsAndCountMismatch) {
                                    [](int, const Vec&, Eigen::MatrixXd*) { return Vec::Zero(4).eval(); })),
                  std::invalid_argument);
 }
-TEST(MeshResponse, EmptyMeshAndAssemblyOverflow) {
+TEST(CustomMeshResponse, EmptyMeshAndAssemblyOverflow) {
     const mesh::TetTopology empty(0, {});
     auto zero =
         formula_response(dof::ConstantDofMap(empty, 2), dof::ElementDofMap(empty, 1),
@@ -109,7 +109,7 @@ TEST(MeshResponse, EmptyMeshAndAssemblyOverflow) {
     EXPECT_THROW(huge.eval_value(Vec::Zero(2)), std::domain_error);
 }
 
-TEST(MeshResponse, RejectsBadIndicesBeforeEvaluation) {
+TEST(CustomMeshResponse, RejectsBadIndicesBeforeEvaluation) {
     struct Map {
         std::vector<int> indices;
         int num_elements() const {
@@ -130,7 +130,7 @@ TEST(MeshResponse, RejectsBadIndicesBeforeEvaluation) {
     EXPECT_THROW((formula_response(outside, valid, evaluate)), std::invalid_argument);
 }
 
-TEST(MeshResponse, SharedAssemblyAndPartialBatch) {
+TEST(CustomMeshResponse, SharedAssemblyAndPartialBatch) {
     const mesh::TetTopology t(6, {{0, 1, 2, 3}, {1, 2, 3, 4}, {2, 3, 4, 5}});
     const dof::ConstantDofMap input(t, 2);
     const dof::VertexDofMap output(t, 1);
@@ -141,7 +141,7 @@ TEST(MeshResponse, SharedAssemblyAndPartialBatch) {
     });
     for (int size : {1, 2, 16}) {
         std::atomic<int> calls = 0;
-        energy::MeshResponse batch(
+        energy::CustomMeshResponse batch(
             input, output,
             [&](std::span<const int> ids, const energy::BatchMatrix& x, energy::BatchMatrix* J) {
                 ++calls;
@@ -165,29 +165,29 @@ TEST(MeshResponse, SharedAssemblyAndPartialBatch) {
     }
 }
 
-TEST(MeshResponse, ValidatesCallbackAndBatchResults) {
+TEST(CustomMeshResponse, ValidatesCallbackAndBatchResults) {
     const dof::ConstantDofMap input(topology, 2);
     const dof::VertexDofMap output(topology, 1);
-    EXPECT_THROW((energy::MeshResponse(input, output, {})), std::invalid_argument);
+    EXPECT_THROW((energy::CustomMeshResponse(input, output, {})), std::invalid_argument);
     auto bad = [](std::span<const int>, const energy::BatchMatrix&, energy::BatchMatrix*) {
         return energy::BatchMatrix::Zero(1, 1).eval();
     };
-    EXPECT_THROW((energy::MeshResponse(input, output, bad, 0)), std::invalid_argument);
-    energy::MeshResponse batch(input, output, bad);
+    EXPECT_THROW((energy::CustomMeshResponse(input, output, bad, 0)), std::invalid_argument);
+    energy::CustomMeshResponse batch(input, output, bad);
     EXPECT_THROW(batch.eval_value(Vec::Zero(2)), std::logic_error);
     EXPECT_THROW(batch.eval_jacobian(Vec::Zero(2)), std::logic_error);
 }
 
-TEST(MeshResponse, ReusedBuffersDetectIncompleteWritesAndRecover) {
+TEST(CustomMeshResponse, ReusedBuffersDetectIncompleteWritesAndRecover) {
     const dof::ConstantDofMap input(topology, 2);
     const dof::VertexDofMap output(topology, 1);
     bool omit = false;
-    energy::MeshResponse batch(input, output,
-                               [&](std::span<const int> ids, const energy::BatchMatrix& x, energy::BatchMatrix* J) {
-                                   if (J && !omit)
-                                       J->setOnes(4 * ids.size(), 2);
-                                   return energy::BatchMatrix::Constant(ids.size(), 4, x.row(0).sum()).eval();
-                               });
+    energy::CustomMeshResponse batch(
+        input, output, [&](std::span<const int> ids, const energy::BatchMatrix& x, energy::BatchMatrix* J) {
+            if (J && !omit)
+                J->setOnes(4 * ids.size(), 2);
+            return energy::BatchMatrix::Constant(ids.size(), 4, x.row(0).sum()).eval();
+        });
     const Vec x = Vec::Ones(2);
     const SpMat expected = batch.eval_jacobian(x);
     omit = true;
@@ -206,9 +206,9 @@ TEST(MeshResponse, ReusedBuffersDetectIncompleteWritesAndRecover) {
     EXPECT_TRUE(Eigen::MatrixXd(regular.eval_jacobian(x)).isApprox(Eigen::MatrixXd(expected)));
 }
 
-TEST(MeshResponse, EmptyLocalInputsAndOutputsRetainBatchDimensions) {
+TEST(CustomMeshResponse, EmptyLocalInputsAndOutputsRetainBatchDimensions) {
     const dof::StencilDofMap map(1, {{}, {}}, 1);
-    energy::MeshResponse obj(
+    energy::CustomMeshResponse obj(
         map, map,
         [](auto ids, const auto& x, auto* J) {
             EXPECT_EQ(x.rows(), static_cast<Eigen::Index>(ids.size()));
@@ -222,7 +222,7 @@ TEST(MeshResponse, EmptyLocalInputsAndOutputsRetainBatchDimensions) {
     EXPECT_EQ(obj.eval_jacobian(Vec::Zero(1)).nonZeros(), 0);
 }
 
-TEST(MeshResponse, DuplicateIndicesGatherAndScatterAcrossBatches) {
+TEST(CustomMeshResponse, DuplicateIndicesGatherAndScatterAcrossBatches) {
     struct RepeatedMap {
         int num_dofs() const {
             return 1;
@@ -235,7 +235,7 @@ TEST(MeshResponse, DuplicateIndicesGatherAndScatterAcrossBatches) {
         }
     } map;
     for (int size : {1, 2, 8}) {
-        energy::MeshResponse obj(
+        energy::CustomMeshResponse obj(
             map, map,
             [](auto ids, const auto& x, auto* J) {
                 energy::BatchMatrix values(ids.size(), 2);
@@ -252,4 +252,68 @@ TEST(MeshResponse, DuplicateIndicesGatherAndScatterAcrossBatches) {
             EXPECT_DOUBLE_EQ(obj.eval_jacobian(Vec::Constant(1, x)).coeff(0, 0), 12);
         }
     }
+}
+
+TEST(MeshResponse, ProductsAndDirectOverrides) {
+    struct Map {
+        int size;
+        std::vector<std::vector<int>> indices;
+        int num_dofs() const {
+            return size;
+        }
+        int num_elements() const {
+            return static_cast<int>(indices.size());
+        }
+        std::vector<int> dof_indices(int e) const {
+            return indices.at(e);
+        }
+    };
+    const Map input{2, {{0, 0}, {0, 1}}};
+    const Map output{3, {{0, 1}, {1, 2}}};
+    class Direct final : public energy::MeshResponse {
+      public:
+        Direct(const Map& i, const Map& o) : MeshResponse(i, o, 1) {}
+        bool fail = false;
+
+      private:
+        energy::BatchMatrix eval_batch(std::span<const int>, const energy::BatchMatrix&,
+                                       energy::BatchMatrix*) const override {
+            throw std::logic_error("explicit Jacobian must not be requested");
+        }
+        energy::BatchMatrix eval_jvp_batch(std::span<const int>, const energy::BatchMatrix&,
+                                           const energy::BatchMatrix& d) const override {
+            if (fail)
+                throw std::domain_error("test failure");
+            return 2 * d;
+        }
+        energy::BatchMatrix eval_vjp_batch(std::span<const int>, const energy::BatchMatrix&,
+                                           const energy::BatchMatrix& d) const override {
+            return 2 * d;
+        }
+    };
+    energy::CustomMeshResponse fallback(input, output,
+                                        [](std::span<const int>, const energy::BatchMatrix& x, energy::BatchMatrix* J) {
+                                            if (J) {
+                                                J->setZero(2 * x.rows(), 2);
+                                                for (Eigen::Index b = 0; b < x.rows(); ++b)
+                                                    J->middleRows(2 * b, 2).diagonal().setConstant(2);
+                                            }
+                                            return energy::BatchMatrix(2 * x);
+                                        });
+    Direct direct(input, output);
+    Vec x(2), dx(2), gy(3);
+    x << .1, .2;
+    dx << .3, -.7;
+    gy << .2, .4, -.9;
+    const SpMat J = fallback.eval_jacobian(x);
+    EXPECT_TRUE(fallback.eval_jvp(x, dx).isApprox(J * dx));
+    EXPECT_TRUE(fallback.eval_vjp(x, gy).isApprox(J.transpose() * gy));
+    EXPECT_TRUE(direct.eval_jvp(x, dx).isApprox(J * dx));
+    EXPECT_TRUE(direct.eval_vjp(x, gy).isApprox(J.transpose() * gy));
+    EXPECT_NEAR(gy.dot(direct.eval_jvp(x, dx)), dx.dot(direct.eval_vjp(x, gy)), 1e-14);
+    EXPECT_THROW(direct.eval_jvp(x, Vec::Zero(3)), std::invalid_argument);
+    direct.fail = true;
+    EXPECT_THROW(direct.eval_jvp(x, dx), std::domain_error);
+    direct.fail = false;
+    EXPECT_TRUE(direct.eval_jvp(x, dx).isApprox(J * dx));
 }

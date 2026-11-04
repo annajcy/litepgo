@@ -16,6 +16,8 @@ void bind_response(nb::module_& m) {
         .def("update_pattern", &Response::update_pattern, "x"_a, nb::call_guard<nb::gil_scoped_release>())
         .def("eval_value", &Response::eval_value, "x"_a, nb::call_guard<nb::gil_scoped_release>())
         .def("eval_jacobian", &Response::eval_jacobian, "x"_a, nb::call_guard<nb::gil_scoped_release>())
+        .def("eval_jvp", &Response::eval_jvp, "x"_a, "dx"_a, nb::call_guard<nb::gil_scoped_release>())
+        .def("eval_vjp", &Response::eval_vjp, "x"_a, "gy"_a, nb::call_guard<nb::gil_scoped_release>())
         .def(
             "eval",
             [](const Response& r, const ConstVecRef& x, bool need_jacobian) {

@@ -7,26 +7,53 @@
 namespace litepgo::energy {
 using BatchMatrix = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
 
-// Concurrent batch callbacks followed by TBB row-owned assembly in element order.
-// Callbacks must be thread-safe and must not depend on batch execution order.
+// Concurrent batch hooks; explicit values/Jacobians use TBB row-owned assembly.
+// Hooks must be thread-safe and must not depend on batch execution order.
 // Values have one row per element; Jacobians stack (output_size x input_size) blocks.
 class MeshResponse : public FixedPatternResponse {
   public:
-    using Callback = std::function<BatchMatrix(std::span<const int>, const BatchMatrix&, BatchMatrix*)>;
     template <class InputMap, class OutputMap>
-    MeshResponse(const InputMap& input, const OutputMap& output, Callback callback, int batch_size = 256)
-        : MeshResponse(dof::ResponseAssembler(input, output), std::move(callback), batch_size) {}
+    MeshResponse(const InputMap& input, const OutputMap& output, int batch_size = 256)
+        : MeshResponse(dof::ResponseAssembler(input, output), batch_size) {}
+
+  protected:
+    virtual BatchMatrix eval_batch(std::span<const int> ids, const BatchMatrix& x, BatchMatrix* J) const = 0;
+    // Defaults multiply local explicit Jacobians; overrides can avoid forming them.
+    virtual BatchMatrix eval_jvp_batch(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& dx) const;
+    virtual BatchMatrix eval_vjp_batch(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& gy) const;
 
   private:
-    MeshResponse(dof::ResponseAssembler assembler, Callback callback, int batch_size);
+    Vec eval_jvp_values(const ConstVecRef& x, const ConstVecRef& dx) const override;
+    Vec eval_vjp_values(const ConstVecRef& x, const ConstVecRef& gy) const override;
+    void check_batch_product(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& d,
+                             bool transpose) const;
+    Vec product(const ConstVecRef& x, const ConstVecRef& direction, bool transpose) const;
+    MeshResponse(dof::ResponseAssembler assembler, int batch_size);
     Vec eval_values(const ConstVecRef& x, SpMat* J) const override;
     dof::ResponseAssembler assembler_;
-    Callback callback_;
     std::vector<std::vector<int>> batches_;
     struct Storage {
         BatchMatrix inputs, values, jacobian;
     };
     mutable std::vector<Storage> storage_;
     mutable std::vector<dof::ResponseAssembler::ElementView> views_;
+};
+class CustomMeshResponse : public MeshResponse {
+  public:
+    using Callback = std::function<BatchMatrix(std::span<const int>, const BatchMatrix&, BatchMatrix*)>;
+    template <class InputMap, class OutputMap>
+    CustomMeshResponse(const InputMap& input, const OutputMap& output, Callback callback, int batch_size = 256)
+        : MeshResponse(input, output, batch_size), callback_(std::move(callback)) {
+        if (!callback_)
+            throw std::invalid_argument("CustomMeshResponse: empty callback");
+    }
+
+  protected:
+    BatchMatrix eval_batch(std::span<const int> ids, const BatchMatrix& x, BatchMatrix* J) const override {
+        return callback_(ids, x, J);
+    }
+
+  private:
+    Callback callback_;
 };
 } // namespace litepgo::energy

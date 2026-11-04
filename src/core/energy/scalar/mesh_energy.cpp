@@ -26,11 +26,11 @@ void project_hessian(Eigen::Ref<BatchMatrix> hessian) {
 }
 } // namespace
 
-MeshEnergy::MeshEnergy(dof::EnergyAssembler assembler, Callback callback, int batch_size, Step step)
+MeshEnergy::MeshEnergy(dof::EnergyAssembler assembler, int batch_size)
     : FixedPatternEnergy(static_cast<int>(assembler.hessian_pattern().rows()), assembler.hessian_pattern()),
-      assembler_(std::move(assembler)), callback_(std::move(callback)), step_(std::move(step)) {
-    if (batch_size <= 0 || !callback_)
-        throw std::invalid_argument("MeshEnergy: invalid batch size or callback");
+      assembler_(std::move(assembler)) {
+    if (batch_size <= 0)
+        throw std::invalid_argument("MeshEnergy: invalid batch size");
     std::map<int, std::vector<int>> groups;
     for (int e = 0; e < assembler_.num_elements(); ++e)
         groups[static_cast<int>(assembler_.dof_indices(e).size())].push_back(e);
@@ -63,7 +63,7 @@ double MeshEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessi
             g.setConstant(count, n, nan);
         if (hessian)
             H.setConstant(count * n, n, nan);
-        data.values = callback_(ids, inputs, gradient ? &g : nullptr, hessian ? &H : nullptr);
+        data.values = eval_batch(ids, inputs, gradient ? &g : nullptr, hessian ? &H : nullptr);
         const auto& values = data.values;
         if (values.size() != count || !values.allFinite() ||
             (gradient && (g.rows() != count || g.cols() != n || !g.allFinite())) ||
@@ -89,8 +89,6 @@ double MeshEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessi
     return value;
 }
 double MeshEnergy::feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const {
-    if (!step_)
-        return 1.;
     return tbb::parallel_reduce(
         tbb::blocked_range<std::size_t>(0, batches_.size()), 1.,
         [&](const auto& range, double bound) {
@@ -99,7 +97,7 @@ double MeshEnergy::feasible_step(const ConstVecRef& x, const ConstVecRef& dx) co
                 auto& data = storage_[k];
                 gather(ids, x, data.inputs);
                 gather(ids, dx, data.delta);
-                const Vec steps = step_(ids, data.inputs, data.delta);
+                const Vec steps = eval_feasible_step_batch(ids, data.inputs, data.delta);
                 if (steps.size() != static_cast<Eigen::Index>(ids.size()) || !steps.allFinite() ||
                     (steps.array() < 0).any() || (steps.array() > 1).any())
                     throw std::logic_error("MeshEnergy: invalid batch steps");

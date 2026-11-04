@@ -22,7 +22,7 @@ template <class M> void bind_shell_fem_energy(nb::module_& m) {
     using Energy = ShellFemEnergy<M>;
     const nb::tuple key = nb::make_tuple(nb::type<M>());
     const std::string name = "ShellFemEnergy[" + class_name(key[0]) + "]";
-    nb::class_<Energy, energy::Energy>(m, name.c_str())
+    nb::class_<Energy, energy::MeshEnergy>(m, name.c_str())
         .def(nb::init<const dof::StencilDofMap&, std::vector<TriangleMidEdgeRestData>, std::vector<double>,
                       std::vector<Eigen::VectorXd>, const std::vector<Eigen::Matrix3d>&>(),
              "displacement_map"_a, "rest_data"_a, "thickness"_a, "theta"_a, "Fp"_a = std::vector<Eigen::Matrix3d>{},

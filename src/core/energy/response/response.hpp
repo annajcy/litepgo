@@ -31,9 +31,15 @@ class Response {
         return eval(x);
     }
     SpMat eval_jacobian(const ConstVecRef& x) const;
+    // Dense products; defaults evaluate the explicit Jacobian on each call.
+    // Dynamic responses require update_pattern(x), as for eval_jacobian.
+    Vec eval_jvp(const ConstVecRef& x, const ConstVecRef& dx) const;
+    Vec eval_vjp(const ConstVecRef& x, const ConstVecRef& gy) const;
 
   protected:
     Response(const SpMat& pattern, bool fixed);
+    virtual Vec eval_jvp_values(const ConstVecRef& x, const ConstVecRef& dx) const;
+    virtual Vec eval_vjp_values(const ConstVecRef& x, const ConstVecRef& gy) const;
 
   private:
     virtual std::optional<SpMat> refresh_pattern(const ConstVecRef& x) = 0;

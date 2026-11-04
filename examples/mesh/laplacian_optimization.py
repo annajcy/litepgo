@@ -14,6 +14,50 @@ from litepgo import dof, energy, mesh, solver
 from volume_mesh import end_faces, read_volume
 
 
+class EdgeSmoothingEnergy(energy.MeshEnergy):
+    def __init__(self, mapping, rest_edge_vectors):
+        super().__init__(mapping)
+        self.rest_edge_vectors = rest_edge_vectors
+        self.edge_hessian = np.kron([[1., -1.], [-1., 1.]], np.eye(3))
+
+    def eval_batch(self, ids, x, need_gradient, need_hessian):
+        x = x.reshape(len(ids), 2, 3)
+        # The volume mode smooths displacement differences across edges.
+        d = x[:, 0] - x[:, 1]
+        if self.rest_edge_vectors is not None:
+            d -= self.rest_edge_vectors[ids]
+        g = np.concatenate([d, -d], axis=1) if need_gradient else None
+        h = np.broadcast_to(self.edge_hessian, (len(ids), 6, 6)) if need_hessian else None
+        return (
+            0.5 * np.sum(d * d, axis=1),
+            g,
+            h.reshape(-1, h.shape[-1]) if h is not None else None,
+        )
+
+
+class DifferentialCoordinateEnergy(energy.MeshEnergy):
+    def __init__(self, mapping, rest, rings):
+        super().__init__(mapping)
+        self.rest = rest
+        self.rings = rings
+
+    def eval_batch(self, ids, x, need_gradient, need_hessian):
+        x = x.reshape(len(ids), -1, 3)
+        # Each batch groups equal-length one-rings; ids retain original vertex IDs.
+        k = x.shape[1]
+        weights = np.array([k - 1, *([-1.0] * (k - 1))])
+        B = np.kron(weights[None, :], np.eye(3))
+        p = self.rest[np.array([self.rings[i] for i in ids])]
+        r = np.einsum("k,bkd->bd", weights, x - p)
+        g = r @ B if need_gradient else None
+        h = np.broadcast_to(B.T @ B, (len(ids), 3 * k, 3 * k)) if need_hessian else None
+        return (
+            0.5 * np.sum(r * r, axis=1),
+            g,
+            h.reshape(-1, h.shape[-1]) if h is not None else None,
+        )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -51,21 +95,7 @@ def main():
     if volume is not None:
         starts, ends = np.asarray(edges).T
         rest_edge_vectors = rest[starts] - rest[ends]
-    edge_hessian = np.kron([[1.0, -1.0], [-1.0, 1.0]], np.eye(3))
 
-    def edge_term(ids, x, need_gradient, need_hessian):
-        x = x.reshape(len(ids), 2, 3)
-        # The volume mode smooths displacement differences across edges.
-        d = x[:, 0] - x[:, 1]
-        if rest_edge_vectors is not None:
-            d -= rest_edge_vectors[ids]
-        g = np.concatenate([d, -d], axis=1) if need_gradient else None
-        h = np.broadcast_to(edge_hessian, (len(ids), 6, 6)) if need_hessian else None
-        return (
-            0.5 * np.sum(d * d, axis=1),
-            g,
-            h.reshape(-1, h.shape[-1]) if h is not None else None,
-        )
 
     neighbors = [[] for _ in rest]
     for i, j in edges:
@@ -74,21 +104,6 @@ def main():
     rings = [[i, *adjacent] for i, adjacent in enumerate(neighbors)]
     ring_map = dof.StencilDofMap(len(rest), rings, 3)
 
-    def ring_term(ids, x, need_gradient, need_hessian):
-        x = x.reshape(len(ids), -1, 3)
-        # Each batch groups equal-length one-rings; ids retain original vertex IDs.
-        k = x.shape[1]
-        weights = np.array([k - 1, *([-1.0] * (k - 1))])
-        B = np.kron(weights[None, :], np.eye(3))
-        p = rest[np.array([rings[i] for i in ids])]
-        r = np.einsum("k,bkd->bd", weights, x - p)
-        g = r @ B if need_gradient else None
-        h = np.broadcast_to(B.T @ B, (len(ids), 3 * k, 3 * k)) if need_hessian else None
-        return (
-            0.5 * np.sum(r * r, axis=1),
-            g,
-            h.reshape(-1, h.shape[-1]) if h is not None else None,
-        )
 
     if volume is not None:
         outer = np.asarray(mesh.extract_surface_with_vertices(volume).vertices)
@@ -119,7 +134,7 @@ def main():
             for j in range(1, n - 1):
                 noisy[i * n + j, 2] = 0.15 * np.sin(0.7 * i) * np.sin(1.1 * j)
     options = solver.NewtonOptions(gradient_tolerance=1e-10)
-    smooth_energy = energy.MeshEnergy(edge_map, edge_term)
+    smooth_energy = EdgeSmoothingEnergy(edge_map, rest_edge_vectors)
     boundary_dofs = (3 * np.array(boundary)[:, None] + np.arange(3)).ravel()
     # Solve only the free coordinates; prescribed coordinates retain their initial values.
     smooth = solver.newton_solve(
@@ -134,7 +149,7 @@ def main():
     assert smooth.energy < smooth_energy.eval_value(noisy.ravel())
 
     # MeshEnergy gathers each stencil and assembles its local derivatives.
-    edit_energy = energy.MeshEnergy(ring_map, ring_term)
+    edit_energy = DifferentialCoordinateEnergy(ring_map, rest, rings)
     left, right = end_faces(rest)
     handles = np.concatenate([left, right])
     handle_dofs = (3 * np.array(handles)[:, None] + np.arange(3)).ravel()

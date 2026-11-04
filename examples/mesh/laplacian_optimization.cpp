@@ -12,6 +12,77 @@
 #include <set>
 #include <stdexcept>
 
+namespace {
+using namespace litepgo;
+class EdgeSmoothingEnergy final : public energy::MeshEnergy {
+  public:
+    EdgeSmoothingEnergy(const dof::StencilDofMap& map, const Eigen::Matrix<double, 3, 6>& B)
+        : MeshEnergy(map), B_edge(B) {}
+
+  private:
+    Eigen::Matrix<double, 3, 6> B_edge;
+    Vec eval_batch(std::span<const int> ids, const energy::BatchMatrix& inputs, energy::BatchMatrix* gradients,
+                   energy::BatchMatrix* hessians) const override {
+        const Eigen::Index n = inputs.cols();
+        Vec values(ids.size());
+        if (gradients)
+            gradients->resize(ids.size(), n);
+        if (hessians)
+            hessians->resize(ids.size() * n, n);
+        for (Eigen::Index batch = 0; batch < inputs.rows(); ++batch) {
+            [[maybe_unused]] const int element = ids[batch];
+            const Eigen::MatrixXd x = inputs.row(batch).reshaped<Eigen::RowMajor>(n / 3, 3);
+
+            // One undirected edge: 1/2 ||x_i - x_j||^2.
+            const Eigen::Vector3d d = (x.row(0) - x.row(1)).transpose();
+            if (gradients)
+                gradients->row(batch) = (B_edge.transpose() * d).transpose();
+            if (hessians)
+                hessians->middleRows(batch * n, n) = B_edge.transpose() * B_edge;
+
+            values[batch] = 0.5 * d.squaredNorm();
+        }
+        return values;
+    }
+};
+class DifferentialCoordinateEnergy final : public energy::MeshEnergy {
+  public:
+    DifferentialCoordinateEnergy(const dof::StencilDofMap& map, const Vec& reference)
+        : MeshEnergy(map), rest(reference), ring_map(map) {}
+
+  private:
+    const Vec& rest;
+    const dof::StencilDofMap& ring_map;
+    Vec eval_batch(std::span<const int> ids, const energy::BatchMatrix& inputs, energy::BatchMatrix* gradients,
+                   energy::BatchMatrix* hessians) const override {
+        const Eigen::Index n = inputs.cols();
+        Vec values(ids.size());
+        if (gradients)
+            gradients->resize(ids.size(), n);
+        if (hessians)
+            hessians->resize(ids.size() * n, n);
+        for (Eigen::Index batch = 0; batch < inputs.rows(); ++batch) {
+            [[maybe_unused]] const int i = ids[batch];
+            const Eigen::MatrixXd x = inputs.row(batch).reshaped<Eigen::RowMajor>(n / 3, 3);
+
+            // B x_local = (LX)_i; the center is the first stencil vertex.
+            Eigen::MatrixXd B(3, 3 * x.rows());
+            for (Eigen::Index j = 0; j < x.rows(); ++j)
+                B.middleCols<3>(3 * j) = (j == 0 ? double(x.rows() - 1) : -1.) * Eigen::Matrix3d::Identity();
+            const Eigen::MatrixXd p = ring_map.gather(i, rest);
+            const Eigen::Vector3d r = B * Vec((x - p).reshaped<Eigen::RowMajor>());
+            if (gradients)
+                gradients->row(batch) = (B.transpose() * r).transpose();
+            if (hessians)
+                hessians->middleRows(batch * n, n) = B.transpose() * B;
+
+            values[batch] = 0.5 * r.squaredNorm();
+        }
+        return values;
+    }
+};
+} // namespace
+
 int main(int argc, char** argv) {
     using namespace litepgo;
     if (argc > 2)
@@ -55,29 +126,7 @@ int main(int argc, char** argv) {
     const dof::StencilDofMap ring_map(vertices, rings, 3);
     Eigen::Matrix<double, 3, 6> B_edge;
     B_edge << Eigen::Matrix3d::Identity(), -Eigen::Matrix3d::Identity();
-    energy::MeshEnergy smooth_energy(edge_map, [B_edge](std::span<const int> ids, const energy::BatchMatrix& inputs,
-                                                        energy::BatchMatrix* gradients, energy::BatchMatrix* hessians) {
-        const Eigen::Index n = inputs.cols();
-        Vec values(ids.size());
-        if (gradients)
-            gradients->resize(ids.size(), n);
-        if (hessians)
-            hessians->resize(ids.size() * n, n);
-        for (Eigen::Index batch = 0; batch < inputs.rows(); ++batch) {
-            [[maybe_unused]] const int element = ids[batch];
-            const Eigen::MatrixXd x = inputs.row(batch).reshaped<Eigen::RowMajor>(n / 3, 3);
-
-            // One undirected edge: 1/2 ||x_i - x_j||^2.
-            const Eigen::Vector3d d = (x.row(0) - x.row(1)).transpose();
-            if (gradients)
-                gradients->row(batch) = (B_edge.transpose() * d).transpose();
-            if (hessians)
-                hessians->middleRows(batch * n, n) = B_edge.transpose() * B_edge;
-
-            values[batch] = 0.5 * d.squaredNorm();
-        }
-        return values;
-    });
+    EdgeSmoothingEnergy smooth_energy(edge_map, B_edge);
     Vec noisy = rest;
     for (int i = 1; i < n - 1; ++i)
         for (int j = 1; j < n - 1; ++j)
@@ -94,34 +143,7 @@ int main(int argc, char** argv) {
         if (smooth.x[d] != noisy[d])
             throw std::runtime_error("Smoothing moved a boundary vertex");
 
-    energy::MeshEnergy edit_energy(
-        ring_map, [&rest, &ring_map](std::span<const int> ids, const energy::BatchMatrix& inputs,
-                                     energy::BatchMatrix* gradients, energy::BatchMatrix* hessians) {
-            const Eigen::Index n = inputs.cols();
-            Vec values(ids.size());
-            if (gradients)
-                gradients->resize(ids.size(), n);
-            if (hessians)
-                hessians->resize(ids.size() * n, n);
-            for (Eigen::Index batch = 0; batch < inputs.rows(); ++batch) {
-                [[maybe_unused]] const int i = ids[batch];
-                const Eigen::MatrixXd x = inputs.row(batch).reshaped<Eigen::RowMajor>(n / 3, 3);
-
-                // B x_local = (LX)_i; the center is the first stencil vertex.
-                Eigen::MatrixXd B(3, 3 * x.rows());
-                for (Eigen::Index j = 0; j < x.rows(); ++j)
-                    B.middleCols<3>(3 * j) = (j == 0 ? double(x.rows() - 1) : -1.) * Eigen::Matrix3d::Identity();
-                const Eigen::MatrixXd p = ring_map.gather(i, rest);
-                const Eigen::Vector3d r = B * Vec((x - p).reshaped<Eigen::RowMajor>());
-                if (gradients)
-                    gradients->row(batch) = (B.transpose() * r).transpose();
-                if (hessians)
-                    hessians->middleRows(batch * n, n) = B.transpose() * B;
-
-                values[batch] = 0.5 * r.squaredNorm();
-            }
-            return values;
-        });
+    DifferentialCoordinateEnergy edit_energy(ring_map, rest);
     Vec initial = rest;
     for (int i = 0; i < n; ++i)
         initial[3 * (i * n + n - 1) + 2] = 0.5;
