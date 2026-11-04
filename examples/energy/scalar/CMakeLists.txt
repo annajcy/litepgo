@@ -3,3 +3,6 @@ target_link_libraries(energy_composition PRIVATE litepgo::energy litepgo::warnin
 
 add_executable(custom_energy custom_energy.cpp)
 target_link_libraries(custom_energy PRIVATE litepgo::energy litepgo::warnings)
+
+add_executable(custom_mesh_energy custom_mesh_energy.cpp)
+target_link_libraries(custom_mesh_energy PRIVATE litepgo::solver litepgo::warnings)

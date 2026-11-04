@@ -17,7 +17,7 @@ def test_thread_limit_example():
     assert "previous TBB policy restored" in result.stdout
 
 
-@pytest.mark.parametrize("folder,name", [("energy/scalar", "custom_energy"), ("energy/response", "custom_response"), ("energy/response", "mesh_response")])
+@pytest.mark.parametrize("folder,name", [("energy/scalar", "custom_energy"), ("energy/scalar", "custom_mesh_energy"), ("energy/response", "custom_response"), ("energy/response", "mesh_response"), ("energy/response", "custom_mesh_response")])
 def test_cpp_python_api_examples(folder, name):
     root = Path(__file__).resolve().parents[2]
     build = Path(_core.__file__).parents[2]

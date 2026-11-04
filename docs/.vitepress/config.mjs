@@ -81,7 +81,9 @@ export default defineConfig({
         { text: 'Catalog and run instructions', link: '/examples' },
         { text: 'Energies and responses', link: '/examples/energy/', collapsed: true, items: [
           { text: 'Custom scalar energies', link: '/examples/energy/custom-energy' },
+          { text: 'Custom mesh energy', link: '/examples/energy/custom-mesh-energy' },
           { text: 'Energy composition', link: '/examples/energy/energy-composition' },
+          { text: 'Custom mesh response', link: '/examples/energy/custom-mesh-response' },
           { text: 'Custom vector responses', link: '/examples/energy/custom-response' },
           { text: 'Batched material-force fitting', link: '/examples/energy/mesh-response' }
         ] },
