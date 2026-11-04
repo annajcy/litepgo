@@ -21,7 +21,9 @@ def main() -> None:
             "cmake --build --preset release --target litepgo_python"
         ) from error
     if not Path(litepgo.__file__).resolve().is_relative_to(root):
-        raise SystemExit("litepgo was imported from another checkout; build this checkout or set PYTHONPATH.")
+        raise SystemExit(
+            "litepgo was imported from another checkout; build this checkout or set PYTHONPATH."
+        )
 
     modules = {"litepgo": doc.Module(litepgo)}
     for info in pkgutil.walk_packages(litepgo.__path__, "litepgo."):
@@ -31,7 +33,9 @@ def main() -> None:
 
     # Package __all__ exports symbols, so supply public submodules for pdoc's navigation.
     for name, module in modules.items():
-        module.submodules = [item for key, item in modules.items() if key.rpartition(".")[0] == name]
+        module.submodules = [
+            item for key, item in modules.items() if key.rpartition(".")[0] == name
+        ]
 
     # Template instances are runtime objects, so pdoc cannot discover their classes itself.
     for name in fem.__all__:
@@ -42,13 +46,27 @@ def main() -> None:
             label = f"{name}[{', '.join(getattr(arg, '__name__', str(arg)) for arg in args)}]"
             kind = doc.Class if inspect.isclass(instance) else doc.Function
             modules["litepgo.fem"].members[label] = kind(
-                "litepgo.fem", label, instance, (instance.__module__, instance.__qualname__)
+                "litepgo.fem",
+                label,
+                instance,
+                (instance.__module__, instance.__qualname__),
             )
 
-    assert isinstance(modules["litepgo.energy"].get("Energy.eval"), doc.Function), "Missing native methods"
+    assert isinstance(modules["litepgo.energy"].get("Energy.eval"), doc.Function), (
+        "Missing native methods"
+    )
     assert all(
-        isinstance(modules["litepgo.torch"].get(name), doc.Function) for name in ("energy", "response")
+        isinstance(modules["litepgo.torch"].get(name), doc.Function)
+        for name in ("energy", "response")
     ), "Missing Torch adapters"
+    assert all(
+        isinstance(modules["litepgo.torch"].get(name), doc.Class)
+        for name in (
+            "TorchVolumetricFemEnergy",
+            "TorchVolumetricFemMaterialResponse",
+            "TorchVolumetricFemFpResponse",
+        )
+    ), "Missing Torch FEM classes"
     assert any(
         name.startswith("VolumetricFemEnergy[") and isinstance(member, doc.Class)
         for name, member in modules["litepgo.fem"].members.items()

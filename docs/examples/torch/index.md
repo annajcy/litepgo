@@ -1,6 +1,9 @@
-# PyTorch fitting through native responses
+# PyTorch materials and fitting
 
 `uv sync --locked` installs PyTorch with the project environment.
+The constitutive and force-response examples implement W in Torch and use native
+assembly and equilibrium solves. The four L-BFGS drivers demonstrate the outer
+optimizer bridge.
 These four Python-only drivers import the physical setup and residual from
 the adjacent native Python fitting example. They show the Torch-specific part:
 CPU float64 parameter tensors, the L-BFGS closure, and backward. Keep both
@@ -35,7 +38,9 @@ All commands run from the repository root after [configuring the release build](
 
 ## Examples
 
+- [Force responses through equilibrium](./torch-equilibrium-response.md). Explicit Jacobians and direct JVP/VJP for physical theta and Fp.
 
+- [Constitutive energy in Torch](./torch-neohookean.md). Write W in Torch and compare FEM derivatives/equilibrium with native Neo-Hookean.
 
 - [Volume material with L-BFGS](./volume-equilibrium-material-fit-torch.md). Volume material recovery with native autograd.
 - [Shell material with L-BFGS](./shell-equilibrium-material-fit-torch.md). Shell material recovery with native autograd.
