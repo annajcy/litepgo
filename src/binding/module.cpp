@@ -58,7 +58,6 @@ NB_MODULE(_core, m) {
     litepgo::energy::binding::bind_dynamic_pattern_response(energy);
     litepgo::energy::binding::bind_energy_response_mesh_response(energy);
 
-    litepgo::energy::binding::bind_parametric_energy(energy);
     litepgo::energy::binding::bind_composed_response(energy);
 
     nb::module_ fem = m.def_submodule("fem");

@@ -1,6 +1,5 @@
 #include "litepgo/energy/response/response.hpp"
 #include "bindings.hpp"
-#include "detail/parametric_view_gc.hpp"
 #include "detail/sparse_matrix.hpp"
 #include <nanobind/eigen/dense.h>
 namespace nb = nanobind;
@@ -9,7 +8,7 @@ using namespace nb::literals;
 namespace litepgo::energy::binding {
 void bind_response(nb::module_& m) {
     using linalg::binding::SparseArgument;
-    nb::class_<Response>(m, "Response", nb::type_slots(ParametricViewGC<Response>::slots()))
+    nb::class_<Response>(m, "Response")
         .def_prop_ro("num_inputs", &Response::num_inputs)
         .def_prop_ro("num_outputs", &Response::num_outputs)
         .def_prop_ro("has_fixed_pattern", &Response::has_fixed_pattern)

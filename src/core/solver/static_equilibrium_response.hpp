@@ -1,7 +1,7 @@
 #pragma once
-#include "litepgo/energy/parametric/parametric_energy.hpp"
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
 #include "litepgo/solver/newton.hpp"
+#include <functional>
 #include <memory>
 
 namespace litepgo::solver {
@@ -10,18 +10,21 @@ struct StaticEquilibriumGC;
 }
 
 // p -> equilibrium displacement, starting from the same initial state on every call.
-// Fixed indices AND values are independent of p. The model defines the total potential,
-// including parameter-dependent loads, and must be deterministic.
+// Fixed indices AND values are independent of p. Callbacks must be deterministic.
+// make_energy(p) supplies the total potential; make_response(u) maps p to its state gradient.
+// Callers guarantee consistency, including parameter-dependent loads.
 // JVP/VJP use one directional/adjoint solve without forming the state Jacobian.
-// Parameter products delegate to the model; the state Jacobian pattern is still explicit.
+// Parameter products delegate to the response; the declared Jacobian pattern remains explicit.
 // Derivatives require an isolated equilibrium and use the exact, unshifted Hessian.
 class StaticEquilibriumResponse final : public energy::FixedPatternResponse {
   public:
-    StaticEquilibriumResponse(std::shared_ptr<energy::ParametricEnergy> model, dof::DofReduction fixed, Vec initial,
-                              NewtonOptions options);
+    using MakeEnergy = std::function<std::shared_ptr<energy::Energy>(const Vec&)>;
+    using MakeResponse = std::function<std::shared_ptr<energy::Response>(const Vec&)>;
+    StaticEquilibriumResponse(int num_parameters, dof::DofReduction fixed, Vec initial, NewtonOptions options,
+                              MakeEnergy make_energy, MakeResponse make_response);
 
   private:
-    friend struct binding::StaticEquilibriumGC; // Python GC visits and clears the owned model.
+    friend struct binding::StaticEquilibriumGC; // Python GC visits and clears the owned callbacks.
     Vec eval_values(const ConstVecRef& p, SpMat* J) const override;
     Vec eval_jvp_values(const ConstVecRef& p, const ConstVecRef& v) const override;
     Vec eval_vjp_values(const ConstVecRef& p, const ConstVecRef& w) const override;
@@ -29,6 +32,7 @@ class StaticEquilibriumResponse final : public energy::FixedPatternResponse {
     dof::DofReduction fixed_;
     Vec initial_;
     NewtonOptions options_;
-    std::shared_ptr<energy::ParametricEnergy> model_;
+    MakeEnergy make_energy_;
+    MakeResponse make_response_;
 };
 } // namespace litepgo::solver

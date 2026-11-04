@@ -1,6 +1,5 @@
 #include "litepgo/energy/scalar/energy.hpp"
 #include "bindings.hpp"
-#include "detail/parametric_view_gc.hpp"
 
 #include <nanobind/eigen/dense.h>
 #include <nanobind/eigen/sparse.h>
@@ -23,7 +22,7 @@ void bind_energy(nb::module_& m) {
 
     // Energies are held by std::shared_ptr, so composites keep their Python
     // children alive. The GIL is released while C++ evaluates.
-    nb::class_<Energy>(m, "Energy", nb::type_slots(ParametricViewGC<Energy>::slots()))
+    nb::class_<Energy>(m, "Energy")
         .def_prop_ro("num_dofs", &Energy::num_dofs)
         .def_prop_ro("has_fixed_pattern", &Energy::has_fixed_pattern)
         .def_prop_ro(

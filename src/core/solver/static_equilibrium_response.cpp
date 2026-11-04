@@ -18,14 +18,16 @@ SpMat state_pattern(int parameters, const dof::DofReduction& fixed) {
     return pattern;
 }
 } // namespace
-StaticEquilibriumResponse::StaticEquilibriumResponse(std::shared_ptr<energy::ParametricEnergy> model,
-                                                     dof::DofReduction fixed, Vec initial, NewtonOptions options)
-    : energy::FixedPatternResponse(state_pattern(model ? model->num_parameters() : 0, fixed)), fixed_(std::move(fixed)),
-      initial_(std::move(initial)), options_(options), model_(std::move(model)) {
-    if (model_->num_dofs() != fixed_.num_dofs() || initial_.size() != fixed_.num_dofs() || !initial_.allFinite() ||
+StaticEquilibriumResponse::StaticEquilibriumResponse(int num_parameters, dof::DofReduction fixed, Vec initial,
+                                                     NewtonOptions options, MakeEnergy make_energy,
+                                                     MakeResponse make_response)
+    : energy::FixedPatternResponse(state_pattern(num_parameters, fixed)), fixed_(std::move(fixed)),
+      initial_(std::move(initial)), options_(options), make_energy_(std::move(make_energy)),
+      make_response_(std::move(make_response)) {
+    if (initial_.size() != fixed_.num_dofs() || !initial_.allFinite() || !make_energy_ || !make_response_ ||
         !std::isfinite(options_.gradient_tolerance) || options_.gradient_tolerance < 0 || options_.max_iterations < 0 ||
         options_.max_line_search_steps < 1 || !(options_.line_search_shrink > 0 && options_.line_search_shrink < 1))
-        throw std::invalid_argument("StaticEquilibriumResponse: invalid model, initial state or options");
+        throw std::invalid_argument("StaticEquilibriumResponse: invalid initial state, options or callbacks");
 }
 Vec StaticEquilibriumResponse::eval_values(const ConstVecRef& p, SpMat* J) const {
     return evaluate(p, J, nullptr, false);
@@ -40,9 +42,9 @@ Vec StaticEquilibriumResponse::eval_vjp_values(const ConstVecRef& p, const Const
 }
 Vec StaticEquilibriumResponse::evaluate(const ConstVecRef& p, SpMat* J, const Vec* direction, bool transpose) const {
     const Vec parameters = p;
-    if (!model_)
-        throw std::logic_error("StaticEquilibriumResponse: cleared model");
-    auto potential = model_->energy_at(parameters);
+    auto potential = make_energy_(parameters);
+    if (!potential || potential->num_dofs() != num_outputs())
+        throw std::invalid_argument("StaticEquilibriumResponse: incompatible energy");
     linalg::AutoIndefiniteSparseSolver linear_solver;
     const auto result = newton_solve(*potential, fixed_, initial_, options_, linear_solver);
     if (result.status != NewtonStatus::Converged)
@@ -50,7 +52,9 @@ Vec StaticEquilibriumResponse::evaluate(const ConstVecRef& p, SpMat* J, const Ve
     if (direction && fixed_.num_free() == 0)
         return Vec::Zero(transpose ? num_inputs() : num_outputs());
     if ((J || direction) && fixed_.num_free() > 0) {
-        auto force = model_->force_at(result.x);
+        auto force = make_response_(result.x);
+        if (!force || force->num_inputs() != num_inputs() || force->num_outputs() != num_outputs())
+            throw std::invalid_argument("StaticEquilibriumResponse: incompatible force response");
         force->update_pattern(parameters);
         potential->update_pattern(result.x);
         const SpMat K = fixed_.reduce(potential->eval_hessian(result.x, energy::HessianKind::Exact));

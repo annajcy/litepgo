@@ -3,7 +3,7 @@ import weakref
 
 import numpy as np
 import pytest
-from litepgo import dof, energy, fem, mesh
+from litepgo import dof, energy, fem, mesh, solver
 
 
 def topology():
@@ -165,6 +165,58 @@ def test_empty_mesh():
     np.testing.assert_array_equal(obj.eval_vjp(np.zeros(2), np.empty(0)), np.zeros(2))
 
 
+@pytest.mark.parametrize("plastic", [True, False])
+@pytest.mark.parametrize("shared", [True, False])
+def test_fem_parameterizations_match_energy_and_equilibrium(plastic, shared):
+    from test_material_force_response import problem, Energy
+
+    topo, mapping, geometry, u, fixed_fp = problem()
+    width = 3 if plastic else 2
+    physical_width = 9 if plastic else 2
+    parameter_map = (dof.ConstantDofMap if shared else dof.ElementDofMap)(topo, width)
+    local = fem.LogDiagonalFpResponse() if plastic else energy.ExpResponse(2)
+    transform = energy.ElementwiseResponse(parameter_map, local)
+    physical_map = dof.ElementDofMap(topo, physical_width)
+    theta = [fem.IdentityField3D(np.array([2.0, 3.0])) for _ in range(2)]
+    force_type = (
+        fem.VolumetricFemForceFpResponse
+        if plastic
+        else fem.VolumetricFemForceMaterialResponse
+    )[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
+
+    def make_energy(p):
+        fields = [
+            fem.IdentityField3D(row)
+            for row in transform.eval_value(p).reshape(2, physical_width)
+        ]
+        return Energy(
+            mapping,
+            geometry,
+            fields if plastic else fixed_fp,
+            theta if plastic else fields,
+        )
+
+    def make_response(state):
+        force = force_type(
+            physical_map, mapping, geometry, state, theta if plastic else fixed_fp
+        )
+        return energy.ComposedResponse(force, transform)
+
+    p = np.linspace(-0.02, 0.03, parameter_map.num_dofs)
+    force = make_response(u)
+    np.testing.assert_allclose(
+        force.eval_value(p), make_energy(p).eval_gradient(u), atol=1e-12
+    )
+    check_products(force, p)
+    eq = solver.StaticEquilibriumResponse(
+        parameter_map.num_dofs,
+        dof.DofReduction(len(u), list(range(12))),
+        u,
+        solver.NewtonOptions(gradient_tolerance=1e-10, max_iterations=100),
+        make_energy,
+        make_response,
+    )
+    check_products(eq, p)
 
 
 def test_composition_reuses_dynamic_child_at_different_inputs():
