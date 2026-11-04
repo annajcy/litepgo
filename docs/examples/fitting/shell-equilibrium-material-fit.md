@@ -15,8 +15,7 @@ parameters directly from `(0.7,1.2)`, rejecting $\mu\le0$ or
 $\lambda_{ps}+\mu\le0$.
 
 **API walkthrough.** The `ShellFemEnergy` factory and
-`ShellFemForceMaterialResponse` partial are implemented in one `ParametricEnergy`
-model consumed by `StaticEquilibriumResponse`.
+`ShellFemForceMaterialResponse` factory feed `StaticEquilibriumResponse`.
 Select fixed rows of $B+KU$ for the reaction Jacobian, then normalize and
 pass to Gauss–Newton. Nonuniform boundary loading excites material-dependent
 center motion, making the state-sensitivity term observable.

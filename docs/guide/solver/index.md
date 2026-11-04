@@ -18,7 +18,7 @@ flowchart TB
   accDescr: Newton consumes Energy and Gauss-Newton consumes a residual Response. StaticEquilibriumResponse builds an Energy, invokes Newton, and uses exact stiffness for sensitivities. All sparse factorizations are delegated to linalg.
   energy["Energy and fixed DOFs"] --> newton["newton_solve"]
   residual["Residual Response"] --> gauss["gauss_newton_solve"]
-  model["ParametricEnergy model"] --> equilibrium["StaticEquilibriumResponse"]
+  factory["Energy and force-response factories"] --> equilibrium["StaticEquilibriumResponse"]
   equilibrium -->|forward state| newton
   newton -->|Hessian systems| linear["linalg SparseSolver"]
   gauss -->|damped normal systems| linear
@@ -26,7 +26,7 @@ flowchart TB
 ```
 
 Arrows identify supplied inputs or delegated solves. The module does not own
-geometry or materials; callers configure those in their energy models. Native code
+geometry or materials; callers build those through model factories. Native code
 is in `src/core/solver/`; Python uses `litepgo.solver`. The
 [inverse-problem guide](inverse.md) explains how state and force derivatives form
 an observation Jacobian.

@@ -24,13 +24,13 @@ K_{ff}\frac{\partial u_f^*}{\partial p}=-B_f,\qquad
 \frac{\partial u_c^*}{\partial p}=0.
 $$
 
-`StaticEquilibriumResponse(model, fixed, initial, options)` takes one
-[ParametricEnergy](../energy/parametric.md) defining the total potential.
+`StaticEquilibriumResponse(num_parameters, fixed, initial, options, make_energy,
+make_response)` implements this map from parameters to full displacement:
 
-- `model.energy_at(p)` supplies the Energy for Newton.
-- `model.force_at(u)` supplies the gradient and its parameter derivatives,
-  including parameter-dependent loads.
-
+- `make_energy(p)` creates the **total** potential for those parameters.
+- `make_response(u)` returns a `Response` mapping parameters to the total potential's
+  state gradient at that fixed displacement, including parameter-dependent loads.
+  It has `num_parameters` inputs and `len(initial)` outputs.
 - Every evaluation starts from the same `initial` vector. Fixed values come
   from that vector. Value-only requests skip the sensitivity solve.
 - Jacobian requests use the exact, unshifted $K_{ff}$, factorized once for all
@@ -40,16 +40,32 @@ $$
 from litepgo import solver
 
 equilibrium = solver.StaticEquilibriumResponse(
-    model, fixed, initial, options)
+    num_parameters, fixed, initial, options, make_energy, make_response)
 u, du_dp = equilibrium.eval(p, need_jacobian=True)
 ```
+
+C++ uses the same argument order. `MakeEnergy` returns `shared_ptr<Energy>` and
+`MakeResponse` returns `shared_ptr<Response>`. Both factories are retained by the
+equilibrium object; Python callback ownership cycles are collectable. The response
+factory is called at the solved state only when derivatives on free DOFs are needed.
+Its dynamic pattern is updated at the current parameters before evaluation.
+
+Callers must ensure
+`make_response(u).eval_value(p) == make_energy(p).eval_gradient(u)` and that the
+response derivatives match that value. This is not checked automatically. Keep
+captured configuration fixed, copy the supplied state if retaining it, and check
+analytic derivatives against finite differences in tests.
+
+The former matrix callback `partial(p,u)` is replaced by `make_response(u)`;
+`ParametricEnergy` and its views have been removed. Existing FEM force responses
+can be returned directly. Custom parameterizations can use [Response transforms and composition](../energy/parameter-transforms.md).
 
 This requires a converged isolated differentiable equilibrium and a nonsingular
 free stiffness. Forward nonconvergence or sensitivity-solve failure throws;
 no approximate derivative is returned. Branch switches, singular states, and
 parameter-dependent prescribed boundary data are outside this contract.
 Convergence does not certify mechanical stability; the sensitivity solve accepts
-indefinite nonsingular stiffness. Model evaluation must be deterministic.
+indefinite nonsingular stiffness. Callbacks and captured data must be deterministic.
 
 ## Directional and adjoint derivatives
 
@@ -58,12 +74,13 @@ indefinite nonsingular stiffness. Model evaluation must be deterministic.
 with zeros at fixed DOFs. `eval_vjp(p, w)` solves the adjoint equation
 `K^T lambda = w_free` and returns `-B^T lambda_full`, extending the
 adjoint with zeros at fixed DOFs. Here `K` is the exact equilibrium Hessian
-and `B = model.force_at(u).eval_jacobian(p)`. Since the energy Hessian is symmetric, both paths
+and `B = make_response(u).eval_jacobian(p)`. Since the energy Hessian is symmetric, both paths
 use the existing direct stiffness solver.
 
 Each product evaluates equilibrium from the configured initial state and uses
 one derivative right-hand-side solve, without forming the numerical state
-Jacobian. Calls do not cache equilibrium states or factorizations. Parameter products delegate to the model without requiring explicit `B`.
+Jacobian. Calls do not cache equilibrium states or factorizations. JVP/VJP call the force response products, so direct overrides avoid assembling `B`.
+Without overrides, the response falls back to explicit Jacobian multiplication.
 The declared state-Jacobian sparsity pattern remains allocated.
 The explicit Jacobian interface and Gauss–Newton behavior are unchanged.
 

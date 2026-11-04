@@ -8,11 +8,13 @@
 as the shell material experiment, with the center free. Observe scaled free
 motion and boundary reactions.
 
-**API walkthrough.** `ShellFemForceFpResponse` supplies the fixed-pose plastic
-partial; columns 0/4 and exponential factors define the two log-stretch inputs.
-`StaticEquilibriumResponse`, total reaction differentiation, and
-`lp_torch.response` form the L-BFGS graph. Original shell integration areas and
-thickness stay fixed as natural forms change.
+**API walkthrough.** `ElementwiseResponse` gathers shared log stretches and applies
+`LogDiagonalFpResponse` to produce per-element physical Fp values. `ComposedResponse`
+connects this transform to the native fixed-pose force response, including Jacobian,
+JVP, and VJP chain rules. The energy factory uses the same transform to construct
+its Fp list. `StaticEquilibriumResponse` supplies the state sensitivity; reaction
+derivatives include both the fixed-state parameter derivative and the stiffness
+multiplied by state sensitivity. See [parameter transforms](../../guide/energy/parameter-transforms.md).
 
 **Expected result.** Recovery, held-out load factor 0.6, rank, equilibrium, and
 re-solved derivative checks pass. The normal plastic stretch and rotations are
