@@ -50,4 +50,46 @@ SpMat Response::eval_jacobian(const ConstVecRef& x) const {
     eval(x, &J);
     return J;
 }
+Vec Response::eval_jvp(const ConstVecRef& x, const ConstVecRef& dx) const {
+    ::litepgo::detail::BusyScope scope(busy_, "Response");
+    check_input(x);
+    if (dx.size() != num_inputs() || !dx.allFinite())
+        throw std::invalid_argument("Response: invalid jvp direction");
+    Vec result = eval_jvp_values(x, dx);
+    if (result.size() != num_outputs() || !result.allFinite())
+        throw std::logic_error("Response: invalid jvp result");
+    return result;
+}
+Vec Response::eval_jvp_values(const ConstVecRef& x, const ConstVecRef& dx) const {
+    check_input(x);
+    if (dx.size() != num_inputs() || !dx.allFinite())
+        throw std::invalid_argument("Response: invalid jvp direction");
+    SpMat J = pattern_;
+    const Vec value = eval_values(x, &J);
+    if (value.size() != num_outputs() || !value.allFinite() || !linalg::same_pattern(J, pattern_) ||
+        !J.coeffs().allFinite())
+        throw std::logic_error("Response: invalid Jacobian evaluation");
+    return J * dx;
+}
+Vec Response::eval_vjp(const ConstVecRef& x, const ConstVecRef& gy) const {
+    ::litepgo::detail::BusyScope scope(busy_, "Response");
+    check_input(x);
+    if (gy.size() != num_outputs() || !gy.allFinite())
+        throw std::invalid_argument("Response: invalid vjp direction");
+    Vec result = eval_vjp_values(x, gy);
+    if (result.size() != num_inputs() || !result.allFinite())
+        throw std::logic_error("Response: invalid vjp result");
+    return result;
+}
+Vec Response::eval_vjp_values(const ConstVecRef& x, const ConstVecRef& gy) const {
+    check_input(x);
+    if (gy.size() != num_outputs() || !gy.allFinite())
+        throw std::invalid_argument("Response: invalid vjp direction");
+    SpMat J = pattern_;
+    const Vec value = eval_values(x, &J);
+    if (value.size() != num_outputs() || !value.allFinite() || !linalg::same_pattern(J, pattern_) ||
+        !J.coeffs().allFinite())
+        throw std::logic_error("Response: invalid Jacobian evaluation");
+    return J.transpose() * gy;
+}
 } // namespace litepgo::energy

@@ -21,16 +21,18 @@ template <class Material> class ShellFemForceFpResponse final : public energy::M
     ShellFemForceFpResponse(const ParameterMap& parameter_map, const dof::StencilDofMap& displacement_map,
                             const std::vector<TriangleMidEdgeRestData>& rest_data, const Vec& displacement,
                             const std::vector<double>& thickness, const std::vector<Vec>& theta, int batch_size = 256)
-        : energy::MeshResponse(
-              parameter_map, displacement_map,
-              make_callback(parameter_map, displacement_map, rest_data, displacement, thickness, theta), batch_size) {}
+        : energy::MeshResponse(parameter_map, displacement_map, batch_size),
+          state_(make_state(parameter_map, displacement_map, rest_data, displacement, thickness, theta)) {}
 
   private:
+    struct State {
+        std::vector<detail::ShellFpForceData> data;
+        std::vector<double> areas;
+    };
     template <class ParameterMap>
-    static energy::MeshResponse::Callback make_callback(const ParameterMap& parameters, const dof::StencilDofMap& map,
-                                                        const std::vector<TriangleMidEdgeRestData>& rest, const Vec& u,
-                                                        const std::vector<double>& thickness,
-                                                        const std::vector<Vec>& theta) {
+    static State make_state(const ParameterMap& parameters, const dof::StencilDofMap& map,
+                            const std::vector<TriangleMidEdgeRestData>& rest, const Vec& u,
+                            const std::vector<double>& thickness, const std::vector<Vec>& theta) {
         const auto count = static_cast<std::size_t>(map.num_elements());
         const int width = [&] {
             if constexpr (std::same_as<ParameterMap, dof::ConstantDofMap>)
@@ -55,21 +57,25 @@ template <class Material> class ShellFemForceFpResponse final : public energy::M
             data.emplace_back(rest[e], map.gather(e, u), thickness[e], theta[e]);
             areas.push_back(0.5 * rest[e].sqrt_det_a_bar);
         }
-        return [data = std::move(data), areas = std::move(areas)](
-                   std::span<const int> ids, const energy::BatchMatrix& plastic, energy::BatchMatrix* jacobian) {
-            const Eigen::Index n = ids.empty() ? 0 : data[ids[0]].current.dab_du.cols();
-            energy::BatchMatrix values = energy::BatchMatrix::Zero(ids.size(), n);
-            if (jacobian)
-                jacobian->setZero(ids.size() * n, 9);
-            for (std::size_t b = 0; b < ids.size(); ++b) {
-                const int e = ids[b];
-                StridedVecRef value(values.row(b).transpose());
-                auto J = detail::batch_matrix_view(jacobian, b, n);
-                detail::accumulate_shell_fp_force<Material>(data[e], plastic.row(b).transpose(), nullptr, areas[e],
-                                                            value, J ? &*J : nullptr);
-            }
-            return values;
-        };
+        return {std::move(data), std::move(areas)};
     }
+    energy::BatchMatrix eval_batch(std::span<const int> ids, const energy::BatchMatrix& plastic,
+                                   energy::BatchMatrix* jacobian) const override {
+        const auto& data = state_.data;
+        const auto& areas = state_.areas;
+        const Eigen::Index n = ids.empty() ? 0 : data[ids[0]].current.dab_du.cols();
+        energy::BatchMatrix values = energy::BatchMatrix::Zero(ids.size(), n);
+        if (jacobian)
+            jacobian->setZero(ids.size() * n, 9);
+        for (std::size_t b = 0; b < ids.size(); ++b) {
+            const int e = ids[b];
+            StridedVecRef value(values.row(b).transpose());
+            auto J = detail::batch_matrix_view(jacobian, b, n);
+            detail::accumulate_shell_fp_force<Material>(data[e], plastic.row(b).transpose(), nullptr, areas[e], value,
+                                                        J ? &*J : nullptr);
+        }
+        return values;
+    }
+    State state_;
 };
 } // namespace litepgo::fem

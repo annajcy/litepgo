@@ -161,7 +161,7 @@ def test_vertex_pulling_energy_matches_numpy():
 
 def test_mesh_energy_stencil_assembly_and_callback_lifetime():
     from litepgo.dof import StencilDofMap
-    from litepgo.energy import MeshEnergy
+    from litepgo.energy import CustomMeshEnergy
 
     retained = []
     def local(ids, x, want_g, want_h):
@@ -172,7 +172,7 @@ def test_mesh_energy_stencil_assembly_and_callback_lifetime():
                 np.tile(H,(len(ids),1)) if want_h else None)
 
     mapping = StencilDofMap(3, [[0, 1], [1, 2]], 3)
-    assembled = MeshEnergy(mapping, local)
+    assembled = CustomMeshEnergy(mapping, local)
     del mapping, local
     gc.collect()
     x = np.arange(9, dtype=float)
@@ -188,28 +188,28 @@ def test_mesh_energy_stencil_assembly_and_callback_lifetime():
 
 def test_mesh_energy_callback_errors_and_step():
     from litepgo.dof import StencilDofMap
-    from litepgo.energy import MeshEnergy
+    from litepgo.energy import CustomMeshEnergy
 
     mapping = StencilDofMap(1, [[0]], 3)
     x = np.ones(3)
     def fail(*args):
         raise ValueError('local callback failed')
     with pytest.raises(ValueError, match='local callback failed'):
-        MeshEnergy(mapping, fail).eval_value(x)
+        CustomMeshEnergy(mapping, fail).eval_value(x)
     with pytest.raises(ValueError, match='Missing batch gradients'):
-        MeshEnergy(mapping, lambda *args: (np.zeros(1), None, None)).eval_gradient(x)
+        CustomMeshEnergy(mapping, lambda *args: (np.zeros(1), None, None)).eval_gradient(x)
     with pytest.raises(RuntimeError, match='invalid batch outputs'):
-        MeshEnergy(mapping, lambda *args: (np.zeros(1), np.zeros((1,2)), None)).eval_gradient(x)
+        CustomMeshEnergy(mapping, lambda *args: (np.zeros(1), np.zeros((1,2)), None)).eval_gradient(x)
     with pytest.raises(RuntimeError, match='invalid batch outputs'):
-        MeshEnergy(mapping, lambda *args: (np.array([np.nan]), None, None)).eval_value(x)
-    bounded = MeshEnergy(mapping, lambda *args: (np.zeros(1), None, None), step=lambda ids, x, dx: np.full(len(ids), .25))
+        CustomMeshEnergy(mapping, lambda *args: (np.array([np.nan]), None, None)).eval_value(x)
+    bounded = CustomMeshEnergy(mapping, lambda *args: (np.zeros(1), None, None), step=lambda ids, x, dx: np.full(len(ids), .25))
     assert bounded.max_feasible_step(x, x) == 0.25
 
 
 @pytest.mark.parametrize('batch_size', [1, 2, 256])
 def test_batched_mesh_energy_variable_stencils(batch_size):
     from litepgo.dof import StencilDofMap
-    from litepgo.energy import MeshEnergy
+    from litepgo.energy import CustomMeshEnergy
     mapping = StencilDofMap(4, [[0, 1], [1, 2, 3], [2, 3], [0]], 3)
     seen = []
     def batch(ids, x, g, h):
@@ -218,7 +218,7 @@ def test_batched_mesh_energy_variable_stencils(batch_size):
         scale = np.asarray(ids) + 1
         return (.5*scale*np.sum(z*z, axis=1), scale[:, None]*z if g else None,
                 (scale[:, None, None]*np.eye(z.shape[1])[None]).reshape(-1,z.shape[1]) if h else None)
-    expected, actual = MeshEnergy(mapping, batch, 1), MeshEnergy(mapping, batch, batch_size)
+    expected, actual = CustomMeshEnergy(mapping, batch, 1), CustomMeshEnergy(mapping, batch, batch_size)
     x = np.arange(12, dtype=float)
     np.testing.assert_allclose(actual.eval_value(x), expected.eval_value(x))
     np.testing.assert_allclose(actual.eval_gradient(x), expected.eval_gradient(x))
@@ -233,43 +233,43 @@ def test_batched_mesh_energy_variable_stencils(batch_size):
 
 def test_batched_mesh_energy_errors_steps_and_recovery():
     from litepgo.dof import StencilDofMap
-    from litepgo.energy import MeshEnergy
+    from litepgo.energy import CustomMeshEnergy
     mapping = StencilDofMap(2, [[0], [1]], 3)
     x = np.ones(6)
     def local(ids, x, g, h):
         return np.zeros(len(ids)), np.zeros((len(ids), 3)) if g else None, np.tile(np.eye(3), (len(ids), 1)) if h else None
     with pytest.raises(ValueError):
-        MeshEnergy(mapping, local, batch_size=0)
+        CustomMeshEnergy(mapping, local, batch_size=0)
     with pytest.raises(RuntimeError, match='invalid batch outputs'):
-        MeshEnergy(mapping, lambda *args: (np.zeros(1), None, None)).eval_value(x)
+        CustomMeshEnergy(mapping, lambda *args: (np.zeros(1), None, None)).eval_value(x)
     with pytest.raises(ValueError, match='Missing batch gradients'):
-        MeshEnergy(mapping, lambda *args: (np.zeros(2), None, None)).eval_gradient(x)
+        CustomMeshEnergy(mapping, lambda *args: (np.zeros(2), None, None)).eval_gradient(x)
     def fail(*args):
         raise KeyError('batch failure')
     with pytest.raises(KeyError, match='batch failure'):
-        MeshEnergy(mapping, fail).eval_value(x)
-    bounded = MeshEnergy(mapping, local, step=lambda ids, x, dx: np.full(len(ids), .25))
+        CustomMeshEnergy(mapping, fail).eval_value(x)
+    bounded = CustomMeshEnergy(mapping, local, step=lambda ids, x, dx: np.full(len(ids), .25))
     assert bounded.max_feasible_step(x, x) == .25
     with pytest.raises(RuntimeError, match='invalid batch steps'):
-        MeshEnergy(mapping, local, step=lambda ids, x, dx: np.full(len(ids), 2.)).max_feasible_step(x, x)
+        CustomMeshEnergy(mapping, local, step=lambda ids, x, dx: np.full(len(ids), 2.)).max_feasible_step(x, x)
     assert bounded.eval_value(x) == 0.
 
 
 def test_batched_mesh_energy_projection_empty_and_recovery():
     from litepgo.dof import StencilDofMap
-    from litepgo.energy import MeshEnergy
+    from litepgo.energy import CustomMeshEnergy
     fail = True
     def batch(ids, x, g, h):
         if fail:
             raise ValueError('retry')
         return np.zeros(len(ids)), np.zeros((len(ids), 1)) if g else None, np.array([[-1.], [2.]]) if h else None
-    obj = MeshEnergy(StencilDofMap(1, [[0], [0]], 1), batch)
+    obj = CustomMeshEnergy(StencilDofMap(1, [[0], [0]], 1), batch)
     with pytest.raises(ValueError, match='retry'):
         obj.eval_hessian(np.zeros(1))
     fail = False
     np.testing.assert_allclose(obj.eval_hessian(np.zeros(1)).toarray(), [[1.]])
     np.testing.assert_allclose(obj.eval_projected_hessian(np.zeros(1)).toarray(), [[2.]])
-    empty = MeshEnergy(StencilDofMap(1, [], 3), lambda *args: pytest.fail('empty batch invoked'))
+    empty = CustomMeshEnergy(StencilDofMap(1, [], 3), lambda *args: pytest.fail('empty batch invoked'))
     assert empty.eval_value(np.zeros(3)) == 0.
     np.testing.assert_array_equal(empty.eval_gradient(np.zeros(3)), np.zeros(3))
 
@@ -277,7 +277,7 @@ def test_batched_mesh_energy_projection_empty_and_recovery():
 @pytest.mark.parametrize("kind", ["constant", "element", "vertex", "stencil"])
 @pytest.mark.parametrize("batch_size", [1, 2, 16])
 def test_mesh_energy_all_maps_share_batch_layout(kind, batch_size):
-    from litepgo.energy import MeshEnergy
+    from litepgo.energy import CustomMeshEnergy
     from litepgo import dof, mesh
     topology = mesh.TetTopology(5, np.array([[0, 1, 2, 3], [1, 2, 3, 4]], dtype=np.int32))
     mapping = {
@@ -295,7 +295,7 @@ def test_mesh_energy_all_maps_share_batch_layout(kind, batch_size):
         h = np.tile(np.eye(x.shape[1]), (len(ids), 1)) if need_h else None
         return .5 * (x*x).sum(axis=1), x if need_g else None, h
 
-    obj = MeshEnergy(mapping, callback, batch_size=batch_size)
+    obj = CustomMeshEnergy(mapping, callback, batch_size=batch_size)
     x = np.arange(mapping.num_dofs, dtype=float)
     assert obj.eval_value(x) == .5 * (counts * x*x).sum()
     np.testing.assert_array_equal(obj.eval_gradient(x), counts * x)
@@ -311,7 +311,7 @@ def test_batch_none_is_infeasible_and_recovers():
             return None
         return (x[:, 0] ** 2, 2*x if need_g else None,
                 np.full((len(ids), 1), 2.) if need_h else None)
-    obj = energy.MeshEnergy(mapping, callback, batch_size=1)
+    obj = energy.CustomMeshEnergy(mapping, callback, batch_size=1)
     x = np.ones(1)
     for operation in (lambda: obj.eval_value(x), lambda: obj.eval_gradient(x), lambda: obj.eval_hessian(x)):
         with pytest.raises(ValueError, match="infeasible batch"):

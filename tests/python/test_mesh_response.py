@@ -19,7 +19,7 @@ def test_shared_scatter_and_solver():
         B = (np.asarray(ids) + 1)[:, None, None] * A
         y = np.einsum("bij,bj->bi", B, x - [2., 3.])
         return (y, B.reshape(-1, 2)) if need_jacobian else y
-    r = energy.MeshResponse(dof.ConstantDofMap(t, 2), dof.VertexDofMap(t, 1), local)
+    r = energy.CustomMeshResponse(dof.ConstantDofMap(t, 2), dof.VertexDofMap(t, 1), local)
     del t, local
     gc.collect()
     assert r.num_inputs == 2 and r.num_outputs == 5 and r.has_fixed_pattern
@@ -41,7 +41,7 @@ def test_matrix_gather_and_zero_values_preserve_pattern():
         J = np.zeros((len(ids), 8))
         J[:, 3] = 2*x[:, 3]
         return (y, J) if need else y
-    r = energy.MeshResponse(dof.VertexDofMap(t, 2), dof.ElementDofMap(t, 1), local)
+    r = energy.CustomMeshResponse(dof.VertexDofMap(t, 2), dof.ElementDofMap(t, 1), local)
     value, J = r.eval(np.arange(1., 11.), need_jacobian=True)
     np.testing.assert_array_equal(value, [16., 36.])
     assert J[0, 3] == 8 and J[1, 5] == 12 and J.nnz == 16
@@ -52,18 +52,18 @@ def test_matrix_gather_and_zero_values_preserve_pattern():
 def test_bad_local_result_and_exception_propagation():
     t = topology()
     i, o = dof.ConstantDofMap(t, 2), dof.VertexDofMap(t, 1)
-    bad = energy.MeshResponse(i, o, lambda ids, x, need: np.zeros((len(ids), 3)))
+    bad = energy.CustomMeshResponse(i, o, lambda ids, x, need: np.zeros((len(ids), 3)))
     with pytest.raises(RuntimeError, match="invalid batch"):
         bad.eval_value(np.zeros(2))
-    bad = energy.MeshResponse(i, o, lambda ids, x, need: (np.zeros((len(ids), 4)), np.zeros((2, 4))))
+    bad = energy.CustomMeshResponse(i, o, lambda ids, x, need: (np.zeros((len(ids), 4)), np.zeros((2, 4))))
     with pytest.raises(RuntimeError, match="invalid batch"):
         bad.eval_jacobian(np.zeros(2))
     def fail(e, x, need):
         raise KeyError("element bug")
     with pytest.raises(KeyError, match="element bug"):
-        energy.MeshResponse(i, o, fail).eval_value(np.zeros(2))
+        energy.CustomMeshResponse(i, o, fail).eval_value(np.zeros(2))
     with pytest.raises(ValueError, match="infeasible"):
-        energy.MeshResponse(i, o, lambda *args: None).eval_value(np.zeros(2))
+        energy.CustomMeshResponse(i, o, lambda *args: None).eval_value(np.zeros(2))
 
 
 @pytest.mark.parametrize("input_kind", ["constant", "element", "vertex", "stencil"])
@@ -83,7 +83,7 @@ def test_bound_map_combinations(input_kind, output_kind):
         count = len(o.dof_indices(ids[0]))
         value = np.repeat(x.sum(axis=1)[:, None], count, axis=1)
         return (value, np.ones((len(ids)*count, x.shape[1]))) if need else value
-    r = energy.MeshResponse(i, o, local)
+    r = energy.CustomMeshResponse(i, o, local)
     expected = np.zeros((o.num_dofs, i.num_dofs))
     for e in range(2):
         expected[np.ix_(o.dof_indices(e), i.dof_indices(e))] += 1

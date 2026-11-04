@@ -30,10 +30,9 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
     VolumetricFemForceResponse(const ParameterMap& parameter_map, const dof::VertexDofMap& displacement_map,
                                std::vector<XField> rest_position_fields, Vec displacement,
                                std::vector<FixedField> fixed_fields, int batch_size = 256)
-        : energy::MeshResponse(parameter_map, displacement_map,
-                               make_callback(parameter_map, displacement_map, std::move(rest_position_fields),
-                                             std::move(displacement), std::move(fixed_fields), batch_size),
-                               batch_size) {}
+        : energy::MeshResponse(parameter_map, displacement_map, batch_size),
+          state_(make_state(parameter_map, displacement_map, std::move(rest_position_fields), std::move(displacement),
+                            std::move(fixed_fields), batch_size)) {}
 
   private:
     struct State {
@@ -84,9 +83,8 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
         }
     };
     template <class ParameterMap>
-    static energy::MeshResponse::Callback make_callback(const ParameterMap& parameters, const dof::VertexDofMap& map,
-                                                        std::vector<XField> X, Vec u,
-                                                        std::vector<FixedField> fixed_fields, int batch_size) {
+    static State make_state(const ParameterMap& parameters, const dof::VertexDofMap& map, std::vector<XField> X, Vec u,
+                            std::vector<FixedField> fixed_fields, int batch_size) {
         if (parameters.num_elements() != map.num_elements() || batch_size <= 0)
             throw std::invalid_argument("VolumetricFemForceResponse: incompatible element count or batch size");
         const int width = [&] {
@@ -97,11 +95,13 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
         }();
         if (width != input_size)
             throw std::invalid_argument("VolumetricFemForceResponse: invalid parameter count");
-        auto state = std::make_shared<State>(map, std::move(X), u, std::move(fixed_fields));
-        return [state](std::span<const int> ids, const energy::BatchMatrix& coefficients, energy::BatchMatrix* J) {
-            return state->evaluate(ids, coefficients, J);
-        };
+        return State(map, std::move(X), u, std::move(fixed_fields));
     }
+    energy::BatchMatrix eval_batch(std::span<const int> ids, const energy::BatchMatrix& x,
+                                   energy::BatchMatrix* J) const override {
+        return state_.evaluate(ids, x, J);
+    }
+    State state_;
 };
 } // namespace detail
 } // namespace litepgo::fem

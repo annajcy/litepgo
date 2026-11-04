@@ -24,7 +24,7 @@ template <class M, class B, class Q> void bind_volumetric_fem_energy(nb::module_
     const nb::tuple key = nb::make_tuple(nb::type<M>(), nb::type<B>(), nb::type<Q>());
     const std::string name =
         "VolumetricFemEnergy[" + class_name(key[0]) + ", " + class_name(key[1]) + ", " + class_name(key[2]) + "]";
-    nb::class_<Energy, energy::Energy>(m, name.c_str())
+    nb::class_<Energy, energy::MeshEnergy>(m, name.c_str())
         .def(
             "__init__",
             [](Energy* self, const dof::VertexDofMap& displacement_map, const Fields& rest_position_fields,

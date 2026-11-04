@@ -1,5 +1,6 @@
 #include "litepgo/energy/response/mesh_response.hpp"
 #include "bindings.hpp"
+#include "detail/mesh_trampolines.hpp"
 #include "detail/sparse_matrix.hpp"
 #include "litepgo/dof/constant_dof_map.hpp"
 #include "litepgo/dof/element_dof_map.hpp"
@@ -17,15 +18,15 @@ namespace {
 template <class Input, class Output, class Cls> void bind_mesh_response(Cls& cls) {
     cls.def(
         "__init__",
-        [](MeshResponse* self, const Input& input, const Output& output, nb::callable evaluator, int batch_size) {
-            new (self) MeshResponse(
+        [](CustomMeshResponse* self, const Input& input, const Output& output, nb::callable evaluator, int batch_size) {
+            new (self) CustomMeshResponse(
                 input, output,
                 [evaluator](std::span<const int> ids, const BatchMatrix& x, BatchMatrix* J) -> BatchMatrix {
                     nb::gil_scoped_acquire acquire;
                     nb::object value = evaluator(std::vector<int>(ids.begin(), ids.end()),
                                                  nb::cast(x, nb::rv_policy::copy), J != nullptr);
                     if (value.is_none())
-                        throw std::domain_error("MeshResponse: infeasible batch");
+                        throw std::domain_error("CustomMeshResponse: infeasible batch");
                     if (!J)
                         return nb::cast<BatchMatrix>(value);
                     if (!nb::isinstance<nb::tuple>(value) || nb::len(value) != 2)
@@ -49,7 +50,34 @@ template <class Input, class Cls> void bind_batch_outputs(Cls& cls) {
 
 void bind_energy_response_mesh_response(nb::module_& m) {
     using linalg::binding::SparseArgument;
-    auto batch = nb::class_<MeshResponse, Response>(m, "MeshResponse");
+    auto base = nb::class_<MeshResponse, Response, PyMeshResponse>(m, "MeshResponse");
+    base.def(
+        "eval_jvp_batch",
+        [](const MeshResponse& r, const std::vector<int>& ids, const BatchMatrix& x, const BatchMatrix& d) {
+            return dynamic_cast<const PyMeshResponse&>(r).default_jvp(ids, x, d);
+        },
+        "ids"_a, "x"_a, "dx"_a);
+    base.def(
+        "eval_vjp_batch",
+        [](const MeshResponse& r, const std::vector<int>& ids, const BatchMatrix& x, const BatchMatrix& d) {
+            return dynamic_cast<const PyMeshResponse&>(r).default_vjp(ids, x, d);
+        },
+        "ids"_a, "x"_a, "gy"_a);
+
+    auto bind_input = [&]<class Input>() {
+        auto bind_output = [&]<class Output>() {
+            base.def(nb::init<const Input&, const Output&, int>(), "input_map"_a, "output_map"_a, "batch_size"_a = 256);
+        };
+        bind_output.template operator()<dof::ConstantDofMap>();
+        bind_output.template operator()<dof::ElementDofMap>();
+        bind_output.template operator()<dof::VertexDofMap>();
+        bind_output.template operator()<dof::StencilDofMap>();
+    };
+    bind_input.template operator()<dof::ConstantDofMap>();
+    bind_input.template operator()<dof::ElementDofMap>();
+    bind_input.template operator()<dof::VertexDofMap>();
+    bind_input.template operator()<dof::StencilDofMap>();
+    auto batch = nb::class_<CustomMeshResponse, MeshResponse>(m, "CustomMeshResponse");
     bind_batch_outputs<dof::ConstantDofMap>(batch);
     bind_batch_outputs<dof::ElementDofMap>(batch);
     bind_batch_outputs<dof::VertexDofMap>(batch);

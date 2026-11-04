@@ -25,6 +25,18 @@ class PyDynamicResponse : public PyResponse<DynamicPatternResponse> {
 void bind_dynamic_pattern_response(nb::module_& m) {
     using linalg::binding::SparseArgument;
     nb::class_<DynamicPatternResponse, Response, PyDynamicResponse>(m, "DynamicPatternResponse")
+        .def(
+            "eval_jvp_values",
+            [](const DynamicPatternResponse& r, const ConstVecRef& x, const ConstVecRef& d) {
+                return dynamic_cast<const PyResponse<DynamicPatternResponse>&>(r).default_jvp(x, d);
+            },
+            "x"_a, "dx"_a)
+        .def(
+            "eval_vjp_values",
+            [](const DynamicPatternResponse& r, const ConstVecRef& x, const ConstVecRef& d) {
+                return dynamic_cast<const PyResponse<DynamicPatternResponse>&>(r).default_vjp(x, d);
+            },
+            "x"_a, "gy"_a)
         .def(nb::init<const SparseArgument&>(), "initial_pattern"_a,
              "Subclass and override pattern_at(x) and eval_values(x, need_jacobian). Dimensions remain fixed.");
 }

@@ -36,6 +36,36 @@ def objective(x, rest, edges, rotation):
     )
 
 
+class ArapGlobalEnergy(energy.MeshEnergy):
+    def __init__(self, mapping, edge_vertices, rest, rotation):
+        super().__init__(mapping)
+        self.edge_vertices = edge_vertices
+        self.rest = rest
+        self.rotation = rotation
+        self.edge_hessian = np.kron([[1., -1.], [-1., 1.]], np.eye(3))
+
+    def eval_batch(self, ids, local_x, need_gradient, need_hessian):
+        local_x = local_x.reshape(len(ids), 2, 3)
+        # Both directed contributions, each with weight 1/4.
+        i, j = self.edge_vertices[ids].T
+        p = self.rest[i] - self.rest[j]
+        d = local_x[:, 0] - local_x[:, 1]
+        ri = d - np.einsum("bij,bj->bi", self.rotation[i], p)
+        rj = d - np.einsum("bij,bj->bi", self.rotation[j], p)
+        force = 0.5 * (ri + rj)
+        g = np.concatenate([force, -force], axis=1) if need_gradient else None
+        h = (
+            np.broadcast_to(self.edge_hessian, (len(ids), 6, 6))
+            if need_hessian
+            else None
+        )
+        return (
+            0.25 * np.sum(ri * ri + rj * rj, axis=1),
+            g,
+            h.reshape(-1, h.shape[-1]) if h is not None else None,
+        )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -62,7 +92,6 @@ def main():
         )
     edge_vertices = np.array(edges)
     edge_map = dof.StencilDofMap(len(rest), edges, 3)
-    edge_hessian = np.kron([[1.0, -1.0], [-1.0, 1.0]], np.eye(3))
     angle = np.pi / 3
     R = np.array(
         [
@@ -97,29 +126,9 @@ def main():
     options = solver.NewtonOptions(gradient_tolerance=1e-10)
     for iteration in range(1000):
 
-        def edge_term(ids, local_x, need_gradient, need_hessian):
-            local_x = local_x.reshape(len(ids), 2, 3)
-            # Both directed contributions, each with weight 1/4.
-            i, j = edge_vertices[ids].T
-            p = rest[i] - rest[j]
-            d = local_x[:, 0] - local_x[:, 1]
-            ri = d - np.einsum("bij,bj->bi", rotation[i], p)
-            rj = d - np.einsum("bij,bj->bi", rotation[j], p)
-            force = 0.5 * (ri + rj)
-            g = np.concatenate([force, -force], axis=1) if need_gradient else None
-            h = (
-                np.broadcast_to(edge_hessian, (len(ids), 6, 6))
-                if need_hessian
-                else None
-            )
-            return (
-                0.25 * np.sum(ri * ri + rj * rj, axis=1),
-                g,
-                h.reshape(-1, h.shape[-1]) if h is not None else None,
-            )
 
         # Rotations stay fixed throughout this global solve.
-        global_energy = energy.MeshEnergy(edge_map, edge_term)
+        global_energy = ArapGlobalEnergy(edge_map, edge_vertices, rest, rotation)
         result = solver.newton_solve(global_energy, fixed, x.ravel(), options)
         assert result.status == solver.NewtonStatus.Converged
         updated = result.x.reshape(-1, 3)

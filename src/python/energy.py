@@ -4,7 +4,7 @@ Hessians are returned as scipy.sparse.csc_matrix. Before assembling a Hessian of
 an energy whose pattern is not fixed, call update_pattern(x) at that x. Values are
 always finite; evaluating at an infeasible state raises ValueError.
 
-MeshEnergy(map, eval_batch, batch_size=256, step=None) uses only batch callbacks.
+CustomMeshEnergy(map, eval_batch, batch_size=256, step=None) uses only batch callbacks.
 eval_batch(ids, x, need_gradient, need_hessian) returns (values, gradients, Hessians)
 with shapes (B,), (B,n), (B*n,n); x is (B,n), including when B=1.
 Return None for an infeasible batch (ValueError). Unrequested derivatives may be None. Optional step(ids, x, dx) returns (B,) bounds.
@@ -41,12 +41,23 @@ unchanged. Call update_pattern(x) before requesting derivatives. Value-only call
 need no pattern update. Gauss-Newton updates the pattern automatically. Pattern
 changes do not imply differentiability at switching points.
 
-MeshResponse(input_map, output_map, eval_batch, batch_size=256) groups equal-sized
+CustomMeshResponse(input_map, output_map, eval_batch, batch_size=256) groups equal-sized
 local inputs/outputs. eval_batch(ids, inputs, need_jacobian) receives (B, ni) inputs
 and returns (B, no) values, or (values, Jacobians) with Jacobians (B*no, ni).
 Batch callbacks run concurrently; do not mutate shared state or assume call order.
 The assembler uses fixed original element order. batch_size=1 retains batch axes.
 
+MeshEnergy(map, batch_size=256) and MeshResponse(input_map, output_map,
+batch_size=256) are subclass bases. Override eval_batch with the corresponding
+CustomMesh callback signature. MeshEnergy domains override
+eval_feasible_step_batch(ids, x, dx). MeshResponse may override
+eval_jvp_batch(ids, x, dx) and eval_vjp_batch(ids, x, gy) to return batch products.
+Their defaults multiply local explicit Jacobians; shared/repeated indices sum.
+All Response instances expose eval_jvp(x, dx) and eval_vjp(x, gy). Custom
+FixedPatternResponse/DynamicPatternResponse subclasses may override
+ eval_jvp_values(x, dx) and eval_vjp_values(x, gy).
+Update dynamic patterns before products as before eval_jacobian. Direct products
+do not remove the stored Jacobian pattern. No automatic linearization cache is kept.
 """
 
 from litepgo._core import energy as _native
@@ -55,14 +66,21 @@ HessianKind = _native.HessianKind
 Energy = _native.Energy
 FixedPatternEnergy = _native.FixedPatternEnergy
 DynamicPatternEnergy = _native.DynamicPatternEnergy
-MeshEnergy = _native.MeshEnergy
+CustomMeshEnergy = _native.CustomMeshEnergy
 QuadraticEnergy = _native.QuadraticEnergy
 VertexPullingEnergy = _native.VertexPullingEnergy
 WeightedEnergySum = _native.WeightedEnergySum
 AffineMappedEnergy = _native.AffineMappedEnergy
 
-__all__ = ["FixedPatternEnergy", "DynamicPatternEnergy", "HessianKind", "Energy", "MeshEnergy", "QuadraticEnergy", "VertexPullingEnergy", "WeightedEnergySum", "AffineMappedEnergy"]
+__all__ = ["FixedPatternEnergy", "DynamicPatternEnergy", "HessianKind", "Energy", "CustomMeshEnergy", "QuadraticEnergy", "VertexPullingEnergy", "WeightedEnergySum", "AffineMappedEnergy"]
 
-from litepgo._core.energy import Response, FixedPatternResponse, DynamicPatternResponse, MeshResponse
+from litepgo._core.energy import Response, FixedPatternResponse, DynamicPatternResponse, CustomMeshResponse
 
-__all__ += ["Response", "FixedPatternResponse", "DynamicPatternResponse", "MeshResponse"]
+__all__ += ["Response", "FixedPatternResponse", "DynamicPatternResponse", "CustomMeshResponse"]
+
+MeshEnergy = _native.MeshEnergy
+MeshResponse = _native.MeshResponse
+__all__ += ["MeshEnergy", "MeshResponse"]
+
+# MeshEnergy and MeshResponse are subclass bases. Callback construction uses
+# CustomMeshEnergy and CustomMeshResponse; both retain the original batch protocol.

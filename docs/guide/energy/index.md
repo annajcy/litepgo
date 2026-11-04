@@ -8,19 +8,23 @@ residual targeting zero, so wrap measurements as prediction minus observation.
 ## Module architecture
 
 `Energy` and `Response` are the solver-facing interfaces. Fixed/dynamic-pattern
-subclasses let applications define a global term; mesh wrappers turn batches of
+subclasses let applications define a global term; mesh subclasses turn batches of
 local terms into the same interfaces. Scalar composition stays in this module,
 so neither assembly nor optimization needs to know a material law.
 
 ```mermaid
 flowchart TB
   accTitle: Energy and response construction paths
-  accDescr: Built-in or custom scalar terms and MeshEnergy expose Energy. Local vector batches and custom response subclasses expose Response. Scalar composites feed Newton while residual responses feed Gauss-Newton.
+  accDescr: MeshEnergy and MeshResponse subclasses assemble local terms; CustomMeshEnergy and CustomMeshResponse adapt callbacks to those bases. Scalar composites feed Newton while residual responses feed Gauss-Newton.
   scalar["Built-in / custom scalar terms"] --> energy["Energy interface"]
-  batches["Local batch callbacks"] --> meshEnergy["MeshEnergy"]
-  meshEnergy --> energy
-  batches --> meshResponse["MeshResponse"]
-  meshResponse --> response["Response interface"]
+  batches["Local batch callbacks"] --> meshEnergy["CustomMeshEnergy"]
+  meshEnergy --> meshEnergyBase["MeshEnergy subclass"]
+  localEnergy["Local scalar model / native FEM"] --> meshEnergyBase
+  meshEnergyBase --> energy
+  batches --> meshResponse["CustomMeshResponse"]
+  meshResponse --> meshResponseBase["MeshResponse subclass"]
+  localResponse["Local vector model / native FEM"] --> meshResponseBase
+  meshResponseBase --> response["Response interface"]
   customResponse["Custom vector response"] --> response
   energy --> composed["Weighted sum / affine composition"]
   composed --> newton["Newton"]
