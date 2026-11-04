@@ -131,7 +131,7 @@ add_executable(litepgo_linalg_tests
     linalg/sparse_solver/pardiso_threading_gtest.cpp
 )
 target_link_libraries(litepgo_linalg_tests PRIVATE
-    litepgo::linalg litepgo::warnings GTest::gtest_main)
+    litepgo::linalg litepgo::warnings GTest::gtest_main ${CMAKE_DL_LIBS})
 foreach(backend accelerate mkl)
     if(TARGET litepgo::linalg_${backend})
         target_link_libraries(litepgo_linalg_tests PRIVATE litepgo::linalg_${backend})
