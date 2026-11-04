@@ -39,7 +39,7 @@ order is unspecified and batches may run concurrently. Captured data stay fixed.
 
 ## Products and fitting
 
-Both programs check values and the explicit Jacobian against the independent
+Tests check values and the explicit Jacobian against the independent
 global formula. They also verify JVP/VJP, the adjoint identity
 `w @ Jv == v @ JTw`, and a directional finite difference.
 
@@ -54,7 +54,7 @@ This is a small algebraic hook example, not an equilibrium or constitutive
 model. Both programs print:
 
 ```text
-mesh response subclass: shared assembly, JVP/VJP and parameter fit verified
+mesh response subclass: shared assembly, JVP/VJP and parameter fit
 ```
 
 ## Run and inspect
@@ -76,3 +76,7 @@ PYTHONPATH=build/release/python uv run --no-sync python examples/energy/response
 <<< ../../../examples/energy/response/mesh_response_subclass.cpp
 
 :::
+
+Independent assembly formulas, finite differences, and solution checks are in
+`tests/python/test_mesh_subclass_examples.py`; the runnable example focuses on
+the subclass and solver calls.

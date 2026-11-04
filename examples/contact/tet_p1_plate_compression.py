@@ -70,8 +70,13 @@ def main():
     # Pin the lateral DOFs on the outer faces to remove rigid modes.
     tolerance = height * 1e-8
     lower = np.flatnonzero(np.abs(box_nodes[:, 2] - bottom) <= tolerance)
-    upper = np.flatnonzero(np.abs(box_nodes[:, 2] - bottom - height) <= tolerance) + box_vertices
-    clamped = (3 * np.concatenate([lower, upper])[:, None] + np.arange(2)).ravel().tolist()
+    upper = (
+        np.flatnonzero(np.abs(box_nodes[:, 2] - bottom - height) <= tolerance)
+        + box_vertices
+    )
+    clamped = (
+        (3 * np.concatenate([lower, upper])[:, None] + np.arange(2)).ravel().tolist()
+    )
 
     # Contact acts on the boundary of both boxes, whose vertices move with their
     # volume displacement DOFs. The barrier's weight kappa is its stiffness.
@@ -83,17 +88,25 @@ def main():
     kinematics = dof.SurfaceKinematics(surface.positions, W)
     rest_surface = kinematics.rest_positions.ravel()
     n = surface.topology.num_vertices
-    bottom_plate = contact.PlanePenaltyEnergy(n, axis=2, height=bottom + 0.2 * height, stiffness=20.0)
+    bottom_plate = contact.PlanePenaltyEnergy(
+        n, axis=2, height=bottom + 0.2 * height, stiffness=20.0
+    )
     top_plate = contact.PlanePenaltyEnergy(
-        n, axis=2, height=bottom + 1.8 * height + gap, stiffness=20.0, positive_side=False
+        n,
+        axis=2,
+        height=bottom + 1.8 * height + gap,
+        stiffness=20.0,
+        positive_side=False,
     )
     kappa = 1e7
-    potential = energy.WeightedEnergySum([
-        (elastic, 1.0),
-        (energy.AffineMappedEnergy(barrier, W, rest_surface), kappa),
-        (energy.AffineMappedEnergy(bottom_plate, W, rest_surface), 1.0),
-        (energy.AffineMappedEnergy(top_plate, W, rest_surface), 1.0),
-    ])
+    potential = energy.WeightedEnergySum(
+        [
+            (elastic, 1.0),
+            (energy.AffineMappedEnergy(barrier, W, rest_surface), kappa),
+            (energy.AffineMappedEnergy(bottom_plate, W, rest_surface), 1.0),
+            (energy.AffineMappedEnergy(top_plate, W, rest_surface), 1.0),
+        ]
+    )
     fixed = dof.DofReduction(num_dofs, clamped)
     initial = np.zeros(num_dofs)
     options = solver.NewtonOptions()

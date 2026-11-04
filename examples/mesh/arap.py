@@ -42,7 +42,7 @@ class ArapGlobalEnergy(energy.MeshEnergy):
         self.edge_vertices = edge_vertices
         self.rest = rest
         self.rotation = rotation
-        self.edge_hessian = np.kron([[1., -1.], [-1., 1.]], np.eye(3))
+        self.edge_hessian = np.kron([[1.0, -1.0], [-1.0, 1.0]], np.eye(3))
 
     def eval_batch(self, ids, local_x, need_gradient, need_hessian):
         local_x = local_x.reshape(len(ids), 2, 3)
@@ -71,7 +71,9 @@ def main():
     parser.add_argument(
         "output", nargs="?", type=Path, default=Path("output/python/arap")
     )
-    parser.add_argument("--volume", type=Path, help="tetrahedral VEG mesh with planar x end faces")
+    parser.add_argument(
+        "--volume", type=Path, help="tetrahedral VEG mesh with planar x end faces"
+    )
     args = parser.parse_args()
     volume = None
     if args.volume:
@@ -111,7 +113,9 @@ def main():
     width = np.ptp(rest[:, 0])
     center = rest[right].mean(axis=0)
     if volume is None:
-        x[right] = (rest[right] - center) @ R.T + center + width * np.array([-0.2, 0.0, 0.5])
+        x[right] = (
+            (rest[right] - center) @ R.T + center + width * np.array([-0.2, 0.0, 0.5])
+        )
     else:
         fraction = (rest[:, 0] - rest[:, 0].min()) / width
         moved = (rest - center) @ R.T + center + width * np.array([0.0, 0.0, 0.25])
@@ -125,8 +129,6 @@ def main():
     first = previous = objective(x, rest, edges, rotation)
     options = solver.NewtonOptions(gradient_tolerance=1e-10)
     for iteration in range(1000):
-
-
         # Rotations stay fixed throughout this global solve.
         global_energy = ArapGlobalEnergy(edge_map, edge_vertices, rest, rotation)
         result = solver.newton_solve(global_energy, fixed, x.ravel(), options)
@@ -145,7 +147,10 @@ def main():
         raise RuntimeError("ARAP did not converge within 1000 local/global iterations")
     np.testing.assert_array_equal(x[handles], initial[handles])
     free = np.setdiff1d(np.arange(len(rest)), handles)
-    assert value < first and np.max(np.linalg.norm(x[free] - rest[free], axis=1)) > 0.05 * width
+    assert (
+        value < first
+        and np.max(np.linalg.norm(x[free] - rest[free], axis=1)) > 0.05 * width
+    )
     args.output.mkdir(parents=True, exist_ok=True)
     if volume is None:
         topology = mesh.TriangleTopology(len(rest), np.array(faces, dtype=np.int32))

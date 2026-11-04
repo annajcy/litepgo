@@ -18,7 +18,7 @@ class EdgeSmoothingEnergy(energy.MeshEnergy):
     def __init__(self, mapping, rest_edge_vectors):
         super().__init__(mapping)
         self.rest_edge_vectors = rest_edge_vectors
-        self.edge_hessian = np.kron([[1., -1.], [-1., 1.]], np.eye(3))
+        self.edge_hessian = np.kron([[1.0, -1.0], [-1.0, 1.0]], np.eye(3))
 
     def eval_batch(self, ids, x, need_gradient, need_hessian):
         x = x.reshape(len(ids), 2, 3)
@@ -27,7 +27,11 @@ class EdgeSmoothingEnergy(energy.MeshEnergy):
         if self.rest_edge_vectors is not None:
             d -= self.rest_edge_vectors[ids]
         g = np.concatenate([d, -d], axis=1) if need_gradient else None
-        h = np.broadcast_to(self.edge_hessian, (len(ids), 6, 6)) if need_hessian else None
+        h = (
+            np.broadcast_to(self.edge_hessian, (len(ids), 6, 6))
+            if need_hessian
+            else None
+        )
         return (
             0.5 * np.sum(d * d, axis=1),
             g,
@@ -66,7 +70,9 @@ def main():
         type=Path,
         default=Path("output/python/laplacian_optimization"),
     )
-    parser.add_argument("--volume", type=Path, help="axis-aligned tetrahedral box VEG mesh")
+    parser.add_argument(
+        "--volume", type=Path, help="axis-aligned tetrahedral box VEG mesh"
+    )
     args = parser.parse_args()
     volume = None
     if args.volume:
@@ -96,14 +102,12 @@ def main():
         starts, ends = np.asarray(edges).T
         rest_edge_vectors = rest[starts] - rest[ends]
 
-
     neighbors = [[] for _ in rest]
     for i, j in edges:
         neighbors[i].append(j)
         neighbors[j].append(i)
     rings = [[i, *adjacent] for i, adjacent in enumerate(neighbors)]
     ring_map = dof.StencilDofMap(len(rest), rings, 3)
-
 
     if volume is not None:
         outer = np.asarray(mesh.extract_surface_with_vertices(volume).vertices)
@@ -120,7 +124,13 @@ def main():
         x, y, z = normalized.T
         envelope = np.sin(np.pi * x) * np.sin(np.pi * y)
         free = np.setdiff1d(np.arange(len(rest)), boundary)
-        ripple = 0.16 * span[2] * z * envelope * (1 + np.cos(2 * np.pi * x) * np.cos(2 * np.pi * y))
+        ripple = (
+            0.16
+            * span[2]
+            * z
+            * envelope
+            * (1 + np.cos(2 * np.pi * x) * np.cos(2 * np.pi * y))
+        )
         noisy[free, 2] += ripple[free]
     else:
         boundary = [

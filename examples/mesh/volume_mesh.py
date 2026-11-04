@@ -11,7 +11,9 @@ def read_volume(path):
     volume = mesh.read_veg(path)
     if not isinstance(volume, mesh.TetMesh) or volume.topology.num_cells == 0:
         raise ValueError("expected a nonempty tetrahedral VEG mesh")
-    edges = sorted({tuple(sorted(edge)) for cell in volume.cells for edge in combinations(cell, 2)})
+    edges = sorted(
+        {tuple(sorted(edge)) for cell in volume.cells for edge in combinations(cell, 2)}
+    )
     return volume, edges
 
 

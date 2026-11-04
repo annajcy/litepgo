@@ -42,18 +42,15 @@ def main():
     fixed, dynamic = Quadratic(), Coupled()
     x = np.ones(2)
     value, g, H = fixed.eval(x, gradient=True, hessian=energy.HessianKind.Exact)
-    np.testing.assert_allclose(g, [0.0, -1.0])
-    assert value == 0.5
-    assert dynamic.eval_value(x) == 5.0  # No pattern update needed for value only.
-    assert dynamic.update_pattern(x)
+    active_value = dynamic.eval_value(x)  # Value-only requests need no pattern update.
+    dynamic.update_pattern(x)
     _, g, H = dynamic.eval(x, gradient=True, hessian=energy.HessianKind.Exact)
-    np.testing.assert_allclose(g, [9.0, 9.0])
-    assert H.nnz == 4 and H[0, 1] == 12
-    assert not dynamic.update_pattern(x)
-    assert dynamic.update_pattern(-x)
+    active_nnz = H.nnz
+    dynamic.update_pattern(-x)
     H = dynamic.eval_hessian(-x)
-    np.testing.assert_allclose(H.toarray(), np.eye(2))
-    print(f"fixed value={value:g}, active value=5, Hessian nnz=2->4->{H.nnz}")
+    print(
+        f"fixed value={value:g}, active value={active_value:g}, Hessian nnz=2->{active_nnz}->{H.nnz}"
+    )
 
 
 if __name__ == "__main__":
