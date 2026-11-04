@@ -129,7 +129,9 @@ export default defineConfig({
           { text: 'Equilibrium volume plastic stretches', link: '/examples/fitting/volume-equilibrium-fp-fit' },
           { text: 'Equilibrium shell plastic stretches', link: '/examples/fitting/shell-equilibrium-fp-fit' }
         ] },
-        { text: 'PyTorch fitting', link: '/examples/torch/', collapsed: true, items: [
+        { text: 'PyTorch materials and fitting', link: '/examples/torch/', collapsed: true, items: [
+          { text: 'Force responses through equilibrium', link: '/examples/torch/torch-equilibrium-response' },
+          { text: 'Constitutive energy in Torch', link: '/examples/torch/torch-neohookean' },
           { text: 'Volume material with L-BFGS', link: '/examples/torch/volume-equilibrium-material-fit-torch' },
           { text: 'Shell material with L-BFGS', link: '/examples/torch/shell-equilibrium-material-fit-torch' },
           { text: 'Volume plastic stretches with L-BFGS', link: '/examples/torch/volume-equilibrium-fp-fit-torch' },

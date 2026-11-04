@@ -1,4 +1,8 @@
-"""CPU float64, first-order PyTorch adapters for Energy and Response.
+"""CPU float64 PyTorch adapters, constitutive FEM energy, and force responses.
+
+TorchVolumetricFemEnergy assembles a Torch density through native MeshEnergy;
+its material/Fp responses provide explicit Jacobians and direct JVP/VJP.
+The energy/response functions below are first-order outer autograd adapters.
 
 Only the explicit tensor input is differentiable. Callbacks and model configuration
 must remain fixed from forward through differentiation. Response products are
@@ -9,7 +13,19 @@ import numpy as np
 import torch
 from torch.autograd.function import once_differentiable
 
-__all__ = ["energy", "response"]
+from litepgo.torch_fem import (
+    TorchVolumetricFemEnergy,
+    TorchVolumetricFemMaterialResponse,
+    TorchVolumetricFemFpResponse,
+)
+
+__all__ = [
+    "energy",
+    "response",
+    "TorchVolumetricFemEnergy",
+    "TorchVolumetricFemMaterialResponse",
+    "TorchVolumetricFemFpResponse",
+]
 
 
 def _input(x):

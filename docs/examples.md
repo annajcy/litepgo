@@ -24,7 +24,7 @@ build/release/examples/energy/scalar/custom_energy
 PYTHONPATH=build/release/python uv run --no-sync python examples/energy/scalar/custom_energy.py
 ```
 
-All 28 cataloged native examples have Python counterparts. Four additional Torch programs
+All cataloged native examples have Python counterparts. Six additional Torch programs
 are Python-only; `uv sync --locked` installs their PyTorch dependency along with
 the other project dependencies. Asset inputs are bundled; generated-grid examples
 need no input files. Output paths and overwrite behavior are documented per case.
@@ -66,6 +66,8 @@ last digits on every platform.
 | Fitting | [`shell_equilibrium_material_fit`](examples/fitting/shell-equilibrium-material-fit.md) | Material-dependent state and reaction sensitivities |
 | Fitting | [`volume_equilibrium_fp_fit`](examples/fitting/volume-equilibrium-fp-fit.md) | Plastic stretches from shapes and reactions |
 | Fitting | [`shell_equilibrium_fp_fit`](examples/fitting/shell-equilibrium-fp-fit.md) | Shell natural geometry through equilibrium |
+| Torch | [`torch_neohookean`](examples/torch/torch-neohookean.md) | Torch density, native FEM assembly, and derivative comparison |
+| Torch | [`torch_equilibrium_response`](examples/torch/torch-equilibrium-response.md) | Physical theta/Fp Jacobians and equilibrium JVP/VJP |
 | Torch | [`volume_equilibrium_material_fit_torch`](examples/torch/volume-equilibrium-material-fit-torch.md) | Volume material recovery with native autograd |
 | Torch | [`shell_equilibrium_material_fit_torch`](examples/torch/shell-equilibrium-material-fit-torch.md) | Shell material recovery with native autograd |
 | Torch | [`volume_equilibrium_fp_fit_torch`](examples/torch/volume-equilibrium-fp-fit-torch.md) | Three-stretch inverse equilibrium with L-BFGS |
@@ -83,3 +85,18 @@ not change the inner equilibrium formulation.
 Examples with recovered synthetic parameters establish numerical correctness and
 local identifiability for those experiments. They do not establish uniqueness for
 arbitrary experimental data or supply a general plastic-evolution model.
+
+## Reading the source
+
+Small API demonstrations stay linear: define the model, call it, and inspect the
+result. Larger fitting examples separate problem construction, physical factories,
+measurement, normalized residual, and the optimizer. Read `main` first for the
+experiment, then follow those named functions for the formulas. Fixed-pose examples
+need no equilibrium stage.
+
+Torch fitting drivers import the adjacent native Python example's physical model;
+they show parameter tensors, L-BFGS, and the response bridge. Keep both files
+together. Derivative, rank, and recovery checks belong to `tests/python`, while
+input validation and solver failure handling remain in the runnable examples.
+Simulation and plotting examples retain their setup → solve → export/plot flow;
+the batch comparison example also verifies equivalence before timing.
