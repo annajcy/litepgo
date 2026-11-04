@@ -9,6 +9,8 @@ returns equilibrium displacement and its direct parameter Jacobian. make_energy(
 returns the total Energy; partial(p, u) returns its sparse gradient/parameter
 Jacobian at fixed u. Fixed DOFs and values must be parameter-independent.
 Each call starts from initial; sensitivities use the exact unshifted Hessian.
+eval_jvp and eval_vjp use directional and adjoint solves without forming the
+state Jacobian; partial(p, u) and the declared sparsity pattern remain explicit.
 Nonconverged equilibria raise ValueError. See examples/fem/fitting/volume_equilibrium_material_fit.py.
 
 """

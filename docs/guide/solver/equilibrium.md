@@ -50,6 +50,22 @@ parameter-dependent prescribed boundary data are outside this contract.
 Convergence does not certify mechanical stability; the sensitivity solve accepts
 indefinite nonsingular stiffness. Callbacks and captured data must be deterministic.
 
+## Directional and adjoint derivatives
+
+`StaticEquilibriumResponse.eval_jvp(p, v)` solves
+`K du = -B v` on the free DOFs and returns the full displacement direction,
+with zeros at fixed DOFs. `eval_vjp(p, w)` solves the adjoint equation
+`K^T lambda = w_free` and returns `-B^T lambda_full`, extending the
+adjoint with zeros at fixed DOFs. Here `K` is the exact equilibrium Hessian
+and `B = partial(p, u)`. Since the energy Hessian is symmetric, both paths
+use the existing direct stiffness solver.
+
+Each product evaluates equilibrium from the configured initial state and uses
+one derivative right-hand-side solve, without forming the numerical state
+Jacobian. Calls do not cache equilibrium states or factorizations. The explicit
+parameter partial and declared state-Jacobian sparsity pattern remain allocated.
+The explicit Jacobian interface and Gauss–Newton behavior are unchanged.
+
 ## Reactions and combined measurements
 
 For a fixed-DOF selector $C$, define reaction $R=Cg(u^*(p),p)$. Its total

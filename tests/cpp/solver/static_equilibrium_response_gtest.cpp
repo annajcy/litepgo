@@ -43,6 +43,15 @@ TEST(StaticEquilibriumResponse, FemDisplacementAndReactionMatchResolveFiniteDiff
     const Vec u = response.eval(p, &J);
     ASSERT_EQ(partial_calls, 1);
     EXPECT_GT(J.norm(), 1e-4);
+    const Vec v = Eigen::Vector2d(.4, -.7);
+    const Vec w = Vec::LinSpaced(12, -.8, 1.1);
+    const Vec jv = response.eval_jvp(p, v), jtw = response.eval_vjp(p, w);
+    EXPECT_LT((jv - J * v).norm(), 1e-10);
+    EXPECT_LT((jtw - J.transpose() * w).norm(), 1e-10);
+    EXPECT_NEAR(w.dot(jv), v.dot(jtw), 1e-10);
+    const double eps = 1e-4;
+    const Vec numerical_direction = (response.eval_value(p + eps * v) - response.eval_value(p - eps * v)) / (2 * eps);
+    EXPECT_LT((jv - numerical_direction).norm(), 2e-7);
     for (int r : fixed.fixed_dofs()) {
         EXPECT_EQ(u[r], initial[r]);
         EXPECT_EQ(Eigen::MatrixXd(J).row(r).norm(), 0);
@@ -84,19 +93,27 @@ TEST(StaticEquilibriumResponse, ValidationFailureAndFullyFixedStates) {
     StaticEquilibriumResponse all_fixed(2, fixed, initial, options, make_energy, partial);
     EXPECT_EQ(all_fixed.eval_value(p), initial);
     EXPECT_EQ(all_fixed.eval_jacobian(p).nonZeros(), 0);
+    EXPECT_TRUE(all_fixed.eval_jvp(p, p).isZero());
+    EXPECT_TRUE(all_fixed.eval_vjp(p, p).isZero());
     StaticEquilibriumResponse valid(2, free, initial, options, make_energy, partial);
     EXPECT_TRUE(valid.eval_value(p).isApprox(p, 1e-12));
     EXPECT_TRUE(Eigen::MatrixXd(valid.eval_jacobian(p)).isApprox(Eigen::Matrix2d::Identity(), 1e-12));
     options.max_iterations = 0;
     StaticEquilibriumResponse unfinished(2, free, initial, options, make_energy, partial);
     EXPECT_THROW(unfinished.eval_value(p), std::domain_error);
+    EXPECT_THROW(unfinished.eval_jvp(p, p), std::domain_error);
+    EXPECT_THROW(unfinished.eval_vjp(p, p), std::domain_error);
     options.max_iterations = 50;
     StaticEquilibriumResponse bad_partial(2, free, initial, options, make_energy,
                                           [](const Vec&, const Vec&) { return SpMat(1, 2); });
     EXPECT_THROW(bad_partial.eval_jacobian(p), std::invalid_argument);
+    EXPECT_THROW(bad_partial.eval_jvp(p, p), std::invalid_argument);
+    EXPECT_THROW(bad_partial.eval_vjp(p, p), std::invalid_argument);
     StaticEquilibriumResponse null_energy(
         2, free, initial, options, [](const Vec&) { return std::shared_ptr<energy::Energy>{}; }, partial);
     EXPECT_THROW(null_energy.eval_value(p), std::invalid_argument);
+    EXPECT_THROW(null_energy.eval_jvp(p, p), std::invalid_argument);
+    EXPECT_THROW(null_energy.eval_vjp(p, p), std::invalid_argument);
     StaticEquilibriumResponse singular(
         2, free, initial, options,
         [](const Vec&) -> std::shared_ptr<energy::Energy> {
@@ -105,6 +122,8 @@ TEST(StaticEquilibriumResponse, ValidationFailureAndFullyFixedStates) {
         },
         partial);
     EXPECT_THROW(singular.eval_jacobian(p), std::exception);
+    EXPECT_THROW(singular.eval_jvp(p, p), std::exception);
+    EXPECT_THROW(singular.eval_vjp(p, p), std::exception);
 }
 TEST(StaticEquilibriumResponse, InterleavedFixedDofsMatchResolveFiniteDifferences) {
     Eigen::Matrix3d K;
