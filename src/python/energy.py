@@ -1,5 +1,9 @@
 """Energies and their composites, mirroring src/core/energy.
 
+ParametricEnergy(state_pattern, parameter_pattern, fixed_pattern=True) defines E(u,p).
+energy_at(p) and force_at(u) create Energy/Response views sharing the same gradient
+hook; fixed inputs are copied and the model is retained. See guide/energy/parametric.
+
 Hessians are returned as scipy.sparse.csc_matrix. Before assembling a Hessian of
 an energy whose pattern is not fixed, call update_pattern(x) at that x. Values are
 always finite; evaluating at an infeasible state raises ValueError.
@@ -80,3 +84,6 @@ __all__ += ["Response", "FixedPatternResponse", "DynamicPatternResponse"]
 MeshEnergy = _native.MeshEnergy
 MeshResponse = _native.MeshResponse
 __all__ += ["MeshEnergy", "MeshResponse"]
+
+ParametricEnergy = _native.ParametricEnergy
+__all__ += ["ParametricEnergy"]

@@ -58,6 +58,8 @@ NB_MODULE(_core, m) {
     litepgo::energy::binding::bind_dynamic_pattern_response(energy);
     litepgo::energy::binding::bind_energy_response_mesh_response(energy);
 
+    litepgo::energy::binding::bind_parametric_energy(energy);
+
     nb::module_ fem = m.def_submodule("fem");
     fem.doc() = "Finite elements (src/core/fem). Template instantiations are in _templates.";
     litepgo::fem::binding::bind_triangle_p1_basis(fem);
