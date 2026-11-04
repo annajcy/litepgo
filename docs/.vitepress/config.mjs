@@ -52,8 +52,8 @@ export default defineConfig({
         ] },
         { text: 'Energy and response', link: '/guide/energy/', collapsed: true, items: [
           { text: 'Evaluation and composition', link: '/guide/energy/evaluation' },
+          { text: 'Parameter transforms', link: '/guide/energy/parameter-transforms' },
           { text: 'Custom energies and responses', link: '/guide/energy/custom' },
-          { text: 'Parameterized energies', link: '/guide/energy/parametric' },
           { text: 'Batched assembly', link: '/guide/energy/assembly' }
         ] },
         { text: 'Finite elements', link: '/guide/fem/', collapsed: true, items: [

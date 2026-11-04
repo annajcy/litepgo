@@ -8,18 +8,19 @@ relaxed. Material is Neo-Hookean with $F_p=I$. Optimize log material
 parameters $\theta=e^p$, starting at `(1,1)` in physical parameters, to recover
 truth `(2,3)`. Each reaction is scaled by its fixed observed magnitude.
 
-**API walkthrough.** `StaticEquilibriumResponse` consumes a `ParametricEnergy` model
-whose hooks use `VolumetricFemEnergy` and analytic material-force partials. The outer residual
+**API walkthrough.** `StaticEquilibriumResponse` composes a
+`VolumetricFemEnergy` factory with a material-force response factory. The outer residual
 sums reaction derivatives and applies the exponential chain rule.
 `lp_torch.response` connects this residual to L-BFGS's closure. Its autograd
-parameter is the two-entry log vector.
+parameter is the two-entry log vector. `ComposedResponse(MaterialResidual(), ExpResponse(2))`
+applies the exponential chain rule through the standard Response interface.
 
 **Expected result.** Recover both material parameters and predict reactions on
 held-out z-compression $-0.07H$. Printed diagnostics include recovered
 parameters and fitting/prediction errors. This changes the outer optimizer from
 the native material experiment; the inner equilibrium and analytic derivative
 model are the same. It does not train displacement tensors or material fields
-through the analytic model hooks.
+through Python callback internals.
 
 ## Run and inspect
 

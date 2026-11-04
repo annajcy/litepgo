@@ -9,7 +9,7 @@ residual targeting zero, so wrap measurements as prediction minus observation.
 
 `Energy` and `Response` are the solver-facing interfaces. Fixed/dynamic-pattern
 subclasses let applications define a global term; mesh subclasses turn batches of
-local terms into the same interfaces. Scalar composition stays in this module,
+local terms into the same interfaces. Scalar and vector composition stay in this module,
 so neither assembly nor optimization needs to know a material law.
 
 ```mermaid
@@ -38,7 +38,7 @@ is under `src/core/energy/`; Python uses `litepgo.energy`.
 | --- | --- |
 | Evaluate derivatives and compose scalar objectives | [Evaluation and composition](evaluation.md) |
 | Implement fixed/dynamic-pattern scalar or vector terms | [Custom energies and responses](custom.md) |
-| Define E(u,p), fixed-argument views and parameter products | [Parameterized energies](parametric.md) |
+| Parameterize Fp/theta and compose vector derivatives | [Parameter transforms](parameter-transforms.md) |
 | Gather, batch and assemble local contributions | [Batched assembly](assembly.md) |
 
 All paths share the sparse-pattern and feasibility contracts below and in

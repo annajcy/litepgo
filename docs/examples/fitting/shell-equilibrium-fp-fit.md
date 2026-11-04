@@ -8,11 +8,13 @@ $F_p=\operatorname{diag}(e^{p_0},e^{p_1},1)$ with truth `(1.06,0.95)`, starting
 at identity. Observe the free center displacement and 24 boundary reactions,
 normalized by separate fixed target norms.
 
-**API walkthrough.** A `PlasticModel` groups state and parameter derivative hooks on one `ParametricEnergy`. Rebuild `ShellFemEnergy` with the per-face natural-state
-matrices for each trial. `ShellFemForceFpResponse` plus columns 0/4 and exponential
-factors supplies $B_p$. `StaticEquilibriumResponse(model,...)` supplies $U$.
-The combined Jacobian stacks $U_f$ and $(B_p+KU)_c$, not merely the
-fixed-pose plastic-force partial.
+**API walkthrough.** `ElementwiseResponse` gathers shared log stretches and applies
+`LogDiagonalFpResponse` to produce per-element physical Fp values. `ComposedResponse`
+connects this transform to the native fixed-pose force response, including Jacobian,
+JVP, and VJP chain rules. The energy factory uses the same transform to construct
+its Fp list. `StaticEquilibriumResponse` supplies the state sensitivity; reaction
+derivatives include both the fixed-state parameter derivative and the stiffness
+multiplied by state sensitivity. See [parameter transforms](../../guide/energy/parameter-transforms.md).
 
 **Expected result.** Recover `(1.06,0.95)` and predict both observation blocks
 at load factor 0.6. Re-solved finite differences, rank, fixed-value, equilibrium,
