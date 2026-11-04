@@ -57,6 +57,7 @@ batch_size=256) are subclass bases. Override eval_batch with the corresponding
 batch hook signature. MeshEnergy domains override
 eval_feasible_step_batch(ids, x, dx). MeshResponse may override
 eval_jvp_batch(ids, x, dx) and eval_vjp_batch(ids, x, gy) to return batch products.
+Product hooks may return None for an infeasible state, just like value hooks.
 Their defaults multiply local explicit Jacobians; shared/repeated indices sum.
 All Response instances expose eval_jvp(x, dx) and eval_vjp(x, gy). Custom
 FixedPatternResponse/DynamicPatternResponse subclasses may override

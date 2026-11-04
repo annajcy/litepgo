@@ -35,17 +35,23 @@ class PyMeshResponse : public MeshResponse {
         nb::detail::ticket ticket(nb_trampoline, "eval_jvp_batch", nb::detail::str_hash("eval_jvp_batch"), false);
         if (!ticket.key.is_valid())
             return MeshResponse::eval_jvp_batch(ids, x, d);
-        return nb::cast<BatchMatrix>(nb_trampoline.base().attr(ticket.key)(std::vector<int>(ids.begin(), ids.end()),
-                                                                           nb::cast(x, nb::rv_policy::copy),
-                                                                           nb::cast(d, nb::rv_policy::copy)));
+        nb::object result =
+            nb_trampoline.base().attr(ticket.key)(std::vector<int>(ids.begin(), ids.end()),
+                                                  nb::cast(x, nb::rv_policy::copy), nb::cast(d, nb::rv_policy::copy));
+        if (result.is_none())
+            throw std::domain_error("MeshResponse: infeasible batch");
+        return nb::cast<BatchMatrix>(result);
     }
     BatchMatrix eval_vjp_batch(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& d) const override {
         nb::detail::ticket ticket(nb_trampoline, "eval_vjp_batch", nb::detail::str_hash("eval_vjp_batch"), false);
         if (!ticket.key.is_valid())
             return MeshResponse::eval_vjp_batch(ids, x, d);
-        return nb::cast<BatchMatrix>(nb_trampoline.base().attr(ticket.key)(std::vector<int>(ids.begin(), ids.end()),
-                                                                           nb::cast(x, nb::rv_policy::copy),
-                                                                           nb::cast(d, nb::rv_policy::copy)));
+        nb::object result =
+            nb_trampoline.base().attr(ticket.key)(std::vector<int>(ids.begin(), ids.end()),
+                                                  nb::cast(x, nb::rv_policy::copy), nb::cast(d, nb::rv_policy::copy));
+        if (result.is_none())
+            throw std::domain_error("MeshResponse: infeasible batch");
+        return nb::cast<BatchMatrix>(result);
     }
 };
 class PyMeshEnergy : public MeshEnergy {

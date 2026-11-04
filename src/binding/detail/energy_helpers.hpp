@@ -80,14 +80,20 @@ template <class Base> class PyResponse : public Base {
                                   false);
         if (!ticket.key.is_valid())
             return Base::eval_jvp_values(x, dx);
-        return nb::cast<Vec>(this->nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x)), nb::cast(Vec(dx))));
+        nb::object result = this->nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x)), nb::cast(Vec(dx)));
+        if (result.is_none())
+            throw std::domain_error("Response is infeasible");
+        return nb::cast<Vec>(result);
     }
     Vec eval_vjp_values(const ConstVecRef& x, const ConstVecRef& gy) const override {
         nb::detail::ticket ticket(this->nb_trampoline, "eval_vjp_values", nb::detail::str_hash("eval_vjp_values"),
                                   false);
         if (!ticket.key.is_valid())
             return Base::eval_vjp_values(x, gy);
-        return nb::cast<Vec>(this->nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x)), nb::cast(Vec(gy))));
+        nb::object result = this->nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x)), nb::cast(Vec(gy)));
+        if (result.is_none())
+            throw std::domain_error("Response is infeasible");
+        return nb::cast<Vec>(result);
     }
     Vec eval_values(const ConstVecRef& x, SpMat* J) const override {
         using linalg::binding::SparseArgument;

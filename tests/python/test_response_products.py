@@ -259,3 +259,49 @@ def test_super_fallback_preserves_reentry_guard():
         r.eval_jvp(np.ones(2), np.ones(2))
     r.reenter = False
     check_products(r, np.array([.2, .4]))
+
+
+def test_direct_products_accept_infeasible_none():
+    import numpy as np
+    import pytest
+    from scipy.sparse import eye
+    from litepgo import energy
+
+    class Infeasible(energy.FixedPatternResponse):
+        def __init__(self):
+            super().__init__(eye(1, format="csc"))
+
+        def eval_values(self, x, need_jacobian):
+            return None
+
+        def eval_jvp_values(self, x, dx):
+            return None
+
+        def eval_vjp_values(self, x, gy):
+            return None
+
+    model = Infeasible()
+    for operation in (model.eval_jvp, model.eval_vjp):
+        with pytest.raises(ValueError, match="infeasible"):
+            operation(np.ones(1), np.ones(1))
+
+
+def test_mesh_products_accept_infeasible_none():
+    from litepgo import dof, mesh
+
+    class Infeasible(energy.MeshResponse):
+        def eval_batch(self, ids, x, need_jacobian):
+            return None
+
+        def eval_jvp_batch(self, ids, x, dx):
+            return None
+
+        def eval_vjp_batch(self, ids, x, gy):
+            return None
+
+    topology = mesh.TetTopology(4, np.array([[0, 1, 2, 3]], dtype=np.int32))
+    mapping = dof.ConstantDofMap(topology, 1)
+    model = Infeasible(mapping, mapping)
+    for operation in (model.eval_jvp, model.eval_vjp):
+        with pytest.raises(ValueError, match="infeasible"):
+            operation(np.ones(1), np.ones(1))

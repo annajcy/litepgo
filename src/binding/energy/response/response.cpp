@@ -21,7 +21,9 @@ void bind_response(nb::module_& m) {
         .def(
             "eval",
             [](const Response& r, const ConstVecRef& x, bool need_jacobian) {
-                SpMat J = r.jacobian_pattern();
+                SpMat J;
+                if (need_jacobian)
+                    J = r.jacobian_pattern();
                 Vec value;
                 {
                     nb::gil_scoped_release release;
