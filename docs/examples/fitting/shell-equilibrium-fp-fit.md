@@ -17,11 +17,18 @@ derivatives include both the fixed-state parameter derivative and the stiffness
 multiplied by state sensitivity. See [parameter transforms](../../guide/energy/parameter-transforms.md).
 
 **Expected result.** Recover `(1.06,0.95)` and predict both observation blocks
-at load factor 0.6. Re-solved finite differences, rank, fixed-value, equilibrium,
-and recovery checks gate success. Tight inner tolerances are used because
+at load factor 0.6. The program prints recovery and held-out errors. Tests separately check re-solved
+finite differences, rank, fixed values, equilibrium, and recovery. Tight inner tolerances are used because
 normalizing a small displacement observation amplifies derivative error.
 Original shell areas/thickness remain fixed and no normal plastic stretch or
 plastic evolution is fitted.
+
+## Reading the example
+
+Read `make_problem` for geometry and constraints, `make_factories` for the
+physical model, `measure` for equilibrium and reactions, and `Residual` for
+normalization. `main` generates observations, fits, and predicts a held-out load.
+Derivative, rank, and boundary checks live in the fitting tests.
 
 ## Run and inspect
 

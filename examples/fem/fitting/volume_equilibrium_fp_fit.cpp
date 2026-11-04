@@ -1,7 +1,6 @@
-// Recover shared positive diagonal volume Fp from equilibrium shapes and reactions.
-// Build: cmake --build build/release --target volume_equilibrium_fp_fit
+// Fit three shared log plastic stretches from equilibrium displacement and reaction.
+// Geometry, material theta=(2,3), and boundary displacements are fixed.
 // Run: build/release/examples/fem/fitting/volume_equilibrium_fp_fit
-
 #include "litepgo/energy/response/composed_response.hpp"
 #include "litepgo/energy/response/elementwise_response.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
@@ -12,177 +11,195 @@
 #include "litepgo/mesh/io/veg.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
 #include "litepgo/solver/static_equilibrium_response.hpp"
-#include <Eigen/SVD>
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 
-// Recover shared diagonal Fp from equilibrium shapes and boundary reactions.
-int main() {
-    using namespace litepgo;
-    try {
-        const auto volume = std::get<mesh::TetMesh>(mesh::read_veg(LITEPGO_ASSETS_DIR "/box-tet.veg"));
-        const auto& topology = volume.topology;
-        const dof::VertexDofMap map(topology, 3);
-        using XField = fem::InterpolatedField3D<fem::TetP1Basis>;
-        using Field = fem::IdentityField3D;
-        std::vector<XField> geometry;
-        for (int e = 0; e < map.num_elements(); ++e)
-            geometry.emplace_back(map.gather(e, volume.positions));
-        const auto nodes = volume.positions.reshaped<Eigen::RowMajor>(topology.num_vertices(), 3);
-        const double bottom = nodes.col(2).minCoeff(), top = nodes.col(2).maxCoeff(), height = top - bottom;
-        if (!(height > 0))
-            throw std::runtime_error("Require nonempty volume with positive height");
-        std::vector<int> fixed_ids;
-        Vec prescribed = Vec::Zero(map.num_dofs());
-        for (int v = 0; v < topology.num_vertices(); ++v) {
-            const bool upper = std::abs(nodes(v, 2) - top) < height * 1e-8;
-            if (upper || std::abs(nodes(v, 2) - bottom) < height * 1e-8)
-                for (int c = 0; c < 3; ++c)
-                    fixed_ids.push_back(3 * v + c);
-            if (upper) {
-                prescribed[3 * v] = .04 * height;
-                prescribed[3 * v + 2] = .05 * height;
-            }
-        }
-        const dof::DofReduction fixed(map.num_dofs(), fixed_ids);
-        using Elastic = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature, XField,
-                                                 Field, Field>;
-        using Force = fem::VolumetricFemForceFpResponse<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature,
-                                                        XField, Field>;
-        const std::vector<Field> theta(map.num_elements(), Field(Eigen::Vector2d(2, 3)));
-        const Vec truth = Eigen::Vector3d(1.04, .97, 1.02);
-        constexpr int n = 3;
-        const int num_free = fixed.num_free();
-        if (num_free == 0 || fixed_ids.empty())
-            throw std::runtime_error("Require both fixed and free DOFs");
-        const dof::ElementDofMap physical_map(topology, 9);
-        auto plastic = std::make_shared<energy::ElementwiseResponse>(dof::ConstantDofMap(topology, n),
-                                                                     std::make_shared<fem::LogDiagonalFpResponse>(n));
-        const auto make_energy = [&](const Vec& p) -> std::shared_ptr<energy::Energy> {
-            const Vec packed = plastic->eval_value(p);
-            std::vector<Field> fields;
-            for (int e = 0; e < map.num_elements(); ++e)
-                fields.emplace_back(packed.segment(9 * e, 9));
-            return std::make_shared<Elastic>(map, geometry, std::move(fields), theta);
-        };
-        const auto make_response = [&](const Vec& u) {
-            return std::make_shared<energy::ComposedResponse>(
-                std::make_shared<Force>(physical_map, map, geometry, u, theta), plastic);
-        };
-        const auto partial = [&](const Vec& p, const Vec& u) { return make_response(u)->eval_jacobian(p); };
-        struct Observation {
-            Vec value;
-            Eigen::MatrixXd jacobian;
-        };
-        // Re-solve free DOFs at each trial; prescribed boundary values are parameter-independent.
-        const auto experiment = [&](const Vec& p, double load, bool derivatives) {
-            const Vec initial = load * prescribed;
-            solver::NewtonOptions options;
-            options.gradient_tolerance = 1e-11;
-            options.max_iterations = 100;
-            solver::StaticEquilibriumResponse equilibrium(n, fixed, initial, options, make_energy, make_response);
-            SpMat J = equilibrium.jacobian_pattern();
-            const Vec u = equilibrium.eval(p, derivatives ? &J : nullptr);
-            const auto elastic = make_energy(p);
-            const Vec gradient = elastic->eval_gradient(u);
-            if (fixed.reduce(gradient).lpNorm<Eigen::Infinity>() > 2e-11)
-                throw std::runtime_error("Invalid equilibrium");
-            Observation observation;
-            observation.value.resize(map.num_dofs());
-            observation.value.head(num_free) = fixed.reduce(u);
-            Eigen::MatrixXd total;
-            if (derivatives) {
-                if (J.norm() < 1e-5)
-                    throw std::runtime_error("Experiment must have nonzero equilibrium sensitivity");
-                total = Eigen::MatrixXd(partial(p, u)) + elastic->eval_hessian(u) * J;
-                observation.jacobian.resize(map.num_dofs(), n);
-                for (int c = 0; c < n; ++c)
-                    observation.jacobian.col(c).head(num_free) = fixed.reduce(Vec(J.col(c)));
-            }
-            for (std::size_t i = 0; i < fixed_ids.size(); ++i) {
-                const int r = fixed_ids[i];
-                if (u[r] != initial[r])
-                    throw std::runtime_error("Changed boundary values");
-                observation.value[num_free + i] = gradient[r];
-                if (derivatives)
-                    observation.jacobian.row(num_free + i) = total.row(r);
-            }
-            return observation;
-        };
-        const Vec truth_p = truth.array().log();
-        const Vec target = experiment(truth_p, 1, false).value;
-        Vec scales(map.num_dofs());
-        scales.head(num_free).setConstant(std::max(target.head(num_free).norm(), 1e-8));
-        scales.tail(fixed_ids.size()).setConstant(std::max(target.tail(fixed_ids.size()).norm(), 1e-8));
-        class Residual final : public energy::FixedPatternResponse {
-          public:
-            Residual(const decltype(experiment)& experiment, const Vec& target, const Vec& scales, int parameters)
-                : FixedPatternResponse(Eigen::MatrixXd::Ones(target.size(), parameters).sparseView()),
-                  experiment_(experiment), target_(target), scales_(scales) {}
+namespace {
+using namespace litepgo;
+using GeometryField = fem::InterpolatedField3D<fem::TetP1Basis>;
+using Field = fem::IdentityField3D;
+using ElasticEnergy =
+    fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature, GeometryField, Field, Field>;
+using ForceFpResponse = fem::VolumetricFemForceFpResponse<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature,
+                                                          GeometryField, Field>;
 
-          private:
-            Vec eval_values(const ConstVecRef& p, SpMat* J) const override {
-                const auto observation = experiment_(p, 1, J != nullptr);
-                if (J)
-                    for (int c = 0; c < num_inputs(); ++c)
-                        for (SpMat::InnerIterator it(*J, c); it; ++it)
-                            it.valueRef() = observation.jacobian(it.row(), c) / scales_[it.row()];
-                return (observation.value - target_).cwiseQuotient(scales_);
-            }
-            const decltype(experiment)& experiment_;
-            const Vec& target_;
-            const Vec& scales_;
-        } residual(experiment, target, scales, n);
-        const auto check_rank = [&](const Vec& p) {
-            const Eigen::MatrixXd J = residual.eval_jacobian(p);
-            const Eigen::JacobiSVD<Eigen::MatrixXd> svd(J);
-            const auto singular = svd.singularValues();
-            const double ratio = singular[n - 1] / singular[0];
-            if (!(ratio > 1e-6))
-                throw std::runtime_error("Observations cannot identify every plastic stretch");
-            return ratio;
-        };
-        const Vec initial = Vec::Zero(n);
-        const double initial_ratio = check_rank(initial), truth_ratio = check_rank(truth_p);
-        double state_fd_error = 0, reaction_fd_error = 0;
-        for (const Vec& p : {initial, truth_p}) {
-            const auto reference = experiment(p, 1, true);
-            for (double h : {1e-4, 1e-5})
-                for (int c = 0; c < n; ++c) {
-                    Vec plus = p, minus = p;
-                    plus[c] += h;
-                    minus[c] -= h;
-                    const Vec forward = experiment(plus, 1, false).value, backward = experiment(minus, 1, false).value;
-                    const Vec error =
-                        ((forward - backward) / (2 * h) - reference.jacobian.col(c)).cwiseQuotient(scales);
-                    state_fd_error = std::max(state_fd_error, error.head(num_free).lpNorm<Eigen::Infinity>());
-                    reaction_fd_error =
-                        std::max(reaction_fd_error, error.tail(fixed_ids.size()).lpNorm<Eigen::Infinity>());
-                }
+struct Problem {
+    dof::VertexDofMap displacement_map;
+    std::vector<GeometryField> geometry;
+    std::vector<Field> theta;
+    dof::DofReduction fixed;
+    Vec prescribed;
+    dof::ConstantDofMap parameter_map;
+    dof::ElementDofMap physical_map;
+};
+
+Problem make_problem() {
+    const auto volume = std::get<mesh::TetMesh>(mesh::read_veg(LITEPGO_ASSETS_DIR "/box-tet.veg"));
+    const auto& topology = volume.topology;
+    const dof::VertexDofMap displacement_map(topology, 3);
+    std::vector<GeometryField> geometry;
+    for (int e = 0; e < displacement_map.num_elements(); ++e)
+        geometry.emplace_back(displacement_map.gather(e, volume.positions));
+    std::vector<Field> theta(displacement_map.num_elements(), Field(Eigen::Vector2d(2, 3)));
+
+    // Clamp the bottom; prescribe shear and extension on the top.
+    const auto nodes = volume.positions.reshaped<Eigen::RowMajor>(topology.num_vertices(), 3);
+    const double bottom = nodes.col(2).minCoeff(), top = nodes.col(2).maxCoeff(), height = top - bottom;
+    if (!(height > 0))
+        throw std::runtime_error("Require nonempty volume with positive height");
+    std::vector<int> fixed_ids;
+    Vec prescribed = Vec::Zero(displacement_map.num_dofs());
+    for (int v = 0; v < topology.num_vertices(); ++v) {
+        const bool upper = std::abs(nodes(v, 2) - top) < height * 1e-8;
+        if (upper || std::abs(nodes(v, 2) - bottom) < height * 1e-8)
+            for (int c = 0; c < 3; ++c)
+                fixed_ids.push_back(3 * v + c);
+        if (upper) {
+            prescribed[3 * v] = .04 * height;
+            prescribed[3 * v + 2] = .05 * height;
         }
-        if (std::max(state_fd_error, reaction_fd_error) > 2e-6)
-            throw std::runtime_error("Re-solve FD failed: state=" + std::to_string(state_fd_error) +
-                                     ", reaction=" + std::to_string(reaction_fd_error));
+    }
+    dof::DofReduction fixed(displacement_map.num_dofs(), fixed_ids);
+    if (fixed.num_free() == 0 || fixed_ids.empty())
+        throw std::runtime_error("Require both fixed and free DOFs");
+    return {displacement_map,
+            std::move(geometry),
+            std::move(theta),
+            std::move(fixed),
+            std::move(prescribed),
+            dof::ConstantDofMap(topology, 3),
+            dof::ElementDofMap(topology, 9)};
+}
+
+struct Factories {
+    solver::StaticEquilibriumResponse::MakeEnergy make_energy;
+    solver::StaticEquilibriumResponse::MakeResponse make_response;
+};
+
+// The problem outlives both factories; they share the same p -> per-element Fp transform.
+Factories make_factories(const Problem& problem) {
+    auto plastic = std::make_shared<energy::ElementwiseResponse>(problem.parameter_map,
+                                                                 std::make_shared<fem::LogDiagonalFpResponse>(3));
+    auto make_energy = [&problem, plastic](const Vec& p) -> std::shared_ptr<energy::Energy> {
+        const Vec packed = plastic->eval_value(p);
+        std::vector<Field> fields;
+        for (int e = 0; e < problem.displacement_map.num_elements(); ++e)
+            fields.emplace_back(packed.segment(9 * e, 9));
+        return std::make_shared<ElasticEnergy>(problem.displacement_map, problem.geometry, std::move(fields),
+                                               problem.theta);
+    };
+    auto make_response = [&problem, plastic](const Vec& u) -> std::shared_ptr<energy::Response> {
+        auto force = std::make_shared<ForceFpResponse>(problem.physical_map, problem.displacement_map, problem.geometry,
+                                                       u, problem.theta);
+        return std::make_shared<energy::ComposedResponse>(force, plastic);
+    };
+    return {std::move(make_energy), std::move(make_response)};
+}
+
+struct Observation {
+    Vec value;
+    Eigen::MatrixXd jacobian;
+};
+
+Observation measure(const Problem& problem, const Factories& factories, const Vec& p, double load = 1.,
+                    bool need_jacobian = false) {
+    // 1. Solve equilibrium, starting from the prescribed displacement every time.
+    solver::NewtonOptions options;
+    options.gradient_tolerance = 1e-11;
+    options.max_iterations = 100;
+    solver::StaticEquilibriumResponse equilibrium(3, problem.fixed, load * problem.prescribed, options,
+                                                  factories.make_energy, factories.make_response);
+    SpMat state_jacobian = equilibrium.jacobian_pattern();
+    const Vec displacement = equilibrium.eval(p, need_jacobian ? &state_jacobian : nullptr);
+
+    // 2. Compute force and its total derivative along the equilibrium branch.
+    const auto elastic = factories.make_energy(p);
+    const Vec force = elastic->eval_gradient(displacement);
+    Eigen::MatrixXd reaction_jacobian;
+    if (need_jacobian) {
+        const SpMat force_parameter_jacobian = factories.make_response(displacement)->eval_jacobian(p);
+        const SpMat stiffness = elastic->eval_hessian(displacement);
+        reaction_jacobian = Eigen::MatrixXd(force_parameter_jacobian) + stiffness * state_jacobian;
+    }
+
+    // 3. Observe free displacement, followed by the reactions at fixed DOFs.
+    const int num_free = problem.fixed.num_free();
+    Observation observation;
+    observation.value.resize(displacement.size());
+    observation.value.head(num_free) = problem.fixed.reduce(displacement);
+    if (need_jacobian) {
+        observation.jacobian.resize(displacement.size(), 3);
+        for (int c = 0; c < 3; ++c)
+            observation.jacobian.col(c).head(num_free) = problem.fixed.reduce(Vec(state_jacobian.col(c)));
+    }
+    const auto& fixed_ids = problem.fixed.fixed_dofs();
+    for (std::size_t i = 0; i < fixed_ids.size(); ++i) {
+        observation.value[num_free + i] = force[fixed_ids[i]];
+        if (need_jacobian)
+            observation.jacobian.row(num_free + i) = reaction_jacobian.row(fixed_ids[i]);
+    }
+    return observation;
+}
+
+class Residual final : public energy::FixedPatternResponse {
+  public:
+    using Measurement = std::function<Observation(const Vec&, bool)>;
+    Residual(Measurement measurement, Vec target, Vec scales)
+        : FixedPatternResponse(Eigen::MatrixXd::Ones(target.size(), 3).sparseView()),
+          measurement_(std::move(measurement)), target_(std::move(target)), scales_(std::move(scales)) {}
+
+  private:
+    Vec eval_values(const ConstVecRef& p, SpMat* J) const override {
+        const auto observation = measurement_(p, J != nullptr);
+        if (J)
+            for (int c = 0; c < num_inputs(); ++c)
+                for (SpMat::InnerIterator it(*J, c); it; ++it)
+                    it.valueRef() = observation.jacobian(it.row(), c) / scales_[it.row()];
+        return (observation.value - target_).cwiseQuotient(scales_);
+    }
+    Measurement measurement_;
+    Vec target_, scales_;
+};
+} // namespace
+
+int main() {
+    try {
+        const auto problem = make_problem();
+        const auto factories = make_factories(problem);
+        const auto measurement = [&](const Vec& p, bool derivatives) {
+            return measure(problem, factories, p, 1., derivatives);
+        };
+
+        // Synthetic target; each observation block uses a fixed normalization.
+        const Vec truth = Eigen::Vector3d(1.04, .97, 1.02);
+        const Vec truth_p = truth.array().log();
+        const Vec target = measurement(truth_p, false).value;
+        const int num_free = problem.fixed.num_free();
+        const auto num_fixed = problem.fixed.fixed_dofs().size();
+        Vec scales(target.size());
+        scales.head(num_free).setConstant(std::max(target.head(num_free).norm(), 1e-8));
+        scales.tail(num_fixed).setConstant(std::max(target.tail(num_fixed).norm(), 1e-8));
+        Residual residual(measurement, target, scales);
+
         solver::GaussNewtonOptions options;
         options.gradient_tolerance = 1e-10;
-        // Fit the measured response using its analytic parameter Jacobian.
-        const auto result = solver::gauss_newton_solve(residual, initial, options);
+        const auto result = solver::gauss_newton_solve(residual, Vec::Zero(3), options);
+        const bool converged = result.status == solver::GaussNewtonStatus::Converged;
         const Vec fitted = result.x.array().exp();
-        const double fitted_ratio = check_rank(result.x);
         const double parameter_error = (fitted - truth).norm() / truth.norm();
         const double relative_residual = residual.eval_value(result.x).norm();
-        const Vec held_out = experiment(truth_p, .6, false).value;
-        const double held_out_error = (experiment(result.x, .6, false).value - held_out).cwiseQuotient(scales).norm();
-        const bool converged = result.status == solver::GaussNewtonStatus::Converged;
+
+        // Predict a load that was not used for fitting.
+        const Vec held_out = measure(problem, factories, truth_p, .6).value;
+        const Vec prediction = measure(problem, factories, result.x, .6).value;
+        const double held_out_error = (prediction - held_out).cwiseQuotient(scales).norm();
         std::cout << std::setprecision(12) << "truth=" << truth.transpose() << ", fitted=" << fitted.transpose()
                   << ", converged=" << converged << ", parameter_error=" << parameter_error
-                  << ", relative_residual=" << relative_residual << ", held_out_error=" << held_out_error
-                  << ", state_fd_error=" << state_fd_error << ", reaction_fd_error=" << reaction_fd_error
-                  << ", initial_ratio=" << initial_ratio << ", truth_ratio=" << truth_ratio
-                  << ", fitted_ratio=" << fitted_ratio << '\n';
-        return converged && parameter_error < 1e-6 && relative_residual < 1e-8 && held_out_error < 1e-8 ? 0 : 1;
+                  << ", relative_residual=" << relative_residual << ", held_out_error=" << held_out_error << '\n';
+        return converged ? 0 : 1;
     } catch (const std::exception& error) {
         std::cerr << "volume_equilibrium_fp_fit: " << error.what() << '\n';
         return 1;

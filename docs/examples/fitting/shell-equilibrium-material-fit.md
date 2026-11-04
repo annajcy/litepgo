@@ -21,10 +21,17 @@ pass to Gauss–Newton. Nonuniform boundary loading excites material-dependent
 center motion, making the state-sensitivity term observable.
 
 **Expected result.** Recover `(2,3)` and predict reactions at 0.6 times the
-training boundary load. Checks include nonzero state sensitivity, local rank,
+training boundary load. Tests cover nonzero state sensitivity, local rank,
 exact boundary preservation, free equilibrium, and independently re-solved
 finite differences of displacement and reactions. No geometry or thickness is
 optimized.
+
+## Reading the example
+
+Read `make_problem` for geometry and constraints, `make_factories` for the
+physical model, `measure` for equilibrium and reactions, and `Residual` for
+normalization. `main` generates observations, fits, and predicts a held-out load.
+Derivative, rank, and boundary checks live in the fitting tests.
 
 ## Run and inspect
 

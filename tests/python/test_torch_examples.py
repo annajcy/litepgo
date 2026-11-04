@@ -23,7 +23,20 @@ def test_material_example(case):
     command = [sys.executable, str(path)]
     if case.startswith("volume_"):
         command.append(str(root / "tests/assets/box-tet.veg"))
-    subprocess.run(command, check=True, timeout=120)
+    completed = subprocess.run(command, capture_output=True, text=True, timeout=120)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    fields = dict(
+        part.strip().split("=", 1) for part in completed.stdout.strip().split(",")
+    )
+    # Recovery checks belong in tests, independently of optimizer stopping criteria.
+    if case == "volume_equilibrium_material_fit":
+        assert float(fields["parameter error"]) < 1e-4
+        assert float(fields["held-out error"]) < 1e-4
+    else:
+        assert fields["converged"] == "1"
+        assert float(fields["parameter_error"]) < 1e-6
+        assert float(fields["relative_residual"]) < 1e-8
+        assert float(fields["held_out_error"]) < 1e-8
 
 
 def test_volume_material_equilibrium_end_to_end_gradcheck():
@@ -38,6 +51,10 @@ def test_volume_material_equilibrium_end_to_end_gradcheck():
     q = torch.tensor([0.2, 0.4], dtype=torch.float64, requires_grad=True)
     assert torch.autograd.gradcheck(
         # Backward now re-solves the system; allow solver roundoff between calls.
-        lambda q: bridge.response(residual, q), (q,), eps=1e-4, atol=1e-6, rtol=1e-4,
-        nondet_tol=1e-12
+        lambda q: bridge.response(residual, q),
+        (q,),
+        eps=1e-4,
+        atol=1e-6,
+        rtol=1e-4,
+        nondet_tol=1e-12,
     )

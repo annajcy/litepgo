@@ -15,15 +15,22 @@ transformed natural stencils, keeping current positions and **original** area
 weights unchanged. The residual is normalized by the target force norm.
 
 **API walkthrough.** `ShellFemForceFpResponse[KoiterStVK]` exposes nine plastic
-columns through a width-9 constant parameter map. Select columns 0 and 4 and
-multiply by the positive stretches for the log-parameter chain rule. Wrap this
-in `FixedPatternResponse` for Gauss–Newton.
+columns through a width-9 constant parameter map. Compose it with
+`LogDiagonalFpResponse(2)` to obtain the two-column log-parameter Jacobian.
+`Residual` only subtracts the target and divides by its norm.
 
 **Expected result.** Recover `(1.06,0.95)`, with centered-difference Jacobian
-agreement and rank checks at initial/truth/fitted states. The flat rest stencil
+agreement and rank checks at initial/truth/fitted states in the test suite. The flat rest stencil
 cannot identify a normal plastic input direction, and left rotations preserve
 natural forms; restricting to two known in-plane axes avoids those ambiguities.
 No inner displacement solve, thickness fit, or plastic evolution occurs.
+
+## Reading the example
+
+Read `make_problem` for the mesh, prescribed pose, and synthetic target;
+`Residual` (or `MaterialResidual`) for normalization; then `main` for fitting
+and reporting. Numerical derivative and identifiability checks live in
+`tests/python/test_fitting_example_derivatives.py`.
 
 ## Run and inspect
 

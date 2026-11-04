@@ -8,6 +8,10 @@
 as the shell material experiment, with the center free. Observe scaled free
 motion and boundary reactions.
 
+**Shared model.** This driver imports the model and residual from
+[the native Python example](../fitting/shell-equilibrium-fp-fit.md); that page contains the
+complete setup. The source below focuses on the Torch optimizer.
+
 **API walkthrough.** `ElementwiseResponse` gathers shared log stretches and applies
 `LogDiagonalFpResponse` to produce per-element physical Fp values. `ComposedResponse`
 connects this transform to the native fixed-pose force response, including Jacobian,
@@ -16,8 +20,8 @@ its Fp list. `StaticEquilibriumResponse` supplies the state sensitivity; reactio
 derivatives include both the fixed-state parameter derivative and the stiffness
 multiplied by state sensitivity. See [parameter transforms](../../guide/energy/parameter-transforms.md).
 
-**Expected result.** Recovery, held-out load factor 0.6, rank, equilibrium, and
-re-solved derivative checks pass. The normal plastic stretch and rotations are
+**Expected result.** Recover the parameters and predict observations at held-out load factor 0.6.
+Tests cover rank, equilibrium, and re-solved derivatives. The normal plastic stretch and rotations are
 not fitted because the planar experiment cannot identify them independently.
 The optimizer exposes only the two explicit log-stretch tensor entries to autograd.
 

@@ -8,19 +8,45 @@ plastic stretches with truth `(1.04,0.97,1.02)`, starting from identity in log
 coordinates. Observe both free displacements and fixed-DOF reactions at equilibrium.
 Each observation block is divided by its fixed target norm, floored at $10^{-8}$.
 
-**API walkthrough.** `ElementwiseResponse` gathers shared log stretches and applies
-`LogDiagonalFpResponse` to produce per-element physical Fp values. `ComposedResponse`
-connects this transform to the native fixed-pose force response, including Jacobian,
-JVP, and VJP chain rules. The energy factory uses the same transform to construct
-its Fp list. `StaticEquilibriumResponse` supplies the state sensitivity; reaction
-derivatives include both the fixed-state parameter derivative and the stiffness
-multiplied by state sensitivity. See [parameter transforms](../../guide/energy/parameter-transforms.md).
+**Read the example in this order.** C++ and Python use the same structure, with
+all helpers in the example file:
 
-**Expected result.** Recover all three stretches and predict displacement and
-reaction observations at load factor 0.6. The program checks full column rank
-at initial/truth/fitted states, nonzero state sensitivity, fixed values, and
-re-solved finite differences of both observation blocks. The model fixes
-plastic principal axes and does not assume a full nine-entry matrix is identifiable.
+1. `make_problem()` prepares geometry, fixed material fields, parameter maps, and
+   boundary displacements. `Problem` only stores these inputs.
+2. `make_factories(problem)` creates a shared `ElementwiseResponse` using
+   `LogDiagonalFpResponse`, then defines `make_energy(p)` and `make_response(u)`
+   together. The former builds Fp fields; the latter composes the native force
+   response with that same parameter transform.
+3. `measure(...)` solves equilibrium, computes force and its total derivative,
+   then concatenates free displacement and constrained reactions.
+4. `Residual` subtracts the target and divides by fixed observation scales.
+5. `main()` generates the target, fits from zero log stretches, and predicts a
+   second load. It checks solver convergence and prints the result.
+
+The key observation derivative stays visible in `measure`:
+
+```python
+reaction_jacobian = force_parameter_jacobian + stiffness @ state_jacobian
+```
+
+The first term is the force derivative at fixed displacement. The second accounts
+for the displacement change along the equilibrium branch. Only fixed rows of this
+sum are observed as reactions; free rows of `state_jacobian` supply displacement
+observations. See [parameter transforms](../../guide/energy/parameter-transforms.md)
+for the shared parameterization interface.
+
+**Expected result.** Recover `(1.04, 0.97, 1.02)` and predict observations at load
+factor `0.6`. Output includes `truth`, `fitted`, `converged`, `parameter_error`,
+`relative_residual`, and `held_out_error`. The model fixes plastic principal axes
+and does not assume a full nine-entry matrix is identifiable.
+
+Finite-difference checks, rank checks at initial/truth/fitted parameters, nonzero
+state sensitivity, prescribed-value checks, and fitting-error thresholds live in
+`tests/python/test_equilibrium_fp_fit_examples.py`. These tests exercise the
+Python example functions directly and compare the complete C++ and Python fitting
+outputs. The example no longer prints `state_fd_error`, `reaction_fd_error`, or
+rank ratios. The physical experiment, solver settings, and fitting metrics are
+unchanged.
 
 ## Run and inspect
 
@@ -41,3 +67,9 @@ PYTHONPATH=build/release/python uv run --no-sync python examples/fem/fitting/vol
 <<< ../../../examples/fem/fitting/volume_equilibrium_fp_fit.cpp
 
 :::
+
+## Run the regression checks
+
+```sh
+uv run --no-sync python -m pytest tests/python/test_equilibrium_fp_fit_examples.py -k volume
+```

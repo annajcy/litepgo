@@ -15,20 +15,28 @@ state. Observe all nodal forces and divide the force residual by target norm.
 
 **API walkthrough.** Targets come from `VolumetricFemEnergy.eval_gradient`.
 `VolumetricFemForceFpResponse` uses `ConstantDofMap(topology,9)` for the full
-plastic matrix. The wrapper restricts and differentiates the log parameterization:
+plastic matrix. `ComposedResponse(force, LogDiagonalFpResponse(3))` restricts
+and differentiates the log parameterization:
 
 $$
 J_p=J_{\operatorname{vec}F_p}[:,(0,4,8)]\operatorname{diag}(e^p)/\|f_{\rm obs}\|.
 $$
 
-Return `None` for unrepresentable exponential trials. Gauss–Newton receives the
+`LogDiagonalFpResponse` rejects unrepresentable exponential trials. Gauss–Newton receives the
 three-column residual object, not the unconstrained nine-column force response.
 
 **Expected result.** The three stretches are recovered. Checks compare the
 composed Jacobian to centered finite differences and require local full column
-rank at initial, true, and fitted states. Output reports these diagnostics and
+rank at initial, true, and fitted states in the test suite. Output reports
 relative force/parameter errors. There is no equilibrium or yield-law update;
 principal plastic axes are assumed known.
+
+## Reading the example
+
+Read `make_problem` for the mesh, prescribed pose, and synthetic target;
+`Residual` (or `MaterialResidual`) for normalization; then `main` for fitting
+and reporting. Numerical derivative and identifiability checks live in
+`tests/python/test_fitting_example_derivatives.py`.
 
 ## Run and inspect
 
