@@ -45,37 +45,17 @@ def main():
     # Re-solve free DOFs for every parameter trial; boundary values stay prescribed.
     def experiment(theta, load, need_jacobian):
         initial = load * prescribed
-
-        class MaterialModel(energy.ParametricEnergy):
-            def __init__(self):
-                prototype = self.potential(theta)
-                super().__init__(
-                    prototype.hessian_pattern, np.ones((prototype.num_dofs, 2))
-                )
-
-            def potential(self, p):
-                return ElasticEnergy(
-                    mapping, rest, thickness, [p] * mapping.num_elements
-                )
-
-            def eval_state_values(self, u, p, need_gradient, hessian_kind):
-                potential = self.potential(p)
-                potential.update_pattern(u)
-                return potential.eval(u, gradient=need_gradient, hessian=hessian_kind)
-
-            def eval_parameter_jacobian(self, u, p):
-                return ForceParameterResponse(
-                    dof.ConstantDofMap(topology, 2), mapping, rest, u, thickness
-                ).eval_jacobian(p)
-
-            def eval_feasible_step(self, u, p, du):
-                return self.potential(p).max_feasible_step(u, du)
-
         equilibrium = solver.StaticEquilibriumResponse(
-            MaterialModel(),
+            2,
             fixed,
             initial,
             solver.NewtonOptions(gradient_tolerance=1e-12, max_iterations=100),
+            lambda p: ElasticEnergy(
+                mapping, rest, thickness, [p] * mapping.num_elements
+            ),
+            lambda displacement: ForceParameterResponse(
+                dof.ConstantDofMap(topology, 2), mapping, rest, displacement, thickness
+            ),
         )
         displacement, J = equilibrium.eval(theta, need_jacobian=need_jacobian)
         elastic = ElasticEnergy(

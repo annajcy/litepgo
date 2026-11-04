@@ -1,9 +1,11 @@
-#include <functional>
 // Recover shared positive diagonal shell Fp from equilibrium shapes and reactions.
 // Build: cmake --build build/release --target shell_equilibrium_fp_fit
 // Run: build/release/examples/fem/fitting/shell_equilibrium_fp_fit
 
+#include "litepgo/energy/response/composed_response.hpp"
+#include "litepgo/energy/response/elementwise_response.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
+#include "litepgo/fem/parameter/log_diagonal_fp_response.hpp"
 #include "litepgo/fem/shell_fem_energy.hpp"
 #include "litepgo/fem/shell_fem_force_fp_response.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
@@ -57,31 +59,21 @@ int main() {
         const int num_free = fixed.num_free();
         if (num_free == 0 || fixed_ids.empty())
             throw std::runtime_error("Require both fixed and free DOFs");
-        const auto plastic = [&](const Vec& p) -> Eigen::Matrix3d {
-            const Vec stretches = p.array().exp();
-            if (!stretches.allFinite() || (stretches.array() <= 0).any())
-                throw std::domain_error("Unrepresentable plastic stretches");
-            Eigen::Matrix3d Fp = Eigen::Matrix3d::Identity();
-            Fp.diagonal().head(n) = stretches;
-            return Fp;
-        };
+        const dof::ElementDofMap physical_map(topology, 9);
+        auto plastic = std::make_shared<energy::ElementwiseResponse>(dof::ConstantDofMap(topology, n),
+                                                                     std::make_shared<fem::LogDiagonalFpResponse>(n));
         const auto make_energy = [&](const Vec& p) -> std::shared_ptr<energy::Energy> {
-            const Eigen::Matrix3d Fp = plastic(p);
-            return std::make_shared<Elastic>(map, rest, thickness, theta,
-                                             std::vector<Eigen::Matrix3d>(map.num_elements(), Fp));
+            const Vec packed = plastic->eval_value(p);
+            std::vector<Eigen::Matrix3d> fields;
+            for (int e = 0; e < map.num_elements(); ++e)
+                fields.emplace_back(packed.segment(9 * e, 9).reshaped(3, 3));
+            return std::make_shared<Elastic>(map, rest, thickness, theta, std::move(fields));
         };
-        // Partial force derivative at fixed displacement; equilibrium supplies du/dp separately.
-        const auto partial = [&](const Vec& p, const Vec& u) -> SpMat {
-            const Eigen::Matrix3d Fp = plastic(p);
-            const Vec packed = Fp.reshaped();
-            const SpMat full =
-                Force(dof::ConstantDofMap(topology, 9), map, rest, u, thickness, theta).eval_jacobian(packed);
-            Eigen::MatrixXd B(map.num_dofs(), n);
-            // Column-major diagonal slots; chain rule through exp(p).
-            for (int c = 0; c < n; ++c)
-                B.col(c) = full.col(4 * c) * Fp(c, c);
-            return B.sparseView();
+        const auto make_response = [&](const Vec& u) {
+            return std::make_shared<energy::ComposedResponse>(
+                std::make_shared<Force>(physical_map, map, rest, u, thickness, theta), plastic);
         };
+        const auto partial = [&](const Vec& p, const Vec& u) { return make_response(u)->eval_jacobian(p); };
         struct Observation {
             Vec value;
             Eigen::MatrixXd jacobian;
@@ -92,39 +84,7 @@ int main() {
             solver::NewtonOptions options;
             options.gradient_tolerance = 1e-13;
             options.max_iterations = 100;
-            // One analytic model supplies both state and parameter derivatives.
-            class PlasticModel final : public energy::ParametricEnergy {
-                using Factory = std::function<std::shared_ptr<energy::Energy>(const Vec&)>;
-                using Partial = std::function<SpMat(const Vec&, const Vec&)>;
-
-              public:
-                PlasticModel(Factory factory, Partial partial, const Vec& sample)
-                    : ParametricEnergy(factory(sample)->hessian_pattern(),
-                                       Eigen::MatrixXd::Ones(factory(sample)->num_dofs(), sample.size()).sparseView()),
-                      factory_(std::move(factory)), partial_(std::move(partial)) {}
-
-              private:
-                double eval_state_values(const ConstVecRef& u, const ConstVecRef& p, Vec* g, SpMat* K,
-                                         energy::HessianKind kind) const override {
-                    auto potential = factory_(p);
-                    potential->update_pattern(u);
-                    return potential->eval(u, g, K, kind);
-                }
-                void eval_parameter_jacobian(const ConstVecRef& u, const ConstVecRef& p, SpMat& B) const override {
-                    const SpMat source = partial_(p, u);
-                    for (int c = 0; c < B.outerSize(); ++c)
-                        for (SpMat::InnerIterator it(B, c); it; ++it)
-                            it.valueRef() = source.coeff(it.row(), c);
-                }
-                double eval_feasible_step(const ConstVecRef& u, const ConstVecRef& p,
-                                          const ConstVecRef& du) const override {
-                    return factory_(p)->max_feasible_step(u, du);
-                }
-                Factory factory_;
-                Partial partial_;
-            };
-            auto model = std::make_shared<PlasticModel>(make_energy, partial, p);
-            solver::StaticEquilibriumResponse equilibrium(model, fixed, initial, options);
+            solver::StaticEquilibriumResponse equilibrium(n, fixed, initial, options, make_energy, make_response);
             SpMat J = equilibrium.jacobian_pattern();
             const Vec u = equilibrium.eval(p, derivatives ? &J : nullptr);
             const auto elastic = make_energy(p);

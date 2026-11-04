@@ -1,4 +1,4 @@
-from parametric_fixtures import FormulaModel
+from equilibrium_fixtures import FormulaForce
 import numpy as np
 from scipy import sparse
 
@@ -16,10 +16,12 @@ def test_direct_sensitivity_callbacks_and_fixed_values():
         return -sparse.eye(2, format="csc")
 
     response = solver.StaticEquilibriumResponse(
-        FormulaModel(2, (dof.DofReduction(2, [0])).num_dofs, make_energy, partial),
+        2,
         dof.DofReduction(2, [0]),
         np.array([0.4, 0.0]),
         solver.NewtonOptions(gradient_tolerance=1e-12),
+        make_energy,
+        lambda u: FormulaForce(2, u, make_energy, partial),
     )
     p = np.array([2.0, 3.0])
     u, J = response.eval(p, need_jacobian=True)
@@ -41,15 +43,12 @@ def test_bound_callbacks_are_kept_alive_and_cycles_are_collected():
     class Problem:
         def __init__(self):
             self.response = solver.StaticEquilibriumResponse(
-                FormulaModel(
-                    2,
-                    (dof.DofReduction(2, [])).num_dofs,
-                    self.make_energy,
-                    self.partial,
-                ),
+                2,
                 dof.DofReduction(2, []),
                 np.zeros(2),
                 solver.NewtonOptions(gradient_tolerance=1e-12),
+                self.make_energy,
+                lambda u: FormulaForce(2, u, self.make_energy, self.partial),
             )
 
         def make_energy(self, p):
@@ -83,12 +82,12 @@ def test_gc_handles_uninitialized_and_failed_construction():
     del instance
     with pytest.raises(ValueError):
         solver.StaticEquilibriumResponse(
-            FormulaModel(
-                2, (dof.DofReduction(2, [])).num_dofs, lambda p: None, lambda p, u: None
-            ),
+            2,
             dof.DofReduction(2, []),
             np.zeros(3),
             solver.NewtonOptions(gradient_tolerance=1e-12),
+            lambda p: None,
+            lambda u: FormulaForce(2, u, lambda p: None, lambda p, u: None),
         )
     gc.collect()
 
@@ -110,15 +109,17 @@ def test_fast_products_rectangular_fixed_dofs_and_recovery():
         return sparse.csc_matrix(-A)
 
     response = solver.StaticEquilibriumResponse(
-        FormulaModel(
-            2,
-            (dof.DofReduction(3, [1])).num_dofs,
-            lambda p: energy.QuadraticEnergy(sparse.csc_matrix(K), -A @ p),
-            partial,
-        ),
+        2,
         dof.DofReduction(3, [1]),
         np.array([0.0, 0.8, 0.0]),
         solver.NewtonOptions(gradient_tolerance=1e-12),
+        lambda p: energy.QuadraticEnergy(sparse.csc_matrix(K), -A @ p),
+        lambda u: FormulaForce(
+            2,
+            u,
+            lambda p: energy.QuadraticEnergy(sparse.csc_matrix(K), -A @ p),
+            partial,
+        ),
     )
     p = np.array([0.6, -1.1])
     v, w = np.array([0.3, -0.7]), np.array([0.4, 10.0, -0.8])
@@ -162,15 +163,17 @@ def test_fully_fixed_products_do_not_request_partials():
         raise AssertionError("fully fixed state needs no derivative solve")
 
     response = solver.StaticEquilibriumResponse(
-        FormulaModel(
-            2,
-            (dof.DofReduction(3, [0, 1, 2])).num_dofs,
-            lambda p: energy.QuadraticEnergy(sparse.eye(3, format="csc")),
-            forbidden,
-        ),
+        2,
         dof.DofReduction(3, [0, 1, 2]),
         np.array([0.2, -0.4, 0.7]),
         solver.NewtonOptions(gradient_tolerance=1e-12),
+        lambda p: energy.QuadraticEnergy(sparse.eye(3, format="csc")),
+        lambda u: FormulaForce(
+            2,
+            u,
+            lambda p: energy.QuadraticEnergy(sparse.eye(3, format="csc")),
+            forbidden,
+        ),
     )
     p = np.ones(2)
     np.testing.assert_array_equal(response.eval_jvp(p, p), np.zeros(3))
@@ -180,15 +183,17 @@ def test_fully_fixed_products_do_not_request_partials():
 def test_products_use_exact_indefinite_stiffness():
     K = sparse.diags([2.0, -4.0], format="csc")
     response = solver.StaticEquilibriumResponse(
-        FormulaModel(
-            2,
-            (dof.DofReduction(2, [])).num_dofs,
-            lambda p: energy.QuadraticEnergy(K, -p),
-            lambda p, u: -sparse.eye(2, format="csc"),
-        ),
+        2,
         dof.DofReduction(2, []),
         np.zeros(2),
         solver.NewtonOptions(gradient_tolerance=1e-12),
+        lambda p: energy.QuadraticEnergy(K, -p),
+        lambda u: FormulaForce(
+            2,
+            u,
+            lambda p: energy.QuadraticEnergy(K, -p),
+            lambda p, u: -sparse.eye(2, format="csc"),
+        ),
     )
     # At this stationary point Newton need not move; derivatives must retain the negative curvature.
     p, direction = np.zeros(2), np.array([3.0, 2.0])
@@ -196,15 +201,123 @@ def test_products_use_exact_indefinite_stiffness():
     np.testing.assert_allclose(response.eval_vjp(p, direction), [1.5, -0.5])
 
 
-def test_removed_callback_constructor_is_rejected():
+def test_response_factory_direct_products_and_invalid_results():
     import pytest
 
-    with pytest.raises(TypeError):
-        solver.StaticEquilibriumResponse(
-            2,
-            dof.DofReduction(2, []),
-            np.zeros(2),
-            solver.NewtonOptions(gradient_tolerance=1e-12),
-            lambda p: None,
-            lambda p, u: None,
-        )
+    K = np.array([[4.0, 1.0, 0.5], [1.0, 3.0, -0.4], [0.5, -0.4, 2.0]])
+    A = np.array([[1.0, -0.5], [0.3, 2.0], [-0.7, 1.2]])
+    states = []
+    mode = "ok"
+
+    class Force(energy.FixedPatternResponse):
+        def __init__(self, u):
+            super().__init__(np.ones((3, 2)))
+            self.u = u.copy()
+
+        def eval_values(self, p, need_jacobian):
+            if need_jacobian:
+                raise AssertionError("explicit B requested")
+            return K @ self.u - A @ p
+
+        def eval_jvp_values(self, p, v):
+            return -A @ v
+
+        def eval_vjp_values(self, p, w):
+            return -A.T @ w
+
+    def make_response(u):
+        states.append(u.copy())
+        if mode == "null":
+            return None
+        if mode == "dimensions":
+            return FormulaForce(1, u, make_energy, lambda p, u: np.zeros((3, 1)))
+        if mode == "throw":
+            raise RuntimeError("factory failed")
+        return Force(u)
+
+    def make_energy(p):
+        return energy.QuadraticEnergy(sparse.csc_matrix(K), -A @ p)
+
+    eq = solver.StaticEquilibriumResponse(
+        2,
+        dof.DofReduction(3, [1]),
+        np.array([0.0, 0.8, 0.0]),
+        solver.NewtonOptions(gradient_tolerance=1e-12),
+        make_energy,
+        make_response,
+    )
+    p, v, w = np.array([0.6, -1.1]), np.array([0.3, -0.7]), np.array([0.4, 7.0, -0.8])
+    u = eq.eval_value(p)
+    assert not states
+    np.testing.assert_allclose(make_energy(p).eval_gradient(u), Force(u).eval_value(p))
+    J = np.zeros((3, 2))
+    J[[0, 2]] = np.linalg.solve(K[np.ix_([0, 2], [0, 2])], A[[0, 2]])
+    np.testing.assert_allclose(eq.eval_jvp(p, v), J @ v, atol=1e-12)
+    np.testing.assert_allclose(eq.eval_vjp(p, w), J.T @ w, atol=1e-12)
+    np.testing.assert_allclose(states[-1], u)
+    h = 1e-5
+    np.testing.assert_allclose(
+        eq.eval_jvp(p, v),
+        (eq.eval_value(p + h * v) - eq.eval_value(p - h * v)) / (2 * h),
+        atol=1e-9,
+    )
+    with pytest.raises(AssertionError, match="explicit B"):
+        eq.eval_jacobian(p)
+    for mode, error in [
+        ("null", ValueError),
+        ("dimensions", ValueError),
+        ("throw", RuntimeError),
+    ]:
+        for call in [
+            lambda: eq.eval_jvp(p, v),
+            lambda: eq.eval_vjp(p, w),
+            lambda: eq.eval_jacobian(p),
+        ]:
+            with pytest.raises(error):
+                call()
+    mode = "ok"
+    np.testing.assert_allclose(eq.eval_vjp(p, w), J.T @ w, atol=1e-12)
+    # The Torch bridge must reach these products rather than requesting B.
+    torch = pytest.importorskip("torch")
+    from litepgo import torch as bridge
+
+    x = torch.tensor(p, dtype=torch.float64, requires_grad=True)
+    (bridge.response(eq, x) * torch.tensor(w)).sum().backward()
+    np.testing.assert_allclose(x.grad.numpy(), J.T @ w, atol=1e-12)
+    with torch.autograd.forward_ad.dual_level():
+        dual = torch.autograd.forward_ad.make_dual(x.detach(), torch.tensor(v))
+        tangent = torch.autograd.forward_ad.unpack_dual(
+            bridge.response(eq, dual)
+        ).tangent
+        np.testing.assert_allclose(tangent.numpy(), J @ v, atol=1e-12)
+
+
+def test_factory_response_dynamic_pattern_is_refreshed():
+    class Force(energy.DynamicPatternResponse):
+        def __init__(self, u):
+            super().__init__(sparse.eye(2, format="csc"))
+            self.u = u.copy()
+
+        def pattern_at(self, p):
+            return np.array([[1.0, 0.0], [float(p[0] > 0), 1.0]])
+
+        def eval_values(self, p, need_jacobian):
+            value = self.u - np.array([p[0], p[1] + max(p[0], 0.0) ** 2])
+            J = np.array([[-1.0, 0.0], [-2 * max(p[0], 0.0), -1.0]])
+            return (value, J) if need_jacobian else value
+
+    eq = solver.StaticEquilibriumResponse(
+        2,
+        dof.DofReduction(2, []),
+        np.zeros(2),
+        solver.NewtonOptions(gradient_tolerance=1e-12),
+        lambda p: energy.QuadraticEnergy(
+            sparse.eye(2, format="csc"), -np.array([p[0], p[1] + max(p[0], 0.0) ** 2])
+        ),
+        Force,
+    )
+    for p in [np.array([0.3, 0.4]), np.array([-0.3, 0.4])]:
+        J = np.array([[1.0, 0.0], [2 * max(p[0], 0.0), 1.0]])
+        np.testing.assert_allclose(eq.eval_jacobian(p).toarray(), J)
+        np.testing.assert_allclose(eq.eval_jvp(p, p), J @ p)
+        np.testing.assert_allclose(eq.eval_vjp(p, p), J.T @ p)

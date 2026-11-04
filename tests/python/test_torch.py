@@ -1,4 +1,4 @@
-from parametric_fixtures import FormulaModel
+from equilibrium_fixtures import FormulaForce
 import numpy as np
 import pytest
 from scipy import sparse
@@ -42,15 +42,17 @@ def test_energy_and_response_gradcheck_and_snapshots():
 
 def test_equilibrium_gradcheck_fixed_dofs_and_failure():
     model = solver.StaticEquilibriumResponse(
-        FormulaModel(
-            2,
-            (dof.DofReduction(2, [0])).num_dofs,
-            lambda p: energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p),
-            lambda p, u: -sparse.eye(2, format="csc"),
-        ),
+        2,
         dof.DofReduction(2, [0]),
         np.array([0.4, 0.0]),
         solver.NewtonOptions(gradient_tolerance=1e-12),
+        lambda p: energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p),
+        lambda u: FormulaForce(
+            2,
+            u,
+            lambda p: energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p),
+            lambda p, u: -sparse.eye(2, format="csc"),
+        ),
     )
     p = torch.tensor([2.0, 3.0], dtype=torch.float64, requires_grad=True)
     assert torch.autograd.gradcheck(lambda p: bridge.response(model, p), (p,))
@@ -155,15 +157,17 @@ def test_equilibrium_forward_ad_and_product_errors():
         return -sparse.eye(2, format="csc")
 
     model = solver.StaticEquilibriumResponse(
-        FormulaModel(
-            2,
-            (dof.DofReduction(2, [0])).num_dofs,
-            lambda p: energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p),
-            partial,
-        ),
+        2,
         dof.DofReduction(2, [0]),
         np.array([0.4, 0.0]),
         solver.NewtonOptions(gradient_tolerance=1e-12),
+        lambda p: energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p),
+        lambda u: FormulaForce(
+            2,
+            u,
+            lambda p: energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p),
+            partial,
+        ),
     )
     x = torch.tensor([2.0, 3.0], dtype=torch.float64, requires_grad=True)
     y = bridge.response(model, x)

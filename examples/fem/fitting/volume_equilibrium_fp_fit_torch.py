@@ -61,65 +61,37 @@ def main():
         raise RuntimeError("Require both fixed and free DOFs")
 
     # Shared diagonal Fp; exp makes each optimized stretch strictly positive.
-    def plastic_matrix(log_stretches):
-        with np.errstate(over="ignore", under="ignore"):
-            stretches = np.exp(log_stretches)
-        if not np.isfinite(stretches).all() or (stretches <= 0).any():
-            raise ValueError("Unrepresentable plastic_matrix stretches")
-        return np.diag(stretches)
+    parameter_map = dof.ConstantDofMap(topology, num_parameters)
+    physical_map = dof.ElementDofMap(topology, 9)
+    plastic = energy.ElementwiseResponse(
+        parameter_map, fem.LogDiagonalFpResponse(num_parameters)
+    )
 
-    def make_energy(log_stretches):
-        Fp = plastic_matrix(log_stretches)
+    def make_energy(p):
+        packed = plastic.eval_value(p).reshape(-1, 9)
         return ElasticEnergy(
-            mapping,
-            geometry,
-            [fem.IdentityField3D(Fp.ravel(order="F")) for _ in geometry],
-            theta,
+            mapping, geometry, [fem.IdentityField3D(row) for row in packed], theta
         )
 
-    def force_parameter_jacobian(log_stretches, displacement):
-        Fp = plastic_matrix(log_stretches)
-        full = ForceParameterResponse(
-            dof.ConstantDofMap(topology, 9), mapping, geometry, displacement, theta
-        ).eval_jacobian(Fp.ravel(order="F"))
-        # Column-major diagonal slots; chain rule through exp(log_stretches).
-        return (
-            full[:, np.arange(num_parameters) * 4]
-            .multiply(np.diag(Fp)[:num_parameters][None, :])
-            .tocsc()
+    def make_response(displacement):
+        force = ForceParameterResponse(
+            physical_map, mapping, geometry, displacement, theta
         )
+        return energy.ComposedResponse(force, plastic)
 
-    # Solve equilibrium before measuring reactions; free DOFs move with the parameters.
+    def force_parameter_jacobian(p, displacement):
+        return make_response(displacement).eval_jacobian(p)
+
+    # Re-solve free DOFs for every parameter trial; boundary values stay prescribed.
     def experiment(log_stretches, load, need_jacobian):
         initial = load * prescribed
-
-        class PlasticModel(energy.ParametricEnergy):
-            def __init__(self):
-                prototype = self.potential(log_stretches)
-                super().__init__(
-                    prototype.hessian_pattern,
-                    np.ones((prototype.num_dofs, num_parameters)),
-                )
-
-            def potential(self, p):
-                return (make_energy)(p)
-
-            def eval_state_values(self, u, p, need_gradient, hessian_kind):
-                potential = self.potential(p)
-                potential.update_pattern(u)
-                return potential.eval(u, gradient=need_gradient, hessian=hessian_kind)
-
-            def eval_parameter_jacobian(self, u, p):
-                return (force_parameter_jacobian)(p, u)
-
-            def eval_feasible_step(self, u, p, du):
-                return self.potential(p).max_feasible_step(u, du)
-
         equilibrium = solver.StaticEquilibriumResponse(
-            PlasticModel(),
+            num_parameters,
             fixed,
             initial,
             solver.NewtonOptions(gradient_tolerance=1e-11, max_iterations=100),
+            make_energy,
+            make_response,
         )
         displacement, state_jacobian = equilibrium.eval(
             log_stretches, need_jacobian=need_jacobian
