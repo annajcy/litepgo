@@ -1,7 +1,6 @@
 #pragma once
 #include "litepgo/dof/energy_assembler.hpp"
 #include "litepgo/energy/scalar/fixed_pattern_energy.hpp"
-#include <functional>
 #include <stdexcept>
 #include <utility>
 
@@ -46,28 +45,5 @@ class MeshEnergy : public FixedPatternEnergy {
     mutable std::vector<Storage> storage_;
     mutable std::vector<double> values_;
     mutable std::vector<dof::EnergyAssembler::ElementView> views_;
-};
-class CustomMeshEnergy : public MeshEnergy {
-  public:
-    using Callback = std::function<Vec(std::span<const int>, const BatchMatrix&, BatchMatrix*, BatchMatrix*)>;
-    using Step = std::function<Vec(std::span<const int>, const BatchMatrix&, const BatchMatrix&)>;
-    template <class Map>
-    CustomMeshEnergy(const Map& map, Callback callback, int batch_size = 256, Step step = {})
-        : MeshEnergy(map, batch_size), callback_(std::move(callback)), step_(std::move(step)) {
-        if (!callback_)
-            throw std::invalid_argument("CustomMeshEnergy: empty callback");
-    }
-
-  protected:
-    Vec eval_batch(std::span<const int> ids, const BatchMatrix& x, BatchMatrix* g, BatchMatrix* H) const override {
-        return callback_(ids, x, g, H);
-    }
-    Vec eval_feasible_step_batch(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& dx) const override {
-        return step_ ? step_(ids, x, dx) : MeshEnergy::eval_feasible_step_batch(ids, x, dx);
-    }
-
-  private:
-    Callback callback_;
-    Step step_;
 };
 } // namespace litepgo::energy

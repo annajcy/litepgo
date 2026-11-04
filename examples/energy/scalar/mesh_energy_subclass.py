@@ -1,10 +1,25 @@
-"""Assemble a spring chain with a batch callback, then solve with fixed endpoints.
+"""Assemble a spring chain with a MeshEnergy subclass, then solve with fixed endpoints.
 
-Run: uv run --no-sync python examples/energy/scalar/custom_mesh_energy.py
+Run: uv run --no-sync python examples/energy/scalar/mesh_energy_subclass.py
 """
 
 import numpy as np
 from litepgo import dof, energy, solver
+
+
+class SpringEnergy(energy.MeshEnergy):
+    def __init__(self, mapping, stiffness, lengths):
+        super().__init__(mapping, batch_size=2)
+        self.stiffness, self.lengths = stiffness.copy(), lengths.copy()
+
+    def eval_batch(self, ids, x, need_gradient, need_hessian):
+        # Each row contains the two endpoints of one edge; ids select its data.
+        k = self.stiffness[ids]
+        stretch = x[:, 1] - x[:, 0] - self.lengths[ids]
+        force = k * stretch
+        g = np.stack([-force, force], axis=1) if need_gradient else None
+        H = (k[:, None, None] * np.array([[1., -1.], [-1., 1.]])).reshape(-1, 2) if need_hessian else None
+        return .5 * k * stretch**2, g, H
 
 
 def main():
@@ -12,17 +27,7 @@ def main():
     stiffness = np.array([2., 3., 4.])
     lengths = np.array([1., 2., 1.])
 
-    def springs(ids, x, need_gradient, need_hessian):
-        # Each row contains the two endpoints of one edge; ids select its data.
-        k = stiffness[ids]
-        stretch = x[:, 1] - x[:, 0] - lengths[ids]
-        force = k * stretch
-        g = np.stack([-force, force], axis=1) if need_gradient else None
-        H = (k[:, None, None] * np.array([[1., -1.], [-1., 1.]])).reshape(-1, 2) if need_hessian else None
-        return .5 * k * stretch**2, g, H
-
-    # No step callback is needed: this polynomial is defined for all finite positions.
-    potential = energy.CustomMeshEnergy(mapping, springs, batch_size=2)
+    potential = SpringEnergy(mapping, stiffness, lengths)
     initial = np.array([0., 0., 0., 7.])
     value, g, H = potential.eval(initial, gradient=True, hessian=energy.HessianKind.Exact)
     # Independent global incidence-matrix check catches shared-node assembly errors.
@@ -43,7 +48,7 @@ def main():
     np.testing.assert_allclose(result.x, expected, atol=1e-10, rtol=0)
     np.testing.assert_array_equal(result.x[[0, 3]], initial[[0, 3]])
     assert np.max(np.abs(potential.eval_gradient(result.x)[1:3])) < 1e-10
-    print("custom mesh energy: 3 springs, shared-node assembly and fixed-end equilibrium verified")
+    print("mesh energy subclass: 3 springs, shared-node assembly and fixed-end equilibrium verified")
 
 
 if __name__ == "__main__":

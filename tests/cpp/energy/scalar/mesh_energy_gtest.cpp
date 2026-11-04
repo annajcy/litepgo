@@ -7,6 +7,7 @@
 #include "litepgo/energy/scalar/mesh_energy.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
+#include "../../testing/batch_fixtures.hpp"
 
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
@@ -101,7 +102,7 @@ void check_material_path(const Map& map, const Vec& data, Fields fields, Bind bi
     check_fd(energy, data);
 }
 
-TEST(CustomMeshEnergy, HexNodeDisplacement) {
+TEST(MeshEnergy, HexNodeDisplacement) {
     const auto topology = two_hexes();
     const dof::VertexDofMap map(topology, 3);
     Vec data = Vec::Zero(36);
@@ -120,7 +121,7 @@ TEST(CustomMeshEnergy, HexNodeDisplacement) {
         [](const auto& fields) { return bind_energy<fem::VolumetricMaterialLocalEnergyF3D<fem::NeoHookean>>(fields); });
 }
 
-TEST(CustomMeshEnergy, OwnsPlanUsesCurrentXAndSupportsTriangleAndTet) {
+TEST(MeshEnergy, OwnsPlanUsesCurrentXAndSupportsTriangleAndTet) {
     const auto quadratic = [](int e, const auto& x_local, Vec* g, Eigen::MatrixXd* h) {
         const Vec flat = x_local.template reshaped<Eigen::RowMajor>();
         if (g)
@@ -142,7 +143,7 @@ TEST(CustomMeshEnergy, OwnsPlanUsesCurrentXAndSupportsTriangleAndTet) {
     check_fd(tet, Vec::LinSpaced(4, 0.1, 0.4));
 }
 
-TEST(CustomMeshEnergy, StencilMapsAssembleNeighborCouplingsAndVariableLocalSizes) {
+TEST(MeshEnergy, StencilMapsAssembleNeighborCouplingsAndVariableLocalSizes) {
     const mesh::TriangleTopology topology(10, {{4, 1, 5}, {5, 1, 3}, {4, 5, 0}, {1, 4, 2}, {6, 7, 8}});
     const auto stencils = mesh::make_triangle_mid_edge_stencils(topology);
     auto energy = [&] {
@@ -194,7 +195,7 @@ TEST(CustomMeshEnergy, StencilMapsAssembleNeighborCouplingsAndVariableLocalSizes
     EXPECT_DOUBLE_EQ(energy.max_feasible_step(x, x), 1);
 }
 
-TEST(CustomMeshEnergy, ProjectsEachLocalHessianBeforeScatter) {
+TEST(MeshEnergy, ProjectsEachLocalHessianBeforeScatter) {
     const auto topology = two_hexes();
     ElementFormulaEnergy energy(dof::ConstantDofMap(topology, 1),
                                 [](int e, const Eigen::VectorXd& x_local, Vec* g, Eigen::MatrixXd* h) {
@@ -209,7 +210,7 @@ TEST(CustomMeshEnergy, ProjectsEachLocalHessianBeforeScatter) {
     EXPECT_EQ(energy.eval_hessian(Vec::Ones(1), HessianKind::Projected).coeff(0, 0), 3);
 }
 
-TEST(CustomMeshEnergy, FeasibleStepUsesMatchingLocalDofValuesAndDeltas) {
+TEST(MeshEnergy, FeasibleStepUsesMatchingLocalDofValuesAndDeltas) {
     const auto topology = two_hexes();
     ElementFormulaEnergy energy(
         dof::ElementDofMap(topology, 2),
@@ -237,7 +238,7 @@ TEST(CustomMeshEnergy, FeasibleStepUsesMatchingLocalDofValuesAndDeltas) {
     EXPECT_THROW(energy.max_feasible_step(x, dx), std::domain_error);
 }
 
-TEST(CustomMeshEnergy, RejectsMalformedOutputsAndHandlesIndependentRequests) {
+TEST(MeshEnergy, RejectsMalformedOutputsAndHandlesIndependentRequests) {
     const dof::ConstantDofMap map(mesh::TriangleTopology(3, {{0, 1, 2}}), 2);
     ElementFormulaEnergy value_only(map, [](int, const Eigen::VectorXd&, Vec* g, Eigen::MatrixXd* h) {
         if (g || h)
@@ -278,7 +279,7 @@ TEST(CustomMeshEnergy, RejectsMalformedOutputsAndHandlesIndependentRequests) {
                  std::invalid_argument);
 }
 
-TEST(CustomMeshEnergy, EmptyMeshProducesZeroOutputs) {
+TEST(MeshEnergy, EmptyMeshProducesZeroOutputs) {
     ElementFormulaEnergy energy(
         dof::VertexDofMap(mesh::HexTopology(2, {}), 3),
         [](int, const auto&, Vec*, Eigen::MatrixXd*) -> double { throw std::logic_error("must not run"); });
@@ -288,7 +289,7 @@ TEST(CustomMeshEnergy, EmptyMeshProducesZeroOutputs) {
     EXPECT_DOUBLE_EQ(energy.max_feasible_step(Vec::Zero(6), Vec::Ones(6)), 1);
 }
 
-TEST(CustomMeshEnergy, RejectsWrongSparsePatternBeforeCallbacksOrOutputWrites) {
+TEST(MeshEnergy, RejectsWrongSparsePatternBeforeCallbacksOrOutputWrites) {
     int calls = 0;
     const dof::ElementDofMap map(mesh::TriangleTopology(3, {{0, 1, 2}}), 2);
     ElementFormulaEnergy energy(map, [&calls](int, const auto&, Vec*, Eigen::MatrixXd*) {
@@ -306,7 +307,7 @@ TEST(CustomMeshEnergy, RejectsWrongSparsePatternBeforeCallbacksOrOutputWrites) {
     EXPECT_EQ(Eigen::MatrixXd(hessian), Eigen::MatrixXd(before));
 }
 
-TEST(CustomMeshEnergy, RejectsProjectionOverflowAtAssemblyBoundary) {
+TEST(MeshEnergy, RejectsProjectionOverflowAtAssemblyBoundary) {
     const dof::ConstantDofMap map(mesh::TriangleTopology(3, {{0, 1, 2}}), 2);
     ElementFormulaEnergy energy(map, [](int, const auto&, Vec*, Eigen::MatrixXd* h) {
         if (h)
@@ -318,7 +319,7 @@ TEST(CustomMeshEnergy, RejectsProjectionOverflowAtAssemblyBoundary) {
     EXPECT_THROW(energy.eval_hessian(x, HessianKind::Projected), std::domain_error);
 }
 
-TEST(CustomMeshEnergy, OverflowingSumsOfFiniteElementValuesAndDerivativesThrowDomainError) {
+TEST(MeshEnergy, OverflowingSumsOfFiniteElementValuesAndDerivativesThrowDomainError) {
     const dof::ConstantDofMap map(mesh::TriangleTopology(3, {{0, 1, 2}, {0, 1, 2}}), 2);
     const Vec x = Vec::Zero(2);
     for (int request : {0, 1, 2}) {
@@ -368,7 +369,7 @@ struct SharedDofMap {
     }
 };
 
-TEST(CustomMeshEnergy, ParallelAssemblyMatchesSerialWithSharedRepeatedAndUnusedDofs) {
+TEST(MeshEnergy, ParallelAssemblyMatchesSerialWithSharedRepeatedAndUnusedDofs) {
     const SharedDofMap map;
     const auto local = [](int e, const Vec& x_local, Vec* g, Eigen::MatrixXd* h) {
         Eigen::MatrixXd A = Eigen::MatrixXd::Constant(x_local.size(), x_local.size(), 0.01 * (e % 3));
@@ -411,7 +412,7 @@ TEST(CustomMeshEnergy, ParallelAssemblyMatchesSerialWithSharedRepeatedAndUnusedD
     }
 }
 
-TEST(CustomMeshEnergy, ReusedBuffersRejectIncompleteWritesAndRecoverAfterExceptions) {
+TEST(MeshEnergy, ReusedBuffersRejectIncompleteWritesAndRecoverAfterExceptions) {
     bool write = true;
     ElementFormulaEnergy energy(dof::ConstantDofMap(mesh::TriangleTopology(3, {{0, 1, 2}, {0, 1, 2}}), 2),
                                 [&write](int e, const Vec& x_local, Vec* g, Eigen::MatrixXd* h) {
@@ -435,7 +436,7 @@ TEST(CustomMeshEnergy, ReusedBuffersRejectIncompleteWritesAndRecoverAfterExcepti
     }
 }
 
-TEST(CustomMeshEnergy, ParallelFeasibleStepMatchesSerialAndPropagatesErrors) {
+TEST(MeshEnergy, ParallelFeasibleStepMatchesSerialAndPropagatesErrors) {
     const SharedDofMap map;
     std::atomic<int> calls = 0;
     bool bad_bound = false;
@@ -478,10 +479,10 @@ TEST(CustomMeshEnergy, ParallelFeasibleStepMatchesSerialAndPropagatesErrors) {
 
 #include "litepgo/energy/scalar/mesh_energy.hpp"
 
-TEST(CustomMeshEnergy, GroupsVariableStencilsAndAssembles) {
+TEST(MeshEnergy, GroupsVariableStencilsAndAssembles) {
     using namespace litepgo;
     dof::StencilDofMap map(3, {{0, 1}, {1}, {1, 2}}, 3);
-    energy::CustomMeshEnergy batched(
+    ::litepgo::testing::BatchEnergyFixture batched(
         map,
         [](std::span<const int> ids, const energy::BatchMatrix& x, energy::BatchMatrix* g, energy::BatchMatrix* h) {
             EXPECT_LE(ids.size(), 2u);
@@ -501,7 +502,7 @@ TEST(CustomMeshEnergy, GroupsVariableStencilsAndAssembles) {
     EXPECT_DOUBLE_EQ(batched.eval_value(x), 7.5);
     EXPECT_TRUE(batched.eval_gradient(x).isApprox(expected));
     EXPECT_TRUE(Eigen::MatrixXd(batched.eval_hessian(x)).isApprox(Eigen::MatrixXd(expected.asDiagonal())));
-    EXPECT_THROW((energy::CustomMeshEnergy(map, {}, 0)), std::invalid_argument);
+    EXPECT_THROW((::litepgo::testing::BatchEnergyFixture(map, {}, 0)), std::invalid_argument);
 }
 
 #include "litepgo/energy/response/mesh_response.hpp"
@@ -509,7 +510,7 @@ TEST(CustomMeshEnergy, GroupsVariableStencilsAndAssembles) {
 #include <tbb/task_arena.h>
 #include <thread>
 
-TEST(CustomMeshEnergy, BatchCallbacksRunConcurrentlyForEnergyResponseAndStep) {
+TEST(MeshEnergy, BatchCallbacksRunConcurrentlyForEnergyResponseAndStep) {
     using namespace litepgo;
     tbb::global_control limit(tbb::global_control::max_allowed_parallelism, 4);
     tbb::task_arena arena(4);
@@ -525,7 +526,7 @@ TEST(CustomMeshEnergy, BatchCallbacksRunConcurrentlyForEnergyResponseAndStep) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         --active;
     };
-    energy::CustomMeshEnergy E(
+    ::litepgo::testing::BatchEnergyFixture E(
         map,
         [&](auto, const energy::BatchMatrix& x, auto* g, auto* H) {
             visit();
@@ -540,7 +541,7 @@ TEST(CustomMeshEnergy, BatchCallbacksRunConcurrentlyForEnergyResponseAndStep) {
             visit();
             return Vec::Constant(x.rows(), 0.5).eval();
         });
-    energy::CustomMeshResponse R(
+    ::litepgo::testing::BatchResponseFixture R(
         map, map,
         [&](auto, const energy::BatchMatrix& x, auto* J) {
             visit();
@@ -563,10 +564,10 @@ TEST(CustomMeshEnergy, BatchCallbacksRunConcurrentlyForEnergyResponseAndStep) {
     check([&] { EXPECT_DOUBLE_EQ(R.eval_value(x)[0], 64); });
 }
 
-TEST(CustomMeshEnergy, EmptyLocalDofsStillHaveOneValuePerElement) {
+TEST(MeshEnergy, EmptyLocalDofsStillHaveOneValuePerElement) {
     using namespace litepgo;
     const dof::StencilDofMap map(1, {{}, {}}, 1);
-    energy::CustomMeshEnergy E(
+    ::litepgo::testing::BatchEnergyFixture E(
         map,
         [](auto ids, const auto&, auto* g, auto* H) {
             if (g)

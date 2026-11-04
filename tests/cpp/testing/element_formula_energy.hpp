@@ -1,11 +1,12 @@
 #pragma once
 #include "litepgo/energy/scalar/mesh_energy.hpp"
+#include "batch_fixtures.hpp"
 #include <limits>
 
 namespace litepgo::testing {
 // Test-only mathematical oracles: preserve scalar formulas while exercising the
 // public batch protocol. Not an alternate production execution path.
-class ElementFormulaEnergy : public energy::CustomMeshEnergy {
+class ElementFormulaEnergy : public ::litepgo::testing::BatchEnergyFixture {
     template <class Map, class Formula> static Callback callback(Map map, Formula formula) {
         return [map, formula](std::span<const int> ids, const energy::BatchMatrix& x, energy::BatchMatrix* gradients,
                               energy::BatchMatrix* hessians) {
@@ -48,9 +49,9 @@ class ElementFormulaEnergy : public energy::CustomMeshEnergy {
   public:
     template <class Map, class Formula>
     ElementFormulaEnergy(const Map& map, Formula formula)
-        : CustomMeshEnergy(map, callback(map, std::move(formula)), 2) {}
+        : BatchEnergyFixture(map, callback(map, std::move(formula)), 2) {}
     template <class Map, class Formula, class Bound>
     ElementFormulaEnergy(const Map& map, Formula formula, Bound bound)
-        : CustomMeshEnergy(map, callback(map, std::move(formula)), 2, step(map, std::move(bound))) {}
+        : BatchEnergyFixture(map, callback(map, std::move(formula)), 2, step(map, std::move(bound))) {}
 };
 } // namespace litepgo::testing

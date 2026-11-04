@@ -239,8 +239,8 @@ add_dependencies(litepgo_tests volume_equilibrium_fp_fit shell_equilibrium_fp_fi
 add_test(NAME FemFit.volume_equilibrium_fp_fit COMMAND $<TARGET_FILE:volume_equilibrium_fp_fit>)
 add_test(NAME FemFit.shell_equilibrium_fp_fit COMMAND $<TARGET_FILE:shell_equilibrium_fp_fit>)
 
-add_dependencies(litepgo_tests custom_mesh_energy)
-add_test(NAME CustomMeshEnergyExample COMMAND $<TARGET_FILE:custom_mesh_energy>)
+add_dependencies(litepgo_tests mesh_energy_subclass)
+add_test(NAME MeshEnergySubclassExample COMMAND $<TARGET_FILE:mesh_energy_subclass>)
 
-add_dependencies(litepgo_tests custom_mesh_response)
-add_test(NAME CustomMeshResponseExample COMMAND $<TARGET_FILE:custom_mesh_response>)
+add_dependencies(litepgo_tests mesh_response_subclass)
+add_test(NAME MeshResponseSubclassExample COMMAND $<TARGET_FILE:mesh_response_subclass>)
