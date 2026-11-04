@@ -12,9 +12,9 @@ Optimize $q$ with $\theta=e^q$, starting at $q=0$. Each of the two
 reaction residuals is divided by its fixed observed magnitude, floored at
 $10^{-8}$. Its derivative includes both $B+KU$ and the exponential factors.
 
-**API walkthrough.** `make_energy(theta)` reconstructs material snapshots.
+**API walkthrough.** A `MaterialModel(ParametricEnergy)` reconstructs material snapshots in its state hook.
 `VolumetricFemForceMaterialResponse` provides $B$ at each solved state.
-`StaticEquilibriumResponse(2,...)` performs the inner displacement solve and
+`StaticEquilibriumResponse(model,...)` performs the inner displacement solve and
 analytic sensitivity. The outer `FixedPatternResponse` selects/sums loaded
 reaction rows, normalizes them, and calls Gauss–Newton.
 

@@ -38,6 +38,7 @@ is under `src/core/energy/`; Python uses `litepgo.energy`.
 | --- | --- |
 | Evaluate derivatives and compose scalar objectives | [Evaluation and composition](evaluation.md) |
 | Implement fixed/dynamic-pattern scalar or vector terms | [Custom energies and responses](custom.md) |
+| Define E(u,p), fixed-argument views and parameter products | [Parameterized energies](parametric.md) |
 | Gather, batch and assemble local contributions | [Batched assembly](assembly.md) |
 
 All paths share the sparse-pattern and feasibility contracts below and in

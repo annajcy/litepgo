@@ -9,7 +9,8 @@ $F_p=\operatorname{diag}(e^{p_0},e^{p_1},e^{p_2})$ from identity to stretches
 reactions with separate fixed target-norm scales.
 
 **API walkthrough.** Select plastic-force Jacobian columns 0/4/8 and apply the
-log-stretch factors before passing the partial to `StaticEquilibriumResponse`.
+log-stretch factors inside the parameter derivative hook of `PlasticModel`.
+`StaticEquilibriumResponse` consumes that parameterized energy model.
 The observation Jacobian stacks $U_f$ and $(B+KU)_c$. The Torch adapter
 then applies the scaled Jacobian transpose in each L-BFGS backward call.
 
