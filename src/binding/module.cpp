@@ -4,6 +4,7 @@ namespace nb = nanobind;
 NB_MODULE(_core, m) {
     m.doc() = "litepgo native extension";
     litepgo::common::binding::bind_build_info(m);
+    litepgo::common::binding::bind_thread_limit(m);
 
     // Register bases and template tags before their dependent types.
     nb::module_ spatial = m.def_submodule("spatial");
