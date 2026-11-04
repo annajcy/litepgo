@@ -1,3 +1,4 @@
+#include "../../testing/batch_fixtures.hpp"
 #include "../../testing/element_formula_response.hpp"
 #include "litepgo/dof/stencil_dof_map.hpp"
 
@@ -18,7 +19,7 @@ Eigen::Matrix<double, 4, 2> local_matrix() {
     return A;
 }
 } // namespace
-TEST(CustomMeshResponse, SharedParametersAndOutputsAccumulate) {
+TEST(MeshResponse, SharedParametersAndOutputsAccumulate) {
     int derivatives = 0;
     auto r = formula_response(dof::ConstantDofMap(topology, 2), dof::VertexDofMap(topology, 1),
                               [&](int e, const Vec& x, Eigen::MatrixXd* J) -> Vec {
@@ -46,7 +47,7 @@ TEST(CustomMeshResponse, SharedParametersAndOutputsAccumulate) {
     EXPECT_TRUE(Eigen::MatrixXd(J).isApprox(expected));
     EXPECT_EQ(J.nonZeros(), 10);
 }
-TEST(CustomMeshResponse, IndependentParameterBlocks) {
+TEST(MeshResponse, IndependentParameterBlocks) {
     auto r = formula_response(dof::ElementDofMap(topology, 2), dof::VertexDofMap(topology, 1),
                               [](int, const Vec& x, Eigen::MatrixXd* J) -> Vec {
                                   if (J)
@@ -60,7 +61,7 @@ TEST(CustomMeshResponse, IndependentParameterBlocks) {
     EXPECT_TRUE(Eigen::MatrixXd(r.eval_jacobian(x)).isApprox(expected));
     EXPECT_TRUE(r.eval_value(x).isApprox(expected * x));
 }
-TEST(CustomMeshResponse, MatrixGatherPreservesRowMajorSlotsAndZeros) {
+TEST(MeshResponse, MatrixGatherPreservesRowMajorSlotsAndZeros) {
     auto r = formula_response(dof::VertexDofMap(topology, 2), dof::ElementDofMap(topology, 1),
                               [](int, const Eigen::MatrixXd& x, Eigen::MatrixXd* J) -> Vec {
                                   EXPECT_EQ(x.rows(), 4);
@@ -80,7 +81,7 @@ TEST(CustomMeshResponse, MatrixGatherPreservesRowMajorSlotsAndZeros) {
     EXPECT_EQ(J.nonZeros(), 16);
     EXPECT_TRUE(J.coeffs().isZero());
 }
-TEST(CustomMeshResponse, RejectsInvalidLocalResultsAndCountMismatch) {
+TEST(MeshResponse, RejectsInvalidLocalResultsAndCountMismatch) {
     const dof::ConstantDofMap input(topology, 2);
     const dof::VertexDofMap output(topology, 1);
     auto wrong = formula_response(input, output, [](int, const Vec&, Eigen::MatrixXd*) { return Vec::Zero(3).eval(); });
@@ -96,7 +97,7 @@ TEST(CustomMeshResponse, RejectsInvalidLocalResultsAndCountMismatch) {
                                    [](int, const Vec&, Eigen::MatrixXd*) { return Vec::Zero(4).eval(); })),
                  std::invalid_argument);
 }
-TEST(CustomMeshResponse, EmptyMeshAndAssemblyOverflow) {
+TEST(MeshResponse, EmptyMeshAndAssemblyOverflow) {
     const mesh::TetTopology empty(0, {});
     auto zero =
         formula_response(dof::ConstantDofMap(empty, 2), dof::ElementDofMap(empty, 1),
@@ -109,7 +110,7 @@ TEST(CustomMeshResponse, EmptyMeshAndAssemblyOverflow) {
     EXPECT_THROW(huge.eval_value(Vec::Zero(2)), std::domain_error);
 }
 
-TEST(CustomMeshResponse, RejectsBadIndicesBeforeEvaluation) {
+TEST(MeshResponse, RejectsBadIndicesBeforeEvaluation) {
     struct Map {
         std::vector<int> indices;
         int num_elements() const {
@@ -130,7 +131,7 @@ TEST(CustomMeshResponse, RejectsBadIndicesBeforeEvaluation) {
     EXPECT_THROW((formula_response(outside, valid, evaluate)), std::invalid_argument);
 }
 
-TEST(CustomMeshResponse, SharedAssemblyAndPartialBatch) {
+TEST(MeshResponse, SharedAssemblyAndPartialBatch) {
     const mesh::TetTopology t(6, {{0, 1, 2, 3}, {1, 2, 3, 4}, {2, 3, 4, 5}});
     const dof::ConstantDofMap input(t, 2);
     const dof::VertexDofMap output(t, 1);
@@ -141,7 +142,7 @@ TEST(CustomMeshResponse, SharedAssemblyAndPartialBatch) {
     });
     for (int size : {1, 2, 16}) {
         std::atomic<int> calls = 0;
-        energy::CustomMeshResponse batch(
+        ::litepgo::testing::BatchResponseFixture batch(
             input, output,
             [&](std::span<const int> ids, const energy::BatchMatrix& x, energy::BatchMatrix* J) {
                 ++calls;
@@ -165,24 +166,23 @@ TEST(CustomMeshResponse, SharedAssemblyAndPartialBatch) {
     }
 }
 
-TEST(CustomMeshResponse, ValidatesCallbackAndBatchResults) {
+TEST(MeshResponse, ValidatesBatchSizeAndResults) {
     const dof::ConstantDofMap input(topology, 2);
     const dof::VertexDofMap output(topology, 1);
-    EXPECT_THROW((energy::CustomMeshResponse(input, output, {})), std::invalid_argument);
     auto bad = [](std::span<const int>, const energy::BatchMatrix&, energy::BatchMatrix*) {
         return energy::BatchMatrix::Zero(1, 1).eval();
     };
-    EXPECT_THROW((energy::CustomMeshResponse(input, output, bad, 0)), std::invalid_argument);
-    energy::CustomMeshResponse batch(input, output, bad);
+    EXPECT_THROW((::litepgo::testing::BatchResponseFixture(input, output, bad, 0)), std::invalid_argument);
+    ::litepgo::testing::BatchResponseFixture batch(input, output, bad);
     EXPECT_THROW(batch.eval_value(Vec::Zero(2)), std::logic_error);
     EXPECT_THROW(batch.eval_jacobian(Vec::Zero(2)), std::logic_error);
 }
 
-TEST(CustomMeshResponse, ReusedBuffersDetectIncompleteWritesAndRecover) {
+TEST(MeshResponse, ReusedBuffersDetectIncompleteWritesAndRecover) {
     const dof::ConstantDofMap input(topology, 2);
     const dof::VertexDofMap output(topology, 1);
     bool omit = false;
-    energy::CustomMeshResponse batch(
+    ::litepgo::testing::BatchResponseFixture batch(
         input, output, [&](std::span<const int> ids, const energy::BatchMatrix& x, energy::BatchMatrix* J) {
             if (J && !omit)
                 J->setOnes(4 * ids.size(), 2);
@@ -206,9 +206,9 @@ TEST(CustomMeshResponse, ReusedBuffersDetectIncompleteWritesAndRecover) {
     EXPECT_TRUE(Eigen::MatrixXd(regular.eval_jacobian(x)).isApprox(Eigen::MatrixXd(expected)));
 }
 
-TEST(CustomMeshResponse, EmptyLocalInputsAndOutputsRetainBatchDimensions) {
+TEST(MeshResponse, EmptyLocalInputsAndOutputsRetainBatchDimensions) {
     const dof::StencilDofMap map(1, {{}, {}}, 1);
-    energy::CustomMeshResponse obj(
+    ::litepgo::testing::BatchResponseFixture obj(
         map, map,
         [](auto ids, const auto& x, auto* J) {
             EXPECT_EQ(x.rows(), static_cast<Eigen::Index>(ids.size()));
@@ -222,7 +222,7 @@ TEST(CustomMeshResponse, EmptyLocalInputsAndOutputsRetainBatchDimensions) {
     EXPECT_EQ(obj.eval_jacobian(Vec::Zero(1)).nonZeros(), 0);
 }
 
-TEST(CustomMeshResponse, DuplicateIndicesGatherAndScatterAcrossBatches) {
+TEST(MeshResponse, DuplicateIndicesGatherAndScatterAcrossBatches) {
     struct RepeatedMap {
         int num_dofs() const {
             return 1;
@@ -235,7 +235,7 @@ TEST(CustomMeshResponse, DuplicateIndicesGatherAndScatterAcrossBatches) {
         }
     } map;
     for (int size : {1, 2, 8}) {
-        energy::CustomMeshResponse obj(
+        ::litepgo::testing::BatchResponseFixture obj(
             map, map,
             [](auto ids, const auto& x, auto* J) {
                 energy::BatchMatrix values(ids.size(), 2);
@@ -291,15 +291,15 @@ TEST(MeshResponse, ProductsAndDirectOverrides) {
             return 2 * d;
         }
     };
-    energy::CustomMeshResponse fallback(input, output,
-                                        [](std::span<const int>, const energy::BatchMatrix& x, energy::BatchMatrix* J) {
-                                            if (J) {
-                                                J->setZero(2 * x.rows(), 2);
-                                                for (Eigen::Index b = 0; b < x.rows(); ++b)
-                                                    J->middleRows(2 * b, 2).diagonal().setConstant(2);
-                                            }
-                                            return energy::BatchMatrix(2 * x);
-                                        });
+    ::litepgo::testing::BatchResponseFixture fallback(
+        input, output, [](std::span<const int>, const energy::BatchMatrix& x, energy::BatchMatrix* J) {
+            if (J) {
+                J->setZero(2 * x.rows(), 2);
+                for (Eigen::Index b = 0; b < x.rows(); ++b)
+                    J->middleRows(2 * b, 2).diagonal().setConstant(2);
+            }
+            return energy::BatchMatrix(2 * x);
+        });
     Direct direct(input, output);
     Vec x(2), dx(2), gy(3);
     x << .1, .2;

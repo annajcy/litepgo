@@ -1,5 +1,5 @@
-// Batch callback assembly for a spring chain with fixed endpoints.
-// Build: cmake --build build/release --target custom_mesh_energy
+// MeshEnergy subclass assembly for a spring chain with fixed endpoints.
+// Build: cmake --build build/release --target mesh_energy_subclass
 #include "litepgo/dof/stencil_dof_map.hpp"
 #include "litepgo/energy/scalar/mesh_energy.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
@@ -8,30 +8,37 @@
 #include <stdexcept>
 
 using namespace litepgo;
+class SpringEnergy final : public energy::MeshEnergy {
+  public:
+    SpringEnergy(const dof::StencilDofMap& map, Eigen::Vector3d k, Eigen::Vector3d l)
+        : MeshEnergy(map, 2), stiffness(std::move(k)), lengths(std::move(l)) {}
+
+  private:
+    Vec eval_batch(std::span<const int> ids, const energy::BatchMatrix& x, energy::BatchMatrix* g,
+                   energy::BatchMatrix* H) const override {
+        Vec values(ids.size());
+        if (g)
+            g->resize(x.rows(), 2);
+        if (H)
+            H->resize(2 * x.rows(), 2);
+        for (Eigen::Index b = 0; b < x.rows(); ++b) {
+            // ids select original edge data, independently of batch order.
+            const double k = stiffness[ids[b]], stretch = x(b, 1) - x(b, 0) - lengths[ids[b]];
+            values[b] = .5 * k * stretch * stretch;
+            if (g)
+                g->row(b) << -k * stretch, k * stretch;
+            if (H)
+                H->middleRows(2 * b, 2) << k, -k, -k, k;
+        }
+        return values;
+    }
+    Eigen::Vector3d stiffness, lengths;
+};
+
 int main() {
     const dof::StencilDofMap mapping(4, {{0, 1}, {1, 2}, {2, 3}}, 1);
     const Eigen::Vector3d stiffness(2, 3, 4), lengths(1, 2, 1);
-    energy::CustomMeshEnergy potential(
-        mapping,
-        [stiffness, lengths](std::span<const int> ids, const energy::BatchMatrix& x, energy::BatchMatrix* g,
-                             energy::BatchMatrix* H) {
-            Vec values(ids.size());
-            if (g)
-                g->resize(x.rows(), 2);
-            if (H)
-                H->resize(2 * x.rows(), 2);
-            for (Eigen::Index b = 0; b < x.rows(); ++b) {
-                // ids select original edge data, independently of batch order.
-                const double k = stiffness[ids[b]], stretch = x(b, 1) - x(b, 0) - lengths[ids[b]];
-                values[b] = .5 * k * stretch * stretch;
-                if (g)
-                    g->row(b) << -k * stretch, k * stretch;
-                if (H)
-                    H->middleRows(2 * b, 2) << k, -k, -k, k;
-            }
-            return values;
-        },
-        2);
+    SpringEnergy potential(mapping, stiffness, lengths);
     // The polynomial has no restricted domain, so the default feasible step is one.
     Vec initial(4);
     initial << 0, 0, 0, 7;
@@ -56,5 +63,5 @@ int main() {
         result.x[0] != initial[0] || result.x[3] != initial[3] ||
         potential.eval_gradient(result.x).segment(1, 2).lpNorm<Eigen::Infinity>() > 1e-10)
         throw std::runtime_error("Fixed-end equilibrium check failed");
-    std::cout << "custom mesh energy: 3 springs, shared-node assembly and fixed-end equilibrium verified\n";
+    std::cout << "mesh energy subclass: 3 springs, shared-node assembly and fixed-end equilibrium verified\n";
 }

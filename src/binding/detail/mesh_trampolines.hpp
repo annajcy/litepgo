@@ -65,10 +65,16 @@ class PyMeshEnergy : public MeshEnergy {
         if (!nb::isinstance<nb::tuple>(result) || nb::len(result) != 3)
             throw nb::type_error("Expected (values, gradients, Hessians)");
         auto tuple = nb::cast<nb::tuple>(result);
-        if (g)
+        if (g) {
+            if (tuple[1].is_none())
+                throw std::invalid_argument("Missing batch gradients");
             *g = nb::cast<BatchMatrix>(tuple[1]);
-        if (H)
+        }
+        if (H) {
+            if (tuple[2].is_none())
+                throw std::invalid_argument("Missing batch Hessians");
             *H = nb::cast<BatchMatrix>(tuple[2]);
+        }
         return nb::cast<Vec>(tuple[0]);
     }
     Vec eval_feasible_step_batch(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& dx) const override {

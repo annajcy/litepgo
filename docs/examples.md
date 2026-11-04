@@ -36,9 +36,9 @@ last digits on every platform.
 | Area | Program | What it teaches |
 | --- | --- | --- |
 | Energy | [`custom_energy`](examples/energy/custom-energy.md) | Fixed/dynamic scalar derivatives and sparse structure |
-| Energy | [`custom_mesh_energy`](examples/energy/custom-mesh-energy.md) | Batch callback assembly and spring equilibrium |
+| Energy | [`mesh_energy_subclass`](examples/energy/mesh-energy-subclass.md) | Subclass assembly and spring equilibrium |
 | Energy | [`energy_composition`](examples/energy/energy-composition.md) | Weighted sums and affine derivative pullback |
-| Energy | [`custom_mesh_response`](examples/energy/custom-mesh-response.md) | Callback assembly, JVP/VJP, and parameter fitting |
+| Energy | [`mesh_response_subclass`](examples/energy/mesh-response-subclass.md) | Subclass assembly, JVP/VJP, and parameter fitting |
 | Energy | [`custom_response`](examples/energy/custom-response.md) | Fixed/dynamic vector residuals and Jacobians |
 | Energy | [`mesh_response`](examples/energy/mesh-response.md) | Batched fixed-pose material-force calibration |
 | Solvers | [`newton_chain`](examples/solvers/newton-chain.md) | Hard constraints and a complete Newton solve |

@@ -15,15 +15,11 @@ so neither assembly nor optimization needs to know a material law.
 ```mermaid
 flowchart TB
   accTitle: Energy and response construction paths
-  accDescr: MeshEnergy and MeshResponse subclasses assemble local terms; CustomMeshEnergy and CustomMeshResponse adapt callbacks to those bases. Scalar composites feed Newton while residual responses feed Gauss-Newton.
+  accDescr: MeshEnergy and MeshResponse subclasses assemble local terms through batch overrides. Scalar composites feed Newton while residual responses feed Gauss-Newton.
   scalar["Built-in / custom scalar terms"] --> energy["Energy interface"]
-  batches["Local batch callbacks"] --> meshEnergy["CustomMeshEnergy"]
-  meshEnergy --> meshEnergyBase["MeshEnergy subclass"]
-  localEnergy["Local scalar model / native FEM"] --> meshEnergyBase
+  localEnergy["Local scalar model / native FEM"] --> meshEnergyBase["MeshEnergy subclass"]
   meshEnergyBase --> energy
-  batches --> meshResponse["CustomMeshResponse"]
-  meshResponse --> meshResponseBase["MeshResponse subclass"]
-  localResponse["Local vector model / native FEM"] --> meshResponseBase
+  localResponse["Local vector model / native FEM"] --> meshResponseBase["MeshResponse subclass"]
   meshResponseBase --> response["Response interface"]
   customResponse["Custom vector response"] --> response
   energy --> composed["Weighted sum / affine composition"]

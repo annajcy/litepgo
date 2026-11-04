@@ -1,7 +1,6 @@
 #pragma once
 #include "litepgo/dof/response_assembler.hpp"
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
-#include <functional>
 #include <utility>
 
 namespace litepgo::energy {
@@ -37,23 +36,5 @@ class MeshResponse : public FixedPatternResponse {
     };
     mutable std::vector<Storage> storage_;
     mutable std::vector<dof::ResponseAssembler::ElementView> views_;
-};
-class CustomMeshResponse : public MeshResponse {
-  public:
-    using Callback = std::function<BatchMatrix(std::span<const int>, const BatchMatrix&, BatchMatrix*)>;
-    template <class InputMap, class OutputMap>
-    CustomMeshResponse(const InputMap& input, const OutputMap& output, Callback callback, int batch_size = 256)
-        : MeshResponse(input, output, batch_size), callback_(std::move(callback)) {
-        if (!callback_)
-            throw std::invalid_argument("CustomMeshResponse: empty callback");
-    }
-
-  protected:
-    BatchMatrix eval_batch(std::span<const int> ids, const BatchMatrix& x, BatchMatrix* J) const override {
-        return callback_(ids, x, J);
-    }
-
-  private:
-    Callback callback_;
 };
 } // namespace litepgo::energy

@@ -1,11 +1,12 @@
 #pragma once
 #include "litepgo/energy/response/mesh_response.hpp"
+#include "batch_fixtures.hpp"
 #include <limits>
 
 namespace litepgo::testing {
 // Test-only scalar oracle evaluated for each row of the public batch protocol.
 template <class Input, class Output, class Formula> auto formula_response(Input input, Output output, Formula formula) {
-    return energy::CustomMeshResponse(
+    return ::litepgo::testing::BatchResponseFixture(
         input, output,
         [input, output, formula](std::span<const int> ids, const energy::BatchMatrix& x, energy::BatchMatrix* J) {
             const Eigen::Index no = output.dof_indices(ids.front()).size(), ni = x.cols();

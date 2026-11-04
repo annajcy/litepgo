@@ -2,6 +2,7 @@
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
 
 
 def test_batch_workers_gil_exception_and_recovery():
@@ -10,6 +11,7 @@ def test_batch_workers_gil_exception_and_recovery():
         import time
         import numpy as np
         from litepgo import dof, energy
+        from batch_fixtures import BatchEnergyFixture, BatchResponseFixture
 
         mapping = dof.StencilDofMap(1, [[0]] * 64, 1)
         workers = set()
@@ -35,8 +37,8 @@ def test_batch_workers_gil_exception_and_recovery():
             visit(ids, x)
             return (x, np.ones_like(x)) if need_j else x
 
-        E = energy.CustomMeshEnergy(mapping, e, batch_size=1, step=step)
-        R = energy.CustomMeshResponse(mapping, mapping, r, batch_size=1)
+        E = BatchEnergyFixture(mapping, e, batch_size=1, step=step)
+        R = BatchResponseFixture(mapping, mapping, r, batch_size=1)
         x = np.ones(1)
         for operation, expected in [
             (lambda: E.eval_value(x), 32),
@@ -63,6 +65,6 @@ def test_batch_workers_gil_exception_and_recovery():
     """
     result = subprocess.run(
         [sys.executable, "-c", textwrap.dedent(code)],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, text=True, timeout=30, cwd=Path(__file__).parent,
     )
     assert result.returncode == 0, result.stdout + result.stderr

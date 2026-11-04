@@ -1,3 +1,4 @@
+from batch_fixtures import BatchResponseFixture
 import gc
 import numpy as np
 import pytest
@@ -33,7 +34,7 @@ def test_maps_and_batch_sizes(input_kind, output_kind, batch_size):
         values = np.repeat((weights * x.sum(axis=1))[:, None], no, axis=1)
         J = np.repeat(weights, no)[:, None] * np.ones((len(ids)*no, x.shape[1]))
         return (values, J) if need else values
-    obj = energy.CustomMeshResponse(i, o, batch, batch_size)
+    obj = BatchResponseFixture(i, o, batch, batch_size)
     del t, i, o
     gc.collect()
     global_x = np.arange(obj.num_inputs, dtype=float)
@@ -62,7 +63,7 @@ def test_zeroing_empty_errors_and_recovery():
         if mode == "bad_j": J = J[:1]
         if mode == "nan": y[0, 0] = np.nan
         return (y, J) if need else y
-    obj = energy.CustomMeshResponse(i, o, batch, 1)
+    obj = BatchResponseFixture(i, o, batch, 1)
     nonzero = obj.eval_jacobian(np.ones(2))
     zero = obj.eval_jacobian(np.zeros(2))
     assert nonzero.nnz == zero.nnz == 10
@@ -80,11 +81,11 @@ def test_zeroing_empty_errors_and_recovery():
     np.testing.assert_array_equal(obj.eval_jacobian(np.ones(2)).toarray(), nonzero.toarray())
     for size in (0, -1):
         with pytest.raises(ValueError, match="batch size"):
-            energy.CustomMeshResponse(i, o, batch, size)
+            BatchResponseFixture(i, o, batch, size)
     empty = dof.StencilDofMap(0, [], 1)
     def unreachable(*args):
         raise AssertionError("empty mesh callback")
-    obj = energy.CustomMeshResponse(empty, empty, unreachable)
+    obj = BatchResponseFixture(empty, empty, unreachable)
     assert obj.eval_value(np.empty(0)).size == 0
     assert obj.eval_jacobian(np.empty(0)).shape == (0, 0)
 
@@ -102,7 +103,7 @@ def test_grouping_preserves_original_element_sum_order(batch_size):
         J[:, 0] = weights[ids]
         return (values, J) if need else values
 
-    obj = energy.CustomMeshResponse(inputs, outputs, batch, batch_size)
+    obj = BatchResponseFixture(inputs, outputs, batch, batch_size)
     value, J = obj.eval(np.ones(2), need_jacobian=True)
     # Grouping evaluates elements 0,2 before 1; assembly must still sum 0,1,2.
     np.testing.assert_array_equal(value, [1.])

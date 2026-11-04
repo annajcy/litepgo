@@ -1,3 +1,4 @@
+from batch_fixtures import BatchResponseFixture
 import numpy as np
 import pytest
 from scipy import sparse
@@ -54,7 +55,7 @@ def test_mesh_fallback_and_direct_products(batch_size):
         values = (x*x) @ A.T
         J = (A[None] * (2*x[:,None,:])).reshape(-1, 2)
         return (values, J) if need_jacobian else values
-    r = energy.CustomMeshResponse(inp, out, batch, batch_size)
+    r = BatchResponseFixture(inp, out, batch, batch_size)
     x = np.array([.2, -.5, .7])
     check_products(r, x)
     class Direct(energy.MeshResponse):
@@ -102,7 +103,7 @@ def test_empty_mesh_products():
     mapping = dof.StencilDofMap(2, [], 1)
     def forbidden(*args):
         raise AssertionError('empty mesh called evaluator')
-    r = energy.CustomMeshResponse(mapping, mapping, forbidden)
+    r = BatchResponseFixture(mapping, mapping, forbidden)
     np.testing.assert_array_equal(r.eval_jvp(np.ones(2),np.ones(2)),np.zeros(2))
     np.testing.assert_array_equal(r.eval_vjp(np.ones(2),np.ones(2)),np.zeros(2))
 
@@ -143,7 +144,7 @@ def test_dynamic_patterns_and_mixed_mesh_shapes():
         values=np.repeat((x*x).sum(1)[:,None],no,axis=1)
         J=np.repeat((2*x)[:,None,:],no,axis=1).reshape(-1,x.shape[1])
         return (values,J) if need else values
-    check_products(energy.CustomMeshResponse(inp,out,batch,2), np.array([.2,.3,-.4]))
+    check_products(BatchResponseFixture(inp,out,batch,2), np.array([.2,.3,-.4]))
 
 
 def test_response_super_products():

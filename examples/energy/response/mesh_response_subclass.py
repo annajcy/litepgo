@@ -1,9 +1,25 @@
-"""Assemble callback residuals and fit two shared parameters.
+"""Assemble subclass residuals and fit two shared parameters.
 
-Run: uv run --no-sync python examples/energy/response/custom_mesh_response.py
+Run: uv run --no-sync python examples/energy/response/mesh_response_subclass.py
 """
 import numpy as np
 from litepgo import dof, energy, solver
+
+
+class LinearResidual(energy.MeshResponse):
+    def __init__(self, inputs, outputs, A, observed):
+        super().__init__(inputs, outputs, batch_size=2)
+        self.A, self.observed = A.copy(), observed.copy()
+
+    def eval_batch(self, ids, x, need_jacobian):
+        values = x @ self.A.T - self.observed[ids]
+        return (values, np.tile(self.A, (len(ids), 1))) if need_jacobian else values
+
+    def eval_jvp_batch(self, ids, x, dx):
+        return dx @ self.A.T
+
+    def eval_vjp_batch(self, ids, x, gy):
+        return gy @ self.A
 
 
 def main():
@@ -13,11 +29,7 @@ def main():
     truth = np.array([2., 3.])
     observed = np.tile(A @ truth, (3, 1))
 
-    def batch(ids, x, need_jacobian):
-        values = x @ A.T - observed[ids]
-        return (values, np.tile(A, (len(ids), 1))) if need_jacobian else values
-
-    response = energy.CustomMeshResponse(inputs, outputs, batch, batch_size=2)
+    response = LinearResidual(inputs, outputs, A, observed)
     x = np.array([.7, 1.2])
     # Independently sum the local rows assigned to each global output.
     J = np.array([[2., 4.], [4., 1.], [6., -2.]])
@@ -38,7 +50,7 @@ def main():
     )
     assert result.status == solver.GaussNewtonStatus.Converged
     np.testing.assert_allclose(result.x, truth, atol=1e-8, rtol=0)
-    print("custom mesh response: shared assembly, JVP/VJP and parameter fit verified")
+    print("mesh response subclass: shared assembly, JVP/VJP and parameter fit verified")
 
 
 if __name__ == "__main__":
