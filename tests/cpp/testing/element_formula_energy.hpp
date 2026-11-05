@@ -1,6 +1,6 @@
 #pragma once
-#include "litepgo/energy/scalar/mesh_energy.hpp"
 #include "batch_fixtures.hpp"
+#include "litepgo/energy/scalar/mesh_energy.hpp"
 #include <limits>
 
 namespace litepgo::testing {
