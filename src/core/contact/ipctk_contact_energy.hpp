@@ -1,6 +1,7 @@
 #pragma once
 
 #include "litepgo/contact/contact_options.hpp"
+#include "litepgo/contact/contact_snapshot.hpp"
 #include "litepgo/energy/scalar/dynamic_pattern_energy.hpp"
 #include "litepgo/mesh/mesh_data.hpp"
 
@@ -54,6 +55,8 @@ class IPCTKContactEnergy final : public energy::DynamicPatternEnergy {
     // pairs, and the smallest distance among them (+infinity when there are none).
     int num_active_pairs(const ConstVecRef& x) const;
     double min_active_distance(const ConstVecRef& x) const;
+    // Full owned snapshot; does not update the Hessian pattern or solver state.
+    ContactSnapshot contact_snapshot(const ConstVecRef& x) const;
 
   private:
     struct Impl;

@@ -164,6 +164,35 @@ double IPCTKContactEnergy::min_active_distance(const ConstVecRef& x) const {
     return std::sqrt(impl_->min_squared_distance(impl_->collisions(V), V));
 }
 
+ContactSnapshot IPCTKContactEnergy::contact_snapshot(const ConstVecRef& x) const {
+    if (x.size() != num_dofs() || !x.allFinite())
+        throw std::invalid_argument("IPCTKContactEnergy::contact_snapshot requires num_dofs finite positions");
+    const Eigen::MatrixXd V = vertex_rows(x);
+    const auto active = impl_->collisions(V);
+    const auto count = static_cast<Eigen::Index>(active.size());
+    ContactSnapshot result{V, {}, ContactSnapshot::VertexIds(count, 4), Vec(count), Vec(count), Vec(count)};
+    result.types.reserve(active.size());
+    Eigen::Index row = 0;
+    const auto append = [&](const auto& collisions, const char* type) {
+        for (const auto& pair : collisions) {
+            const auto ids = pair.vertex_ids(impl_->mesh.edges(), impl_->mesh.faces());
+            const auto p = pair.dof(V, impl_->mesh.edges(), impl_->mesh.faces());
+            result.types.emplace_back(type);
+            for (int k = 0; k < 4; ++k)
+                result.vertex_ids(row, k) = static_cast<int>(ids[static_cast<std::size_t>(k)]);
+            result.distances[row] = std::sqrt(pair.compute_distance(p));
+            result.weights[row] = pair.weight;
+            result.mollifiers[row] = pair.mollifier(p);
+            ++row;
+        }
+    };
+    append(active.vv_collisions, "VV");
+    append(active.ev_collisions, "VE");
+    append(active.ee_collisions, "EE");
+    append(active.fv_collisions, "VF");
+    return result;
+}
+
 SpMat IPCTKContactEnergy::pattern_at(const ConstVecRef& x) const {
     if (!x.allFinite()) {
         throw std::invalid_argument("IPCTKContactEnergy requires finite positions");

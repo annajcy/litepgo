@@ -2,6 +2,7 @@
 
 #include "litepgo/contact/broad_phase/broad_phase.hpp"
 #include "litepgo/contact/contact_options.hpp"
+#include "litepgo/contact/contact_snapshot.hpp"
 #include "litepgo/energy/scalar/dynamic_pattern_energy.hpp"
 #include "litepgo/mesh/mesh_data.hpp"
 #include <memory>
@@ -41,6 +42,8 @@ class IPCContactEnergy final : public energy::DynamicPatternEnergy {
     }
     int num_active_pairs(const ConstVecRef& x) const;
     double min_active_distance(const ConstVecRef& x) const;
+    // Full owned snapshot; does not update the Hessian pattern or solver state.
+    ContactSnapshot contact_snapshot(const ConstVecRef& x) const;
 
   private:
     struct Impl;

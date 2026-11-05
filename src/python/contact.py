@@ -8,6 +8,8 @@ require an explicit broad_phase=SpatialHash() and retain shared
 ownership of that backend. Custom backends are implemented in C++, not Python.
 Both options types default to fixed reference-area weights; set
 use_area_weighting=False for the original unweighted candidate sum.
+contact_snapshot(x) copies every merged active record without updating the pattern;
+its arrays are read-only and independent of subsequent queries.
 """
 from litepgo import _core
 
@@ -16,7 +18,8 @@ SpatialHash = _core.contact.SpatialHash
 PlanePenaltyEnergy = _core.contact.PlanePenaltyEnergy
 IPCContactOptions = _core.contact.IPCContactOptions
 IPCContactEnergy = _core.contact.IPCContactEnergy
-__all__ = ["BroadPhase", "SpatialHash", "PlanePenaltyEnergy", "IPCContactOptions", "IPCContactEnergy"]
+ContactSnapshot = _core.contact.ContactSnapshot
+__all__ = ["BroadPhase", "SpatialHash", "PlanePenaltyEnergy", "IPCContactOptions", "IPCContactEnergy", "ContactSnapshot"]
 
 if hasattr(_core.contact, "IPCTKContactEnergy"):
     IPCTKContactOptions = _core.contact.IPCTKContactOptions

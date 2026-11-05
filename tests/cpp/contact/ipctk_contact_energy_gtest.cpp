@@ -75,6 +75,15 @@ TEST(IPCTKContactEnergy, ReportsTheActivePairAndItsDistance) {
     EXPECT_EQ(energy.num_active_pairs(surface.positions), 1);
     EXPECT_NEAR(energy.min_active_distance(surface.positions), 0.5, 1e-14);
 
+    const auto snapshot = energy.contact_snapshot(surface.positions);
+    EXPECT_EQ(snapshot.types, std::vector<std::string>{"VF"});
+    EXPECT_EQ(snapshot.positions.reshaped<Eigen::RowMajor>(), surface.positions);
+    EXPECT_EQ(snapshot.vertex_ids.row(0), (Eigen::RowVector4i(3, 0, 1, 2)));
+    EXPECT_DOUBLE_EQ(snapshot.distances[0], 0.5);
+    EXPECT_GT(snapshot.weights[0], 0);
+    EXPECT_DOUBLE_EQ(snapshot.mollifiers[0], 1);
+    EXPECT_EQ(energy.hessian_pattern().nonZeros(), 0);
+
     // Pushes vertex 3 away from A and A's vertices the other way.
     const Vec gradient = energy.eval_gradient(surface.positions);
     EXPECT_GT(energy.eval_value(surface.positions), 0.0);

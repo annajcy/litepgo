@@ -12,3 +12,4 @@ All commands run from the repository root after [configuring the release build](
 - [Pressed tet box stack](./tet-p1-box-stack.md). Boundary mapping, native IPC, and changing sparsity.
 - [Compression between penalty plates](./tet-p1-plate-compression.md). Elasticity, IPC self-contact, and two one-sided plate penalties.
 - [Area weighting under mesh refinement](./area-weighting.md). Fixed parallel sheets compare contact energy and normal force with area weighting off and on.
+- [Read-only active contact snapshot](./contact-snapshot.md). Export and plot every merged active record, including mollified EE stencils.

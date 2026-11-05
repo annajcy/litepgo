@@ -29,6 +29,12 @@ struct Pair {
     int count() const {
         return epsilon > 0 ? 4 : feature.n;
     }
+    double mollifier_ratio(const Points& p) const {
+        if (epsilon <= 0)
+            return 1;
+        const auto n = cross(sub(p[1], p[0]), sub(p[3], p[2]));
+        return dot(n, n) / epsilon;
+    }
     auto key() const {
         return std::tuple{epsilon > 0, feature.n, feature.line_line, ids};
     }
@@ -206,13 +212,7 @@ struct IPCContactEnergy::Impl {
             return 0;
         const double log_d = std::log(d / h), delta = d - h;
         const double b = -delta * delta * log_d;
-        double m = 1, z = 1;
-        if (pair.epsilon > 0) {
-            const auto n = cross(sub(p[1], p[0]), sub(p[3], p[2]));
-            z = dot(n, n) / pair.epsilon;
-            if (z < 1)
-                m = z * (2 - z);
-        }
+        const double z = pair.mollifier_ratio(p), m = z < 1 ? z * (2 - z) : 1;
         if (gradient || hessian) {
             LocalGradient gd;
             LocalHessian Hd;
@@ -326,6 +326,32 @@ double IPCContactEnergy::min_active_distance(const ConstVecRef& x) const {
     for (const auto& pair : impl_->active(x))
         d = std::min(d, distance(points(x, pair.ids), pair.feature));
     return std::sqrt(d);
+}
+ContactSnapshot IPCContactEnergy::contact_snapshot(const ConstVecRef& x) const {
+    const auto pairs = impl_->active(x);
+    const auto count = static_cast<Eigen::Index>(pairs.size());
+    ContactSnapshot result{x.reshaped<Eigen::RowMajor>(num_vertices(), 3),
+                           {},
+                           ContactSnapshot::VertexIds(count, 4),
+                           Vec(count),
+                           Vec(count),
+                           Vec(count)};
+    result.types.reserve(pairs.size());
+    for (Eigen::Index i = 0; i < count; ++i) {
+        const auto& pair = pairs[static_cast<std::size_t>(i)];
+        result.types.emplace_back(pair.epsilon > 0 || pair.feature.line_line ? "EE"
+                                  : pair.feature.n == 2                      ? "VV"
+                                  : pair.feature.n == 3                      ? "VE"
+                                                                             : "VF");
+        for (int k = 0; k < 4; ++k)
+            result.vertex_ids(i, k) = pair.ids[k];
+        const auto p = points(x, pair.ids);
+        result.distances[i] = std::sqrt(distance(p, pair.feature));
+        result.weights[i] = pair.weight;
+        const double z = pair.mollifier_ratio(p);
+        result.mollifiers[i] = z < 1 ? z * (2 - z) : 1;
+    }
+    return result;
 }
 SpMat IPCContactEnergy::pattern_at(const ConstVecRef& x) const {
     std::vector<Triplet> entries;

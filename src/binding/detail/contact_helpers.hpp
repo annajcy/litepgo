@@ -30,6 +30,10 @@ template <class ContactEnergy, class Options> void bind_backend(nb::module_& m, 
         .def_prop_ro("options", &ContactEnergy::options)
         .def("num_active_pairs", &ContactEnergy::num_active_pairs, "x"_a, nb::call_guard<nb::gil_scoped_release>())
         .def("min_active_distance", &ContactEnergy::min_active_distance, "x"_a,
-             nb::call_guard<nb::gil_scoped_release>(), "Smallest distance among the active pairs; inf if none.");
+             nb::call_guard<nb::gil_scoped_release>(), "Smallest distance among the active pairs; inf if none.")
+        .def("contact_snapshot", &ContactEnergy::contact_snapshot, "x"_a, nb::call_guard<nb::gil_scoped_release>(),
+             "Copy all merged active records at the entire surface's flat xyz positions, including zero-mollifier EE. "
+             "The snapshot is independent of future queries and does not update the Hessian pattern. "
+             "Its record count equals num_active_pairs(x); this is not an intersection test.");
 }
 } // namespace litepgo::contact::binding
