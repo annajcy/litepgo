@@ -14,6 +14,7 @@ namespace litepgo::contact {
 // [Li et al. 2020], evaluated by IPC Toolkit. x holds the surface vertices'
 // positions in vertex-major xyz order. The stiffness is 1: scale the energy by its
 // weight in a WeightedEnergySum.
+// use_area_weighting enables fixed reference-area collision weights.
 //
 // The active set at x is every vertex-face, edge-edge (mollified near parallel),
 // edge-vertex and vertex-vertex pair closer than min_distance + dhat;

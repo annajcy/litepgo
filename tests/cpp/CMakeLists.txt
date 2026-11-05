@@ -203,6 +203,8 @@ endforeach()
 
 add_dependencies(litepgo_tests tet_p1_box_stack)
 add_test(NAME ContactEquilibrium.tet_p1_box_stack COMMAND $<TARGET_FILE:tet_p1_box_stack>)
+add_dependencies(litepgo_tests contact_area_weighting)
+add_test(NAME ContactAreaWeighting COMMAND $<TARGET_FILE:contact_area_weighting>)
 if(LITEPGO_WITH_IPC_TOOLKIT)
     target_sources(litepgo_contact_tests PRIVATE contact/ipctk_contact_energy_gtest.cpp)
     target_link_libraries(litepgo_contact_tests PRIVATE litepgo::contact_ipctk)

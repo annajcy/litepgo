@@ -2,6 +2,9 @@
 
 [Back to Contact](./index.md)
 
+Contact uses the default fixed reference-area weighting. Its coefficient is
+set directly on the raw barrier energy; no normalization conversion is applied.
+
 **Geometry and boundary conditions.** Load `assets/box-tet.veg` and duplicate it
 in the y direction. If one box has height $H$, separate them by $0.04H$
 and offset the upper box laterally by $(0.013H,0,0.017H)$ to avoid an exactly

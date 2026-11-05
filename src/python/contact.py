@@ -6,6 +6,8 @@ SurfaceKinematics for displacement DOFs. Native ACCD uses floating-point arithme
 it does not provide formal floating-point robustness guarantees. Native energies
 require an explicit broad_phase=SpatialHash() and retain shared
 ownership of that backend. Custom backends are implemented in C++, not Python.
+Both options types default to fixed reference-area weights; set
+use_area_weighting=False for the original unweighted candidate sum.
 """
 from litepgo import _core
 

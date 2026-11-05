@@ -71,6 +71,7 @@ TEST(IPCTKContactEnergy, VanishesBeyondDhat) {
 TEST(IPCTKContactEnergy, ReportsTheActivePairAndItsDistance) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
     IPCTKContactEnergy energy(surface, options(1.0));
+    EXPECT_TRUE(energy.options().use_area_weighting);
     EXPECT_EQ(energy.num_active_pairs(surface.positions), 1);
     EXPECT_NEAR(energy.min_active_distance(surface.positions), 0.5, 1e-14);
 

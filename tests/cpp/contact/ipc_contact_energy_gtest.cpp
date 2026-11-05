@@ -125,6 +125,46 @@ TEST(IPCContactEnergy, DerivativesMatchFiniteDifferences) {
     }
 }
 
+TEST(IPCContactEnergy, AreaWeightScalesValueAndDerivativesUsingRestGeometry) {
+    const auto surface = two_triangles(0.5);
+    IPCContactEnergy weighted(surface, options(1), std::make_shared<SpatialHash>());
+    EXPECT_TRUE(weighted.options().use_area_weighting);
+    auto unweighted_options = options(1);
+    unweighted_options.use_area_weighting = false;
+    IPCContactEnergy unweighted(surface, unweighted_options, std::make_shared<SpatialHash>());
+    Vec x = surface.positions;
+    // Change B's current area without moving its only active vertex-face pair.
+    x[14] += 2;
+    const Eigen::Vector3d a = surface.positions.segment<3>(12) - surface.positions.segment<3>(9),
+                          b = surface.positions.segment<3>(15) - surface.positions.segment<3>(9);
+    const double weight = a.cross(b).norm() / 24; // quarter of vertex 3's one-third face area
+    ASSERT_EQ(weighted.num_active_pairs(x), 1);
+    weighted.update_pattern(x);
+    unweighted.update_pattern(x);
+    EXPECT_DOUBLE_EQ(weighted.eval_value(x), weight * unweighted.eval_value(x));
+    EXPECT_TRUE(weighted.eval_gradient(x).isApprox(weight * unweighted.eval_gradient(x), 1e-12));
+    EXPECT_TRUE(Eigen::MatrixXd(weighted.eval_hessian(x))
+                    .isApprox(weight * Eigen::MatrixXd(unweighted.eval_hessian(x)), 1e-12));
+    EXPECT_TRUE(
+        Eigen::MatrixXd(weighted.eval_hessian(x, energy::HessianKind::Projected))
+            .isApprox(weight * Eigen::MatrixXd(unweighted.eval_hessian(x, energy::HessianKind::Projected)), 1e-12));
+    Vec dx = Vec::Zero(x.size());
+    dx[11] = -2;
+    EXPECT_EQ(weighted.max_feasible_step(x, dx), unweighted.max_feasible_step(x, dx));
+}
+
+TEST(IPCContactEnergy, AreaWeightedDerivativesMatchFiniteDifferences) {
+    const auto surface = two_triangles(0.5);
+    auto weighted_options = options(3, 0.1);
+    weighted_options.use_area_weighting = true;
+    IPCContactEnergy weighted(surface, weighted_options, std::make_shared<SpatialHash>());
+    Vec x = surface.positions;
+    x.segment<3>(12) += Eigen::Vector3d(0.3, -0.2, 0.1);
+    ASSERT_GE(weighted.num_active_pairs(x), 4);
+    weighted.update_pattern(x);
+    energy::test::expect_derivatives_match(weighted, x, 1e-5);
+}
+
 TEST(IPCContactEnergy, ProjectedHessianIsPositiveSemidefinite) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
     IPCContactEnergy energy(surface, options(3.0), std::make_shared<SpatialHash>());
@@ -235,7 +275,9 @@ TEST(IPCContactEnergy, ComposesWithASurfaceKinematics) {
 TEST(IPCContactEnergy, OriginalSquaredBarrierAndThickness) {
     for (double thickness : {0.0, 0.2}) {
         auto surface = two_triangles(0.5);
-        IPCContactEnergy e(surface, options(1, thickness), std::make_shared<SpatialHash>());
+        auto unweighted_options = options(1, thickness);
+        unweighted_options.use_area_weighting = false;
+        IPCContactEnergy e(surface, unweighted_options, std::make_shared<SpatialHash>());
         double s = 0.25 - thickness * thickness, h = 1 + 2 * thickness;
         EXPECT_NEAR(e.eval_value(surface.positions), -(s - h) * (s - h) * std::log(s / h), 1e-13);
         e.update_pattern(surface.positions);
@@ -319,7 +361,9 @@ TEST(IPCContactEnergy, MatchesBruteForceOriginalCandidateSum) {
         SCOPED_TRACE(shift);
         Vec x = translate_b(rest, Eigen::Vector3d(shift, 0.13, 0.07));
         x[13] += 0.173;
-        IPCContactEnergy e(surface, options(3, 0.1), std::make_shared<SpatialHash>());
+        auto unweighted_options = options(3, 0.1);
+        unweighted_options.use_area_weighting = false;
+        IPCContactEnergy e(surface, unweighted_options, std::make_shared<SpatialHash>());
         auto barrier = [](double d2) {
             double s = d2 - 0.01, h = 9.6;
             return s < h ? -(s - h) * (s - h) * std::log(s / h) : 0;

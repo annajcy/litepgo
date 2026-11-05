@@ -14,6 +14,8 @@ namespace litepgo::contact {
 // Uses b(d² - min_distance², dhat * (dhat + 2 min_distance)), and the
 // rest-length edge mollifier. Repeated closest features are merged in sorted order
 // with multiplicity preserved (the original VF + mollified EE candidate sum).
+// Optional reference-area weighting multiplies VF terms by A_vertex/4 and EE
+// terms by (A_edge0 + A_edge1)/4 before closest-feature merging.
 // Update the dynamic pattern before evaluating a Hessian at a new active set.
 //
 // Requires nonempty, nondegenerate triangles, no duplicate faces, and every
