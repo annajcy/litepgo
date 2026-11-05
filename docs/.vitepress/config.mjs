@@ -57,6 +57,7 @@ export default defineConfig({
           { text: 'Batched assembly', link: '/guide/energy/assembly' }
         ] },
         { text: 'Finite elements', link: '/guide/fem/', collapsed: true, items: [
+          { text: 'Basis functions', link: '/guide/fem/basis' },
           { text: 'Fields and quadrature', link: '/guide/fem/fields' },
           { text: 'Volumetric elasticity', link: '/guide/fem/volume' },
           { text: 'Shells and natural geometry', link: '/guide/fem/shell' },
@@ -81,6 +82,10 @@ export default defineConfig({
       ] },
       { text: 'Examples', collapsed: true, items: [
         { text: 'Catalog and run instructions', link: '/examples' },
+        { text: 'FEM basics', link: '/examples/fem/', collapsed: true, items: [
+          { text: 'Tet P1 basis and field', link: '/examples/fem/tet-p1-basis' },
+          { text: 'Hermite interpolation', link: '/examples/fem/hermite-interpolation' }
+        ] },
         { text: 'Energies and responses', link: '/examples/energy/', collapsed: true, items: [
           { text: 'Custom scalar energies', link: '/examples/energy/custom-energy' },
           { text: 'Mesh energy subclass', link: '/examples/energy/mesh-energy-subclass' },

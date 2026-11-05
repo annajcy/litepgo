@@ -1,4 +1,4 @@
-# Fields, bases, and quadrature
+# Fields and quadrature
 
 A field maps reference-element coordinates $\xi\in\mathbb R^D$ to an
 $m$-component value. Parameter dimension $D$, component count $m$, and
@@ -45,7 +45,7 @@ import numpy as np
 from litepgo import fem
 
 B = fem.TetP1Basis
-X = np.array([B.reference_node(i) for i in range(4)])
+X = np.array([B.coefficient_info(i).point for i in range(4)])
 field = fem.InterpolatedField3D[B](X)
 xi = np.array([0.1, 0.2, 0.3])
 np.testing.assert_allclose(field.eval_value(xi), xi)
@@ -53,24 +53,22 @@ np.testing.assert_allclose(field.eval_dvalue_dxi(xi), np.eye(3))
 assert field.eval_dvalue_dcoeffs(xi).shape == (3, 12)
 ```
 
+The [Tet P1 example](../../examples/fem/tet-p1-basis.md#sample-a-target-and-construct-a-field)
+shows the complete scalar workflow: define a target function, sample vertex
+values, create a Field, and verify reconstruction at interior points.
+The [Hermite example](../../examples/fem/hermite-interpolation.md#reconstruct-through-a-field)
+also samples the derivative coefficients required by its corner slots.
+
 In C++, template syntax is `InterpolatedField3D<TetP1Basis>`. Python uses
 `fem.Template` objects: indexing with the C++ template arguments returns a bound
 class. `.instances` lists supported argument tuples. Unsupported combinations
 raise `TypeError`; Python cannot instantiate arbitrary C++ templates at runtime.
 
-## Basis and derivative layouts
+## Field derivative layouts
 
-| Basis | Reference domain | Scalar basis functions |
-| --- | --- | --- |
-| `TriangleP1Basis` | $\xi,\eta\ge0,\ \xi+\eta\le1$ | 3 |
-| `TetP1Basis` | $\xi_i\ge0,\ \sum_i\xi_i\le1$ | 4 |
-| `HexQ1Basis` | $[0,1]^3$ | 8 |
-| `QuadHermiteBasis` | $[0,1]^2$ | 16 |
-| `HexHermiteBasis` | $[0,1]^3$ | 64 |
-
-The 1D native building blocks are `LinearLagrangeBasis` and `CubicHermiteBasis`.
-Tensor products form the higher-dimensional bases. A basis provides `eval_N`,
-`eval_dN_dxi`, `eval_d2N_dxi2`, and reference-node information.
+See [basis functions](basis.md) for the core basis API, shape-function
+formulations, reference domains, and coefficient ordering. Field derivatives
+use that same basis-function order.
 
 For $n_b$ basis functions, $m$ components, and
 $s=D(D+1)/2$ packed second derivatives:
@@ -97,11 +95,9 @@ composition, not Python subclasses for per-quadrature-point execution.
 
 ## Two-dimensional parameter fields
 
-`QuadHermiteBasis` has corners `(0,0), (1,0), (1,1), (0,1)`. At each corner its
-four vector coefficient slots are $[y,y_{,\xi},y_{,\eta},y_{,\xi\eta}]$, so
-basis row `4*vertex + slot` identifies one of 16 scalar functions. A three-component
-field stores `(16,3)` coefficients. A width-12 vertex gather on a quad can be
-row-reshaped into this layout.
+For the [Quad Hermite coefficient order](basis.md#quad-hermite), a
+three-component field stores `(16,3)` coefficients. A width-12 vertex gather
+on a quad can be row-reshaped into this layout.
 
 For a rectangular physical parameter chart with spans $(h_s,h_t)$, physical
 slots scale to reference slots by $(1,h_s,h_t,h_sh_t)$. Sharing reference
@@ -110,11 +106,10 @@ Compatible chart transitions require their own derivative transforms. This
 lower-level field support does not turn the triangle mid-edge shell model into
 a higher-order quad shell.
 
-`TriangleP1Basis` instead uses
-$N=(1-\xi-\eta,\xi,\eta)$ on the reference triangle. Its nodal field stores
-three rows, has constant first derivatives, and zero second derivatives. Shell
-curvature reconstruction additionally uses neighboring vertices; it is not
-provided by this P1 basis alone.
+A [Triangle P1](basis.md#triangle-p1) nodal field stores three coefficient rows,
+has constant first derivatives, and zero second derivatives. Shell curvature
+reconstruction additionally uses neighboring vertices; it is not provided by
+this P1 basis alone.
 
 ## Geometry and deformation are separate fields
 

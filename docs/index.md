@@ -31,6 +31,7 @@ use the release preset and bundled or generated geometry. Python arrays use
 | Factor sparse systems and select a backend | [Linear algebra](guide/linalg/index.md) |
 | Define energies, responses, and batched assembly | [Energy and response contracts](guide/energy/index.md) |
 | Understand the finite-element layers | [FEM module](guide/fem/index.md) |
+| Choose shape functions and prepare coefficient slots | [Basis functions](guide/fem/basis.md) |
 | Construct interpolated fields and derivatives | [Fields and quadrature](guide/fem/fields.md) |
 | Model 3D elasticity and prescribed plasticity | [Volumetric FEM](guide/fem/volume.md) |
 | Model membrane strain and bending | [Shell FEM](guide/fem/shell.md) |

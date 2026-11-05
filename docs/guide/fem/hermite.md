@@ -1,9 +1,10 @@
 # Hex Hermite physical DOFs
 
 Hex Hermite uses a cubic tensor-product displacement basis with 64 scalar basis
-functions per component. To share meaningful derivative DOFs between differently
-sized boxes, litepgo stores derivatives with respect to physical rest coordinates.
-Rest geometry and displacement interpolation are separate.
+functions per component; see the [basis formulation](basis.md#hex-hermite) for
+the polynomials and reference coefficient order. To share meaningful derivative
+DOFs between differently sized boxes, litepgo stores derivatives with respect to
+physical rest coordinates. Rest geometry and displacement interpolation are separate.
 
 ## Physical DOFs and reference coefficients
 
