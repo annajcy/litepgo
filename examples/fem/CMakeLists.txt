@@ -1,4 +1,5 @@
 add_subdirectory(basis)
+add_subdirectory(quadrature)
 add_subdirectory(equilibrium)
 add_subdirectory(fitting)
 add_subdirectory(plasticity)

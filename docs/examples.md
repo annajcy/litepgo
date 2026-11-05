@@ -37,6 +37,7 @@ last digits on every platform.
 | --- | --- | --- |
 | FEM | [`tet_p1_basis`](examples/fem/tet-p1-basis.md) | Shape functions, target sampling at vertices, and scalar Field reconstruction |
 | FEM | [`hermite_interpolation`](examples/fem/hermite-interpolation.md) | Value/derivative samples and Hermite Field reconstruction in 2D/3D |
+| FEM | [`quadrature_integration`](examples/fem/quadrature-integration.md) | Reference integration in 1D/2D/3D and simplex area/volume weights |
 | Energy | [`custom_energy`](examples/energy/custom-energy.md) | Fixed/dynamic scalar derivatives and sparse structure |
 | Energy | [`mesh_energy_subclass`](examples/energy/mesh-energy-subclass.md) | Subclass assembly and spring equilibrium |
 | Energy | [`energy_composition`](examples/energy/energy-composition.md) | Weighted sums and affine derivative pullback |

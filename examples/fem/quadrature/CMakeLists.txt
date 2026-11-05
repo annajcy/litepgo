@@ -1,0 +1,2 @@
+add_executable(quadrature_integration quadrature_integration.cpp)
+target_link_libraries(quadrature_integration PRIVATE litepgo::fem litepgo::warnings)

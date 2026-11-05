@@ -37,6 +37,7 @@ exactly once.
 | Layer | Main objects | Read |
 | --- | --- | --- |
 | Shape functions | P1, Q1 and Hermite bases, reference derivatives and coefficient slots | [Basis functions](basis.md) |
+| Reference integration rules | Gauss-Legendre tensor products and simplex centroid rules | [Quadrature](quadrature.md) |
 | Interpolation and integration | `Field2D/3D`, local terms, quadrature, `VolumetricElement3D` | [Fields and quadrature](fields.md) |
 | Solid elasticity | `DeformationGradientField3D`, `NeoHookean`, `VolumetricFemEnergy` | [Volumetric elasticity](volume.md) |
 | Shell elasticity | Mid-edge stencils/forms, `KoiterStVK`, `ShellFemEnergy` | [Shells and natural geometry](shell.md) |

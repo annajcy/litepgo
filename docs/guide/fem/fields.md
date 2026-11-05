@@ -146,12 +146,10 @@ reference-volume weight. Rebuild it when rest geometry changes. `LocalEnergy3D`
 supplies density and coefficient derivatives; `LocalResponse3D` supplies a vector
 and optional Jacobian. Neither local object silently adds the geometric measure.
 
-| Rule | Domain | Weight sum |
-| --- | --- | --- |
-| `TetCentroidQuadrature` | Unit reference tetrahedron | $1/6$ |
-| `TriangleCentroidQuadrature` | Unit reference triangle | $1/2$ |
-| `GaussLegendre2D[k]` | $[0,1]^2$, $k^2$ points | 1 |
-| `GaussLegendre3D[k]` | $[0,1]^3$, $k^3$ points | 1 |
+See [quadrature](quadrature.md) for the common API, supported reference rules,
+weight sums, and polynomial exactness. The
+[quadrature example](../../examples/fem/quadrature-integration.md) computes
+analytic reference integrals directly from points and weights.
 
 For a surface field $X(\xi,\eta)$, use
 $w_q\|X_{,\xi}\times X_{,\eta}\|$. The triangle rule's $1/2$ already

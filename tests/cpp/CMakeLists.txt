@@ -223,6 +223,8 @@ add_dependencies(litepgo_tests tet_p1_basis)
 add_test(NAME FemBasisExample COMMAND $<TARGET_FILE:tet_p1_basis>)
 add_dependencies(litepgo_tests hermite_interpolation)
 add_test(NAME FemHermiteInterpolationExample COMMAND $<TARGET_FILE:hermite_interpolation>)
+add_dependencies(litepgo_tests quadrature_integration)
+add_test(NAME FemQuadratureExample COMMAND $<TARGET_FILE:quadrature_integration>)
 
 add_dependencies(litepgo_tests volume_equilibrium_material_fit)
 add_test(NAME FemFit.volume_equilibrium_material_fit COMMAND $<TARGET_FILE:volume_equilibrium_material_fit>)

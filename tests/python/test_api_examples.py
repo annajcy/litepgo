@@ -24,6 +24,7 @@ def test_thread_limit_example():
     [
         ("fem/basis", "tet_p1_basis"),
         ("fem/basis", "hermite_interpolation"),
+        ("fem/quadrature", "quadrature_integration"),
         ("energy/scalar", "custom_energy"),
         ("energy/scalar", "mesh_energy_subclass"),
         ("energy/response", "custom_response"),

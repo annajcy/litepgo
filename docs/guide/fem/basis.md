@@ -49,7 +49,7 @@ $\partial^2N_a/\partial\xi_1\partial\xi_2$. Mixed entries are stored once
 without a factor of two. All derivatives are with respect to reference
 coordinates; [physical derivative DOFs](hermite.md) require a separate transform.
 Built-in polynomial bases extrapolate outside their reference domains without
-clamping. Choose [quadrature](fields.md#integration-applies-the-measure-once)
+clamping. Choose [quadrature](quadrature.md)
 on the same reference domain.
 
 ## Coefficient descriptions
