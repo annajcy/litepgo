@@ -1,12 +1,14 @@
 #pragma once
 
 #include "litepgo/contact/contact_options.hpp"
+#include "litepgo/contact/contact_pair_weights.hpp"
 #include "litepgo/contact/contact_snapshot.hpp"
 #include "litepgo/energy/scalar/dynamic_pattern_energy.hpp"
 #include "litepgo/mesh/mesh_data.hpp"
 
 #include <limits>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace litepgo::contact {
@@ -16,6 +18,9 @@ namespace litepgo::contact {
 // positions in vertex-major xyz order. The stiffness is 1: scale the energy by its
 // weight in a WeightedEnergySum.
 // use_area_weighting enables fixed reference-area collision weights.
+// Optional group multipliers act before closest-feature merging. Zero excludes
+// candidates from the active set and CCD, while initial whole-surface intersection
+// validation remains unconditional. Configuration is owned by value.
 //
 // The active set at x is every vertex-face, edge-edge (mollified near parallel),
 // edge-vertex and vertex-vertex pair closer than min_distance + dhat;
@@ -24,7 +29,8 @@ namespace litepgo::contact {
 // set; an active pair outside the current pattern is a std::logic_error.
 //
 // A state is feasible when the surface does not intersect itself, every pair is
-// farther apart than min_distance. eval() throws std::domain_error for an active
+// with a positive group multiplier is farther apart than min_distance.
+// eval() throws std::domain_error for an active
 // pair within min_distance.
 // max_feasible_step() first checks all of x's feasibility (std::domain_error), then
 // returns the earliest conservative impact time over Tight-Inclusion CCD queries of
@@ -37,7 +43,8 @@ class IPCTKContactEnergy final : public energy::DynamicPatternEnergy {
     // Its positions are the rest geometry, which IPC Toolkit uses for the edge-edge
     // mollifier threshold.
     // dhat must be finite and positive, min_distance finite and non-negative.
-    IPCTKContactEnergy(const mesh::TriangleMesh& surface, IPCTKContactOptions options);
+    IPCTKContactEnergy(const mesh::TriangleMesh& surface, IPCTKContactOptions options,
+                       std::optional<ContactPairWeights> pair_weights = std::nullopt);
     ~IPCTKContactEnergy() override;
 
     int num_vertices() const {

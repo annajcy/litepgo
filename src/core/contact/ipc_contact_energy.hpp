@@ -2,10 +2,12 @@
 
 #include "litepgo/contact/broad_phase/broad_phase.hpp"
 #include "litepgo/contact/contact_options.hpp"
+#include "litepgo/contact/contact_pair_weights.hpp"
 #include "litepgo/contact/contact_snapshot.hpp"
 #include "litepgo/energy/scalar/dynamic_pattern_energy.hpp"
 #include "litepgo/mesh/mesh_data.hpp"
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace litepgo::contact {
@@ -17,6 +19,9 @@ namespace litepgo::contact {
 // with multiplicity preserved (the original VF + mollified EE candidate sum).
 // Optional reference-area weighting multiplies VF terms by A_vertex/4 and EE
 // terms by (A_edge0 + A_edge1)/4 before closest-feature merging.
+// Optional group multipliers act on original VF/EE candidates before merging;
+// zero excludes a candidate from the active set and CCD. Initial whole-surface
+// intersection validation remains unconditional. Configuration is owned by value.
 // Update the dynamic pattern before evaluating a Hessian at a new active set.
 //
 // Requires nonempty, nondegenerate triangles, no duplicate faces, and every
@@ -29,7 +34,8 @@ class IPCContactEnergy final : public energy::DynamicPatternEnergy {
   public:
     // A non-null backend is required; the energy shares ownership of it.
     IPCContactEnergy(const mesh::TriangleMesh& surface, IPCContactOptions options,
-                     std::shared_ptr<const BroadPhase> broad_phase);
+                     std::shared_ptr<const BroadPhase> broad_phase,
+                     std::optional<ContactPairWeights> pair_weights = std::nullopt);
     ~IPCContactEnergy() override;
     int num_vertices() const {
         return num_dofs() / 3;

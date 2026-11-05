@@ -92,7 +92,7 @@ arrays are read-only views that keep the snapshot alive; `types` is a tuple.
 | `types` | `M` | `VV`, `VE`, `VF` or `EE` |
 | `vertex_ids` | `(M, 4)` | VV: two vertices; VE: vertex then edge; VF: vertex then face; EE: two edges; pad with `-1` |
 | `distances` | `(M,)` | Unsquared distance `d`, without subtracting `min_distance` |
-| `weights` | `(M,)` | Merged candidate weights; fixed reference areas when enabled, otherwise multiplicities; excludes kappa and mollifiers |
+| `weights` | `(M,)` | Sum of candidate area weights (or one without area weighting) times optional group multipliers; excludes kappa and mollifiers |
 | `mollifiers` | `(M,)` | EE mollifier; one for other types |
 
 Mollified EE always retains its four-vertex stencil, even when the closest

@@ -172,6 +172,7 @@ if(TARGET litepgo::mesh_cgal)
 endif()
 
 add_executable(litepgo_contact_tests
+    contact/contact_pair_weights_gtest.cpp
     contact/ipc_contact_energy_gtest.cpp
     contact/broad_phase/broad_phase_gtest.cpp
 )
@@ -207,6 +208,8 @@ add_dependencies(litepgo_tests contact_area_weighting)
 add_test(NAME ContactAreaWeighting COMMAND $<TARGET_FILE:contact_area_weighting>)
 add_dependencies(litepgo_tests contact_snapshot)
 add_test(NAME ContactSnapshotExample COMMAND $<TARGET_FILE:contact_snapshot>)
+add_dependencies(litepgo_tests contact_pair_weights)
+add_test(NAME ContactPairWeightsExample COMMAND $<TARGET_FILE:contact_pair_weights>)
 if(LITEPGO_WITH_IPC_TOOLKIT)
     target_sources(litepgo_contact_tests PRIVATE contact/ipctk_contact_energy_gtest.cpp)
     target_link_libraries(litepgo_contact_tests PRIVATE litepgo::contact_ipctk)

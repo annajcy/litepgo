@@ -55,3 +55,8 @@ unit being used.
 
 The [area-weighting example](../../examples/contact/area-weighting.md) compares
 energy and normal force on fixed parallel sheets as the grid is refined.
+
+Optional [primitive-group multipliers](pair-weights.md) multiply each original
+candidate's area weight **before** closest-feature merging. Zero multipliers
+exclude candidates from the active set and CCD; positive multipliers scale the
+energy and its derivatives without relaxing minimum separation.

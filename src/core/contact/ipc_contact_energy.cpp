@@ -2,6 +2,7 @@
 #include "litepgo/contact/broad_phase/detail/candidates.hpp"
 #include "litepgo/contact/detail/distance.hpp"
 #include "litepgo/contact/detail/distance_derivatives.hpp"
+#include "litepgo/contact/detail/pair_weights.hpp"
 
 #include <Eigen/Eigenvalues>
 #include <Eigen/Geometry>
@@ -93,9 +94,13 @@ struct IPCContactEnergy::Impl {
     int nv;
     IPCContactOptions options;
     std::shared_ptr<const BroadPhase> broad_phase_;
+    PairWeights pair_weights;
 
-    Impl(const mesh::TriangleMesh& surface, IPCContactOptions o, std::shared_ptr<const BroadPhase> broad_phase)
-        : nv(surface.topology.num_vertices()), options(o), broad_phase_(std::move(broad_phase)) {
+    Impl(const mesh::TriangleMesh& surface, IPCContactOptions o, std::shared_ptr<const BroadPhase> broad_phase,
+         std::optional<ContactPairWeights> weights)
+        : edges(contact_edges(surface.topology)), nv(surface.topology.num_vertices()), options(o),
+          broad_phase_(std::move(broad_phase)),
+          pair_weights(std::move(weights), nv, edges.size(), surface.topology.num_cells()) {
         if (!broad_phase_)
             throw std::invalid_argument("IPCContactEnergy requires a non-null broad phase");
         std::set<std::array<int, 3>> unique;
@@ -107,15 +112,11 @@ struct IPCContactEnergy::Impl {
             if (!unique.insert(sorted).second)
                 throw std::invalid_argument("IPCContactEnergy: duplicate face");
             faces.push_back(f);
-            for (int j = 0; j < 3; ++j) {
-                used[f[j]] = true;
-                edges.push_back({std::min(f[j], f[(j + 1) % 3]), std::max(f[j], f[(j + 1) % 3])});
-            }
+            for (int vertex : f)
+                used[vertex] = true;
         }
         if (std::find(used.begin(), used.end(), false) != used.end())
             throw std::invalid_argument("IPCContactEnergy: unused surface vertex");
-        std::sort(edges.begin(), edges.end());
-        edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
         for (auto e : edges)
             edge_lengths_squared.push_back(
                 (surface.positions.segment<3>(3 * e[0]) - surface.positions.segment<3>(3 * e[1])).squaredNorm());
@@ -159,22 +160,34 @@ struct IPCContactEnergy::Impl {
         auto a = edges[pair[0]], b = edges[pair[1]];
         return {a[0], a[1], b[0], b[1]};
     }
+    Ids face_ids(const Ids& pair) const {
+        const auto f = faces[pair[1]];
+        return {pair[0], f[0], f[1], f[2]};
+    }
     std::vector<Pair> active(const ConstVecRef& x) const {
         check_x(x, 3 * nv);
         check_geometry(x);
         auto candidates_ = candidates(x, nullptr, 0.5 * (options.dhat + options.min_distance));
         const double reach = options.dhat + options.min_distance;
         std::vector<Pair> pairs;
-        for (auto ids : candidates_.vf) {
+        for (auto indices : candidates_.vf) {
+            const double multiplier = pair_weights.vertex_face(indices[0], indices[1]);
+            if (multiplier == 0)
+                continue;
+            const auto ids = face_ids(indices);
             auto p = points(x, ids);
             auto f = point_triangle(p);
             if (distance(p, f) < reach * reach) {
                 Pair pair = reduced(ids, f);
-                pair.weight = options.use_area_weighting ? vertex_areas[ids[0]] / 4 : 1.0;
+                pair.weight =
+                    checked_pair_weight(multiplier * (options.use_area_weighting ? vertex_areas[ids[0]] / 4 : 1.0));
                 pairs.push_back(pair);
             }
         }
         for (auto indices : candidates_.ee) {
+            const double multiplier = pair_weights.edge_edge(indices[0], indices[1]);
+            if (multiplier == 0)
+                continue;
             auto ids = edge_ids(indices);
             auto p = points(x, ids);
             auto f = edge_edge(p);
@@ -185,14 +198,16 @@ struct IPCContactEnergy::Impl {
                 throw std::domain_error("IPCContactEnergy: unrepresentable mollifier threshold");
             auto n = cross(sub(p[1], p[0]), sub(p[3], p[2]));
             Pair pair = dot(n, n) < epsilon ? Pair{ids, f, epsilon} : reduced(ids, f);
-            pair.weight = options.use_area_weighting ? edge_areas[indices[0]] / 4 + edge_areas[indices[1]] / 4 : 1.0;
+            pair.weight = checked_pair_weight(
+                multiplier *
+                (options.use_area_weighting ? edge_areas[indices[0]] / 4 + edge_areas[indices[1]] / 4 : 1.0));
             pairs.push_back(pair);
         }
         std::sort(pairs.begin(), pairs.end(), [](const Pair& a, const Pair& b) { return a.key() < b.key(); });
         std::vector<Pair> merged;
         for (const auto& pair : pairs) {
             if (!merged.empty() && merged.back().key() == pair.key())
-                merged.back().weight += pair.weight;
+                merged.back().weight = checked_pair_weight(merged.back().weight + pair.weight);
             else
                 merged.push_back(pair);
         }
@@ -248,6 +263,18 @@ struct IPCContactEnergy::Impl {
         return pair.weight * b * m;
     }
     void check_intersections(const ConstVecRef& x, const Candidates& c) const {
+        // Disabled candidates bypass the clearance check, but coplanar overlaps must still be rejected.
+        const auto check_touch = [&](const Ids& ids, bool edge) {
+            const auto p = points(x, ids);
+            if (!(distance(p, edge ? edge_edge(p) : point_triangle(p)) > 0))
+                throw std::domain_error("IPCContactEnergy: surface intersects itself");
+        };
+        for (const auto& pair : c.vf)
+            if (pair_weights.vertex_face(pair[0], pair[1]) == 0)
+                check_touch(face_ids(pair), false);
+        for (const auto& pair : c.ee)
+            if (pair_weights.edge_edge(pair[0], pair[1]) == 0)
+                check_touch(edge_ids(pair), true);
         // Noncoplanar edge-face crossings may have positive VF and EE distances.
         for (auto indices : c.ef) {
             auto e = edges[indices[0]];
@@ -313,10 +340,11 @@ struct IPCContactEnergy::Impl {
 };
 
 IPCContactEnergy::IPCContactEnergy(const mesh::TriangleMesh& surface, IPCContactOptions options,
-                                   std::shared_ptr<const BroadPhase> broad_phase)
+                                   std::shared_ptr<const BroadPhase> broad_phase,
+                                   std::optional<ContactPairWeights> pair_weights)
     : DynamicPatternEnergy(checked_size(surface), SpMat(surface.positions.size(), surface.positions.size())),
       rest_positions_(surface.positions), options_(checked_options(options)),
-      impl_(std::make_unique<const Impl>(surface, options_, std::move(broad_phase))) {}
+      impl_(std::make_unique<const Impl>(surface, options_, std::move(broad_phase), std::move(pair_weights))) {}
 IPCContactEnergy::~IPCContactEnergy() = default;
 int IPCContactEnergy::num_active_pairs(const ConstVecRef& x) const {
     return static_cast<int>(impl_->active(x).size());
@@ -471,8 +499,11 @@ double IPCContactEnergy::feasible_step(const ConstVecRef& x, const ConstVecRef& 
     std::vector<double> steps(swept.vf.size() + swept.ee.size());
     // Every query keeps the full [0, 1] interval, independent of other results.
     tbb::parallel_for(std::size_t(0), steps.size(), [&](std::size_t i) {
-        steps[i] = i < swept.vf.size() ? impl_->advance(x, dx, swept.vf[i], false)
-                                       : impl_->advance(x, dx, impl_->edge_ids(swept.ee[i - swept.vf.size()]), true);
+        const bool vf = i < swept.vf.size();
+        const auto pair = vf ? swept.vf[i] : swept.ee[i - swept.vf.size()];
+        const double multiplier =
+            vf ? impl_->pair_weights.vertex_face(pair[0], pair[1]) : impl_->pair_weights.edge_edge(pair[0], pair[1]);
+        steps[i] = multiplier == 0 ? 1 : impl_->advance(x, dx, vf ? impl_->face_ids(pair) : impl_->edge_ids(pair), !vf);
     });
     double step = 1;
     for (double candidate : steps)

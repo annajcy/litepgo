@@ -12,6 +12,7 @@
 namespace litepgo::contact::detail {
 
 struct Candidates {
+    // VF stores vertex/face indices; EE and EF store their primitive indices.
     std::vector<std::array<int, 4>> vf, ee, ef;
 };
 
@@ -79,9 +80,10 @@ inline Candidates broad_phase(const ConstVecRef& x, const Vec* dx, double inflat
         // Input order is vertices, edges, faces; backends return those original indices.
         if (boxes[a].kind == PrimitiveKind::Vertex) {
             const int v = static_cast<int>(a);
-            const auto f = faces[b - nv - edges.size()];
+            const int fi = static_cast<int>(b - nv - edges.size());
+            const auto f = faces[fi];
             if (v != f[0] && v != f[1] && v != f[2])
-                result.vf.push_back({v, f[0], f[1], f[2]});
+                result.vf.push_back({v, fi, -1, -1});
         } else if (boxes[b].kind == PrimitiveKind::Edge) {
             const int ai = static_cast<int>(std::min(a, b) - nv), bi = static_cast<int>(std::max(a, b) - nv);
             const auto e = edges[ai], f = edges[bi];

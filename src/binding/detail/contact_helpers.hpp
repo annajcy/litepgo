@@ -4,6 +4,7 @@
 #include <nanobind/nanobind.h>
 
 #include <nanobind/eigen/dense.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <type_traits>
 
@@ -14,10 +15,13 @@ namespace litepgo::contact::binding {
 template <class ContactEnergy, class Options> void bind_backend(nb::module_& m, const char* energy_name) {
     auto cls = nb::class_<ContactEnergy, energy::Energy>(m, energy_name);
     if constexpr (std::is_same_v<ContactEnergy, IPCContactEnergy>) {
-        cls.def(nb::init<const mesh::TriangleMesh&, Options, std::shared_ptr<const BroadPhase>>(), "surface"_a,
-                "options"_a, "broad_phase"_a, "Native IPC self-contact barrier with a required broad phase.");
+        cls.def(nb::init<const mesh::TriangleMesh&, Options, std::shared_ptr<const BroadPhase>,
+                         std::optional<ContactPairWeights>>(),
+                "surface"_a, "options"_a, "broad_phase"_a, "pair_weights"_a = nb::none(),
+                "Native IPC self-contact barrier with a required broad phase.");
     } else {
-        cls.def(nb::init<const mesh::TriangleMesh&, Options>(), "surface"_a, "options"_a,
+        cls.def(nb::init<const mesh::TriangleMesh&, Options, std::optional<ContactPairWeights>>(), "surface"_a,
+                "options"_a, "pair_weights"_a = nb::none(),
                 "IPC Toolkit self-contact barrier over surface vertex positions.");
     }
     cls.def_prop_ro("num_vertices", &ContactEnergy::num_vertices)

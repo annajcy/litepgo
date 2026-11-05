@@ -1,4 +1,5 @@
 #include "litepgo/contact/ipctk_contact_energy.hpp"
+#include "litepgo/contact/detail/pair_weights.hpp"
 
 #include <ipc/candidates/candidates.hpp>
 #include <ipc/ccd/tight_inclusion_ccd.hpp>
@@ -13,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -49,18 +51,7 @@ Eigen::MatrixXd vertex_rows(const ConstVecRef& x) {
 
 // Each undirected edge of the faces once, as sorted vertex pairs in sorted order.
 Eigen::MatrixXi unique_edges(const mesh::TriangleTopology& topology) {
-    std::vector<std::array<int, 2>> edges;
-    edges.reserve(3 * static_cast<std::size_t>(topology.num_cells()));
-    for (int f = 0; f < topology.num_cells(); ++f) {
-        const auto& face = topology.cell_vertices(f);
-        for (std::size_t j = 0; j < 3; ++j) {
-            const int a = face[j];
-            const int b = face[(j + 1) % 3];
-            edges.push_back({std::min(a, b), std::max(a, b)});
-        }
-    }
-    std::sort(edges.begin(), edges.end());
-    edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
+    const auto edges = contact_edges(topology);
     Eigen::MatrixXi result(static_cast<Eigen::Index>(edges.size()), 2);
     for (std::size_t e = 0; e < edges.size(); ++e) {
         result(static_cast<Eigen::Index>(e), 0) = edges[e][0];
@@ -109,11 +100,91 @@ struct IPCTKContactEnergy::Impl {
     double dhat;
     double min_distance;
     bool use_area_weighting;
+    detail::PairWeights pair_weights;
+
+    Impl(const mesh::TriangleMesh& surface, IPCTKContactOptions o, std::optional<ContactPairWeights> weights)
+        : mesh(vertex_rows(surface.positions), unique_edges(surface.topology), face_rows(surface.topology)),
+          barrier(o.dhat, 1.0), ccd(o.ccd_tolerance, o.ccd_max_iterations), dhat(o.dhat), min_distance(o.min_distance),
+          use_area_weighting(o.use_area_weighting),
+          pair_weights(std::move(weights), mesh.num_vertices(), mesh.edges().rows(), mesh.faces().rows()) {}
+
+    double multiplier(const ipc::VertexVertexCandidate& p) const {
+        return pair_weights.vertex_vertex(p.vertex0_id, p.vertex1_id);
+    }
+    double multiplier(const ipc::EdgeVertexCandidate& p) const {
+        return pair_weights.edge_vertex(p.edge_id, p.vertex_id);
+    }
+    double multiplier(const ipc::FaceVertexCandidate& p) const {
+        return pair_weights.vertex_face(p.vertex_id, p.face_id);
+    }
+    double multiplier(const ipc::EdgeEdgeCandidate& p) const {
+        return pair_weights.edge_edge(p.edge0_id, p.edge1_id);
+    }
+
+    void filter(ipc::Candidates& candidates) const {
+        if (!pair_weights.configured())
+            return;
+        const auto remove_zero = [&](auto& list) {
+            std::erase_if(list, [&](const auto& p) { return multiplier(p) == 0; });
+        };
+        remove_zero(candidates.vv_candidates);
+        remove_zero(candidates.ev_candidates);
+        remove_zero(candidates.fv_candidates);
+        remove_zero(candidates.ee_candidates);
+    }
 
     ipc::NormalCollisions collisions(const Eigen::MatrixXd& V) const {
         ipc::NormalCollisions result;
         result.set_use_area_weighting(use_area_weighting);
-        result.build(mesh, V, dhat, min_distance);
+        if (!pair_weights.configured()) {
+            result.build(mesh, V, dhat, min_distance);
+        } else {
+            ipc::Candidates candidates;
+            candidates.build(mesh, V, .5 * (dhat + min_distance));
+            // Equal-multiplier buckets preserve original primitive provenance through Toolkit's feature reduction.
+            std::map<double, ipc::Candidates> buckets;
+            const auto add = [&](const auto& list, auto member) {
+                for (const auto& p : list) {
+                    const double w = multiplier(p);
+                    if (w > 0)
+                        (buckets[w].*member).push_back(p);
+                }
+            };
+            add(candidates.vv_candidates, &ipc::Candidates::vv_candidates);
+            add(candidates.ev_candidates, &ipc::Candidates::ev_candidates);
+            add(candidates.ee_candidates, &ipc::Candidates::ee_candidates);
+            add(candidates.fv_candidates, &ipc::Candidates::fv_candidates);
+            for (const auto& [w, subset] : buckets) {
+                ipc::NormalCollisions local;
+                local.set_use_area_weighting(use_area_weighting);
+                local.build(subset, mesh, V, dhat, min_distance);
+                const auto append = [&](auto& to, const auto& from) {
+                    for (auto p : from) {
+                        p.weight = detail::checked_pair_weight(p.weight * w);
+                        to.push_back(std::move(p));
+                    }
+                };
+                append(result.vv_collisions, local.vv_collisions);
+                append(result.ev_collisions, local.ev_collisions);
+                append(result.ee_collisions, local.ee_collisions);
+                append(result.fv_collisions, local.fv_collisions);
+            }
+            const auto merge = [](auto& list) {
+                std::sort(list.begin(), list.end());
+                std::size_t count = 0;
+                for (const auto& p : list) {
+                    if (count && list[count - 1] == p)
+                        list[count - 1].weight = detail::checked_pair_weight(list[count - 1].weight + p.weight);
+                    else
+                        list[count++] = p;
+                }
+                list.erase(list.begin() + count, list.end());
+            };
+            merge(result.vv_collisions);
+            merge(result.ev_collisions);
+            merge(result.ee_collisions);
+            merge(result.fv_collisions);
+        }
         const auto by_vertices = [this](auto& list) {
             std::stable_sort(list.begin(), list.end(), [this](const auto& p, const auto& q) {
                 return p.vertex_ids(mesh.edges(), mesh.faces()) < q.vertex_ids(mesh.edges(), mesh.faces());
@@ -136,15 +207,12 @@ struct IPCTKContactEnergy::Impl {
     }
 };
 
-IPCTKContactEnergy::IPCTKContactEnergy(const mesh::TriangleMesh& surface, IPCTKContactOptions options)
+IPCTKContactEnergy::IPCTKContactEnergy(const mesh::TriangleMesh& surface, IPCTKContactOptions options,
+                                       std::optional<ContactPairWeights> pair_weights)
     : DynamicPatternEnergy(checked_num_dofs(surface),
                            SpMat(3 * surface.topology.num_vertices(), 3 * surface.topology.num_vertices())),
       rest_positions_(surface.positions), options_(checked_options(options)) {
-    impl_ = std::make_unique<const Impl>(Impl{
-        ipc::CollisionMesh(vertex_rows(surface.positions), unique_edges(surface.topology), face_rows(surface.topology)),
-        ipc::BarrierPotential(options_.dhat, 1.0),
-        ipc::TightInclusionCCD(options_.ccd_tolerance, options_.ccd_max_iterations), options_.dhat,
-        options_.min_distance, options_.use_area_weighting});
+    impl_ = std::make_unique<const Impl>(surface, options_, std::move(pair_weights));
 }
 
 IPCTKContactEnergy::~IPCTKContactEnergy() = default;
@@ -308,6 +376,7 @@ double IPCTKContactEnergy::feasible_step(const ConstVecRef& x, const ConstVecRef
     // conservative answer depends on that bound, so its step varies between runs.
     ipc::Candidates candidates;
     candidates.build(impl.mesh, V0, V1, 0.5 * impl.min_distance);
+    impl.filter(candidates);
     const Eigen::MatrixXi& edges = impl.mesh.edges();
     const Eigen::MatrixXi& faces = impl.mesh.faces();
     double step = tbb::parallel_reduce(
