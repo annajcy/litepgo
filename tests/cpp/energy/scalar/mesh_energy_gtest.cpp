@@ -1,4 +1,5 @@
 #include "../../fem/material/volumetric/test_material_sources.hpp"
+#include "../../testing/batch_fixtures.hpp"
 #include "../../testing/element_formula_energy.hpp"
 #include "litepgo/dof/constant_dof_map.hpp"
 #include "litepgo/dof/element_dof_map.hpp"
@@ -7,7 +8,6 @@
 #include "litepgo/energy/scalar/mesh_energy.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
-#include "../../testing/batch_fixtures.hpp"
 
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"

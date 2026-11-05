@@ -1,6 +1,6 @@
 #pragma once
-#include "litepgo/energy/response/mesh_response.hpp"
 #include "batch_fixtures.hpp"
+#include "litepgo/energy/response/mesh_response.hpp"
 #include <limits>
 
 namespace litepgo::testing {
