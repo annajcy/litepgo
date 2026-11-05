@@ -47,11 +47,16 @@ template <class B, int Dim> void bind_basis(nb::module_& m, const char* name) {
 }
 
 template <class Q> void bind_quadrature(nb::module_& m, const char* name) {
-    nb::class_<Q> cls(m, name);
+    nb::class_<Q> cls(m, name,
+                      "Fixed reference quadrature with static points() and weights() methods. "
+                      "Weights include reference-domain measure; physical geometry is applied by the integrator.");
     cls.attr("num_points") = Q::num_points;
     cls.def_static(
-           "points", [] { return Eigen::MatrixXd(Q::points()); }, "One reference point per row.")
-        .def_static("weights", [] { return Eigen::VectorXd(Q::weights()); });
+           "points", [] { return Eigen::MatrixXd(Q::points()); },
+           "Copy of reference coordinates, shape (num_points, D), including (num_points, 1) in 1D.")
+        .def_static(
+            "weights", [] { return Eigen::VectorXd(Q::weights()); },
+            "Copy of reference integration weights, shape (num_points,). Entry q corresponds to points()[q].");
 }
 
 inline nb::tuple value_and_derivatives(double value, bool gradient, const Eigen::VectorXd& g, bool hessian,

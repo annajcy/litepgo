@@ -72,6 +72,7 @@ NB_MODULE(_core, m) {
     litepgo::fem::binding::bind_hex_hermite_basis(fem);
     litepgo::fem::binding::bind_triangle_centroid_quadrature(fem);
     litepgo::fem::binding::bind_tet_centroid_quadrature(fem);
+    litepgo::fem::binding::bind_fem_quadrature_1d_gauss_legendre_1d(fem);
     litepgo::fem::binding::bind_fem_quadrature_2d_gauss_legendre_2d(fem);
     litepgo::fem::binding::bind_fem_quadrature_3d_gauss_legendre_3d(fem);
     litepgo::fem::binding::bind_fem_field_field(fem);

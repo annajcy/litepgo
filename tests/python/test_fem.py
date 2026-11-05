@@ -123,17 +123,44 @@ def test_coefficient_info_samples_reconstruct_polynomials(basis, dim, hermite):
 
 
 @pytest.mark.parametrize(
-    "quadrature,volume",
+    "quadrature,dim,volume",
     [
-        (fem.TetCentroidQuadrature, 1 / 6),
-        (fem.TriangleCentroidQuadrature, 1 / 2),
-        (fem.GaussLegendre2D[2], 1.0),
-        (fem.GaussLegendre3D[4], 1.0),
+        (fem.TetCentroidQuadrature, 3, 1 / 6),
+        (fem.TriangleCentroidQuadrature, 2, 1 / 2),
+        (fem.GaussLegendre1D[2], 1, 1.0),
+        (fem.GaussLegendre1D[4], 1, 1.0),
+        (fem.GaussLegendre2D[2], 2, 1.0),
+        (fem.GaussLegendre2D[4], 2, 1.0),
+        (fem.GaussLegendre3D[2], 3, 1.0),
+        (fem.GaussLegendre3D[4], 3, 1.0),
     ],
 )
-def test_quadrature_weights(quadrature, volume):
-    assert quadrature.points().shape[0] == quadrature.num_points
+def test_quadrature_weights(quadrature, dim, volume):
+    points, weights = quadrature.points(), quadrature.weights()
+    assert points.shape == (quadrature.num_points, dim)
+    assert weights.shape == (quadrature.num_points,)
+    assert weights.sum() == pytest.approx(volume)
+    expected_points = points.copy()
+    points[:] = -1
+    weights[:] = 0
+    np.testing.assert_array_equal(quadrature.points(), expected_points)
     assert quadrature.weights().sum() == pytest.approx(volume)
+
+
+@pytest.mark.parametrize("num_points", [2, 4])
+def test_gauss_legendre_1d_integrates_polynomials(num_points):
+    assert "GaussLegendre1D" in fem.__all__
+    Q = fem.GaussLegendre1D[num_points]
+    assert Q is fem.GaussLegendre1D[(num_points,)]
+    assert Q.num_points == num_points
+    points, weights = Q.points()[:, 0], Q.weights()
+    assert np.all((points > 0) & (points < 1))
+    assert np.all(np.diff(points) > 0)
+    assert np.all(weights > 0)
+    for degree in range(2 * num_points):
+        assert weights @ points**degree == pytest.approx(1 / (degree + 1), rel=0, abs=1e-14)
+    with pytest.raises(TypeError, match=r"available: .*GaussLegendre1D\[2\]"):
+        fem.GaussLegendre1D[3]
 
 
 def test_fields():

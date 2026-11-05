@@ -65,6 +65,7 @@ void bind_hex_q1_basis(nanobind::module_& m);
 void bind_hex_hermite_basis(nanobind::module_& m);
 void bind_triangle_centroid_quadrature(nanobind::module_& m);
 void bind_tet_centroid_quadrature(nanobind::module_& m);
+void bind_fem_quadrature_1d_gauss_legendre_1d(nanobind::module_& m);
 void bind_fem_quadrature_2d_gauss_legendre_2d(nanobind::module_& m);
 void bind_fem_quadrature_3d_gauss_legendre_3d(nanobind::module_& m);
 void bind_fem_field_field(nanobind::module_& m);

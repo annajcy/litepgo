@@ -10,6 +10,11 @@ and derivative_order is a tuple of per-axis derivative orders. All zeros mean
 a value sample.
 LinearLagrangeBasis and CubicHermiteBasis take scalar 1D coordinates.
 
+Quadrature types expose num_points, points() with shape (num_points, D),
+and weights() with shape (num_points,). Weights include reference-domain measure;
+physical geometry is applied by the integrator. GaussLegendre1D/2D/3D[n]
+support n=2 or 4 points per axis and return independent NumPy array copies.
+
     Energy = fem.VolumetricFemEnergy[fem.NeoHookean, fem.HexQ1Basis, fem.GaussLegendre3D[2]]
     energy = Energy(displacement_map, rest_position_fields, Fp, theta)
 
@@ -129,6 +134,7 @@ HexHermiteBasis = _native.HexHermiteBasis
 
 TriangleCentroidQuadrature = _native.TriangleCentroidQuadrature
 TetCentroidQuadrature = _native.TetCentroidQuadrature
+GaussLegendre1D = _templates["GaussLegendre1D"]
 GaussLegendre2D = _templates["GaussLegendre2D"]
 GaussLegendre3D = _templates["GaussLegendre3D"]
 
@@ -198,6 +204,7 @@ __all__ = [
     "HexHermiteBasis",
     "TriangleCentroidQuadrature",
     "TetCentroidQuadrature",
+    "GaussLegendre1D",
     "GaussLegendre2D",
     "GaussLegendre3D",
     "Field2D",

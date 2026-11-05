@@ -7,7 +7,10 @@
 
 namespace litepgo::fem {
 
-// Points are rows in parameter coordinates; weights form a column vector.
+// Static reference integration rule: sum_q weights()[q] * f(points().row(q)).
+// Points are reference-coordinate rows, including a single column in 1D.
+// Weights include reference-domain measure; physical geometry belongs to the integrator.
+// Point order is independent of basis/coefficient order; row q pairs with weight q.
 // The concept checks the interface, not the domain or integration accuracy.
 template <class Q, int Dim>
 concept Quadrature = (Dim > 0) && requires {
