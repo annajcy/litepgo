@@ -42,6 +42,18 @@ The feasible active interval is $d_{\min}<d<d_{\min}+\hat d$, equivalently
 $0<d-d_{\min}<\hat d$. Use mapped surface positions rather than volume
 displacement for these methods.
 
+`contact_snapshot(p)` returns an owned copy of **all merged active assembly
+records** and all current surface positions. It exposes stencil types, vertex
+IDs, unsquared distances, reference-area/multiplicity weights and mollifiers.
+Python arrays are read-only and `types` is a tuple; C++ returns an owned value.
+Queries do not update the Hessian pattern. Mollified EE keeps all four support
+vertices, including when its closest feature is VV or VE or its mollifier is
+zero. Weights exclude stiffness and mollifiers. Records have no persistent row
+IDs and need not share ordering across backends. See the
+[snapshot example and plot](../../examples/contact/contact-snapshot.md) for
+field shapes, full export and visualization. This diagnostic is not a
+collision-freedom certificate or a force/pressure output.
+
 `IPCTKContactEnergy` / `IPCTKContactOptions` are separate optional bindings,
 enabled with `LITEPGO_WITH_IPC_TOOLKIT=ON` and linked in C++ with
 `litepgo::contact_ipctk`. They use the Toolkit's CCD behavior rather

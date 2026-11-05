@@ -37,6 +37,7 @@ backend path; see [collision safety and diagnostics](collision-safety.md).
 | Barrier density, candidate features and edge mollification | [Barrier formulation](barrier.md) |
 | Connect surface positions to volume/shell displacement | [Displacement coupling](coupling.md) |
 | Broad phase, CCD, validity, diagnostics and optional backend | [Collision safety and diagnostics](collision-safety.md) |
+| Inspect all active records, vertex IDs, weights and distances | [Read-only contact snapshot example](../../examples/contact/contact-snapshot.md) |
 
 Start from a feasible nonintersecting surface and use the model's feasible-step
 bound during a solve. The safety page states the geometric contracts and the
