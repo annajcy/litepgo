@@ -219,6 +219,11 @@ add_dependencies(litepgo_tests spatial_query point_embedding)
 add_test(NAME SpatialQueryExample COMMAND $<TARGET_FILE:spatial_query>)
 add_test(NAME PointEmbeddingExample COMMAND $<TARGET_FILE:point_embedding>)
 
+add_dependencies(litepgo_tests tet_p1_basis)
+add_test(NAME FemBasisExample COMMAND $<TARGET_FILE:tet_p1_basis>)
+add_dependencies(litepgo_tests hermite_interpolation)
+add_test(NAME FemHermiteInterpolationExample COMMAND $<TARGET_FILE:hermite_interpolation>)
+
 add_dependencies(litepgo_tests volume_equilibrium_material_fit)
 add_test(NAME FemFit.volume_equilibrium_material_fit COMMAND $<TARGET_FILE:volume_equilibrium_material_fit>)
 

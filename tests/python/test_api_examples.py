@@ -22,6 +22,8 @@ def test_thread_limit_example():
 @pytest.mark.parametrize(
     "folder,name",
     [
+        ("fem/basis", "tet_p1_basis"),
+        ("fem/basis", "hermite_interpolation"),
         ("energy/scalar", "custom_energy"),
         ("energy/scalar", "mesh_energy_subclass"),
         ("energy/response", "custom_response"),
