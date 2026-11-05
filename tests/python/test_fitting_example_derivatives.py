@@ -121,7 +121,8 @@ def test_volume_material_cpp_python_recovery():
         [str(build / "examples/fem/fitting/volume_equilibrium_material_fit")],
         [sys.executable, str(ROOT / "volume_equilibrium_material_fit.py")],
     ):
-        completed = subprocess.run(command, capture_output=True, text=True, timeout=120)
+        # The native example takes over two minutes in Windows Debug CI.
+        completed = subprocess.run(command, capture_output=True, text=True, timeout=300)
         assert completed.returncode == 0, completed.stdout + completed.stderr
         fields = dict(
             part.strip().split("=", 1) for part in completed.stdout.strip().split(",")
