@@ -24,7 +24,7 @@ SampledBoundary sample_boundary<HexQ1Basis>(const mesh::HexTopology& topology,
             throw std::invalid_argument("sample_boundary: X fields need three components");
         const auto& cell = topology.cell_vertices(e);
         for (int v = 0; v < 8; ++v) {
-            Eigen::Vector3d p = fields[e].eval_value(HexQ1Basis::reference_node(v));
+            Eigen::Vector3d p = fields[e].eval_value(HexQ1Basis::coefficient_info(v).point);
             auto [it, inserted] = corners.emplace(cell[v], p);
             if (!inserted && !(it->second.array() == p.array()).all())
                 throw std::invalid_argument("sample_boundary: shared vertex has inconsistent rest positions");
@@ -62,9 +62,9 @@ SampledBoundary sample_boundary<HexQ1Basis>(const mesh::HexTopology& topology,
     std::vector<mesh::TriangleTopology::Cell> triangles;
     for (const auto& f : faces) {
         std::vector<int> grid(static_cast<std::size_t>(n + 1) * (n + 1));
-        const Eigen::Vector3d a = HexQ1Basis::reference_node(f.local[0]);
-        const Eigen::Vector3d b = HexQ1Basis::reference_node(f.local[1]);
-        const Eigen::Vector3d d = HexQ1Basis::reference_node(f.local[3]);
+        const Eigen::Vector3d a = HexQ1Basis::coefficient_info(f.local[0]).point;
+        const Eigen::Vector3d b = HexQ1Basis::coefficient_info(f.local[1]).point;
+        const Eigen::Vector3d d = HexQ1Basis::coefficient_info(f.local[3]).point;
         for (int j = 0; j <= n; ++j)
             for (int i = 0; i <= n; ++i) {
                 const std::int64_t u = i, v = j, m = n;

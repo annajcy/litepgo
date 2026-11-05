@@ -50,7 +50,7 @@ Eigen::Matrix<double, 8, 3> coordinates(bool warped = true) {
     Eigen::Matrix3d affine_dX_dxi;
     affine_dX_dxi << 1.7, 0.2, 0.1, 0.1, 1.2, 0.2, 0.0, 0.1, 0.9;
     for (int i = 0; i < 8; ++i) {
-        const auto xi = HexQ1Basis::reference_node(i);
+        const auto xi = HexQ1Basis::coefficient_info(i).point;
         Eigen::Vector3d X = affine_dX_dxi * xi;
         if (warped)
             X += Eigen::Vector3d(0.15 * xi.y() * xi.z(), 0.1 * xi.x() * xi.z(), 0.05 * xi.x() * xi.y());

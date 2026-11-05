@@ -17,7 +17,7 @@ namespace {
 auto coordinates(double scale = 1) {
     Eigen::Matrix<double, 8, 3> X_local;
     for (int a = 0; a < 8; ++a)
-        X_local.row(a) = scale * HexQ1Basis::reference_node(a).transpose();
+        X_local.row(a) = scale * HexQ1Basis::coefficient_info(a).point.transpose();
     return InterpolatedField3D<HexQ1Basis>(X_local);
 }
 
@@ -244,7 +244,7 @@ TEST(VolumetricMaterialLocalEnergyF3D, FeasibleStepUsesTheDeformationFieldAffine
     Eigen::MatrixXd u = Eigen::MatrixXd::Zero(8, 3), du(8, 3);
     const Eigen::Matrix3d dF = Eigen::Vector3d(-4, -4, 0).asDiagonal();
     for (int v = 0; v < 8; ++v)
-        du.row(v) = (dF * (2 * HexQ1Basis::reference_node(v))).transpose();
+        du.row(v) = (dF * (2 * HexQ1Basis::coefficient_info(v).point)).transpose();
     const InterpolatedField3D<HexQ1Basis> displacement(u);
     const DeformationGradientField3D deformation(displacement, X);
     const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped()), theta(Eigen::Vector2d(2, 3));
@@ -332,7 +332,7 @@ TEST(VolumetricMaterialLocalEnergyF3D, RejectsInvalidFAndFpSizesBeforeReshaping)
 }
 
 namespace {
-struct InvalidParameterGradients {
+struct InvalidParameterGradients : HexQ1Basis {
     static constexpr int num_basis_functions = 8;
     static Eigen::Matrix<double, 8, 1> eval_N(const Eigen::Vector3d& xi) {
         return HexQ1Basis::eval_N(xi);

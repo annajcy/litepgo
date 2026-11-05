@@ -51,13 +51,13 @@ TEST(HexHermiteBasis, InterpolatesCornerValuesAndFirstDerivativesInVertexOrder) 
         const auto N = HexHermiteBasis::eval_N(nodes.row(vertex).transpose());
         const auto dN_dxi = HexHermiteBasis::eval_dN_dxi(nodes.row(vertex).transpose());
         for (int slot = 0; slot < 8; ++slot)
-            EXPECT_EQ(HexHermiteBasis::reference_node(8 * vertex + slot), nodes.row(vertex).transpose());
+            EXPECT_EQ(HexHermiteBasis::coefficient_info(8 * vertex + slot).point, nodes.row(vertex).transpose());
         EXPECT_EQ(N, (Eigen::Matrix<double, 64, 1>::Unit(8 * vertex)));
         for (int d = 0; d < 3; ++d)
             EXPECT_EQ(dN_dxi.col(d), (Eigen::Matrix<double, 64, 1>::Unit(8 * vertex + d + 1)));
     }
-    EXPECT_THROW(HexHermiteBasis::reference_node(-1), std::out_of_range);
-    EXPECT_THROW(HexHermiteBasis::reference_node(64), std::out_of_range);
+    EXPECT_THROW(HexHermiteBasis::coefficient_info(-1), std::out_of_range);
+    EXPECT_THROW(HexHermiteBasis::coefficient_info(64), std::out_of_range);
 }
 
 TEST(HexHermiteBasis, ReproducesAllTricubicMonomialsAndGradients) {
@@ -69,9 +69,14 @@ TEST(HexHermiteBasis, ReproducesAllTricubicMonomialsAndGradients) {
                 SCOPED_TRACE(powers.transpose());
                 Eigen::Matrix<double, 64, 1> coefficients;
                 for (int vertex = 0; vertex < 8; ++vertex)
-                    for (int slot = 0; slot < 8; ++slot)
-                        coefficients[8 * vertex + slot] = monomial(powers, nodes.row(vertex).transpose(),
-                                                                   derivatives[static_cast<std::size_t>(slot)]);
+                    for (int slot = 0; slot < 8; ++slot) {
+                        const auto info = HexHermiteBasis::coefficient_info(8 * vertex + slot);
+                        EXPECT_EQ(info.point, nodes.row(vertex).transpose());
+                        const Eigen::Vector3i order(info.derivative_order[0], info.derivative_order[1],
+                                                    info.derivative_order[2]);
+                        EXPECT_EQ(order, derivatives[static_cast<std::size_t>(slot)]);
+                        coefficients[8 * vertex + slot] = monomial(powers, info.point, order);
+                    }
                 for (const auto& xi : samples) {
                     const auto N = HexHermiteBasis::eval_N(xi);
                     const auto dN_dxi = HexHermiteBasis::eval_dN_dxi(xi);

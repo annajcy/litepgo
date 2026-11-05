@@ -49,9 +49,77 @@ def test_lagrange_like_bases_partition_unity(basis, dim):
         np.testing.assert_allclose(basis.eval_dN_dxi(xi)[:, k], fd, atol=1e-8)
 
 
-def test_basis_reference_nodes_interpolate():
+def test_basis_coefficient_points_interpolate():
     for i in range(fem.TetP1Basis.num_basis_functions):
-        np.testing.assert_allclose(fem.TetP1Basis.eval_N(fem.TetP1Basis.reference_node(i)), np.eye(4)[i], atol=1e-15)
+        np.testing.assert_allclose(fem.TetP1Basis.eval_N(fem.TetP1Basis.coefficient_info(i).point), np.eye(4)[i], atol=1e-15)
+
+
+@pytest.mark.parametrize(
+    "basis,dim,hermite",
+    [
+        (fem.LinearLagrangeBasis, 1, False),
+        (fem.CubicHermiteBasis, 1, True),
+        (fem.TriangleP1Basis, 2, False),
+        (fem.TetP1Basis, 3, False),
+        (fem.HexQ1Basis, 3, False),
+        (fem.QuadHermiteBasis, 2, True),
+        (fem.HexHermiteBasis, 3, True),
+    ],
+)
+def test_coefficient_info_samples_reconstruct_polynomials(basis, dim, hermite):
+    from itertools import product
+    from math import factorial
+
+    assert basis.__name__ in fem.__all__
+    assert not hasattr(basis, "reference_node")
+    assert f"CoefficientInfo{dim}D" in fem.__all__
+    samples = [basis.coefficient_info(i) for i in range(basis.num_basis_functions)]
+    for i, info in enumerate(samples):
+        assert isinstance(info, getattr(fem, f"CoefficientInfo{dim}D"))
+        assert isinstance(info.derivative_order, tuple)
+        assert len(info.derivative_order) == dim
+        assert np.asarray(info.point).shape == (() if dim == 1 else (dim,))
+        with pytest.raises(AttributeError):
+            info.derivative_order = (0,) * dim
+        with pytest.raises(AttributeError):
+            info.point = 0.0
+    with pytest.raises(IndexError):
+        basis.coefficient_info(-1)
+    with pytest.raises(IndexError):
+        basis.coefficient_info(basis.num_basis_functions)
+
+    def monomial(point, powers, derivative):
+        value = 1.0
+        for x, p, d in zip(np.atleast_1d(point), powers, derivative):
+            if p < d:
+                return 0.0
+            value *= factorial(p) / factorial(p - d) * x ** (p - d)
+        return value
+
+    if basis in (fem.TriangleP1Basis, fem.TetP1Basis):
+        powers = [(0,) * dim] + [tuple(row) for row in np.eye(dim, dtype=int)]
+    else:
+        powers = list(product(range(4 if hermite else 2), repeat=dim))
+    xi = 0.37 if dim == 1 else np.linspace(0.2, 0.7, dim)
+    first = np.eye(dim, dtype=int)
+    second = [first[i] + first[j] for i in range(dim) for j in range(i, dim)]
+    for power in powers:
+        coefficients = np.array([
+            monomial(info.point, power, info.derivative_order) for info in samples
+        ])
+        assert coefficients @ basis.eval_N(xi) == pytest.approx(
+            monomial(xi, power, (0,) * dim), abs=1e-12
+        )
+        np.testing.assert_allclose(
+            coefficients @ basis.eval_dN_dxi(xi),
+            [monomial(xi, power, order) for order in first],
+            atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            coefficients @ basis.eval_d2N_dxi2(xi),
+            [monomial(xi, power, order) for order in second],
+            atol=1e-12,
+        )
 
 
 @pytest.mark.parametrize(
@@ -69,7 +137,7 @@ def test_quadrature_weights(quadrature, volume):
 
 
 def test_fields():
-    coeffs = np.array([fem.HexQ1Basis.reference_node(v) for v in range(8)]) * [2.0, 1.0, 3.0]
+    coeffs = np.array([fem.HexQ1Basis.coefficient_info(v).point for v in range(8)]) * [2.0, 1.0, 3.0]
     X = fem.InterpolatedField3D[fem.HexQ1Basis](coeffs)
     xi = np.array([0.2, 0.5, 0.9])
     np.testing.assert_allclose(X.eval_value(xi), [0.4, 0.5, 2.7])
@@ -83,7 +151,7 @@ def test_fields():
 
 def test_deformation_gradient_keeps_its_fields_alive():
     def make():
-        nodes = np.array([fem.TetP1Basis.reference_node(v) for v in range(4)])
+        nodes = np.array([fem.TetP1Basis.coefficient_info(v).point for v in range(4)])
         u = fem.InterpolatedField3D[fem.TetP1Basis](0.1 * nodes)
         X = fem.InterpolatedField3D[fem.TetP1Basis](nodes)
         return fem.DeformationGradientField3D(u, X)
@@ -314,7 +382,7 @@ def test_plastic_twist_examples(tmp_path, name, asset):
 
 
 def single_hex(scale=1.5):
-    nodes = scale * np.array([fem.HexQ1Basis.reference_node(v) for v in range(8)])
+    nodes = scale * np.array([fem.HexQ1Basis.coefficient_info(v).point for v in range(8)])
     return mesh.HexMesh(nodes, np.arange(8, dtype=np.int32)[None])
 
 
@@ -389,7 +457,7 @@ def test_kinematic_helpers():
 
 def test_basis_dof_transform_maps_physical_hermite_dofs():
     size, origin = np.array([2.0, 1.0, 3.0]), np.array([0.5, -1.0, 2.0])
-    X_nodes = origin + size * np.array([fem.HexQ1Basis.reference_node(v) for v in range(8)])
+    X_nodes = origin + size * np.array([fem.HexQ1Basis.coefficient_info(v).point for v in range(8)])
     X_field = fem.InterpolatedField3D[fem.HexQ1Basis](X_nodes)
     transform = fem.BasisDofTransform[fem.HexHermiteBasis](X_field)
     assert transform.dofs_per_vertex == 24

@@ -19,18 +19,18 @@ TEST(TetP1Basis, InterpolatesReferenceNodes) {
     Eigen::Matrix<double, 4, 3> nodes;
     nodes << 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1;
     for (int a = 0; a < 4; ++a) {
-        EXPECT_EQ(TetP1Basis::reference_node(a), nodes.row(a).transpose());
+        EXPECT_EQ(TetP1Basis::coefficient_info(a).point, nodes.row(a).transpose());
         const auto N = TetP1Basis::eval_N(nodes.row(a).transpose());
         EXPECT_EQ(N, Eigen::Vector4d::Unit(a));
     }
-    EXPECT_THROW(TetP1Basis::reference_node(-1), std::out_of_range);
-    EXPECT_THROW(TetP1Basis::reference_node(4), std::out_of_range);
+    EXPECT_THROW(TetP1Basis::coefficient_info(-1), std::out_of_range);
+    EXPECT_THROW(TetP1Basis::coefficient_info(4), std::out_of_range);
 }
 
 TEST(TetP1Basis, ReproducesAffineFunctionsAndPartitionsUnity) {
     Eigen::Matrix<double, 4, 3> nodes;
     for (int a = 0; a < 4; ++a)
-        nodes.row(a) = TetP1Basis::reference_node(a).transpose();
+        nodes.row(a) = TetP1Basis::coefficient_info(a).point.transpose();
     const Eigen::Vector3d slope(0.3, -0.7, 0.2);
     const Eigen::Vector4d coefficients = (nodes * slope).array() + 0.4;
     for (const auto& xi : samples) {

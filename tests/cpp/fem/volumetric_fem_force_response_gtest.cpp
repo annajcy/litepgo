@@ -17,7 +17,7 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
     for (int e = 0; e < 2; ++e) {
         Eigen::MatrixXd X(8, 3);
         for (int v = 0; v < 8; ++v) {
-            const auto xi = HexQ1Basis::reference_node(v);
+            const auto xi = HexQ1Basis::coefficient_info(v).point;
             X.row(v) = Eigen::Vector3d(2.0 + 1.7 * (xi.x() + e), -.3 + .8 * xi.y(), .4 + 1.2 * xi.z());
             if (warped)
                 X(v, 0) += .05 * xi.y() * xi.z();
@@ -134,7 +134,7 @@ TEST(VolumetricFemForceResponse, HexHermiteFourthOrderQuadratureParameterDerivat
 TEST(BasisDofTransformResponse, HermiteScalesOnlyRowsInPaddedViews) {
     Eigen::MatrixXd X(8, 3);
     for (int v = 0; v < 8; ++v)
-        X.row(v) = HexQ1Basis::reference_node(v).cwiseProduct(Eigen::Vector3d(2, 3, 4));
+        X.row(v) = HexQ1Basis::coefficient_info(v).point.cwiseProduct(Eigen::Vector3d(2, 3, 4));
     const Geometry geometry(X);
     const BasisDofTransform<HexHermiteBasis> transform(geometry);
     Eigen::MatrixXd storage = Eigen::MatrixXd::Constant(194, 5, 7);

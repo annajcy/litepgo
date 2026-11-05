@@ -21,17 +21,17 @@ TEST(TriangleP1Basis, InterpolatesReferenceNodes) {
     Eigen::Matrix<double, 3, 2> nodes;
     nodes << 0, 0, 1, 0, 0, 1;
     for (int a = 0; a < 3; ++a) {
-        EXPECT_EQ(TriangleP1Basis::reference_node(a), nodes.row(a).transpose());
+        EXPECT_EQ(TriangleP1Basis::coefficient_info(a).point, nodes.row(a).transpose());
         EXPECT_EQ(TriangleP1Basis::eval_N(nodes.row(a).transpose()), Eigen::Vector3d::Unit(a));
     }
-    EXPECT_THROW(TriangleP1Basis::reference_node(-1), std::out_of_range);
-    EXPECT_THROW(TriangleP1Basis::reference_node(3), std::out_of_range);
+    EXPECT_THROW(TriangleP1Basis::coefficient_info(-1), std::out_of_range);
+    EXPECT_THROW(TriangleP1Basis::coefficient_info(3), std::out_of_range);
 }
 
 TEST(TriangleP1Basis, ReproducesAffineFunctionsAndPartitionsUnity) {
     Eigen::Matrix<double, 3, 2> nodes;
     for (int a = 0; a < 3; ++a)
-        nodes.row(a) = TriangleP1Basis::reference_node(a).transpose();
+        nodes.row(a) = TriangleP1Basis::coefficient_info(a).point.transpose();
     const Eigen::Vector2d slope(0.3, -0.7);
     const Eigen::Vector3d coefficients = (nodes * slope).array() + 0.4;
     for (const auto& xi : samples) {

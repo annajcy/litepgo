@@ -1,6 +1,7 @@
 #pragma once
 
-#include <Eigen/Core>
+#include "litepgo/fem/basis/basis.hpp"
+#include <stdexcept>
 
 namespace litepgo::fem {
 
@@ -8,6 +9,12 @@ namespace litepgo::fem {
 class LinearLagrangeBasis {
   public:
     static constexpr int num_basis_functions = 2;
+
+    static CoefficientInfo<1> coefficient_info(int i) {
+        if (i < 0 || i >= num_basis_functions)
+            throw std::out_of_range("LinearLagrangeBasis::coefficient_info: index out of range");
+        return {static_cast<double>(i), {0}};
+    }
 
     // Evaluates the polynomials without clamping the parameter to the interval.
     static Eigen::Vector2d eval_N(double t) {

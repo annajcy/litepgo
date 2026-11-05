@@ -9,7 +9,7 @@ def test_map_matches_physical_dof_interpolation(basis, width):
     tet = basis is fem.TetP1Basis
     geometry = fem.TetP1Basis if tet else fem.HexQ1Basis
     count = 4 if tet else 8
-    X = np.array([geometry.reference_node(i) for i in range(count)]) * [2., 3., 4.]
+    X = np.array([geometry.coefficient_info(i).point for i in range(count)]) * [2., 3., 4.]
     cells = np.array([np.arange(count), np.arange(count) + count], dtype=np.int32)
     topology = (mesh.TetTopology if tet else mesh.HexTopology)(2 * count, cells)
     fields = [fem.InterpolatedField3D[geometry](X), fem.InterpolatedField3D[geometry](X + [5., 0, 0])]

@@ -29,9 +29,9 @@ class ElementLocator {
         for (const auto& field : fields_) {
             if (field.num_components() != 3)
                 throw std::invalid_argument("ElementLocator: X fields must have three components");
-            Eigen::Vector3d lo = field.eval_value(B::reference_node(0)), hi = lo;
+            Eigen::Vector3d lo = field.eval_value(B::coefficient_info(0).point), hi = lo;
             for (int i = 1; i < B::num_basis_functions; ++i) {
-                const Eigen::Vector3d p = field.eval_value(B::reference_node(i));
+                const Eigen::Vector3d p = field.eval_value(B::coefficient_info(i).point);
                 lo = lo.cwiseMin(p);
                 hi = hi.cwiseMax(p);
             }

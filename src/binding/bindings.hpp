@@ -55,6 +55,8 @@ void bind_energy_response_mesh_response(nanobind::module_& m);
 } // namespace litepgo::energy::binding
 
 namespace litepgo::fem::binding {
+void bind_coefficient_info(nanobind::module_& m);
+void bind_basis_1d(nanobind::module_& m);
 void bind_log_diagonal_fp_response(nanobind::module_& m);
 void bind_triangle_p1_basis(nanobind::module_& m);
 void bind_quad_hermite_basis(nanobind::module_& m);

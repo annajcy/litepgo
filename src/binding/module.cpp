@@ -62,6 +62,8 @@ NB_MODULE(_core, m) {
 
     nb::module_ fem = m.def_submodule("fem");
     fem.doc() = "Finite elements (src/core/fem). Template instantiations are in _templates.";
+    litepgo::fem::binding::bind_coefficient_info(fem);
+    litepgo::fem::binding::bind_basis_1d(fem);
     litepgo::fem::binding::bind_log_diagonal_fp_response(fem);
     litepgo::fem::binding::bind_triangle_p1_basis(fem);
     litepgo::fem::binding::bind_quad_hermite_basis(fem);

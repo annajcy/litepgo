@@ -13,9 +13,9 @@ static_assert(Basis2D<B>);
 static_assert(!Basis3D<B>);
 static_assert(Basis2D<TensorProductBasis2D<CubicHermiteBasis>>);
 
-TEST(TensorProductBasis2D, InterpolatesInLastAxisFastestOrderAndReproducesBilinears) {
+TEST(TensorProductBasis2D, InterpolatesInCornerOrderAndReproducesBilinears) {
     Eigen::Matrix<double, 4, 2> nodes;
-    nodes << 0, 0, 0, 1, 1, 0, 1, 1;
+    nodes << 0, 0, 1, 0, 1, 1, 0, 1;
     Eigen::Vector4d coefficients;
     for (int a = 0; a < 4; ++a) {
         EXPECT_EQ(B::eval_N(nodes.row(a).transpose()), Eigen::Vector4d::Unit(a));
@@ -53,9 +53,9 @@ TEST(TensorProductBasis2D, BilinearFieldsProvideZeroPureAndNonzeroMixedSecondDer
     EXPECT_EQ(field.eval_dvalue_dxi(xi).cols(), 2);
     EXPECT_TRUE(field.eval_value(xi).allFinite());
     EXPECT_TRUE(field.eval_dgrad_xi_dcoeffs(xi).allFinite());
-    EXPECT_EQ(field.eval_d2value_dxi2(xi), Eigen::RowVector3d(0, 3, 0));
+    EXPECT_EQ(field.eval_d2value_dxi2(xi), Eigen::RowVector3d(0, -5, 0));
     Eigen::Matrix<double, 3, 4> expected = Eigen::Matrix<double, 3, 4>::Zero();
-    expected.row(1) << 1, -1, -1, 1;
+    expected.row(1) << 1, -1, 1, -1;
     EXPECT_EQ(field.eval_dhess_xi_dcoeffs(xi), expected);
 }
 } // namespace

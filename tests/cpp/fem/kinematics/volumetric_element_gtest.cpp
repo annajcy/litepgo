@@ -46,7 +46,7 @@ double step_displacement(const VolumetricElement3D<Q>& element, const Field3D& X
 template <class B> Eigen::MatrixXd coordinates() {
     Eigen::MatrixXd X(B::num_basis_functions, 3);
     for (int a = 0; a < X.rows(); ++a) {
-        const auto xi = B::reference_node(a);
+        const auto xi = B::coefficient_info(a).point;
         X.row(a) =
             Eigen::Vector3d(1.2 * xi.x() + 0.15 * xi.y() * xi.z(), 0.9 * xi.y() + 0.1 * xi.x() * xi.z(), 1.1 * xi.z())
                 .transpose();
@@ -165,7 +165,7 @@ TEST(VolumetricElement3D, MaterialFieldsRemainLiveAndNeedOnlyValues) {
     const VolumetricElement3D<TetCentroidQuadrature> element(X);
     Eigen::MatrixXd u(4, 3);
     for (int a = 0; a < 4; ++a)
-        u.row(a) = 0.1 * TetP1Basis::reference_node(a).transpose();
+        u.row(a) = 0.1 * TetP1Basis::coefficient_info(a).point.transpose();
     ValueField Fp(Eigen::Matrix3d::Identity().reshaped()), theta(Eigen::Vector2d(2, 3));
     Eigen::VectorXd g, g_scaled;
     Eigen::MatrixXd H, H_scaled;
@@ -425,7 +425,7 @@ TEST(VolumetricElement3D, InvertedStatesAndNumericalOverflowThrowDomainError) {
     IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped()), theta(Eigen::Vector2d(2, 3));
     Eigen::MatrixXd u = Eigen::MatrixXd::Zero(4, 3);
     for (int a = 0; a < 4; ++a)
-        u.row(a) = -2 * TetP1Basis::reference_node(a).transpose();
+        u.row(a) = -2 * TetP1Basis::coefficient_info(a).point.transpose();
     EXPECT_THROW(eval_displacement<TetP1Basis>(element, X, u, Fp, theta), std::domain_error);
     EXPECT_THROW(step_displacement<TetP1Basis>(element, X, u, u, Fp, theta), std::domain_error);
     u.setZero();
@@ -449,7 +449,7 @@ TEST(VolumetricElement3D, InvertedStatesAndNumericalOverflowThrowDomainError) {
     X.J_X = 10 * Eigen::Matrix3d::Identity();
     const VolumetricElement3D<TetCentroidQuadrature> large_volume(X);
     for (int a = 0; a < 4; ++a)
-        u.row(a) = 10 * TetP1Basis::reference_node(a).transpose();
+        u.row(a) = 10 * TetP1Basis::coefficient_info(a).point.transpose();
     theta = IdentityField3D(Eigen::Vector2d(0, 1e307));
     EXPECT_THROW(eval_displacement<TetP1Basis>(large_volume, X, u, Fp, theta), std::domain_error);
 }
@@ -463,7 +463,7 @@ TEST(VolumetricElementViews, IntegratesIntoPaddedStridedOutputsWithoutTouchingNe
     using namespace litepgo::fem;
     Eigen::Matrix<double, 4, 3> nodes;
     for (int i = 0; i < 4; ++i)
-        nodes.row(i) = TetP1Basis::reference_node(i).transpose();
+        nodes.row(i) = TetP1Basis::coefficient_info(i).point.transpose();
     const InterpolatedField3D<TetP1Basis> X(nodes);
     const VolumetricElement3D<TetCentroidQuadrature> element(X);
     const IdentityField3D F((1.1 * Eigen::Matrix3d::Identity()).eval().reshaped());
@@ -517,7 +517,7 @@ TEST(VolumetricElementViews, ResponseWritesPaddedRectangularBatchBlocks) {
     using namespace litepgo::fem;
     Eigen::Matrix<double, 4, 3> nodes;
     for (int i = 0; i < 4; ++i)
-        nodes.row(i) = TetP1Basis::reference_node(i).transpose();
+        nodes.row(i) = TetP1Basis::coefficient_info(i).point.transpose();
     const InterpolatedField3D<TetP1Basis> X(nodes);
     const VolumetricElement3D<TetCentroidQuadrature> element(X);
     const IdentityField3D F((1.1 * Eigen::Matrix3d::Identity()).eval().reshaped());
@@ -557,7 +557,7 @@ TEST(VolumetricElementViews, IndexedCallbacksShareWeightsZeroingAndValidation) {
     using namespace litepgo::fem;
     Eigen::Matrix<double, 8, 3> nodes;
     for (int i = 0; i < 8; ++i)
-        nodes.row(i) = HexQ1Basis::reference_node(i).transpose();
+        nodes.row(i) = HexQ1Basis::coefficient_info(i).point.transpose();
     const InterpolatedField3D<HexQ1Basis> X(nodes);
     const VolumetricElement3D<GaussLegendre3D<2>> element(X);
     Eigen::Vector2d gradient = Eigen::Vector2d::Constant(123);

@@ -5,6 +5,11 @@ instantiation, with the C++ template arguments in order. Basis, quadrature and
 material classes are the type arguments; integers stand for integer arguments.
 Field type arguments of the energies are erased: they accept any Field3D.
 
+All named bases expose coefficient_info(i): point is a reference coordinate,
+and derivative_order is a tuple of per-axis derivative orders. All zeros mean
+a value sample.
+LinearLagrangeBasis and CubicHermiteBasis take scalar 1D coordinates.
+
     Energy = fem.VolumetricFemEnergy[fem.NeoHookean, fem.HexQ1Basis, fem.GaussLegendre3D[2]]
     energy = Energy(displacement_map, rest_position_fields, Fp, theta)
 
@@ -111,6 +116,11 @@ def _format(key):
 
 _templates = {name: Template(name, instances) for name, instances in _native._templates.items()}
 
+CoefficientInfo1D = _native.CoefficientInfo1D
+CoefficientInfo2D = _native.CoefficientInfo2D
+CoefficientInfo3D = _native.CoefficientInfo3D
+LinearLagrangeBasis = _native.LinearLagrangeBasis
+CubicHermiteBasis = _native.CubicHermiteBasis
 TriangleP1Basis = _native.TriangleP1Basis
 QuadHermiteBasis = _native.QuadHermiteBasis
 TetP1Basis = _native.TetP1Basis
@@ -176,6 +186,11 @@ __all__ = [
     "ElementLocator",
     "PointEmbedding",
     "Template",
+    "CoefficientInfo1D",
+    "CoefficientInfo2D",
+    "CoefficientInfo3D",
+    "LinearLagrangeBasis",
+    "CubicHermiteBasis",
     "TriangleP1Basis",
     "QuadHermiteBasis",
     "TetP1Basis",

@@ -8,7 +8,7 @@ using namespace litepgo::fem;
 TEST(SampleBoundary, MatchesExtractionAndWeldsEdges) {
     Eigen::MatrixXd X(8, 3);
     for (int i = 0; i < 8; ++i)
-        X.row(i) = HexQ1Basis::reference_node(i).transpose();
+        X.row(i) = HexQ1Basis::coefficient_info(i).point.transpose();
     mesh::HexTopology topology(8, {{0, 1, 2, 3, 4, 5, 6, 7}});
     std::vector<InterpolatedField3D<HexQ1Basis>> fields{InterpolatedField3D<HexQ1Basis>(X)};
     const auto extracted = mesh::extract_surface(mesh::HexMesh{X.reshaped<Eigen::RowMajor>(), topology});

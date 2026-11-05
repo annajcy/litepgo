@@ -11,10 +11,10 @@ namespace {
 
 static_assert(litepgo::fem::TensorProductBasis3D<litepgo::fem::LinearLagrangeBasis>::num_basis_functions == 8);
 
-// Explicit tensor order, independent of the evaluator's implementation.
+// Explicit Hex corner order, independent of the evaluator's implementation.
 Eigen::Matrix<double, 3, 8> corners() {
     Eigen::Matrix<double, 3, 8> points;
-    points << 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1;
+    points << 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1;
     return points;
 }
 
@@ -34,7 +34,7 @@ Eigen::Vector3d polynomial_gradient(const Eigen::Vector3d& p) {
 
 } // namespace
 
-TEST(TensorProductBasis3D, InterpolatesCornersInTensorOrder) {
+TEST(TensorProductBasis3D, InterpolatesCornersInHexOrder) {
     const auto nodes = corners();
     for (int a = 0; a < litepgo::fem::TensorProductBasis3D<litepgo::fem::LinearLagrangeBasis>::num_basis_functions;
          ++a) {

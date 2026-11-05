@@ -10,7 +10,7 @@ from litepgo import fem, dof, mesh
 
 def run(basis, geometry, name, width):
     n = 4 if geometry is fem.TetP1Basis else 8
-    X = np.array([geometry.reference_node(i) for i in range(n)]) * [2.0, 3.0, 4.0]
+    X = np.array([geometry.coefficient_info(i).point for i in range(n)]) * [2.0, 3.0, 4.0]
     fields = [fem.InterpolatedField3D[geometry](X)]
     xi = np.array([[0.1, 0.2, 0.3], [0.2, 0.1, 0.2]])
     points = np.array([fields[0].eval_value(p) for p in xi])

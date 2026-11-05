@@ -22,7 +22,7 @@ def test_extracted_surface_and_geometry_snapshot():
 
 
 def test_hex_geometry_for_hermite_displacement():
-    X = np.array([fem.HexQ1Basis.reference_node(i) for i in range(8)])
+    X = np.array([fem.HexQ1Basis.coefficient_info(i).point for i in range(8)])
     X[6] += [.3, 0, .4]
     field = fem.InterpolatedField3D[fem.HexQ1Basis](X)
     locator = fem.ElementLocator[fem.HexQ1Basis]([field])

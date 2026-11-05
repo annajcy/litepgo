@@ -14,7 +14,7 @@ namespace {
 template <class B, class XBasis, class Q> void check_against_field() {
     Eigen::MatrixXd positions(XBasis::num_basis_functions, 3);
     for (int i = 0; i < positions.rows(); ++i) {
-        const auto xi = XBasis::reference_node(i);
+        const auto xi = XBasis::coefficient_info(i).point;
         positions.row(i) = Eigen::Vector3d(2 * xi.x() + 0.1 * xi.y() * xi.z(), 3 * xi.y(), 4 * xi.z());
     }
     const InterpolatedField3D<XBasis> X(positions);
@@ -49,7 +49,7 @@ TEST(DeformationGradientKinematics, MatchesFieldsAcrossQuadraturePointsAndDispla
 TEST(DeformationGradientKinematics, RejectsInvalidIndicesCoefficientsAndGeometry) {
     Eigen::MatrixXd positions(4, 3);
     for (int i = 0; i < 4; ++i)
-        positions.row(i) = TetP1Basis::reference_node(i);
+        positions.row(i) = TetP1Basis::coefficient_info(i).point;
     const InterpolatedField3D<TetP1Basis> X(positions);
     using Kinematics = DeformationGradientKinematics3D<TetP1Basis, TetCentroidQuadrature>;
     const Kinematics cache(X);

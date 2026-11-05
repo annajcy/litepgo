@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Eigen/Core>
+#include "litepgo/fem/basis/basis.hpp"
 
 namespace litepgo::fem {
 
@@ -14,8 +14,8 @@ class TetP1Basis final {
     static Eigen::Matrix<double, num_basis_functions, 3> eval_dN_dxi(const Eigen::Vector3d& xi);
     static Eigen::Matrix<double, num_basis_functions, 6> eval_d2N_dxi2(const Eigen::Vector3d& xi);
 
-    // Invalid basis indices throw std::out_of_range.
-    static Eigen::Vector3d reference_node(int basis_index);
+    // Coefficients sample values at vertices; invalid indices throw std::out_of_range.
+    static CoefficientInfo<3> coefficient_info(int basis_index);
 };
 
 } // namespace litepgo::fem

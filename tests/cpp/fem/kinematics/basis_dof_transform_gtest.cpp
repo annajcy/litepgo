@@ -19,7 +19,7 @@ Eigen::Matrix<double, 8, 3> box_nodes(const Eigen::Vector3d& lengths,
                                       const Eigen::Vector3d& origin = Eigen::Vector3d::Zero()) {
     Eigen::Matrix<double, 8, 3> X_nodes;
     for (int v = 0; v < 8; ++v)
-        X_nodes.row(v) = (origin + lengths.cwiseProduct(HexQ1Basis::reference_node(v))).transpose();
+        X_nodes.row(v) = (origin + lengths.cwiseProduct(HexQ1Basis::coefficient_info(v).point)).transpose();
     return X_nodes;
 }
 
@@ -124,8 +124,9 @@ TEST(HexHermiteDofTransform, RejectsInconsistentCornersAndOverflowingEdgeLengths
     EXPECT_THROW(make_transform(duplicate), std::invalid_argument);
     auto overflowing = box_nodes(Eigen::Vector3d::Ones());
     for (int v = 0; v < 8; ++v)
-        overflowing(v, 0) = HexHermiteBasis::reference_node(8 * v).x() == 0 ? -std::numeric_limits<double>::max()
-                                                                            : std::numeric_limits<double>::max();
+        overflowing(v, 0) = HexHermiteBasis::coefficient_info(8 * v).point.x() == 0
+                                ? -std::numeric_limits<double>::max()
+                                : std::numeric_limits<double>::max();
     ASSERT_TRUE(overflowing.allFinite());
     EXPECT_THROW(make_transform(overflowing), std::invalid_argument);
 }

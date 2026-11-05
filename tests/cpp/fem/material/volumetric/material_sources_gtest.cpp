@@ -54,7 +54,7 @@ struct Fixture {
         for (int e = 0; e < 2; ++e) {
             const auto& v = topology.cell_vertices(e);
             for (int i = 0; i < 8; ++i) {
-                const Eigen::Vector3d p = HexQ1Basis::reference_node(i) + Eigen::Vector3d(e, 0, 0);
+                const Eigen::Vector3d p = HexQ1Basis::coefficient_info(i).point + Eigen::Vector3d(e, 0, 0);
                 X.row(v[static_cast<std::size_t>(i)]) = Eigen::RowVector3d(
                     1.2 * p.x() + 0.1 * p.y() * p.z(), 0.9 * p.y() + 0.05 * p.x() * p.z(), 1.1 * p.z());
             }

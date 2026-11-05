@@ -59,7 +59,7 @@ const Eigen::Vector3d tangent1(2, 0.4, 1), tangent2(0.2, 3, -0.6);
 F coordinates(int element) {
     Eigen::MatrixXd coefficients = Eigen::MatrixXd::Zero(16, 3);
     for (int v = 0; v < 4; ++v) {
-        const auto xi = QuadHermiteBasis::reference_node(4 * v);
+        const auto xi = QuadHermiteBasis::coefficient_info(4 * v).point;
         coefficients.row(4 * v) = ((element + xi.x()) * tangent1 + xi.y() * tangent2).transpose();
         coefficients.row(4 * v + 1) = tangent1.transpose();
         coefficients.row(4 * v + 2) = tangent2.transpose();

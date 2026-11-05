@@ -13,7 +13,7 @@ template <class B, class G> void run(const char* name) {
     Eigen::MatrixXd X(nodes, 3);
     typename mesh::MeshTopology<nodes>::Cell cell;
     for (int i = 0; i < nodes; ++i) {
-        X.row(i) = G::reference_node(i).cwiseProduct(Eigen::Vector3d(2, 3, 4)).transpose();
+        X.row(i) = G::coefficient_info(i).point.cwiseProduct(Eigen::Vector3d(2, 3, 4)).transpose();
         cell[i] = i;
     }
     std::vector<fem::InterpolatedField3D<G>> fields{fem::InterpolatedField3D<G>(X)};

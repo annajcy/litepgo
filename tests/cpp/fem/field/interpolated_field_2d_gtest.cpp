@@ -91,7 +91,7 @@ TEST(InterpolatedField2D, TriangleP1SupportsScalarAndThreeComponentFieldsWithAll
     check_derivatives<TriangleP1Basis, 3, Eigen::RowMajor>();
 }
 
-template <int InvalidPart> struct InvalidBasis {
+template <int InvalidPart> struct InvalidBasis : QuadHermiteBasis {
     InvalidBasis() = delete;
     static constexpr int num_basis_functions = 16;
     static auto eval_N(const Eigen::Vector2d& xi) {

@@ -5,19 +5,8 @@
 
 namespace litepgo::fem {
 
-// Bicubic Hermite basis on [0,1]^2, corners (0,0), (1,0), (1,1), (0,1).
-// Index 4*vertex+slot uses slots u, u_xi, u_eta, u_xi_eta.
-// Coefficients are reference-parameter derivatives, without length scaling.
-class QuadHermiteBasis final {
-  public:
-    static constexpr int num_basis_functions = 16;
-    // Extrapolates without clamping. All arrays use the same vertex/slot row order.
-    static Eigen::Matrix<double, num_basis_functions, 1> eval_N(const Eigen::Vector2d& xi);
-    static Eigen::Matrix<double, num_basis_functions, 2> eval_dN_dxi(const Eigen::Vector2d& xi);
-    static Eigen::Matrix<double, num_basis_functions, 3> eval_d2N_dxi2(const Eigen::Vector2d& xi);
-
-    // The corner owning a basis function, repeated for each of its four slots.
-    static Eigen::Vector2d reference_node(int basis_index);
-};
+// Bicubic Hermite; corner order (0,0), (1,0), (1,1), (0,1).
+// Per corner: u, u_xi, u_eta, u_xi_eta, with reference-coordinate derivatives.
+using QuadHermiteBasis = TensorProductBasis2D<CubicHermiteBasis>;
 
 } // namespace litepgo::fem

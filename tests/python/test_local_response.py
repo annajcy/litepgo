@@ -11,7 +11,7 @@ from litepgo import dof, fem, mesh
 @pytest.mark.parametrize("nodal_parameters", [False, True])
 def test_material_local_response_matches_energy_and_parameter_linearity(basis, quadrature, topology_type, nodal_parameters):
     n = 4 if basis is fem.TetP1Basis else 8
-    nodes = 2 * np.array([basis.reference_node(i) for i in range(n)])
+    nodes = 2 * np.array([basis.coefficient_info(i).point for i in range(n)])
     Field = fem.InterpolatedField3D[basis]
     X = Field(nodes)
     F_value = np.array([[1.2, .3, -.1], [.1, .9, .2], [-.05, .1, 1.1]])

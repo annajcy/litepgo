@@ -33,7 +33,7 @@ mesh::HexTopology two_hexes() {
 fem::InterpolatedField3D<fem::HexQ1Basis> make_X_field() {
     Eigen::Matrix<double, 8, 3> nodes;
     for (int i = 0; i < 8; ++i)
-        nodes.row(i) = fem::HexQ1Basis::reference_node(i).transpose();
+        nodes.row(i) = fem::HexQ1Basis::coefficient_info(i).point.transpose();
     return fem::InterpolatedField3D<fem::HexQ1Basis>(nodes);
 }
 auto passive_fields() {

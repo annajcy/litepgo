@@ -4,7 +4,7 @@ from litepgo import fem, mesh, dof, contact
 
 
 def model():
-    X = np.array([fem.HexQ1Basis.reference_node(i) for i in range(8)]) * [2.,3.,4.]
+    X = np.array([fem.HexQ1Basis.coefficient_info(i).point for i in range(8)]) * [2.,3.,4.]
     right = X + [2.,0,0]
     X = np.vstack([X,right[[1,2,5,6]]])
     cells = np.array([[0,1,2,3,4,5,6,7],[1,8,9,2,5,10,11,6]],dtype=np.int32)

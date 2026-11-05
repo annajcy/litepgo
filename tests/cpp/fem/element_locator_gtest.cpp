@@ -21,7 +21,7 @@ TEST(ElementLocator, TetBoundaryInteriorAndOutside) {
 TEST(ElementLocator, WarpedHexInverseAndDegenerateRejection) {
     Eigen::MatrixXd X(8, 3);
     for (int i = 0; i < 8; ++i)
-        X.row(i) = HexQ1Basis::reference_node(i).transpose();
+        X.row(i) = HexQ1Basis::coefficient_info(i).point.transpose();
     X(6, 0) += 0.3;
     X(6, 2) += 0.4;
     InterpolatedField3D<HexQ1Basis> field(X);

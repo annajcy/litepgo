@@ -64,7 +64,7 @@ template <> class BasisDofTransform<HexHermiteBasis> {
         if (X.num_components() != 3)
             throw std::invalid_argument("Hermite DOFs require three reference components");
         for (int v = 0; v < 8; ++v) {
-            const auto position = X.eval_value(HexQ1Basis::reference_node(v));
+            const auto position = X.eval_value(HexQ1Basis::coefficient_info(v).point);
             if (position.size() != 3 || !position.allFinite())
                 throw std::invalid_argument("Hermite DOFs require finite three-component reference values");
             nodes.row(v) = position.transpose();
@@ -75,7 +75,7 @@ template <> class BasisDofTransform<HexHermiteBasis> {
             throw std::invalid_argument("Hermite DOF transform requires positive axis-aligned box dimensions");
         for (int v = 0; v < 8; ++v) {
             const Eigen::Vector3d normalized = (nodes.row(v).transpose() - origin).cwiseQuotient(lengths);
-            if (!normalized.allFinite() || !(normalized - HexHermiteBasis::reference_node(8 * v)).isZero(1e-12))
+            if (!normalized.allFinite() || !(normalized - HexHermiteBasis::coefficient_info(8 * v).point).isZero(1e-12))
                 throw std::invalid_argument("Hermite DOF transform requires axis-aligned boxes in Hex corner order");
         }
         const auto [hx, hy, hz] = std::array{lengths.x(), lengths.y(), lengths.z()};

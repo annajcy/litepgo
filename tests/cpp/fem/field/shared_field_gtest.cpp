@@ -22,7 +22,7 @@ namespace {
 Eigen::MatrixXd unit_box_nodes() {
     Eigen::MatrixXd nodes(8, 3);
     for (int v = 0; v < 8; ++v)
-        nodes.row(v) = HexQ1Basis::reference_node(v).transpose();
+        nodes.row(v) = HexQ1Basis::coefficient_info(v).point.transpose();
     return nodes;
 }
 

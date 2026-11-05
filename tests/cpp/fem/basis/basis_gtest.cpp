@@ -2,6 +2,7 @@
 #include "litepgo/fem/basis/1d/linear_lagrange_basis.hpp"
 #include "litepgo/fem/basis/2d/quad_hermite_basis.hpp"
 #include "litepgo/fem/basis/2d/tensor_product_basis_2d.hpp"
+#include "litepgo/fem/basis/2d/triangle_p1_basis.hpp"
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/basis/3d/tensor_product_basis_3d.hpp"
@@ -12,6 +13,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <limits>
 
 namespace litepgo::fem::test {
 
@@ -19,6 +21,11 @@ namespace {
 
 struct ConstantBasis {
     static constexpr int num_basis_functions = 1;
+    static CoefficientInfo<1> coefficient_info(int i) {
+        if (i != 0)
+            throw std::out_of_range("ConstantBasis coefficient index");
+        return {0.0, {0}};
+    }
     static Eigen::Matrix<double, 1, 1> eval_N(double) {
         return Eigen::Matrix<double, 1, 1>(1.0);
     }
@@ -37,6 +44,12 @@ struct InstanceOnly3D : TensorProductBasis3D<LinearLagrangeBasis> {
     Eigen::Matrix<double, 8, 1> eval_N(const Eigen::Vector3d&) const;
 };
 struct MissingBasis {};
+struct MissingCoefficientInfo : ConstantBasis {
+    static CoefficientInfo<1> coefficient_info(int) = delete;
+};
+struct WrongCoefficientInfo : ConstantBasis {
+    static double coefficient_info(int);
+};
 struct MissingEvaluate : ConstantBasis {
     static Eigen::Matrix<double, 1, 1> eval_N(double) = delete;
 };
@@ -96,11 +109,16 @@ static_assert(Basis2D<TensorProductBasis2D<ConstantBasis>>);
 static_assert(Basis3D<HexQ1Basis>);
 static_assert(Basis3D<HexHermiteBasis>);
 static_assert(Basis3D<TetP1Basis>);
+static_assert(std::same_as<HexQ1Basis, TensorProductBasis3D<LinearLagrangeBasis>>);
+static_assert(std::same_as<QuadHermiteBasis, TensorProductBasis2D<CubicHermiteBasis>>);
+static_assert(std::same_as<HexHermiteBasis, TensorProductBasis3D<CubicHermiteBasis>>);
 static_assert(Basis3D<TensorProductBasis3D<ConstantBasis>>);
 static_assert(Basis<TensorProductBasis3D<LinearLagrangeBasis>, 3>);
 static_assert(!Basis1D<InstanceOnly1D>);
 static_assert(!Basis3D<InstanceOnly3D>);
 static_assert(!Basis1D<MissingBasis>);
+static_assert(!Basis1D<MissingCoefficientInfo>);
+static_assert(!Basis1D<WrongCoefficientInfo>);
 static_assert(!Basis1D<MissingEvaluate>);
 static_assert(!Basis1D<NonConstantCount>);
 static_assert(!Basis1D<ZeroCount>);
@@ -132,6 +150,64 @@ static_assert(!CanFormTensorProduct<WrongReturn>);
 static_assert(!CanFormTensorProduct<WrongGradientSize>);
 static_assert(!CanFormTensorProduct<MissingHessian>);
 static_assert(!CanFormTensorProduct2D<MissingHessian>);
+
+TEST(Basis1D, CoefficientInfoDistinguishesValuesAndDerivativesAtTheSamePoint) {
+    const Eigen::Vector4d expected_points(0, 0, 1, 1);
+    for (int i = 0; i < 4; ++i) {
+        const auto info = CubicHermiteBasis::coefficient_info(i);
+        EXPECT_EQ(info.point, expected_points[i]);
+        EXPECT_EQ(info.derivative_order, (std::array<int, 1>{i % 2}));
+        const Eigen::Vector4d sample = info.derivative_order[0] == 0 ? CubicHermiteBasis::eval_N(info.point)
+                                                                     : CubicHermiteBasis::eval_dN_dxi(info.point);
+        EXPECT_EQ(sample, Eigen::Vector4d::Unit(i));
+    }
+    for (int i = 0; i < 2; ++i) {
+        const auto info = LinearLagrangeBasis::coefficient_info(i);
+        EXPECT_EQ(info.point, i);
+        EXPECT_EQ(info.derivative_order[0], 0);
+    }
+    EXPECT_THROW(CubicHermiteBasis::coefficient_info(-1), std::out_of_range);
+    EXPECT_THROW(CubicHermiteBasis::coefficient_info(4), std::out_of_range);
+    EXPECT_THROW(LinearLagrangeBasis::coefficient_info(-1), std::out_of_range);
+    EXPECT_THROW(LinearLagrangeBasis::coefficient_info(2), std::out_of_range);
+}
+
+template <class B, int Dim> void check_value_samples() {
+    for (int i = 0; i < B::num_basis_functions; ++i) {
+        const auto info = B::coefficient_info(i);
+        EXPECT_EQ(info.derivative_order, (std::array<int, Dim>{}));
+        EXPECT_EQ(B::eval_N(info.point), (Eigen::Matrix<double, B::num_basis_functions, 1>::Unit(i)));
+    }
+    EXPECT_THROW(B::coefficient_info(-1), std::out_of_range);
+    EXPECT_THROW(B::coefficient_info(B::num_basis_functions), std::out_of_range);
+}
+
+TEST(Basis, SimplexAndQ1CoefficientInfoSelectsNodalValues) {
+    check_value_samples<TriangleP1Basis, 2>();
+    check_value_samples<TetP1Basis, 3>();
+    check_value_samples<HexQ1Basis, 3>();
+}
+
+template <bool BadPoint> struct InvalidCoefficientInfo : LinearLagrangeBasis {
+    static CoefficientInfo<1> coefficient_info(int i) {
+        auto info = LinearLagrangeBasis::coefficient_info(i);
+        if constexpr (BadPoint)
+            info.point = std::numeric_limits<double>::quiet_NaN();
+        else
+            info.derivative_order[0] = -1;
+        return info;
+    }
+};
+
+TEST(Basis, TensorProductsRejectInvalidSampleDescriptorsBeforeOrdering) {
+    EXPECT_THROW((TensorProductBasis2D<InvalidCoefficientInfo<true>>::eval_N(Eigen::Vector2d::Zero())),
+                 std::invalid_argument);
+    EXPECT_THROW((TensorProductBasis3D<InvalidCoefficientInfo<false>>::coefficient_info(0)), std::invalid_argument);
+    EXPECT_THROW(QuadHermiteBasis::coefficient_info(-1), std::out_of_range);
+    EXPECT_THROW(QuadHermiteBasis::coefficient_info(16), std::out_of_range);
+    EXPECT_THROW(HexHermiteBasis::coefficient_info(-1), std::out_of_range);
+    EXPECT_THROW(HexHermiteBasis::coefficient_info(64), std::out_of_range);
+}
 
 struct CountingBasis : LinearLagrangeBasis {
     CountingBasis() = delete;

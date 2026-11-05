@@ -4,6 +4,7 @@
 #include "litepgo/dof/element_dof_map.hpp"
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/energy/response/mesh_response.hpp"
+#include "litepgo/fem/basis/basis.hpp"
 #include "litepgo/fem/field/shared_field.hpp"
 #include "litepgo/fem/local/local_response.hpp"
 #include <memory>
@@ -23,19 +24,26 @@ namespace litepgo::fem::binding {
 using bindings::register_instance;
 using Fields = std::vector<std::shared_ptr<Field3D>>;
 template <class B, int Dim> void bind_basis(nb::module_& m, const char* name) {
-    using Coordinate = Eigen::Matrix<double, Dim, 1>;
-    nb::class_<B> cls(m, name);
+    using Coordinate = typename CoefficientInfo<Dim>::Coordinate;
+    nb::class_<B> cls(m, name,
+                      "Scalar shape functions evaluated by static methods at one reference coordinate xi. "
+                      "num_basis_functions counts scalar functions, independently of field components. "
+                      "All output rows follow coefficient-row order. Domain-exterior coordinates extrapolate "
+                      "without clamping.");
     cls.attr("num_basis_functions") = B::num_basis_functions;
-    cls.def_static(
-           "eval_N", [](const Coordinate& xi) { return Eigen::VectorXd(B::eval_N(xi)); }, "xi"_a)
+    cls.def_static("coefficient_info", &B::coefficient_info, "basis_index"_a,
+                   "Coefficient sample: reference point and per-axis derivative orders. All-zero orders mean a value. "
+                   "Invalid indices raise IndexError.")
         .def_static(
-            "eval_dN_dxi", [](const Coordinate& xi) { return Eigen::MatrixXd(B::eval_dN_dxi(xi)); }, "xi"_a)
+            "eval_N", [](const Coordinate& xi) { return Eigen::VectorXd(B::eval_N(xi)); }, "xi"_a,
+            "Shape-function values, shape (num_basis_functions,).")
+        .def_static(
+            "eval_dN_dxi", [](const Coordinate& xi) { return Eigen::MatrixXd(B::eval_dN_dxi(xi)); }, "xi"_a,
+            "Reference-coordinate derivatives, shape (num_basis_functions, D); column j differentiates xi[j].")
         .def_static(
             "eval_d2N_dxi2", [](const Coordinate& xi) { return Eigen::MatrixXd(B::eval_d2N_dxi2(xi)); }, "xi"_a,
-            "Second derivatives, upper triangle in row order: (11,12,22) or (11,12,13,22,23,33).")
-        .def_static(
-            "reference_node", [](int basis_index) { return Coordinate(B::reference_node(basis_index)); },
-            "basis_index"_a);
+            "Second reference-coordinate derivatives, shape (num_basis_functions, D*(D+1)/2). "
+            "Columns: (11,12,22) in 2D or (11,12,13,22,23,33) in 3D; mixed entries are stored once, unscaled.");
 }
 
 template <class Q> void bind_quadrature(nb::module_& m, const char* name) {

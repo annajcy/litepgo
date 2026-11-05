@@ -24,12 +24,12 @@ static_assert(InterpolatedField3D<HexQ1Basis>::num_basis_functions == 8);
 Eigen::Matrix<double, 8, 3> corners() {
     Eigen::Matrix<double, 8, 3> X_nodes;
     for (int i = 0; i < 8; ++i)
-        X_nodes.row(i) = HexQ1Basis::reference_node(i).transpose();
+        X_nodes.row(i) = HexQ1Basis::coefficient_info(i).point.transpose();
     return X_nodes;
 }
 
 // Static evaluation must not require constructing a basis object.
-template <int InvalidPart> struct InvalidBasis {
+template <int InvalidPart> struct InvalidBasis : HexQ1Basis {
     InvalidBasis() = delete;
     static constexpr int num_basis_functions = 8;
     static auto eval_N(const Eigen::Vector3d& xi) {

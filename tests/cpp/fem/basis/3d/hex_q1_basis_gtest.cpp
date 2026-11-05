@@ -24,14 +24,14 @@ const std::array<Eigen::Vector3d, 6> samples{{Eigen::Vector3d(0, 0, 0), Eigen::V
 TEST(HexQ1Basis, InterpolatesReferenceNodesInLibpgoOrder) {
     const auto corners = reference_corners();
     for (int a = 0; a < 8; ++a) {
-        EXPECT_EQ(HexQ1Basis::reference_node(a), corners.col(a));
+        EXPECT_EQ(HexQ1Basis::coefficient_info(a).point, corners.col(a));
         const auto N = HexQ1Basis::eval_N(corners.col(a));
         for (int b = 0; b < 8; ++b) {
             EXPECT_DOUBLE_EQ(N[b], a == b ? 1.0 : 0.0);
         }
     }
-    EXPECT_THROW(HexQ1Basis::reference_node(-1), std::out_of_range);
-    EXPECT_THROW(HexQ1Basis::reference_node(8), std::out_of_range);
+    EXPECT_THROW(HexQ1Basis::coefficient_info(-1), std::out_of_range);
+    EXPECT_THROW(HexQ1Basis::coefficient_info(8), std::out_of_range);
 }
 
 TEST(HexQ1Basis, MatchesVerifiedLibpgoWeightsAndGradients) {

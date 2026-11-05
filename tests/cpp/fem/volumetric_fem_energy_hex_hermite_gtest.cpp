@@ -111,7 +111,7 @@ TEST(HexHermiteFemEnergy, SharedFacesHaveContinuousValuesAndPhysicalGradientsInA
             lengths[normal] = e + 1;
             origin[normal] = e;
             for (int v = 0; v < 8; ++v) {
-                const Eigen::Vector3d X = origin + lengths.cwiseProduct(fem::HexQ1Basis::reference_node(v));
+                const Eigen::Vector3d X = origin + lengths.cwiseProduct(fem::HexQ1Basis::coefficient_info(v).point);
                 const auto found = std::find(vertices.begin(), vertices.end(), X);
                 cells[static_cast<std::size_t>(e)][static_cast<std::size_t>(v)] =
                     static_cast<int>(found - vertices.begin());
@@ -293,7 +293,7 @@ TEST(HexHermiteFemEnergy, AcceptsHermiteReferenceFieldsRepresentingAffineBoxes) 
         Eigen::MatrixXd coefficients = Eigen::MatrixXd::Zero(64, 3);
         for (int v = 0; v < 8; ++v) {
             coefficients.row(8 * v) = nodes.row(v);
-            const auto jacobian = q1.eval_dvalue_dxi(fem::HexQ1Basis::reference_node(v));
+            const auto jacobian = q1.eval_dvalue_dxi(fem::HexQ1Basis::coefficient_info(v).point);
             for (int axis = 0; axis < 3; ++axis)
                 coefficients.row(8 * v + 1 + axis) = jacobian.col(axis).transpose();
         }

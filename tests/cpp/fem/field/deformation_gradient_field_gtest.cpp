@@ -22,7 +22,7 @@ namespace {
 Eigen::Matrix<double, 8, 3> nodes() {
     Eigen::Matrix<double, 8, 3> X;
     for (int a = 0; a < 8; ++a)
-        X.row(a) = HexQ1Basis::reference_node(a).transpose();
+        X.row(a) = HexQ1Basis::coefficient_info(a).point.transpose();
     return X;
 }
 
@@ -118,7 +118,9 @@ TEST(DeformationGradientField3D, ConstantDisplacementHasIdentityValueAndZeroCoef
 }
 
 TEST(DeformationGradientField3D, DifferentDisplacementBasisOnWarpedCoordinatesUsesPhysicalChainRule) {
-    using TensorBasis = TensorProductBasis3D<LinearLagrangeBasis>;
+    const auto target = [](const Eigen::Vector3d& xi) -> Eigen::Vector3d {
+        return {xi.x() * xi.y(), xi.y() * xi.z(), xi.z() * xi.x()};
+    };
     const auto warped = [](const Eigen::Vector3d& xi) -> Eigen::Vector3d {
         return {xi.x() + 0.4 * xi.y() * xi.z(), xi.y() + 0.2 * xi.x() * xi.z(), xi.z()};
     };
@@ -127,23 +129,34 @@ TEST(DeformationGradientField3D, DifferentDisplacementBasisOnWarpedCoordinatesUs
         return {(X.x() - 0.4 * X.z() * X.y()) / det, (X.y() - 0.2 * X.z() * X.x()) / det, X.z()};
     };
     auto X = nodes();
-    Eigen::Matrix<double, 8, 3> coefficients;
-    for (int a = 0; a < 8; ++a) {
-        X.row(a) = warped(HexQ1Basis::reference_node(a));
-        const Eigen::Vector3d xi(a / 4, (a / 2) % 2, a % 2);
-        coefficients.row(a) << xi.x() * xi.y(), xi.y() * xi.z(), xi.z() * xi.x();
+    for (int a = 0; a < 8; ++a)
+        X.row(a) = warped(HexQ1Basis::coefficient_info(a).point);
+    Eigen::Matrix<double, HexHermiteBasis::num_basis_functions, 3> coefficients;
+    for (int a = 0; a < HexHermiteBasis::num_basis_functions; ++a) {
+        const auto info = HexHermiteBasis::coefficient_info(a);
+        for (int c = 0; c < 3; ++c) {
+            coefficients(a, c) = 1;
+            for (int d = 0; d < 3; ++d) {
+                const int power = (d == c || d == (c + 1) % 3) ? 1 : 0;
+                if (info.derivative_order[d] > power)
+                    coefficients(a, c) = 0;
+                else if (info.derivative_order[d] < power)
+                    coefficients(a, c) *= info.point[d];
+            }
+        }
     }
-    const InterpolatedField3D<TensorBasis> u_field(coefficients);
+    const InterpolatedField3D<HexHermiteBasis> u_field(coefficients);
     const InterpolatedField3D<HexQ1Basis> X_field(X);
     const DeformationGradientField3D deformation(u_field, X_field);
     const Eigen::Vector3d xi(0.2, 0.3, 0.4);
+    EXPECT_TRUE(u_field.eval_value(xi).isApprox(target(xi), 1e-14));
     const Eigen::Matrix3d F = deformation.eval_value(xi).reshaped(3, 3);
     const Eigen::Vector3d position = warped(xi);
     for (int d = 0; d < 3; ++d) {
         Eigen::Vector3d plus = position, minus = position;
         plus[d] += 1e-5;
         minus[d] -= 1e-5;
-        const Eigen::Vector3d fd = (u_field.eval_value(inverse(plus)) - u_field.eval_value(inverse(minus))) / 2e-5;
+        const Eigen::Vector3d fd = (target(inverse(plus)) - target(inverse(minus))) / 2e-5;
         EXPECT_TRUE(fd.isApprox((F - Eigen::Matrix3d::Identity()).col(d), 3e-9));
     }
 }
