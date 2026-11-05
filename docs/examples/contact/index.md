@@ -13,3 +13,4 @@ All commands run from the repository root after [configuring the release build](
 - [Compression between penalty plates](./tet-p1-plate-compression.md). Elasticity, IPC self-contact, and two one-sided plate penalties.
 - [Area weighting under mesh refinement](./area-weighting.md). Fixed parallel sheets compare contact energy and normal force with area weighting off and on.
 - [Read-only active contact snapshot](./contact-snapshot.md). Export and plot every merged active record, including mollified EE stencils.
+- [Three primitive groups](./pair-weights.md). Fixed group multipliers scale contact energy and force before feature merging.

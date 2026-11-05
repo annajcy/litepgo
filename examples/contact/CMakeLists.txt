@@ -12,6 +12,10 @@ add_executable(contact_snapshot contact_snapshot.cpp)
 target_link_libraries(contact_snapshot PRIVATE litepgo::contact litepgo::warnings)
 target_compile_definitions(contact_snapshot PRIVATE LITEPGO_OUTPUT_DIR="${PROJECT_SOURCE_DIR}/output")
 
+add_executable(contact_pair_weights contact_pair_weights.cpp)
+target_link_libraries(contact_pair_weights PRIVATE litepgo::contact litepgo::warnings)
+target_compile_definitions(contact_pair_weights PRIVATE LITEPGO_OUTPUT_DIR="${PROJECT_SOURCE_DIR}/output")
+
 if(LITEPGO_WITH_IPC_TOOLKIT)
     add_executable(contact_benchmark tet_p1_box_stack.cpp)
     target_link_libraries(contact_benchmark PRIVATE litepgo::contact_ipctk litepgo::solver litepgo::fem litepgo::mesh litepgo::warnings)

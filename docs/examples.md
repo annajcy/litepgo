@@ -59,6 +59,7 @@ last digits on every platform.
 | Contact | [`tet_p1_plate_compression`](examples/contact/tet-p1-plate-compression.md) | Elasticity, IPC self-contact, and two one-sided plate penalties |
 | Contact | [`contact_area_weighting`](examples/contact/area-weighting.md) | Contact energy and force under mesh refinement, with area weighting off/on |
 | Contact | [`contact_snapshot`](examples/contact/contact-snapshot.md) | Export every active contact record and plot individual stencils and distances |
+| Contact | [`contact_pair_weights`](examples/contact/pair-weights.md) | Three primitive groups scale contact energy and force by 0.5, 2 and 0 |
 | Spatial | [`spatial_query`](examples/spatial/spatial-query.md) | Point/region/filtered box-pair queries |
 | Spatial | [`point_embedding`](examples/spatial/point-embedding.md) | Location and interpolation for P1/Q1/Hermite |
 | Fitting | [`shell_fixed_pose_material_fit`](examples/fitting/shell-fixed-pose-material-fit.md) | Shared shell material from fixed-pose forces |

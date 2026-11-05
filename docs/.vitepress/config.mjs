@@ -73,6 +73,7 @@ export default defineConfig({
         { text: 'Contact', link: '/guide/contact/', collapsed: true, items: [
           { text: 'Barrier formulation', link: '/guide/contact/barrier' },
           { text: 'Displacement coupling', link: '/guide/contact/coupling' },
+          { text: 'Primitive groups and multipliers', link: '/guide/contact/pair-weights' },
           { text: 'Collision safety and diagnostics', link: '/guide/contact/collision-safety' }
         ] },
         { text: 'Spatial queries', link: '/guide/spatial' },
@@ -116,7 +117,8 @@ export default defineConfig({
           { text: 'Pressed tet box stack', link: '/examples/contact/tet-p1-box-stack' },
           { text: 'Compression between penalty plates', link: '/examples/contact/tet-p1-plate-compression' },
           { text: 'Area weighting under refinement', link: '/examples/contact/area-weighting' },
-          { text: 'Read-only contact snapshot', link: '/examples/contact/contact-snapshot' }
+          { text: 'Read-only contact snapshot', link: '/examples/contact/contact-snapshot' },
+          { text: 'Three primitive groups', link: '/examples/contact/pair-weights' }
         ] },
         { text: 'Spatial queries and embedding', link: '/examples/spatial/', collapsed: true, items: [
           { text: 'Spatial hash queries', link: '/examples/spatial/spatial-query' },

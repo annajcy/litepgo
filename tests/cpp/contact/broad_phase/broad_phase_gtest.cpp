@@ -48,9 +48,9 @@ detail::Candidates brute_force(const Vec& x, const Vec* dx, double inflation, co
     };
     detail::Candidates result;
     for (int v = 0; v < x.size() / 3; ++v)
-        for (auto f : faces)
-            if (overlaps(std::array{v}, f))
-                result.vf.push_back({v, f[0], f[1], f[2]});
+        for (int f = 0; f < static_cast<int>(faces.size()); ++f)
+            if (overlaps(std::array{v}, faces[f]))
+                result.vf.push_back({v, f, -1, -1});
     for (int e = 0; e < static_cast<int>(edges.size()); ++e) {
         for (int f = e + 1; f < static_cast<int>(edges.size()); ++f)
             if (overlaps(edges[e], edges[f]))
@@ -121,14 +121,14 @@ TEST(ContactBroadPhase, RetainsTouchingRoundedAndSweptPairs) {
     Vec dx = Vec::Zero(15);
     dx[11] = -2; // Crosses the face, though neither endpoint touches it.
     auto swept = detail::broad_phase(x, &dx, 0, edges, faces, true, SpatialHash{});
-    EXPECT_NE(std::find(swept.vf.begin(), swept.vf.end(), std::array{3, 0, 1, 2}), swept.vf.end());
+    EXPECT_NE(std::find(swept.vf.begin(), swept.vf.end(), std::array{3, 0, -1, -1}), swept.vf.end());
     EXPECT_NE(std::find(swept.ef.begin(), swept.ef.end(), std::array{3, 0, -1, -1}), swept.ef.end());
     compare(x, &dx, 0, edges, faces, true);
     for (double height : {0.0, std::nextafter(0.0, 1.0), 0.125, std::nextafter(0.125, 1.0)}) {
         x[11] = x[14] = height;
         const double inflation = height < 0.1 ? 0 : 0.0625;
         const auto candidates = detail::broad_phase(x, nullptr, inflation, edges, faces, true, SpatialHash{});
-        EXPECT_NE(std::find(candidates.vf.begin(), candidates.vf.end(), std::array{3, 0, 1, 2}), candidates.vf.end());
+        EXPECT_NE(std::find(candidates.vf.begin(), candidates.vf.end(), std::array{3, 0, -1, -1}), candidates.vf.end());
         compare(x, nullptr, inflation, edges, faces, true);
     }
 }

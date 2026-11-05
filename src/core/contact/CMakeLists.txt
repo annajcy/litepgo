@@ -1,5 +1,6 @@
 add_library(litepgo_contact STATIC
     broad_phase/spatial_hash.cpp
+    contact_pair_weights.cpp
     detail/distance_derivatives.cpp
     detail/ipc_derivatives/edge_edge_mollifier.cpp
     detail/ipc_derivatives/line_line.cpp

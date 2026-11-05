@@ -5,6 +5,11 @@ Broad-phase candidates must cover every permitted overlap; CCD then bounds
 motion along a search direction. The [barrier page](barrier.md) defines the
 activation width and minimum separation.
 
+`options.min_distance` affects both the barrier definition and CCD clearance.
+It is not a CCD-only thickness parameter; an independent CCD clearance is not
+currently exposed. A caller migrating a CCD-only thickness must account for
+this distinction instead of copying a nonzero value directly into `min_distance`.
+
 ## Broad phase and collision-safe steps
 
 `contact.SpatialHash()` selects an automatic cell width from primitive AABB
@@ -27,6 +32,11 @@ orders contributions deterministically across thread counts.
 `ccd_max_iterations` limits work per pair. On exhaustion/stalling the algorithm
 returns the last conservative bound.
 
+With optional [primitive-group multipliers](pair-weights.md), CCD skips
+zero-multiplier original candidates. Every positive multiplier enforces the same
+clearance, regardless of magnitude. The initial whole-surface intersection check
+still inspects all primitives; the resulting step only protects enabled pairs.
+
 ## Validity, diagnostics, and optional backend
 
 The surface must be nonempty, have nondegenerate unique triangles, and use every
@@ -44,7 +54,7 @@ displacement for these methods.
 
 `contact_snapshot(p)` returns an owned copy of **all merged active assembly
 records** and all current surface positions. It exposes stencil types, vertex
-IDs, unsquared distances, reference-area/multiplicity weights and mollifiers.
+IDs, unsquared distances, merged area/group weights and mollifiers.
 Python arrays are read-only and `types` is a tuple; C++ returns an owned value.
 Queries do not update the Hessian pattern. Mollified EE keeps all four support
 vertices, including when its closest feature is VV or VE or its mollifier is

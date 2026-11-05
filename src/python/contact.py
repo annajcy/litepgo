@@ -8,6 +8,9 @@ require an explicit broad_phase=SpatialHash() and retain shared
 ownership of that backend. Custom backends are implemented in C++, not Python.
 Both options types default to fixed reference-area weights; set
 use_area_weighting=False for the original unweighted candidate sum.
+ContactPairWeights supplies fixed primitive groups and a symmetric multiplier
+table, applied before feature merging. Zero excludes a candidate from the active
+set and CCD; whole-surface initial-intersection validation remains independent.
 contact_snapshot(x) copies every merged active record without updating the pattern;
 its arrays are read-only and independent of subsequent queries.
 """
@@ -19,7 +22,10 @@ PlanePenaltyEnergy = _core.contact.PlanePenaltyEnergy
 IPCContactOptions = _core.contact.IPCContactOptions
 IPCContactEnergy = _core.contact.IPCContactEnergy
 ContactSnapshot = _core.contact.ContactSnapshot
+ContactPairWeights = _core.contact.ContactPairWeights
+contact_edges = _core.contact.contact_edges
 __all__ = ["BroadPhase", "SpatialHash", "PlanePenaltyEnergy", "IPCContactOptions", "IPCContactEnergy", "ContactSnapshot"]
+__all__ += ["ContactPairWeights", "contact_edges"]
 
 if hasattr(_core.contact, "IPCTKContactEnergy"):
     IPCTKContactOptions = _core.contact.IPCTKContactOptions
