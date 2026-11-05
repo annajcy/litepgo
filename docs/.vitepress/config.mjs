@@ -114,7 +114,8 @@ export default defineConfig({
         ] },
         { text: 'Contact', link: '/examples/contact/', collapsed: true, items: [
           { text: 'Pressed tet box stack', link: '/examples/contact/tet-p1-box-stack' },
-          { text: 'Compression between penalty plates', link: '/examples/contact/tet-p1-plate-compression' }
+          { text: 'Compression between penalty plates', link: '/examples/contact/tet-p1-plate-compression' },
+          { text: 'Area weighting under refinement', link: '/examples/contact/area-weighting' }
         ] },
         { text: 'Spatial queries and embedding', link: '/examples/spatial/', collapsed: true, items: [
           { text: 'Spatial hash queries', link: '/examples/spatial/spatial-query' },

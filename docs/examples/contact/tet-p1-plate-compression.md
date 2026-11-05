@@ -2,6 +2,9 @@
 
 [Back to Contact](./index.md)
 
+Contact uses the default fixed reference-area weighting. Its coefficient is
+set directly on the raw barrier energy; no normalization conversion is applied.
+
 Two tetrahedral boxes start with a small gap along z. Place the bottom and top
 plates inside the outer faces by 20% of one box height, then solve for static
 equilibrium. The lateral DOFs on the outer faces are fixed to suppress rigid

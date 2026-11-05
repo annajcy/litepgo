@@ -33,5 +33,25 @@ $$
 
 The contribution is $m(z)b(s,h)$. Derivatives include distance, mollifier,
 and mixed product terms. Projected Hessians clamp each local term's eigenvalues.
-The model is the original unweighted barrier, not an area-weighted physical
-barrier or a friction model.
+Both `IPCContactOptions` and `IPCTKContactOptions` default to fixed reference-area
+weighting. Set `use_area_weighting=False` to recover the original unweighted
+candidate sum. With area weighting enabled:
+
+- Each vertex and edge carries one third of the area of every incident reference face.
+- A vertex-face candidate has weight `vertex_area / 4`.
+- An edge-edge candidate has weight `(edge_area_0 + edge_area_1) / 4`.
+
+The factors account for the two contacting surfaces and the VF/EE contributions.
+They multiply the value, gradient and exact/projected Hessians consistently.
+Closest-feature reduction and merging sum these weights, including repeated
+lower-dimensional features. Areas stay fixed when the current positions change.
+Area weighting does not change the activation distance, minimum separation or CCD.
+It alone does not implement the full convergent IPC formulation or add friction.
+
+The raw barrier formula above is unchanged by area weighting. Set its coefficient
+directly through `WeightedEnergySum`; no normalization conversion is applied.
+Calibrate the coefficient for the barrier definition, area weighting and length
+unit being used.
+
+The [area-weighting example](../../examples/contact/area-weighting.md) compares
+energy and normal force on fixed parallel sheets as the grid is refined.

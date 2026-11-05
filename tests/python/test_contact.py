@@ -30,6 +30,8 @@ def central_gradient(f, x, step=1e-6):
 
 def test_build_info_reports_ipc_toolkit():
     assert hasattr(contact, "IPCTKContactEnergy") == bool(litepgo.build_info()["ipc_toolkit_version"])
+    if hasattr(contact, "IPCTKContactOptions"):
+        assert contact.IPCTKContactOptions(dhat=1.0).use_area_weighting is True
 
 
 def test_barrier_mirrors_cpp():
@@ -39,6 +41,7 @@ def test_barrier_mirrors_cpp():
     assert barrier.num_vertices == 6 and barrier.num_dofs == 18
     np.testing.assert_array_equal(barrier.rest_positions, surface.positions)
     assert barrier.options.dhat == 1.0 and barrier.options.min_distance == 0.0
+    assert barrier.options.use_area_weighting is True
 
     x = surface.positions.ravel()
     assert barrier.num_active_pairs(x) == 1
@@ -131,12 +134,15 @@ def test_python_box_stack_matches_cpp(tmp_path):
 
 
 @pytest.mark.skipif(not hasattr(contact, "IPCTKContactEnergy"), reason="toolkit backend disabled")
-def test_independent_native_matches_toolkit_original_sum():
+@pytest.mark.parametrize("use_area_weighting", [False, True])
+def test_independent_native_matches_toolkit_original_sum(use_area_weighting):
     # Compare independent implementations at generic closest features, including
     # repeated lower-dimensional features. Projected Hessians need not match.
     surface = two_triangles(0.5)
-    native = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=3, min_distance=0.1), contact.SpatialHash())
-    toolkit = contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(dhat=3, min_distance=0.1))
+    native = contact.IPCContactEnergy(surface, contact.IPCContactOptions(
+        dhat=3, min_distance=0.1, use_area_weighting=use_area_weighting), contact.SpatialHash())
+    toolkit = contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(
+        dhat=3, min_distance=0.1, use_area_weighting=use_area_weighting))
     x = surface.positions.ravel().copy()
     x[12:15] += [0.3, -0.2, 0.1]
     for backend in (native, toolkit):
@@ -192,6 +198,7 @@ def test_native_broad_phase_injection_and_lifetime(backend_factory):
 
 
 @pytest.mark.skipif(not hasattr(contact, "IPCTKContactEnergy"), reason="toolkit backend disabled")
+@pytest.mark.parametrize("use_area_weighting", [False, True])
 @pytest.mark.parametrize("positions", [
     [[0, 0, 0], [2, 0, 0], [0, 2, 0], [-0.2, -0.3, 0.4], [-1, -2, 1], [-2, -1, 1]],
     [[0, 0, 0], [2, 0, 0], [0, 2, 0], [0.7, -0.2, 0.4], [2, -2, 1], [-2, -1, 1]],
@@ -199,10 +206,12 @@ def test_native_broad_phase_injection_and_lifetime(backend_factory):
     [[-1, 0, 0], [1, 0, 0], [0, -4, -2], [-0.7, -0.004, 0.2], [0.8, 0.008, 0.2], [0, 4, 2]],
     [[-1, 0, 0], [1, 0, 0], [0, -4, -2], [-0.7, 0, 0.2], [0.8, 0, 0.2], [0, 4, 2]],
 ])
-def test_analytic_features_and_mollifier_match_toolkit(positions):
+def test_analytic_features_and_mollifier_match_toolkit(positions, use_area_weighting):
     surface = mesh.TriangleMesh(np.array(positions, dtype=float), np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32))
-    native = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=0.7, min_distance=0.05), contact.SpatialHash())
-    toolkit = contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(dhat=0.7, min_distance=0.05))
+    native = contact.IPCContactEnergy(surface, contact.IPCContactOptions(
+        dhat=0.7, min_distance=0.05, use_area_weighting=use_area_weighting), contact.SpatialHash())
+    toolkit = contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(
+        dhat=0.7, min_distance=0.05, use_area_weighting=use_area_weighting))
     x = surface.positions.ravel()
     for barrier in (native, toolkit):
         barrier.update_pattern(x)

@@ -83,6 +83,7 @@ struct IPCContactEnergy::Impl {
     std::vector<std::array<int, 3>> faces;
     std::vector<std::array<int, 2>> edges;
     std::vector<double> edge_lengths_squared;
+    std::vector<double> vertex_areas, edge_areas;
     int nv;
     IPCContactOptions options;
     std::shared_ptr<const BroadPhase> broad_phase_;
@@ -117,6 +118,24 @@ struct IPCContactEnergy::Impl {
         } catch (const std::domain_error&) {
             throw std::invalid_argument("IPCContactEnergy: degenerate or unrepresentable rest triangle");
         }
+        if (options.use_area_weighting) {
+            vertex_areas.assign(nv, 0.0);
+            edge_areas.assign(edges.size(), 0.0);
+            for (auto f : faces) {
+                const V a = surface.positions.segment<3>(3 * f[1]) - surface.positions.segment<3>(3 * f[0]),
+                        b = surface.positions.segment<3>(3 * f[2]) - surface.positions.segment<3>(3 * f[0]);
+                const double third_area = a.cross(b).norm() / 6;
+                for (int j = 0; j < 3; ++j) {
+                    vertex_areas[f[j]] += third_area;
+                    const std::array<int, 2> edge{std::min(f[j], f[(j + 1) % 3]), std::max(f[j], f[(j + 1) % 3])};
+                    edge_areas[std::lower_bound(edges.begin(), edges.end(), edge) - edges.begin()] += third_area;
+                }
+            }
+            for (const auto* areas : {&vertex_areas, &edge_areas})
+                for (double area : *areas)
+                    if (!std::isfinite(area) || area <= 0)
+                        throw std::invalid_argument("IPCContactEnergy: unrepresentable rest area weight");
+        }
     }
     void check_geometry(const ConstVecRef& x) const {
         for (auto f : faces) {
@@ -143,8 +162,11 @@ struct IPCContactEnergy::Impl {
         for (auto ids : candidates_.vf) {
             auto p = points(x, ids);
             auto f = point_triangle(p);
-            if (distance(p, f) < reach * reach)
-                pairs.push_back(reduced(ids, f));
+            if (distance(p, f) < reach * reach) {
+                Pair pair = reduced(ids, f);
+                pair.weight = options.use_area_weighting ? vertex_areas[ids[0]] / 4 : 1.0;
+                pairs.push_back(pair);
+            }
         }
         for (auto indices : candidates_.ee) {
             auto ids = edge_ids(indices);
@@ -156,10 +178,9 @@ struct IPCContactEnergy::Impl {
             if (!std::isfinite(epsilon) || epsilon <= 0)
                 throw std::domain_error("IPCContactEnergy: unrepresentable mollifier threshold");
             auto n = cross(sub(p[1], p[0]), sub(p[3], p[2]));
-            if (dot(n, n) < epsilon)
-                pairs.push_back(Pair{ids, f, epsilon});
-            else
-                pairs.push_back(reduced(ids, f));
+            Pair pair = dot(n, n) < epsilon ? Pair{ids, f, epsilon} : reduced(ids, f);
+            pair.weight = options.use_area_weighting ? edge_areas[indices[0]] / 4 + edge_areas[indices[1]] / 4 : 1.0;
+            pairs.push_back(pair);
         }
         std::sort(pairs.begin(), pairs.end(), [](const Pair& a, const Pair& b) { return a.key() < b.key(); });
         std::vector<Pair> merged;

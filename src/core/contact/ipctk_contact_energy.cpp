@@ -108,9 +108,11 @@ struct IPCTKContactEnergy::Impl {
     ipc::TightInclusionCCD ccd;
     double dhat;
     double min_distance;
+    bool use_area_weighting;
 
     ipc::NormalCollisions collisions(const Eigen::MatrixXd& V) const {
         ipc::NormalCollisions result;
+        result.set_use_area_weighting(use_area_weighting);
         result.build(mesh, V, dhat, min_distance);
         const auto by_vertices = [this](auto& list) {
             std::stable_sort(list.begin(), list.end(), [this](const auto& p, const auto& q) {
@@ -142,7 +144,7 @@ IPCTKContactEnergy::IPCTKContactEnergy(const mesh::TriangleMesh& surface, IPCTKC
         ipc::CollisionMesh(vertex_rows(surface.positions), unique_edges(surface.topology), face_rows(surface.topology)),
         ipc::BarrierPotential(options_.dhat, 1.0),
         ipc::TightInclusionCCD(options_.ccd_tolerance, options_.ccd_max_iterations), options_.dhat,
-        options_.min_distance});
+        options_.min_distance, options_.use_area_weighting});
 }
 
 IPCTKContactEnergy::~IPCTKContactEnergy() = default;

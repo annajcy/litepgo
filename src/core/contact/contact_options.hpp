@@ -9,6 +9,8 @@ struct IPCContactOptions {
     double min_distance = 0.0;
     double ccd_tolerance = 1e-6;
     long ccd_max_iterations = 100'000;
+    // Fixed reference areas; set false for the original unweighted candidate sum.
+    bool use_area_weighting = true;
 };
 
 // Tight-Inclusion time-of-impact tolerance and conservative iteration budget.
@@ -17,5 +19,6 @@ struct IPCTKContactOptions {
     double min_distance = 0.0;
     double ccd_tolerance = 1e-6;
     long ccd_max_iterations = 100'000;
+    bool use_area_weighting = true;
 };
 } // namespace litepgo::contact
