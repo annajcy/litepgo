@@ -27,16 +27,18 @@ class MeshResponse : public FixedPatternResponse {
     Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& gy) override;
     void check_batch_product(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& d,
                              bool transpose) const;
+    BatchMatrix eval_batch_jacobian(std::span<const int> ids, const BatchMatrix& x) const;
+    void gather(const std::vector<int>& ids, const ConstVecRef& x, BatchMatrix& result, bool output) const;
     Vec product(const ConstVecRef& x, const ConstVecRef& direction, bool transpose) const;
     MeshResponse(dof::ResponseAssembler assembler, int batch_size);
     Vec eval_impl(const ConstVecRef& x, SpMat* J) override;
     dof::ResponseAssembler assembler_;
-    std::vector<std::vector<int>> batches_;
-    struct Storage {
-        BatchMatrix inputs, values, jacobian;
+    struct Batch {
+        std::vector<int> ids;
+        BatchMatrix inputs, values, jacobian, direction;
     };
     mutable std::atomic<bool> busy_ = false;
-    mutable std::vector<Storage> storage_;
+    mutable std::vector<Batch> batches_;
     mutable std::vector<dof::ResponseAssembler::ElementView> views_;
 };
 } // namespace litepgo::energy

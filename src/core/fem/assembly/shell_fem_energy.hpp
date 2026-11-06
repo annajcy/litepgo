@@ -22,9 +22,9 @@ template <class Material> class ShellFemEnergy final : public energy::MeshEnergy
     // Original positions, area weights and thickness remain unchanged.
     ShellFemEnergy(const dof::StencilDofMap& displacement_map, std::vector<TriangleMidEdgeRestData> rest_data,
                    std::vector<double> thickness, std::vector<Eigen::VectorXd> theta,
-                   const std::vector<Eigen::Matrix3d>& Fp = {})
-        : energy::MeshEnergy(displacement_map, 256), rest_data_(std::move(rest_data)), thickness_(std::move(thickness)),
-          theta_(std::move(theta)) {
+                   const std::vector<Eigen::Matrix3d>& Fp = {}, int batch_size = 256)
+        : energy::MeshEnergy(displacement_map, batch_size), rest_data_(std::move(rest_data)),
+          thickness_(std::move(thickness)), theta_(std::move(theta)) {
         const auto count = static_cast<std::size_t>(displacement_map.num_elements());
         if (displacement_map.dofs_per_vertex() != 3 || rest_data_.size() != count || thickness_.size() != count ||
             theta_.size() != count)

@@ -18,31 +18,31 @@ MeshResponse::MeshResponse(dof::ResponseAssembler assembler, int batch_size)
     for (const auto& [shape, ids] : groups)
         for (std::size_t begin = 0; begin < ids.size(); begin += batch_size) {
             const auto end = std::min(ids.size(), begin + batch_size);
-            batches_.emplace_back(ids.begin() + begin, ids.begin() + end);
+            batches_.push_back({.ids = {ids.begin() + begin, ids.begin() + end}});
         }
-    storage_.resize(batches_.size());
     views_.resize(assembler_.num_elements());
+}
+
+void MeshResponse::gather(const std::vector<int>& ids, const ConstVecRef& x, BatchMatrix& result, bool output) const {
+    const auto indices = [&](int e) { return output ? assembler_.output_indices(e) : assembler_.input_indices(e); };
+    result.resize(ids.size(), indices(ids.front()).size());
+    for (std::size_t b = 0; b < ids.size(); ++b)
+        result.row(b) = x(indices(ids[b])).transpose();
 }
 
 Vec MeshResponse::eval_impl(const ConstVecRef& x, SpMat* J) {
     ::litepgo::detail::BusyScope scope(busy_, "MeshResponse");
     tbb::parallel_for(std::size_t(0), batches_.size(), [&](std::size_t k) {
-        const auto& ids = batches_[k];
+        auto& data = batches_[k];
+        const auto& ids = data.ids;
         const Eigen::Index count = ids.size();
         const Eigen::Index input_size = assembler_.input_indices(ids.front()).size();
         const Eigen::Index output_size = assembler_.output_indices(ids.front()).size();
-        auto& data = storage_[k];
-        auto& inputs = data.inputs;
-        inputs.resize(count, input_size);
-        for (Eigen::Index b = 0; b < count; ++b) {
-            const auto indices = assembler_.input_indices(ids[b]);
-            for (Eigen::Index c = 0; c < input_size; ++c)
-                inputs(b, c) = x[indices[c]];
-        }
+        gather(ids, x, data.inputs, false);
         auto& jacobians = data.jacobian;
         if (J)
             jacobians.setConstant(count * output_size, input_size, std::numeric_limits<double>::quiet_NaN());
-        data.values = eval_batch(ids, inputs, J ? &jacobians : nullptr);
+        data.values = eval_batch(ids, data.inputs, J ? &jacobians : nullptr);
         const auto& values = data.values;
         if (values.rows() != count || values.cols() != output_size || !values.allFinite() ||
             (J &&
@@ -69,36 +69,30 @@ Vec MeshResponse::eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& gy) {
 }
 Vec MeshResponse::product(const ConstVecRef& x, const ConstVecRef& direction, bool transpose) const {
     ::litepgo::detail::BusyScope scope(busy_, "MeshResponse");
-    std::vector<BatchMatrix> products(batches_.size());
     tbb::parallel_for(std::size_t(0), batches_.size(), [&](std::size_t k) {
-        const auto& ids = batches_[k];
-        const auto ni = assembler_.input_indices(ids.front()).size();
-        const auto no = assembler_.output_indices(ids.front()).size();
-        BatchMatrix local_x(ids.size(), ni), local_d(ids.size(), transpose ? no : ni);
-        for (std::size_t b = 0; b < ids.size(); ++b) {
-            const auto in = assembler_.input_indices(ids[b]);
-            const auto directions = transpose ? assembler_.output_indices(ids[b]) : in;
-            for (std::size_t c = 0; c < in.size(); ++c)
-                local_x(b, c) = x[in[c]];
-            for (std::size_t c = 0; c < directions.size(); ++c)
-                local_d(b, c) = direction[directions[c]];
-        }
-        products[k] = transpose ? eval_vjp_batch(ids, local_x, local_d) : eval_jvp_batch(ids, local_x, local_d);
-        if (products[k].rows() != static_cast<Eigen::Index>(ids.size()) ||
-            products[k].cols() != static_cast<Eigen::Index>(transpose ? ni : no) || !products[k].allFinite())
+        auto& data = batches_[k];
+        const auto& ids = data.ids;
+        gather(ids, x, data.inputs, false);
+        gather(ids, direction, data.direction, transpose);
+        auto& values = data.values;
+        values = transpose ? eval_vjp_batch(ids, data.inputs, data.direction)
+                           : eval_jvp_batch(ids, data.inputs, data.direction);
+        const Eigen::Index size =
+            (transpose ? assembler_.input_indices(ids.front()) : assembler_.output_indices(ids.front())).size();
+        if (values.rows() != static_cast<Eigen::Index>(ids.size()) || values.cols() != size || !values.allFinite())
             throw std::logic_error("MeshResponse: invalid batch product");
+        for (std::size_t b = 0; b < ids.size(); ++b) {
+            const Eigen::Map<const Vec> value(size ? values.data() + b * size : nullptr, size);
+            views_[ids[b]] = dof::ResponseAssembler::ElementView(value);
+        }
     });
     Vec result = Vec::Zero(transpose ? num_inputs() : num_outputs());
     // Reduce in original element order, including repeated indices.
-    std::vector<std::pair<std::size_t, std::size_t>> locations(assembler_.num_elements());
-    for (std::size_t k = 0; k < batches_.size(); ++k)
-        for (std::size_t b = 0; b < batches_[k].size(); ++b)
-            locations[batches_[k][b]] = {k, b};
     for (int e = 0; e < assembler_.num_elements(); ++e) {
-        const auto [k, b] = locations[e];
+        const auto value = views_[e].value();
         const auto indices = transpose ? assembler_.input_indices(e) : assembler_.output_indices(e);
         for (std::size_t c = 0; c < indices.size(); ++c)
-            result[indices[c]] += products[k](b, c);
+            result[indices[c]] += value[c];
     }
     return result;
 }
@@ -117,14 +111,19 @@ void MeshResponse::check_batch_product(std::span<const int> ids, const BatchMatr
             throw std::invalid_argument("MeshResponse: mismatched batch dimensions");
     }
 }
-BatchMatrix MeshResponse::eval_jvp_batch(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& d) const {
-    check_batch_product(ids, x, d, false);
+BatchMatrix MeshResponse::eval_batch_jacobian(std::span<const int> ids, const BatchMatrix& x) const {
     const Eigen::Index no = assembler_.output_indices(ids.front()).size();
     BatchMatrix J = BatchMatrix::Constant(x.rows() * no, x.cols(), std::numeric_limits<double>::quiet_NaN());
     const BatchMatrix value = eval_batch(ids, x, &J);
     if (value.rows() != x.rows() || value.cols() != no || !value.allFinite() || J.rows() != x.rows() * no ||
         J.cols() != x.cols() || !J.allFinite())
         throw std::logic_error("MeshResponse: invalid batch Jacobian");
+    return J;
+}
+BatchMatrix MeshResponse::eval_jvp_batch(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& d) const {
+    check_batch_product(ids, x, d, false);
+    const BatchMatrix J = eval_batch_jacobian(ids, x);
+    const Eigen::Index no = assembler_.output_indices(ids.front()).size();
     BatchMatrix result(x.rows(), no);
     for (Eigen::Index b = 0; b < x.rows(); ++b)
         result.row(b) = (J.middleRows(b * no, no) * d.row(b).transpose()).transpose();
@@ -132,12 +131,8 @@ BatchMatrix MeshResponse::eval_jvp_batch(std::span<const int> ids, const BatchMa
 }
 BatchMatrix MeshResponse::eval_vjp_batch(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& d) const {
     check_batch_product(ids, x, d, true);
+    const BatchMatrix J = eval_batch_jacobian(ids, x);
     const Eigen::Index no = assembler_.output_indices(ids.front()).size();
-    BatchMatrix J = BatchMatrix::Constant(x.rows() * no, x.cols(), std::numeric_limits<double>::quiet_NaN());
-    const BatchMatrix value = eval_batch(ids, x, &J);
-    if (value.rows() != x.rows() || value.cols() != no || !value.allFinite() || J.rows() != x.rows() * no ||
-        J.cols() != x.cols() || !J.allFinite())
-        throw std::logic_error("MeshResponse: invalid batch Jacobian");
     BatchMatrix result(x.rows(), x.cols());
     for (Eigen::Index b = 0; b < x.rows(); ++b)
         result.row(b) = (J.middleRows(b * no, no).transpose() * d.row(b).transpose()).transpose();

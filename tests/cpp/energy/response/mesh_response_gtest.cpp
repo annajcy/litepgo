@@ -272,6 +272,8 @@ TEST(MeshResponse, DuplicateIndicesGatherAndScatterAcrossBatches) {
         for (double x : {2.0, -3.0}) {
             EXPECT_DOUBLE_EQ(obj.eval_value(Vec::Constant(1, x))[0], 12 * x);
             EXPECT_DOUBLE_EQ(obj.eval_jacobian(Vec::Constant(1, x)).coeff(0, 0), 12);
+            EXPECT_DOUBLE_EQ(obj.eval_jvp(Vec::Constant(1, x), Vec::Constant(1, 2))[0], 24);
+            EXPECT_DOUBLE_EQ(obj.eval_vjp(Vec::Constant(1, x), Vec::Constant(1, 3))[0], 36);
         }
     }
 }

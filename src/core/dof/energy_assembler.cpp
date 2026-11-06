@@ -117,14 +117,14 @@ void EnergyAssembler::assemble(std::span<const ElementView> elements, Vec* gradi
     const auto count = element_dof_indices_.size();
     if (elements.size() != count)
         throw std::invalid_argument("EnergyAssembler::assemble requires one view per element");
-    for (std::size_t e = 0; e < count; ++e) {
+    tbb::parallel_for(std::size_t(0), count, [&](std::size_t e) {
         const auto n = static_cast<Eigen::Index>(element_dof_indices_[e].size());
         const auto local_gradient = elements[e].gradient();
         const auto local_hessian = elements[e].hessian();
         if ((gradient && (local_gradient.size() != n || !local_gradient.allFinite())) ||
             (hessian && (local_hessian.rows() != n || local_hessian.cols() != n || !local_hessian.allFinite())))
             throw std::invalid_argument("EnergyAssembler::assemble: invalid local dimensions or non-finite values");
-    }
+    });
     if (hessian && !linalg::same_pattern(*hessian, pattern_))
         throw std::invalid_argument("EnergyAssembler::assemble: Hessian pattern does not match hessian_pattern()");
     if (gradient)

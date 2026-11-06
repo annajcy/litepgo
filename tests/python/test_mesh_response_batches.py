@@ -108,3 +108,6 @@ def test_grouping_preserves_original_element_sum_order(batch_size):
     # Grouping evaluates elements 0,2 before 1; assembly must still sum 0,1,2.
     np.testing.assert_array_equal(value, [1.])
     np.testing.assert_array_equal(J.toarray(), [[1., 0.]])
+    np.testing.assert_array_equal(obj.eval_jvp(np.ones(2), np.ones(2)), [1.])
+    np.testing.assert_array_equal(obj.eval_vjp(np.ones(2), np.ones(1)), [1., 0.])
+    np.testing.assert_array_equal(obj.eval_jacobian(np.ones(2)).toarray(), J.toarray())

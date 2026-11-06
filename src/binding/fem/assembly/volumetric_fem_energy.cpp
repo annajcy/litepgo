@@ -27,9 +27,9 @@ template <class M, class B, class Q> void bind_volumetric_fem_energy(nb::module_
         .def(
             "__init__",
             [](Energy* self, const dof::VertexDofMap& displacement_map, const Responses& rest_position_fields,
-               const Responses& Fp,
-               const Responses& theta) { new (self) Energy(displacement_map, rest_position_fields, Fp, theta); },
-            "displacement_map"_a, "rest_position_fields"_a, "Fp"_a, "theta"_a,
+               const Responses& Fp, const Responses& theta,
+               int batch_size) { new (self) Energy(displacement_map, rest_position_fields, Fp, theta, batch_size); },
+            "displacement_map"_a, "rest_position_fields"_a, "Fp"_a, "theta"_a, "batch_size"_a = 256,
             "One spatial Response per element in map order for each of rest positions, Fp (9 components) and theta; "
             "the energy snapshots their values at construction.");
     register_instance(m, "VolumetricFemEnergy", key, nb::type<Energy>());

@@ -107,6 +107,18 @@ def test_empty_mesh_products():
     np.testing.assert_array_equal(r.eval_vjp(np.ones(2),np.ones(2)),np.zeros(2))
 
 
+@pytest.mark.parametrize('ni, no', [(0, 0), (0, 2), (2, 0)])
+def test_empty_local_product_blocks(ni, no):
+    inp = dof.StencilDofMap(3, [list(range(ni))] * 3, 1)
+    out = dof.StencilDofMap(4, [list(range(no))] * 3, 1)
+
+    def batch(ids, x, need):
+        values = np.zeros((len(ids), no))
+        return (values, np.zeros((len(ids) * no, ni))) if need else values
+
+    check_products(BatchResponseFixture(inp, out, batch, 2), np.ones(3))
+
+
 def test_invalid_product_and_recovery():
     mapping = dof.StencilDofMap(1, [[0]], 1)
     class Bad(energy.MeshResponse):

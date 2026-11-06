@@ -4,8 +4,8 @@
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/energy/scalar/mesh_energy.hpp"
 #include "litepgo/fem/assembly/basis_dof_transform.hpp"
-#include "litepgo/fem/integration/volumetric_element.hpp"
 #include "litepgo/fem/assembly/dof_derivatives.hpp"
+#include "litepgo/fem/integration/volumetric_element.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_inputs.hpp"
 #include "litepgo/fem/response/sampling_response.hpp"
 #include <memory>
@@ -22,8 +22,8 @@ template <class Material, Basis3D UBasis, Quadrature3D Q> class VolumetricFemEne
     VolumetricFemEnergy(const dof::VertexDofMap& displacement_map,
                         const std::vector<std::shared_ptr<energy::Response>>& rest_positions,
                         const std::vector<std::shared_ptr<energy::Response>>& Fp,
-                        const std::vector<std::shared_ptr<energy::Response>>& theta)
-        : energy::MeshEnergy(displacement_map, 256) {
+                        const std::vector<std::shared_ptr<energy::Response>>& theta, int batch_size = 256)
+        : energy::MeshEnergy(displacement_map, batch_size) {
         const auto count = static_cast<std::size_t>(displacement_map.num_elements());
         if (displacement_map.dofs_per_vertex() != BasisDofTransform<UBasis>::dofs_per_vertex ||
             rest_positions.size() != count || Fp.size() != count || theta.size() != count)
