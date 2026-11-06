@@ -7,7 +7,6 @@
 #include "litepgo/fem/detail/batch_views.hpp"
 #include "litepgo/fem/detail/shell_fp_force.hpp"
 #include <concepts>
-#include <utility>
 #include <vector>
 
 namespace litepgo::fem {
@@ -21,61 +20,44 @@ template <class Material> class ShellFemForceFpResponse final : public energy::M
     ShellFemForceFpResponse(const ParameterMap& parameter_map, const dof::StencilDofMap& displacement_map,
                             const std::vector<TriangleMidEdgeRestData>& rest_data, const Vec& displacement,
                             const std::vector<double>& thickness, const std::vector<Vec>& theta, int batch_size = 256)
-        : energy::MeshResponse(parameter_map, displacement_map, batch_size),
-          state_(make_state(parameter_map, displacement_map, rest_data, displacement, thickness, theta)) {}
-
-  private:
-    struct State {
-        std::vector<detail::ShellFpForceData> data;
-        std::vector<double> areas;
-    };
-    template <class ParameterMap>
-    static State make_state(const ParameterMap& parameters, const dof::StencilDofMap& map,
-                            const std::vector<TriangleMidEdgeRestData>& rest, const Vec& u,
-                            const std::vector<double>& thickness, const std::vector<Vec>& theta) {
-        const auto count = static_cast<std::size_t>(map.num_elements());
+        : energy::MeshResponse(parameter_map, displacement_map, batch_size) {
+        const auto count = static_cast<std::size_t>(displacement_map.num_elements());
         const int width = [&] {
             if constexpr (std::same_as<ParameterMap, dof::ConstantDofMap>)
-                return parameters.num_dofs();
+                return parameter_map.num_dofs();
             else
-                return parameters.dofs_per_element();
+                return parameter_map.dofs_per_element();
         }();
-        if (parameters.num_elements() != map.num_elements() || width != 9 || map.dofs_per_vertex() != 3 ||
-            u.size() != map.num_dofs() || !u.allFinite() || rest.size() != count || thickness.size() != count ||
+        if (parameter_map.num_elements() != displacement_map.num_elements() || width != 9 ||
+            displacement_map.dofs_per_vertex() != 3 || displacement.size() != displacement_map.num_dofs() ||
+            !displacement.allFinite() || rest_data.size() != count || thickness.size() != count ||
             theta.size() != count)
             throw std::invalid_argument("ShellFemForceFpResponse: incompatible maps or fixed inputs");
-        std::vector<detail::ShellFpForceData> data;
-        std::vector<double> areas;
-        data.reserve(count);
-        areas.reserve(count);
-        for (int e = 0; e < map.num_elements(); ++e) {
-            if (map.vertex_indices(e).size() != static_cast<std::size_t>(rest[e].X_local.rows()) ||
-                !std::isfinite(rest[e].sqrt_det_a_bar) || rest[e].sqrt_det_a_bar <= 0)
-                throw std::invalid_argument("ShellFemForceFpResponse: incompatible reference stencil or area");
+        faces_.reserve(count);
+        for (int e = 0; e < displacement_map.num_elements(); ++e) {
+            if (displacement_map.vertex_indices(e).size() != static_cast<std::size_t>(rest_data[e].X_local.rows()))
+                throw std::invalid_argument("ShellFemForceFpResponse: incompatible reference stencil");
             if (theta[e].size() != Material::num_parameters)
                 throw std::invalid_argument("ShellFemForceFpResponse: invalid material parameter count");
-            data.emplace_back(rest[e], map.gather(e, u), thickness[e], theta[e]);
-            areas.push_back(0.5 * rest[e].sqrt_det_a_bar);
+            faces_.emplace_back(rest_data[e], displacement_map.gather(e, displacement), thickness[e], theta[e]);
         }
-        return {std::move(data), std::move(areas)};
     }
+
+  private:
     energy::BatchMatrix eval_batch(std::span<const int> ids, const energy::BatchMatrix& plastic,
                                    energy::BatchMatrix* jacobian) const override {
-        const auto& data = state_.data;
-        const auto& areas = state_.areas;
-        const Eigen::Index n = ids.empty() ? 0 : data[ids[0]].current.dab_du.cols();
-        energy::BatchMatrix values = energy::BatchMatrix::Zero(ids.size(), n);
+        const Eigen::Index n = ids.empty() ? 0 : faces_[ids[0]].current.dab_du.cols();
+        energy::BatchMatrix values(ids.size(), n);
         if (jacobian)
-            jacobian->setZero(ids.size() * n, 9);
+            jacobian->resize(ids.size() * n, 9);
         for (std::size_t b = 0; b < ids.size(); ++b) {
             const int e = ids[b];
             StridedVecRef value(values.row(b).transpose());
             auto J = detail::batch_matrix_view(jacobian, b, n);
-            detail::accumulate_shell_fp_force<Material>(data[e], plastic.row(b).transpose(), areas[e], value,
-                                                        J ? &*J : nullptr);
+            detail::eval_shell_fp_force<Material>(faces_[e], plastic.row(b).transpose(), value, J ? &*J : nullptr);
         }
         return values;
     }
-    State state_;
+    std::vector<detail::ShellFpForceData> faces_;
 };
 } // namespace litepgo::fem

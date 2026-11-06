@@ -11,30 +11,25 @@ namespace litepgo::fem {
 namespace detail {
 // The material parameter vector is the active input.
 template <class Material>
-void accumulate_shell_force(const ShellForceData& data, const Eigen::VectorXd& theta, double weight,
-                            StridedVecRef value, StridedMatRef* J) {
+void eval_shell_material_force(const ShellForceData& data, const Eigen::VectorXd& theta, StridedVecRef value,
+                               StridedMatRef* J) {
     constexpr int n = Material::num_parameters;
-    if (!std::isfinite(weight) || theta.size() != Material::num_parameters || !theta.allFinite() ||
-        value.size() != data.dab_du.cols() || (J && (J->rows() != value.size() || J->cols() != n)))
-        throw std::invalid_argument("Shell force: invalid parameters, derivative, weight or output dimensions");
+    if (theta.size() != Material::num_parameters || !theta.allFinite() || value.size() != data.dab_du.cols() ||
+        (J && (J->rows() != value.size() || J->cols() != n)))
+        throw std::invalid_argument("Shell force: invalid parameters, derivative or output dimensions");
     auto inputs = data.inputs;
     inputs.theta = theta;
-    const Eigen::VectorXd stress = Material::eval_dW_dab(inputs);
-    if (stress.size() != 6)
-        throw std::logic_error("Shell force: invalid material gradient dimensions");
-    if (!stress.allFinite())
-        throw std::domain_error("Shell force: non-finite material gradient");
-    value.noalias() += weight * (data.dab_du.transpose() * stress);
+    eval_shell_force_value<Material>(data, inputs, value);
     if (J) {
         const Eigen::MatrixXd mixed = Material::eval_d2W_dab_dtheta(inputs);
         if (mixed.rows() != 6 || mixed.cols() != Material::num_parameters)
             throw std::logic_error("Shell force: invalid material mixed derivative dimensions");
         if (!mixed.allFinite())
             throw std::domain_error("Shell force: non-finite material mixed derivative");
-        J->noalias() += weight * (data.dab_du.transpose() * mixed);
+        J->noalias() = data.area * (data.dab_du.transpose() * mixed);
     }
-    if (!value.allFinite() || (J && !J->allFinite()))
-        throw std::domain_error("Shell force: non-finite accumulation");
+    if (J && !J->allFinite())
+        throw std::domain_error("Shell force: non-finite Jacobian");
 }
 } // namespace detail
 } // namespace litepgo::fem

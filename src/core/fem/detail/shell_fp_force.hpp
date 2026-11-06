@@ -29,25 +29,19 @@ struct ShellFpForceData {
 
 // The nine column-major Fp entries are the active input.
 template <class Material>
-void accumulate_shell_fp_force(const ShellFpForceData& data, const Eigen::VectorXd& packed, double weight,
-                               StridedVecRef value, StridedMatRef* J) {
+void eval_shell_fp_force(const ShellFpForceData& data, const Eigen::VectorXd& packed, StridedVecRef value,
+                         StridedMatRef* J) {
     constexpr int n = 9;
-    if (packed.size() != 9 || !packed.allFinite() || !std::isfinite(weight) ||
-        data.current.inputs.theta.size() != Material::num_parameters || value.size() != data.current.dab_du.cols() ||
-        (J && (J->rows() != value.size() || J->cols() != n)))
-        throw std::invalid_argument("Shell Fp force: invalid Fp, derivative, parameters, weight or output dimensions");
+    if (packed.size() != 9 || !packed.allFinite() || data.current.inputs.theta.size() != Material::num_parameters ||
+        value.size() != data.current.dab_du.cols() || (J && (J->rows() != value.size() || J->cols() != n)))
+        throw std::invalid_argument("Shell Fp force: invalid Fp, derivative, parameters or output dimensions");
     const Eigen::Matrix3d Fp = packed.reshaped(3, 3);
     Eigen::MatrixXd natural_derivative;
     const auto natural = shell_plastic_geometry(data.reference, data.opposite, Fp, J ? &natural_derivative : nullptr);
     auto inputs = data.current.inputs;
     inputs.a_bar = natural.a;
     inputs.b_bar = natural.b;
-    const Eigen::VectorXd stress = Material::eval_dW_dab(inputs);
-    if (stress.size() != 6)
-        throw std::logic_error("Shell Fp force: invalid material gradient dimensions");
-    if (!stress.allFinite())
-        throw std::domain_error("Shell Fp force: non-finite material gradient");
-    value.noalias() += weight * (data.current.dab_du.transpose() * stress);
+    eval_shell_force_value<Material>(data.current, inputs, value);
     if (J) {
         const Eigen::MatrixXd mixed = Material::eval_d2W_dab_dabarbbar(inputs);
         if (mixed.rows() != 6 || mixed.cols() != 6)
@@ -55,10 +49,10 @@ void accumulate_shell_fp_force(const ShellFpForceData& data, const Eigen::Vector
         if (!mixed.allFinite())
             throw std::domain_error("Shell Fp force: non-finite natural-form mixed derivative");
         const Eigen::MatrixXd full = data.current.dab_du.transpose() * mixed * natural_derivative * data.dy_dFp;
-        J->noalias() += weight * full;
+        J->noalias() = data.current.area * full;
     }
-    if (!value.allFinite() || (J && !J->allFinite()))
-        throw std::domain_error("Shell Fp force: non-finite accumulation");
+    if (J && !J->allFinite())
+        throw std::domain_error("Shell Fp force: non-finite Jacobian");
 }
 } // namespace detail
 } // namespace litepgo::fem
