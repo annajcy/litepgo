@@ -2,12 +2,7 @@
 namespace litepgo::energy {
 ElementwiseResponse::ElementwiseResponse(dof::ResponseAssembler assembler, std::shared_ptr<Response> child)
     : FixedPatternResponse(assembler.jacobian_pattern()), assembler_(std::move(assembler)),
-      children_{std::move(child)} {}
-Response& ElementwiseResponse::transform() const {
-    if (!children_[0])
-        throw std::logic_error("ElementwiseResponse: cleared transform");
-    return *children_[0];
-}
+      transform_(std::move(child)) {}
 Vec ElementwiseResponse::gather(int e, const ConstVecRef& x) const {
     const auto ids = assembler_.input_indices(e);
     Vec q(ids.size());
@@ -16,7 +11,7 @@ Vec ElementwiseResponse::gather(int e, const ConstVecRef& x) const {
     return q;
 }
 Vec ElementwiseResponse::eval_impl(const ConstVecRef& x, SpMat* J) {
-    auto& local = transform();
+    auto& local = *transform_;
     const int count = assembler_.num_elements();
     std::vector<Vec> values(count);
     std::vector<Eigen::MatrixXd> jacobians(J ? count : 0);
@@ -41,7 +36,7 @@ Vec ElementwiseResponse::eval_impl(const ConstVecRef& x, SpMat* J) {
     return value;
 }
 Vec ElementwiseResponse::eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& v) {
-    auto& local = transform();
+    auto& local = *transform_;
     Vec result(num_outputs());
     for (int e = 0; e < assembler_.num_elements(); ++e) {
         const Vec q = gather(e, x);
@@ -50,7 +45,7 @@ Vec ElementwiseResponse::eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& 
     return result;
 }
 Vec ElementwiseResponse::eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& w) {
-    auto& local = transform();
+    auto& local = *transform_;
     Vec result = Vec::Zero(num_inputs());
     for (int e = 0; e < assembler_.num_elements(); ++e) {
         const Vec q = gather(e, x);

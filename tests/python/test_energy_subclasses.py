@@ -1,4 +1,5 @@
 import gc
+import weakref
 import numpy as np
 import pytest
 import scipy.sparse as sp
@@ -130,3 +131,29 @@ def test_invalid_hessian_and_pattern_are_rejected():
         def eval_values(self, x, want_gradient, hessian_kind):
             return .5*x[0]**2, x if want_gradient else None, np.ones((1, 1)) if hessian_kind is not None else None
     assert Plain().max_feasible_step(np.ones(1), -np.ones(1)) == 1.
+
+
+@pytest.mark.parametrize("kind", ["sum", "mapped", "nested", "repeated"])
+def test_composite_lifetime_with_weak_back_reference(kind):
+    child = Quadratic()
+    if kind == "sum":
+        owner = energy.WeightedSumEnergy([(child, 1.)])
+    elif kind == "mapped":
+        owner = energy.AffineMappedEnergy(child, sp.eye(2, format="csc"))
+    elif kind == "nested":
+        owner = energy.AffineMappedEnergy(
+            energy.WeightedSumEnergy([(child, 1.)]), sp.eye(2, format="csc"))
+    else:
+        owner = energy.WeightedSumEnergy([(child, .5), (child, .5)])
+    child.owner = weakref.ref(owner)
+    assert child.owner() is owner
+    owner_ref = weakref.ref(owner)
+    ref = weakref.ref(child)
+    del child
+    gc.collect()
+    assert ref() is not None
+    assert owner.eval_value(np.zeros(2)) == pytest.approx(2.5)
+    del owner
+    gc.collect()
+    assert ref() is None
+    assert owner_ref() is None

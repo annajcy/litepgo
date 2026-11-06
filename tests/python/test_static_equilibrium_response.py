@@ -36,13 +36,13 @@ def test_direct_sensitivity_callbacks_and_fixed_values():
     assert len(calls) == 1
 
 
-def test_bound_callbacks_are_kept_alive_and_cycles_are_collected():
+def test_bound_callbacks_are_kept_alive_without_an_owner_cycle():
     import gc
     import weakref
 
     class Problem:
-        def __init__(self):
-            self.response = solver.StaticEquilibriumResponse(
+        def make_equilibrium(self):
+            response = solver.StaticEquilibriumResponse(
                 2,
                 dof.DofReduction(2, []),
                 np.zeros(2),
@@ -50,6 +50,8 @@ def test_bound_callbacks_are_kept_alive_and_cycles_are_collected():
                 self.make_energy,
                 lambda u: FormulaForce(2, u, self.make_energy, self.partial),
             )
+            self.response = weakref.ref(response)
+            return response
 
         def make_energy(self, p):
             return energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p)
@@ -59,7 +61,8 @@ def test_bound_callbacks_are_kept_alive_and_cycles_are_collected():
 
     problem = Problem()
     owner = weakref.ref(problem)
-    response = problem.response
+    response = problem.make_equilibrium()
+    assert problem.response() is response
     del problem
     gc.collect()
     assert owner() is not None  # A live response must keep its callback owner alive.
@@ -71,15 +74,9 @@ def test_bound_callbacks_are_kept_alive_and_cycles_are_collected():
     assert owner() is None
 
 
-def test_gc_handles_uninitialized_and_failed_construction():
-    import gc
+def test_invalid_initial_state_is_rejected():
     import pytest
 
-    instance = solver.StaticEquilibriumResponse.__new__(
-        solver.StaticEquilibriumResponse
-    )
-    gc.collect()
-    del instance
     with pytest.raises(ValueError):
         solver.StaticEquilibriumResponse(
             2,
@@ -89,7 +86,6 @@ def test_gc_handles_uninitialized_and_failed_construction():
             lambda p: None,
             lambda u: FormulaForce(2, u, lambda p: None, lambda p, u: None),
         )
-    gc.collect()
 
 
 def test_fast_products_rectangular_fixed_dofs_and_recovery():

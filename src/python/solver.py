@@ -1,5 +1,9 @@
 """Nonlinear solvers, mirroring src/core/solver.
 
+Retained callbacks must not strongly reference their owning response, directly or
+through a model object. Use weakref.ref for a back-reference; bindings do not
+collect cross-language ownership cycles.
+
 Gauss-Newton accepts a Response and uses sparse damped normal equations for damped steps.
 Jacobian patterns are updated at current iterates; symbolic analysis is reused
 while the structure is unchanged. Trials evaluate only the residual vector.

@@ -1,14 +1,10 @@
 #pragma once
 #include "litepgo/dof/response_assembler.hpp"
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
-#include <array>
 #include <limits>
 #include <memory>
 
 namespace litepgo::energy {
-namespace binding {
-template <class T> struct ResponseOwnerGC;
-}
 // Gather local inputs, transform them, and concatenate outputs in element order.
 // The local response is reused sequentially; VJP sums shared/repeated input DOFs.
 class ElementwiseResponse final : public FixedPatternResponse {
@@ -18,7 +14,6 @@ class ElementwiseResponse final : public FixedPatternResponse {
         : ElementwiseResponse(make_assembler(input_map, transform), transform) {}
 
   private:
-    template <class T> friend struct binding::ResponseOwnerGC;
     template <class Map>
     static dof::ResponseAssembler make_assembler(const Map& map, const std::shared_ptr<Response>& transform) {
         if (!transform || transform->num_outputs() <= 0 || map.num_elements() < 0 ||
@@ -38,12 +33,11 @@ class ElementwiseResponse final : public FixedPatternResponse {
         return {map.num_elements() * transform->num_outputs(), map.num_dofs(), std::move(rows), std::move(cols)};
     }
     ElementwiseResponse(dof::ResponseAssembler assembler, std::shared_ptr<Response> transform);
-    Response& transform() const;
     Vec gather(int e, const ConstVecRef& x) const;
     Vec eval_impl(const ConstVecRef& x, SpMat* J) override;
     Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& v) override;
     Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& w) override;
     dof::ResponseAssembler assembler_;
-    std::array<std::shared_ptr<Response>, 1> children_;
+    std::shared_ptr<Response> transform_;
 };
 } // namespace litepgo::energy

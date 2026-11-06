@@ -33,6 +33,12 @@ MeshEnergy(map, batch_size=256) implements eval_batch(ids, x, need_gradient,
 need_hessian), returning shapes (B,), (B,n), (B*n,n). Optional
  eval_feasible_step_batch(ids, x, dx) returns (B,) conservative bounds.
 
+Ownership must remain acyclic: children must not strongly reference their owner,
+including through closures or model containers. Use weakref.ref(owner) when a
+back-reference is needed; native Energy and Response instances support weak
+references. Bindings keep children alive but do not collect cross-language cycles.
+The same contract applies to equilibrium callbacks and contact/FEM dependencies.
+
 Vector responses and analytic sparse derivatives.
 
 Ordinary eval_value(x), eval_jacobian(x), eval_value_and_jacobian(x),

@@ -218,3 +218,26 @@ def test_analytic_features_and_mollifier_match_toolkit(positions, use_area_weigh
 def test_spatial_hash_rejects_invalid_cell_size(cell_size):
     with pytest.raises(ValueError):
         contact.SpatialHash(cell_size)
+
+
+
+def test_broad_phase_lifetime_with_weak_energy_back_reference():
+    import gc
+    import weakref
+
+    class BroadPhase(contact.SpatialHash):
+        pass
+
+    broad = BroadPhase()
+    barrier = contact.IPCContactEnergy(
+        two_triangles(0.5), contact.IPCContactOptions(dhat=1.0), broad)
+    broad.energy = weakref.ref(barrier)
+    assert broad.energy() is barrier
+    broad_ref, energy_ref = weakref.ref(broad), weakref.ref(barrier)
+    del broad
+    gc.collect()
+    assert broad_ref() is not None
+    assert barrier.eval_value(barrier.rest_positions.ravel()) > 0
+    del barrier
+    gc.collect()
+    assert broad_ref() is None and energy_ref() is None

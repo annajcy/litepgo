@@ -164,7 +164,9 @@ def test_missing_hook_reentrancy_and_ownership():
 
     child = Affine(np.eye(2))
     owner = energy.ComposedResponse(energy.ExpResponse(2), child)
-    child.owner = owner
+    child.owner = weakref.ref(owner)
+    assert child.owner() is owner
+    owner_ref = weakref.ref(owner)
     ref = weakref.ref(child)
     del child
     gc.collect()
@@ -173,6 +175,7 @@ def test_missing_hook_reentrancy_and_ownership():
     del owner
     gc.collect()
     assert ref() is None
+    assert owner_ref() is None
 
 
 def test_dynamic_constant_hessian_and_atomic_pattern_validation():

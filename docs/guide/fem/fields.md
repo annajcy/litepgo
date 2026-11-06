@@ -132,6 +132,9 @@ coordinate optimization and spatial derivatives of $F$ are not part of this API.
 C++ composed fields and local material objects borrow named inputs: keep them
 alive, and avoid temporaries. Python retains those dependencies. Basic identity
 and interpolated fields themselves own snapshots.
+Python dependencies must not strongly reference their owner, including through
+model containers or callbacks; see the
+[acyclic ownership contract](../concepts.md#python-ownership-must-remain-acyclic).
 
 ## Integration applies the measure once
 

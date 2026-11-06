@@ -1,12 +1,8 @@
 #pragma once
 #include "litepgo/energy/response/response.hpp"
-#include <array>
 #include <memory>
 
 namespace litepgo::energy {
-namespace binding {
-template <class T> struct ResponseOwnerGC;
-}
 // outer(inner(x)); owns both responses. Ordinary evaluation prepares the composed pattern automatically.
 class ComposedResponse final : public Response {
   public:
@@ -20,14 +16,12 @@ class ComposedResponse final : public Response {
     bool has_hessian() const override;
 
   private:
-    template <class T> friend struct binding::ResponseOwnerGC;
-    void check_children() const;
     Vec eval_value_impl(const ConstVecRef& x) override;
     std::pair<Vec, SpMat> eval_value_and_jacobian_impl(const ConstVecRef& x) override;
     SpMat eval_weighted_hessian_impl(const ConstVecRef& x, const ConstVecRef& weights) override;
     Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& v) override;
     Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& w) override;
-    std::array<std::shared_ptr<Response>, 2> children_;
+    std::shared_ptr<Response> outer_, inner_;
     int num_inputs_, num_outputs_;
 };
 } // namespace litepgo::energy

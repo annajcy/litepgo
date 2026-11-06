@@ -9,7 +9,7 @@ using namespace nb::literals;
 namespace litepgo::energy::binding {
 void bind_response(nb::module_& m) {
     using linalg::binding::SparseArgument;
-    nb::class_<Response>(m, "Response")
+    nb::class_<Response>(m, "Response", nb::is_weak_referenceable())
         .def_prop_ro("num_inputs", &Response::num_inputs)
         .def_prop_ro("num_outputs", &Response::num_outputs)
         .def_prop_ro("has_hessian", &Response::has_hessian)

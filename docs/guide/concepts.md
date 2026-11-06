@@ -104,6 +104,38 @@ objects borrow other fields; those inputs must outlive them. Python bindings kee
 borrowed field inputs alive. An energy may own arrays of fields while a field
 inside that array still borrows an external input: keep that dependency alive too.
 
+### Python ownership must remain acyclic
+
+Bindings keep child objects and callbacks alive for as long as their owner needs
+them. They do **not** implement custom cyclic-GC traversal for references held by
+C++. Do not give a child a strong reference back to its owner, directly or through
+a list, closure, bound method, or another model object. Violating this contract
+can leak the entire ownership cycle even after `gc.collect()`.
+
+This applies to Energy/Response composites, contact broad phases, FEM Field
+dependencies, and equilibrium factories. Native Energy and Response instances
+support `weakref.ref`; use a weak reference when a child needs to reach its owner:
+
+```python
+import weakref
+
+child.owner = weakref.ref(composite)
+owner = child.owner()  # None after the owner has been released.
+if owner is not None:
+    # Use owner only for the duration of this operation.
+    pass
+```
+
+An equilibrium response retains its factory callbacks. If those are methods of
+a Python `Problem`, the response keeps `Problem` alive. Store only
+`weakref.ref(response)` on that `Problem`, or keep the response outside it;
+`Problem -> response -> bound method -> Problem` is otherwise a strong cycle.
+For other bound types that do not support weak references, omit the back-reference
+or refer weakly to a Python model container. No property named `owner` or
+`energy` is required by the library.
+
+### Concurrent evaluation
+
 Energy and Response implementations with shared workspaces (such as MeshEnergy,
 MeshResponse, and cached energy composites) reject overlapping evaluation. The
 mathematical Energy and Response bases have no global concurrency guard; custom

@@ -126,7 +126,7 @@ def test_dynamic_children_and_external_pattern_updates():
 
 
 @pytest.mark.parametrize("kind", ["composed", "elementwise"])
-def test_child_lifetime_and_cycles(kind):
+def test_child_lifetime_with_weak_back_reference(kind):
     class Child(energy.FixedPatternResponse):
         def __init__(self):
             super().__init__(np.eye(2))
@@ -139,7 +139,9 @@ def test_child_lifetime_and_cycles(kind):
         owner = energy.ComposedResponse(child, energy.ExpResponse(2))
     else:
         owner = energy.ElementwiseResponse(dof.ConstantDofMap(topology(), 2), child)
-    child.owner = owner
+    child.owner = weakref.ref(owner)
+    assert child.owner() is owner
+    owner_ref = weakref.ref(owner)
     ref = weakref.ref(child)
     del child
     gc.collect()
@@ -148,6 +150,7 @@ def test_child_lifetime_and_cycles(kind):
     del owner
     gc.collect()
     assert ref() is None
+    assert owner_ref() is None
 
 
 def test_empty_mesh():

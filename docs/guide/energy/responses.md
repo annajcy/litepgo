@@ -88,6 +88,13 @@ Composed responses use independent results from child evaluations, including whe
 both roles share a child. They support second order when both children support it.
 See [Response Hessians](response-hessians.md) for the chain rule.
 
+## Ownership
+
+Composed and elementwise responses retain their children. Children and callbacks
+must not strongly reference their owner; use a weak back-reference when necessary.
+Bindings keep children alive but do not provide cross-language cycle collection.
+See the [Python ownership contract](../concepts.md#python-ownership-must-remain-acyclic).
+
 ## Concurrency
 
 The base does not prohibit concurrent calls or reentry. This does not make arbitrary

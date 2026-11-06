@@ -156,8 +156,9 @@ auto response = std::make_shared<energy::ComposedResponse>(force, plastic);
 
 Headers are `litepgo/energy/response/{elementwise_response,composed_response,exp_response}.hpp`
 and `litepgo/fem/parameter/log_diagonal_fp_response.hpp`. Child responses are
-shared-owned; Python subclass lifetimes and ownership cycles are handled by the
-bindings. Captured model configuration must remain fixed. Thread safety depends on each child implementation; children with shared
+shared-owned; bindings keep Python subclasses alive. Child-to-owner back-references
+must be weak: cross-language ownership cycles are not collected by the bindings.
+See the [ownership contract](../concepts.md#python-ownership-must-remain-acyclic). Captured model configuration must remain fixed. Thread safety depends on each child implementation; children with shared
 workspaces protect their own evaluation.
 
 Elementwise evaluation calls the local Response sequentially, including Python

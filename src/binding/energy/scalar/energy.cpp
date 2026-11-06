@@ -23,7 +23,7 @@ void bind_energy(nb::module_& m) {
 
     // Energies are held by std::shared_ptr, so composites keep their Python
     // children alive. The GIL is released while C++ evaluates.
-    nb::class_<Energy>(m, "Energy")
+    nb::class_<Energy>(m, "Energy", nb::is_weak_referenceable())
         .def_prop_ro("num_dofs", &Energy::num_dofs)
         .def("eval_value", &Energy::eval_value, "x"_a, nb::call_guard<nb::gil_scoped_release>())
         .def("eval_gradient", &Energy::eval_gradient, "x"_a, nb::call_guard<nb::gil_scoped_release>())
