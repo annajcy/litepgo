@@ -110,8 +110,7 @@ the `Basis` concept.
 | `QuadHermiteBasis` | $[0,1]^2$ | 16 | Corner values and derivative slots |
 | `HexHermiteBasis` | $[0,1]^3$ | 64 | Corner values and derivative slots |
 
-Python exposes all seven named bases in this table. Generic
-`TensorProductBasis2D<B>` / `TensorProductBasis3D<B>` remain C++ building blocks.
+C++ and Python expose all seven named bases in this table.
 
 ## Linear Lagrange in 1D
 
@@ -321,31 +320,12 @@ or mixed second derivative returned by the API. Together with the 1D
 polynomials above, this defines all derivative entries for Hex Q1 and both
 Hermite bases.
 
-Generic tensor products use one fixed order: reference nodes first, derivative
-slots within each node. For endpoint bases, the node order is the Quad/Hex
-corner order listed above. Slots use increasing total derivative order,
-with earlier coordinate directions first within each degree. Thus 3D Hermite
-slots are `u, u_r, u_s, u_t, u_rs, u_rt, u_st, u_rst`.
-Values, derivatives, and `coefficient_info` share the same row order.
-
-The index combinations come from the 1D coefficient descriptions. For example,
-combining a sample at `point=0, derivative_order=(1,)` with a sample at
-`point=1, derivative_order=(0,)` gives `point=(0,1)` and
-`derivative_order=(1,0)` in 2D. Evaluation generates rows directly in this
-order; there is no separate matrix permutation.
-
-The named tensor bases are C++ aliases:
-
-```cpp
-using HexQ1Basis = TensorProductBasis3D<LinearLagrangeBasis>;
-using QuadHermiteBasis = TensorProductBasis2D<CubicHermiteBasis>;
-using HexHermiteBasis = TensorProductBasis3D<CubicHermiteBasis>;
-```
-
-This replaces the generic tensor products' former last-coordinate-fastest row
-order. Existing named Quad/Hex coefficient orders are preserved. Code that used
-generic tensor products with manually ordered coefficient arrays must update
-those arrays; `coefficient_info` supplies the corresponding sample definitions.
+`HexQ1Basis`, `QuadHermiteBasis`, and `HexHermiteBasis` implement these
+products directly using the 1D bases. Each class lists its fixed corner order;
+the Hermite classes also list the derivative slots within each corner.
+The 1D Hermite factor for endpoint `p` and derivative order `d` has index
+`2 * p + d`. Values, derivatives, and `coefficient_info` use these same tables,
+so their rows stay aligned without sorting or a separate matrix permutation.
 Quadrature point ordering is independent and remains last-coordinate-fastest.
 
 ## Evaluate a basis
