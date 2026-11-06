@@ -49,6 +49,7 @@ add_executable(litepgo_fem_tests
     fem/basis/3d/hex_q1_basis_gtest.cpp
     fem/basis/3d/hex_hermite_basis_gtest.cpp
     fem/basis/3d/tet_p1_basis_gtest.cpp
+    fem/response/interpolated_response_gtest.cpp
     fem/field/interpolated_field_gtest.cpp
     fem/field/interpolated_field_2d_gtest.cpp
     fem/kinematics/basis_dof_transform_gtest.cpp
@@ -262,3 +263,6 @@ add_test(NAME MeshResponseSubclassExample COMMAND $<TARGET_FILE:mesh_response_su
 
 add_dependencies(litepgo_tests response_hessian)
 add_test(NAME ResponseHessianExample COMMAND $<TARGET_FILE:response_hessian>)
+
+add_dependencies(litepgo_tests interpolated_response)
+add_test(NAME FemInterpolatedResponseExample COMMAND $<TARGET_FILE:interpolated_response>)

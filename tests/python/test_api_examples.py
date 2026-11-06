@@ -23,6 +23,7 @@ def test_thread_limit_example():
     "folder,name",
     [
         ("fem/basis", "tet_p1_basis"),
+        ("fem/basis", "interpolated_response"),
         ("fem/basis", "hermite_interpolation"),
         ("fem/quadrature", "quadrature_integration"),
         ("fem/response", "response_hessian"),

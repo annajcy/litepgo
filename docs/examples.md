@@ -35,6 +35,7 @@ last digits on every platform.
 
 | Area | Program | What it teaches |
 | --- | --- | --- |
+| FEM | [`interpolated_response`](examples/fem/interpolated-response.md) | Fixed coefficients and exact spatial derivatives |
 | FEM | [`tet_p1_basis`](examples/fem/tet-p1-basis.md) | Shape functions, target sampling at vertices, and scalar Field reconstruction |
 | FEM | [`hermite_interpolation`](examples/fem/hermite-interpolation.md) | Value/derivative samples and Hermite Field reconstruction in 2D/3D |
 | FEM | [`quadrature_integration`](examples/fem/quadrature-integration.md) | Reference integration in 1D/2D/3D and simplex area/volume weights |

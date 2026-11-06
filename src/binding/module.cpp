@@ -79,6 +79,7 @@ NB_MODULE(_core, m) {
     litepgo::fem::binding::bind_fem_field_field(fem);
     litepgo::fem::binding::bind_identity_field(fem);
     litepgo::fem::binding::bind_fem_field_interpolated_field(fem);
+    litepgo::fem::binding::bind_interpolated_response(fem);
     litepgo::fem::binding::bind_deformation_gradient_field(fem);
     litepgo::fem::binding::bind_fem_material_volumetric_neo_hookean(fem);
     litepgo::fem::binding::bind_fem_material_shell_koiter_stvk(fem);

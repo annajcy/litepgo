@@ -61,6 +61,7 @@ export default defineConfig({
         { text: 'Finite elements', link: '/guide/fem/', collapsed: true, items: [
           { text: 'Basis functions', link: '/guide/fem/basis' },
           { text: 'Quadrature', link: '/guide/fem/quadrature' },
+          { text: 'Spatial interpolation response', link: '/guide/fem/interpolated-response' },
           { text: 'Fields and quadrature', link: '/guide/fem/fields' },
           { text: 'Volumetric elasticity', link: '/guide/fem/volume' },
           { text: 'Shells and natural geometry', link: '/guide/fem/shell' },
@@ -86,6 +87,7 @@ export default defineConfig({
       { text: 'Examples', collapsed: true, items: [
         { text: 'Catalog and run instructions', link: '/examples' },
         { text: 'FEM basics', link: '/examples/fem/', collapsed: true, items: [
+          { text: 'Spatial interpolation response', link: '/examples/fem/interpolated-response' },
           { text: 'Tet P1 basis and field', link: '/examples/fem/tet-p1-basis' },
           { text: 'Hermite interpolation', link: '/examples/fem/hermite-interpolation' },
           { text: 'Quadrature integration', link: '/examples/fem/quadrature-integration' },

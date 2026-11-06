@@ -5,6 +5,13 @@ instantiation, with the C++ template arguments in order. Basis, quadrature and
 material classes are the type arguments; integers stand for integer arguments.
 Field type arguments of the energies are erased: they accept any Field3D.
 
+InterpolatedResponse[Basis](coefficients) snapshots a finite (basis_count, components)
+matrix and maps reference xi to coefficients.T @ Basis.eval_N(xi). All Response
+derivatives are with respect to xi, not coefficients. Coordinates have shape (D,),
+including (1,) for 1D bases. Weighted Hessians are exact full spatial Hessians.
+All seven named bases are bound; polynomial queries extrapolate outside the domain.
+See guide/fem/interpolated-response for shapes, packing and coefficient-map distinctions.
+
 All named bases expose coefficient_info(i): point is a reference coordinate,
 and derivative_order is a tuple of per-axis derivative orders. All zeros mean
 a value sample.
@@ -150,6 +157,7 @@ Field2D = _native.Field2D
 Field3D = _native.Field3D
 IdentityField2D = _native.IdentityField2D
 IdentityField3D = _native.IdentityField3D
+InterpolatedResponse = _templates["InterpolatedResponse"]
 InterpolatedField2D = _templates["InterpolatedField2D"]
 InterpolatedField3D = _templates["InterpolatedField3D"]
 DeformationGradientField3D = _native.DeformationGradientField3D
@@ -211,6 +219,7 @@ __all__ = [
     "Field3D",
     "IdentityField2D",
     "IdentityField3D",
+    "InterpolatedResponse",
     "InterpolatedField2D",
     "InterpolatedField3D",
     "DeformationGradientField3D",
