@@ -5,7 +5,7 @@
 #include "litepgo/dof/stencil_dof_map.hpp"
 #include "litepgo/energy/response/mesh_response.hpp"
 #include "litepgo/fem/detail/batch_views.hpp"
-#include "litepgo/fem/material/shell/shell_fp_force_local_response.hpp"
+#include "litepgo/fem/detail/shell_fp_force.hpp"
 #include <concepts>
 #include <utility>
 #include <vector>
@@ -71,7 +71,7 @@ template <class Material> class ShellFemForceFpResponse final : public energy::M
             const int e = ids[b];
             StridedVecRef value(values.row(b).transpose());
             auto J = detail::batch_matrix_view(jacobian, b, n);
-            detail::accumulate_shell_fp_force<Material>(data[e], plastic.row(b).transpose(), nullptr, areas[e], value,
+            detail::accumulate_shell_fp_force<Material>(data[e], plastic.row(b).transpose(), areas[e], value,
                                                         J ? &*J : nullptr);
         }
         return values;

@@ -6,7 +6,7 @@ from litepgo import fem, mesh
 def test_extracted_surface_and_geometry_snapshot():
     X = np.array([[0., 0, 0], [.25, .25, .25], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     cells = np.array([[1, 2, 3, 4], [0, 1, 3, 4], [0, 2, 1, 4], [0, 2, 3, 1]], dtype=np.int32)
-    fields = [fem.InterpolatedField3D[fem.TetP1Basis](X[c]) for c in cells]
+    fields = [fem.InterpolatedResponse[fem.TetP1Basis](X[c]) for c in cells]
     locator = fem.ElementLocator[fem.TetP1Basis](fields)
     surface = mesh.extract_surface(mesh.TetMesh(X, cells))
     result = locator.locate(surface.positions)
@@ -24,7 +24,7 @@ def test_extracted_surface_and_geometry_snapshot():
 def test_hex_geometry_for_hermite_displacement():
     X = np.array([fem.HexQ1Basis.coefficient_info(i).point for i in range(8)])
     X[6] += [.3, 0, .4]
-    field = fem.InterpolatedField3D[fem.HexQ1Basis](X)
+    field = fem.InterpolatedResponse[fem.HexQ1Basis](X)
     locator = fem.ElementLocator[fem.HexQ1Basis]([field])
     xi = np.array([[.2, .3, .4], [0, .5, 1]])
     points = np.array([field.eval_value(p) for p in xi])

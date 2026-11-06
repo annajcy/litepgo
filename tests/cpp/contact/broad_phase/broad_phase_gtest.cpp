@@ -1,5 +1,6 @@
 #include "litepgo/contact/broad_phase/detail/candidates.hpp"
 #include "litepgo/contact/broad_phase/spatial_hash.hpp"
+#include <memory>
 
 #include "litepgo/contact/ipc_contact_energy.hpp"
 #include <cstring>

@@ -5,7 +5,6 @@
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/energy/response/mesh_response.hpp"
 #include "litepgo/fem/basis/basis.hpp"
-#include "litepgo/fem/field/shared_field.hpp"
 #include "litepgo/fem/local/local_response.hpp"
 #include <memory>
 #include <nanobind/eigen/dense.h>
@@ -22,7 +21,7 @@ using namespace nb::literals;
 
 namespace litepgo::fem::binding {
 using bindings::register_instance;
-using Fields = std::vector<std::shared_ptr<Field3D>>;
+using Responses = std::vector<std::shared_ptr<energy::Response>>;
 template <class B, int Dim> void bind_basis(nb::module_& m, const char* name) {
     using Coordinate = typename CoefficientInfo<Dim>::Coordinate;
     nb::class_<B> cls(m, name,
@@ -68,34 +67,14 @@ inline std::string class_name(nb::handle cls) {
     return nb::cast<std::string>(cls.attr("__name__"));
 }
 
-template <class M, class Local>
-void bind_force_local_response(nb::module_& m, const char* template_name, const char* doc) {
-    const nb::tuple key = nb::make_tuple(nb::type<M>());
-    const std::string name = std::string(template_name) + "[" + class_name(key[0]) + "]";
-    nb::class_<Local, LocalResponse3D>(m, name.c_str())
-        .def(nb::init<const Field3D&, const Field3D&, const Field3D&>(), "F"_a, "Fp"_a, "theta"_a,
-             nb::keep_alive<1, 2>(), nb::keep_alive<1, 3>(), nb::keep_alive<1, 4>(), doc);
-    register_instance(m, template_name, key, nb::type<Local>());
-}
-
-// Field types are erased: Python passes any Field3D, held through SharedField3D.
-
-inline std::vector<SharedField3D> shared(const Fields& fields) {
-    std::vector<SharedField3D> result;
-    result.reserve(fields.size());
-    for (const auto& field : fields)
-        result.emplace_back(field);
-    return result;
-}
-
 template <class ParameterMap, class Force, class Cls>
 void bind_force_init(Cls& cls, const char* fixed_name, const char* doc) {
     cls.def(
         "__init__",
         [](Force* self, const ParameterMap& parameter_map, const dof::VertexDofMap& displacement_map,
-           const Fields& rest_position_fields, Vec displacement, const Fields& fixed, int batch_size) {
-            new (self) Force(parameter_map, displacement_map, shared(rest_position_fields), std::move(displacement),
-                             shared(fixed), batch_size);
+           const Responses& rest_position_fields, Vec displacement, const Responses& fixed, int batch_size) {
+            new (self) Force(parameter_map, displacement_map, rest_position_fields, std::move(displacement), fixed,
+                             batch_size);
         },
         "parameter_map"_a, "displacement_map"_a, "rest_position_fields"_a, "displacement"_a, nb::arg(fixed_name),
         "batch_size"_a = 256, doc);

@@ -4,6 +4,7 @@ Run from the repository root after building litepgo:
     uv run --no-sync python examples/fem/fitting/volume_equilibrium_material_fit.py
 """
 
+from litepgo.energy import AffineResponse
 from pathlib import Path
 from dataclasses import dataclass
 from functools import partial
@@ -37,7 +38,7 @@ class Problem:
             self.mapping,
             self.geometry,
             self.plastic,
-            [fem.IdentityField3D(theta)] * len(self.geometry),
+            [AffineResponse(np.zeros((2, 3)), theta)] * len(self.geometry),
         )
 
     def make_response(self, u):
@@ -53,7 +54,7 @@ def make_geometry(input_path=None):
     topology = rest.topology
     positions = rest.positions.ravel()
     mapping = dof.VertexDofMap(topology, 3)
-    XField = fem.InterpolatedField3D[fem.TetP1Basis]
+    XField = fem.InterpolatedResponse[fem.TetP1Basis]
     geometry = [XField(mapping.gather(e, positions)) for e in range(topology.num_cells)]
     z = rest.positions[:, 2]
     height = z.max() - z.min()
@@ -70,7 +71,7 @@ def make_geometry(input_path=None):
     return Problem(
         mapping,
         geometry,
-        [fem.IdentityField3D(np.eye(3).ravel())] * len(geometry),
+        [AffineResponse(np.zeros((9, 3)), np.eye(3).ravel())] * len(geometry),
         dof.ConstantDofMap(topology, 2),
         fixed,
         top,

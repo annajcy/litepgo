@@ -1,3 +1,4 @@
+from litepgo.energy import AffineResponse
 import gc
 
 import numpy as np
@@ -6,7 +7,6 @@ import pytest
 from litepgo import dof, energy, fem, mesh
 from test_shell_material_force_response import problem
 
-Local = fem.ShellFpForceLocalResponse2D[fem.KoiterStVK]
 Force = fem.ShellFemForceFpResponse[fem.KoiterStVK]
 P = np.array([[1.12, .07, -.02], [.03, .94, .06], [.01, -.03, 1.08]])
 
@@ -62,31 +62,6 @@ def test_shared_and_element_fp_jacobians_and_original_area(batch_size):
     np.testing.assert_allclose(shared.eval_value(packed), value, atol=1e-12)
 
 
-def test_local_field_chain_rule_and_lifetime():
-    _, mapping, rest, u, thickness = problem()
-    xi = np.array([.2, .3])
-    coefficients = np.array([(1+.02*i)*P.ravel(order="F") for i in range(3)])
-    Field = fem.InterpolatedField2D[fem.TriangleP1Basis]
-    field = Field(coefficients)
-    theta = np.array([2., 3.])
-    local_u = mapping.gather(0, u)
-    local = Local(rest[0], local_u, thickness[0], field, theta)
-    assert isinstance(local, fem.LocalResponse2D) and local.num_inputs == 27
-    value, J = local.eval_value(xi), local.eval_jacobian(xi)
-    for j in range(27):
-        plus, minus = coefficients.copy(), coefficients.copy()
-        plus.flat[j] += 1e-6
-        minus.flat[j] -= 1e-6
-        fp = Local(rest[0], local_u, thickness[0], Field(plus), theta).eval_value(xi)
-        fm = Local(rest[0], local_u, thickness[0], Field(minus), theta).eval_value(xi)
-        np.testing.assert_allclose(J[:, j], (fp-fm)/2e-6, atol=2e-7, rtol=1e-6)
-    weighted, weighted_J = local.accumulate(xi, .4, jacobian=True)
-    np.testing.assert_allclose(weighted, .4*value, atol=1e-12)
-    np.testing.assert_allclose(weighted_J, .4*J, atol=1e-12)
-    del field, rest, local_u, mapping
-    theta[:] = 100
-    gc.collect()
-    np.testing.assert_allclose(local.eval_value(xi), value, atol=1e-12)
 
 
 def test_natural_form_mixed_derivative_binding():
@@ -125,8 +100,6 @@ def test_invalid_inputs_and_empty_mesh():
     for packed in [np.zeros(9), np.full(9, np.nan), np.diag([-1., 1., 1.]).ravel(), np.ones(8)]:
         with pytest.raises(ValueError):
             response.eval_value(packed)
-    with pytest.raises(ValueError):
-        Local(rest[0], mapping.gather(0, u), thickness[0], fem.IdentityField2D(np.ones(8)), theta[0])
     empty = mesh.TriangleTopology(0, np.empty((0, 3), dtype=np.int32))
     zero = Force(dof.ConstantDofMap(empty, 9), dof.StencilDofMap(0, [], 3), [], np.empty(0), [], [])
     value, J = zero.eval_value_and_jacobian(np.eye(3).ravel(order="F"))

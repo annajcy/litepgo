@@ -9,7 +9,7 @@ def model():
     X = np.vstack([X,right[[1,2,5,6]]])
     cells = np.array([[0,1,2,3,4,5,6,7],[1,8,9,2,5,10,11,6]],dtype=np.int32)
     topology = mesh.HexTopology(len(X),cells)
-    fields = [fem.InterpolatedField3D[fem.HexQ1Basis](X[c]) for c in cells]
+    fields = [fem.InterpolatedResponse[fem.HexQ1Basis](X[c]) for c in cells]
     return X,topology,fields
 
 
@@ -58,7 +58,7 @@ def test_hermite_derivatives_move_face_samples_but_not_corners():
             np.testing.assert_array_equal(displacement[:len(X)],0)
         for i,(e,xi) in enumerate(zip(sampled.embedding.element_ids,sampled.embedding.xi)):
             coeffs = fem.BasisDofTransform[fem.HexHermiteBasis](fields[e]).to_coefficients(layout.gather(e,u))
-            expected = fem.InterpolatedField3D[fem.HexHermiteBasis](coeffs).eval_value(xi)
+            expected = fem.InterpolatedResponse[fem.HexHermiteBasis](coeffs).eval_value(xi)
             np.testing.assert_allclose(displacement[i],expected,atol=1e-12)
 
 
@@ -69,7 +69,7 @@ def test_boundary_input_checks():
             fem.sample_boundary[fem.HexQ1Basis](topology,fields,n)
     with pytest.raises(ValueError):
         fem.sample_boundary[fem.HexQ1Basis](topology,fields[:1],2)
-    bad = fem.InterpolatedField3D[fem.HexQ1Basis](X[[1,8,9,2,5,10,11,6]] + [0,.01,0])
+    bad = fem.InterpolatedResponse[fem.HexQ1Basis](X[[1,8,9,2,5,10,11,6]] + [0,.01,0])
     with pytest.raises(ValueError,match='inconsistent'):
         fem.sample_boundary[fem.HexQ1Basis](topology,[fields[0],bad],2)
     cells = np.tile(np.arange(8,dtype=np.int32),(3,1))

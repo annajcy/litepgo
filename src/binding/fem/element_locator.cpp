@@ -3,7 +3,8 @@
 #include "detail/templates.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
+#include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/vector.h>
 #include <stdexcept>
 #include <vector>
@@ -20,7 +21,7 @@ using bindings::register_instance;
 template <class B> void bind_element_locator(nb::module_& m, const char* name) {
     using Locator = ElementLocator<B>;
     nb::class_<Locator>(m, name)
-        .def(nb::init<std::vector<InterpolatedField3D<B>>>(), "X_fields"_a)
+        .def(nb::init<std::vector<std::shared_ptr<energy::Response>>>(), "X_fields"_a)
         .def("locate", &Locator::locate, "points"_a);
     register_instance(m, "ElementLocator", nb::make_tuple(nb::type<B>()), nb::type<Locator>());
 }

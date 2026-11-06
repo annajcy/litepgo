@@ -4,6 +4,7 @@ Run from the repository root after building litepgo:
     uv run --no-sync python examples/fem/equilibrium/tet_p1_corner_pull.py
 """
 
+from litepgo.energy import AffineResponse
 import argparse
 import sys
 from pathlib import Path
@@ -39,13 +40,13 @@ def main():
     if topology.num_cells == 0:
         raise RuntimeError("Example requires a nonempty mesh")
     rest_position_map = dof.VertexDofMap(topology, 3)
-    XField = fem.InterpolatedField3D[fem.TetP1Basis]
+    XField = fem.InterpolatedResponse[fem.TetP1Basis]
     rest_position_fields = [
         XField(rest_position_map.gather(e, rest_positions))
         for e in range(topology.num_cells)
     ]
-    Fp_field = fem.IdentityField3D(np.eye(3).ravel(order="F"))
-    theta_field = fem.IdentityField3D(np.array([2.0, 3.0]))
+    Fp_field = AffineResponse(np.zeros((9, 3)), np.eye(3).ravel(order="F"))
+    theta_field = AffineResponse(np.zeros((2, 3)), np.array([2.0, 3.0]))
     elastic = fem.VolumetricFemEnergy[
         fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
     ](

@@ -1,22 +1,23 @@
+#include "litepgo/energy/response/affine_response.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
 #include "litepgo/fem/volumetric_fem_force_fp_response.hpp"
 #include "litepgo/fem/volumetric_fem_force_material_response.hpp"
 #include <gtest/gtest.h>
+#include <memory>
 
 namespace litepgo::fem::test {
 namespace {
-using XField = InterpolatedField3D<TetP1Basis>;
-using Force =
-    VolumetricFemForceMaterialResponse<NeoHookean, TetP1Basis, TetCentroidQuadrature, XField, IdentityField3D>;
-using Energy =
-    VolumetricFemEnergy<NeoHookean, TetP1Basis, TetCentroidQuadrature, XField, IdentityField3D, IdentityField3D>;
+
+using Force = VolumetricFemForceMaterialResponse<NeoHookean, TetP1Basis, TetCentroidQuadrature>;
+using Energy = VolumetricFemEnergy<NeoHookean, TetP1Basis, TetCentroidQuadrature>;
 struct Fixture {
     mesh::TetTopology topology{5, {{0, 1, 2, 3}, {1, 2, 3, 4}}};
     dof::VertexDofMap map{topology, 3};
-    std::vector<XField> X;
-    std::vector<IdentityField3D> plastic;
+    std::vector<std::shared_ptr<litepgo::energy::Response>> X;
+    std::vector<std::shared_ptr<litepgo::energy::Response>> plastic;
     Vec u;
     Fixture() {
         Eigen::Matrix<double, 5, 3, Eigen::RowMajor> nodes;
@@ -27,17 +28,20 @@ struct Fixture {
         u = displacement.reshaped<Eigen::RowMajor>();
         const Vec positions = nodes.reshaped<Eigen::RowMajor>();
         for (int e = 0; e < 2; ++e) {
-            X.emplace_back(map.gather(e, positions));
+            X.push_back(std::make_shared<InterpolatedResponse<TetP1Basis>>(map.gather(e, positions)));
             Eigen::Matrix3d Fp = Eigen::Matrix3d::Identity();
             Fp(0, 0) = 1.1 + .05 * e;
             Fp(1, 2) = .1;
-            plastic.emplace_back(Fp.reshaped());
+            plastic.push_back(std::make_shared<litepgo::energy::AffineResponse>(
+                litepgo::SpMat((Fp.reshaped()).size(), 3), Fp.reshaped()));
         }
     }
     Vec force(const Vec& theta) const {
-        std::vector<IdentityField3D> fields;
+        std::vector<std::shared_ptr<litepgo::energy::Response>> fields;
         for (int e = 0; e < 2; ++e)
-            fields.emplace_back(theta.segment(theta.size() == 2 ? 0 : 2 * e, 2));
+            fields.push_back(std::make_shared<litepgo::energy::AffineResponse>(
+                litepgo::SpMat((theta.segment(theta.size() == 2 ? 0 : 2 * e, 2)).size(), 3),
+                theta.segment(theta.size() == 2 ? 0 : 2 * e, 2)));
         return Energy(map, X, plastic, fields).eval_gradient(u);
     }
 };
@@ -93,13 +97,14 @@ TEST(VolumetricFemForceMaterialResponse, OwnsDisplacementAndValidatesConstructio
 
 namespace litepgo::fem::test {
 TEST(VolumetricFemForceFpResponse, EnergyConsistencySharedElementAndBatchJacobians) {
-    using PlasticForce =
-        VolumetricFemForceFpResponse<NeoHookean, TetP1Basis, TetCentroidQuadrature, XField, IdentityField3D>;
+    using PlasticForce = VolumetricFemForceFpResponse<NeoHookean, TetP1Basis, TetCentroidQuadrature>;
     Fixture f;
-    std::vector<IdentityField3D> theta{IdentityField3D(Eigen::Vector2d(2, 3)), IdentityField3D(Eigen::Vector2d(4, 2))};
+    std::vector<std::shared_ptr<litepgo::energy::Response>> theta{
+        std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(2, 3)),
+        std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(4, 2))};
     Vec p(18);
     for (int e = 0; e < 2; ++e)
-        p.segment<9>(9 * e) = f.plastic[e].eval_value(Eigen::Vector3d::Zero());
+        p.segment<9>(9 * e) = f.plastic[e]->eval_value(Eigen::Vector3d::Zero());
     Eigen::MatrixXd reference;
     for (int size : {1, 3, 256}) {
         PlasticForce local(dof::ElementDofMap(f.topology, 9), f.map, f.X, f.u, theta, size);

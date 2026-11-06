@@ -1,3 +1,4 @@
+#include <memory>
 // Recover shared KoiterStVK parameters from forces at a prescribed shell pose.
 // Build: cmake --build build/release --target shell_fixed_pose_material_fit
 // Run: build/release/examples/fem/fitting/shell_fixed_pose_material_fit

@@ -36,13 +36,13 @@ def _sample_fields(fields, count, width=None):
     if len(fields) != count:
         raise ValueError("expected one geometry or material field per element")
     for field in fields:
-        if not isinstance(field, fem.Field3D):
-            raise TypeError("expected Field3D entries")
-        if field.num_components <= 0 or (
-            width is not None and field.num_components != width
+        if not isinstance(field, energy.Response):
+            raise TypeError("expected spatial Response entries")
+        if field.num_outputs <= 0 or (
+            width is not None and field.num_outputs != width
         ):
             raise ValueError("incompatible field component count")
-        width = field.num_components
+        width = field.num_outputs
     return _finite(
         np.array(
             [field.eval_value(np.full(3, 0.25)) for field in fields], dtype=np.float64
@@ -62,16 +62,15 @@ class _TetGeometry:
         if len(fields) != count:
             raise ValueError("expected one geometry field per element")
         xi = np.full(3, 0.25)
-        zero = fem.InterpolatedField3D[fem.TetP1Basis](np.zeros((4, 3)))
         derivatives, weights = [], []
         for X in fields:
-            if not isinstance(X, fem.Field3D):
-                raise TypeError("expected Field3D entries")
-            if X.num_components != 3:
+            if not isinstance(X, energy.Response):
+                raise TypeError("expected spatial Response entries")
+            if X.num_outputs != 3:
                 raise ValueError("reference geometry requires three components")
-            J = X.eval_dvalue_dxi(xi)
+            J = X.eval_jacobian(xi).toarray()
             _positive_det(J, "reference geometry")
-            B = fem.DeformationGradientField3D(zero, X).eval_dvalue_dcoeffs(xi)
+            B = np.kron((fem.TetP1Basis.eval_dN_dxi(xi) @ np.linalg.inv(J)).T, np.eye(3))
             # Native vec(F) is column-major; Torch reshapes matrices row-major.
             derivatives.append(B.reshape(3, 3, 12).transpose(1, 0, 2).reshape(9, 12))
             weights.append(np.linalg.det(J) / 6)
@@ -96,7 +95,7 @@ def _density(material, F, Fp, theta):
 class TorchVolumetricFemEnergy(energy.MeshEnergy):
     """TetP1/centroid FEM energy driven by ``material(F, Fp, theta) -> W``.
 
-    All three field lists contain one Field3D per element. Geometry has three
+    All three field lists contain one spatial Response per element. Geometry has three
     components, Fp has nine (column-major), and theta has a common positive width.
     Their centroid samples are snapshotted at construction; rebuild to change them.
     ``displacement_map`` must be a VertexDofMap with four vertices per element and

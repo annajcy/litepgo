@@ -1,10 +1,11 @@
+#include "litepgo/fem/response/interpolated_response.hpp"
 // pull a hex box's corners and solve static equilibrium.
 // Build: cmake --build build/release --target hex_q1_corner_pull
 // Run: build/release/examples/fem/equilibrium/hex_q1_corner_pull
 
+#include "litepgo/energy/response/affine_response.hpp"
 #include "litepgo/energy/scalar/vertex_pulling_energy.hpp"
 #include "litepgo/energy/scalar/weighted_sum_energy.hpp"
-#include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
@@ -31,18 +32,20 @@ int main(int argc, char** argv) {
     if (topology.num_cells() == 0)
         throw std::runtime_error("Example requires a nonempty mesh");
     const dof::VertexDofMap rest_position_map(topology, 3);
-    using XField = fem::InterpolatedField3D<fem::HexQ1Basis>;
-    std::vector<XField> rest_position_fields;
+
+    std::vector<std::shared_ptr<litepgo::energy::Response>> rest_position_fields;
     rest_position_fields.reserve(topology.num_cells());
     for (int e = 0; e < topology.num_cells(); ++e)
-        rest_position_fields.emplace_back(rest_position_map.gather(e, rest_positions));
-    const fem::IdentityField3D Fp_field(Eigen::Matrix3d::Identity().reshaped());
-    const fem::IdentityField3D theta_field(Eigen::Vector2d(2, 3));
-    auto elastic = std::make_shared<fem::VolumetricFemEnergy<fem::NeoHookean, fem::HexQ1Basis, fem::GaussLegendre3D<2>,
-                                                             XField, fem::IdentityField3D, fem::IdentityField3D>>(
-        rest_position_map, std::move(rest_position_fields),
-        std::vector<fem::IdentityField3D>(topology.num_cells(), Fp_field),
-        std::vector<fem::IdentityField3D>(topology.num_cells(), theta_field));
+        rest_position_fields.push_back(
+            std::make_shared<fem::InterpolatedResponse<fem::HexQ1Basis>>(rest_position_map.gather(e, rest_positions)));
+    auto Fp_field =
+        std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped());
+    auto theta_field = std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(2, 3));
+    auto elastic =
+        std::make_shared<fem::VolumetricFemEnergy<fem::NeoHookean, fem::HexQ1Basis, fem::GaussLegendre3D<2>>>(
+            rest_position_map, std::move(rest_position_fields),
+            std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), Fp_field),
+            std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), theta_field));
 
     // Pull the bounding-box corners toward a copy of the box enlarged about its minimum
     // corner, whose anchor coincides with that corner's rest position.

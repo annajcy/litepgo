@@ -6,7 +6,6 @@ import pytest
 from litepgo import dof, energy, fem, mesh, solver
 
 Force = fem.ShellFemForceMaterialResponse[fem.KoiterStVK]
-Local = fem.ShellMaterialForceLocalResponse2D[fem.KoiterStVK]
 Energy = fem.ShellFemEnergy[fem.KoiterStVK]
 
 
@@ -55,33 +54,6 @@ def test_shared_and_per_face_parameters_match_energy(batch_size):
     np.testing.assert_allclose(shared.eval_value(theta), value, atol=1e-13)
 
 
-def test_local_field_coefficients_weight_and_lifetime():
-    _, mapping, rest, u, thickness = problem()
-    xi = np.array([.2, .3])
-    coefficients = np.array([[2., 3.], [4., 5.], [1., 2.]])
-    Field = fem.InterpolatedField2D[fem.TriangleP1Basis]
-    field = Field(coefficients)
-    local_u = mapping.gather(0, u)
-    local = Local(rest[0], local_u, thickness[0], field)
-    assert isinstance(local, fem.LocalResponse2D)
-    assert local.num_inputs == 6 and local.num_outputs == 18
-    theta = field.eval_value(xi)
-    expected = fem.ShellMaterialLocalEnergy2D[fem.KoiterStVK](rest[0], local_u, thickness[0], theta).eval_gradient(xi)
-    J = local.eval_jacobian(xi)
-    np.testing.assert_allclose(local.eval_value(xi), expected, atol=1e-13)
-    for j in range(6):
-        plus, minus = coefficients.copy(), coefficients.copy()
-        plus.flat[j] += 1e-6
-        minus.flat[j] -= 1e-6
-        fp = Local(rest[0], local_u, thickness[0], Field(plus)).eval_value(xi)
-        fm = Local(rest[0], local_u, thickness[0], Field(minus)).eval_value(xi)
-        np.testing.assert_allclose(J[:, j], (fp-fm)/2e-6, atol=1e-8)
-    value, weighted_J = local.accumulate(xi, .4, jacobian=True)
-    np.testing.assert_allclose(value, .4*expected, atol=1e-13)
-    np.testing.assert_allclose(weighted_J, .4*J, atol=1e-13)
-    del field, rest, mapping, local_u
-    gc.collect()
-    np.testing.assert_allclose(local.eval_value(xi), expected, atol=1e-13)
 
 
 def test_material_mixed_derivative_and_parameter_recovery():

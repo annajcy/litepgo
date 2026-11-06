@@ -6,7 +6,8 @@
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
 #include "litepgo/fem/basis/basis.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
+#include "litepgo/fem/response/sampling_response.hpp"
 
 #include <gtest/gtest.h>
 
@@ -199,13 +200,29 @@ template <class B, int Dim> void check_evaluation_counts() {
         EXPECT_TRUE(eval().allFinite());
         EXPECT_EQ(Counted::calls, expected);
     };
-    const InterpolatedFieldT<Counted, Dim> field(Eigen::MatrixXd::Ones(B::num_basis_functions, 3));
-    check([&] { return field.eval_value(xi); }, {1, 0, 0});
-    check([&] { return field.eval_dvalue_dcoeffs(xi); }, {1, 0, 0});
-    check([&] { return field.eval_dvalue_dxi(xi); }, {0, 1, 0});
-    check([&] { return field.eval_dgrad_xi_dcoeffs(xi); }, {0, 1, 0});
-    check([&] { return field.eval_d2value_dxi2(xi); }, {0, 0, 1});
-    check([&] { return field.eval_dhess_xi_dcoeffs(xi); }, {0, 0, 1});
+    InterpolatedResponse<Counted> response(Eigen::MatrixXd::Ones(B::num_basis_functions, 3));
+    check([&] { return response.eval_value(xi); }, {1, 0, 0});
+    check([&] { return Eigen::MatrixXd(response.eval_jacobian(xi)); }, {1, 1, 0});
+    check([&] { return Eigen::MatrixXd(response.eval_hessian(xi, Vec::Ones(3))); }, {0, 0, 1});
+    const Eigen::MatrixXd points = xi.transpose();
+    check(
+        [&] {
+            auto r = value_sampling_response<Counted>(points, 3);
+            return r.eval_value(Vec::Ones(3 * B::num_basis_functions));
+        },
+        {1, 0, 0});
+    check(
+        [&] {
+            auto r = gradient_sampling_response<Counted>(points, 3);
+            return r.eval_value(Vec::Ones(3 * B::num_basis_functions));
+        },
+        {0, 1, 0});
+    check(
+        [&] {
+            auto r = hessian_sampling_response<Counted>(points, 3);
+            return r.eval_value(Vec::Ones(3 * B::num_basis_functions));
+        },
+        {0, 0, 1});
 }
 
 TEST(Basis2D, FieldsEvaluateOnlyRequestedQuantities) {

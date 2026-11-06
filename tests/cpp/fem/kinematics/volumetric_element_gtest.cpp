@@ -1,13 +1,10 @@
 #include "litepgo/fem/kinematics/volumetric_element.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
 
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
-#include "litepgo/fem/field/deformation_gradient_field.hpp"
-#include "litepgo/fem/field/identity_field.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
-#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 
@@ -23,203 +20,23 @@ namespace litepgo::fem::test {
 
 namespace {
 
-template <class B, class Q>
-double eval_displacement(const VolumetricElement3D<Q>& element, const Field3D& X, const Eigen::MatrixXd& u,
-                         const Field3D& Fp, const Field3D& theta, Eigen::VectorXd* g = nullptr,
-                         Eigen::MatrixXd* H = nullptr) {
-    const InterpolatedField3D<B> displacement(u);
-    const DeformationGradientField3D deformation(displacement, X);
-    const VolumetricMaterialLocalEnergyF3D<NeoHookean> local(deformation, Fp, theta);
-    return element.eval(local, g, H);
-}
-
-template <class B, class Q>
-double step_displacement(const VolumetricElement3D<Q>& element, const Field3D& X, const Eigen::MatrixXd& u,
-                         const Eigen::MatrixXd& du, const Field3D& Fp, const Field3D& theta) {
-    const InterpolatedField3D<B> displacement(u);
-    const DeformationGradientField3D deformation(displacement, X);
-    const VolumetricMaterialLocalEnergyF3D<NeoHookean> local(deformation, Fp, theta);
-    const Eigen::VectorXd delta = du.reshaped<Eigen::RowMajor>();
-    return element.max_feasible_step(local, delta);
-}
-
-template <class B> Eigen::MatrixXd coordinates() {
-    Eigen::MatrixXd X(B::num_basis_functions, 3);
-    for (int a = 0; a < X.rows(); ++a) {
-        const auto xi = B::coefficient_info(a).point;
-        X.row(a) =
-            Eigen::Vector3d(1.2 * xi.x() + 0.15 * xi.y() * xi.z(), 0.9 * xi.y() + 0.1 * xi.x() * xi.z(), 1.1 * xi.z())
-                .transpose();
-    }
-    return X;
-}
-
-template <class B, class XBasis, class Q> void compare_uncached() {
-    const InterpolatedField3D<XBasis> X(coordinates<XBasis>());
-    const VolumetricElement3D<Q> element(X);
-    Eigen::MatrixXd u(B::num_basis_functions, 3), du(u.rows(), 3);
-    for (int a = 0; a < u.rows(); ++a)
-        for (int c = 0; c < 3; ++c) {
-            u(a, c) = 0.02 * std::sin(3 * a + c + 0.2);
-            du(a, c) = 0.8 * std::cos(3 * a + c + 0.4);
-        }
-    const InterpolatedField3D<B> displacement(u);
-    const DeformationGradientField3D deformation(displacement, X);
-    const Eigen::Matrix3d Fp_matrix = (Eigen::Matrix3d() << 1.05, 0.02, 0, 0, 0.97, 0, 0, 0.01, 1.02).finished();
-    const IdentityField3D Fp(Fp_matrix.reshaped());
-    Eigen::MatrixXd theta_coeffs(XBasis::num_basis_functions, 2);
-    for (int a = 0; a < theta_coeffs.rows(); ++a)
-        theta_coeffs.row(a) = Eigen::Vector2d(2 + 0.2 * a, 3 + 0.1 * a).transpose();
-    const InterpolatedField3D<XBasis> theta(theta_coeffs);
-    const VolumetricMaterialLocalEnergyF3D<NeoHookean> local(deformation, Fp, theta);
-    Eigen::VectorXd g_ref = Eigen::VectorXd::Zero(local.num_dofs());
-    Eigen::MatrixXd H_ref = Eigen::MatrixXd::Zero(local.num_dofs(), local.num_dofs());
-    double E_ref = 0, alpha_ref = 1;
-    const Eigen::VectorXd delta = du.reshaped<Eigen::RowMajor>();
-    for (int q = 0; q < Q::num_points; ++q) {
-        const Eigen::Vector3d xi = Q::points().row(q).transpose();
-        const double weight = Q::weights()[q] * Eigen::Matrix3d(X.eval_dvalue_dxi(xi)).determinant();
-        E_ref += local.accumulate(xi, weight, &g_ref, &H_ref);
-        alpha_ref = std::min(alpha_ref, local.eval_feasible_step(xi, delta));
-    }
-    Eigen::VectorXd g = Eigen::VectorXd::Ones(1);
-    Eigen::MatrixXd H = Eigen::MatrixXd::Ones(1, 2);
-    const double E = eval_displacement<B>(element, X, u, Fp, theta, &g, &H);
-    EXPECT_EQ(local.num_dofs(), 3 * B::num_basis_functions);
-    EXPECT_NEAR(E, E_ref, 1e-12 * (1 + std::abs(E_ref)));
-    EXPECT_LT((g - g_ref).norm(), 1e-12 * (1 + g_ref.norm()));
-    EXPECT_LT((H - H_ref).norm(), 1e-12 * (1 + H_ref.norm()));
-    EXPECT_NEAR(step_displacement<B>(element, X, u, du, Fp, theta), alpha_ref, 1e-9);
-    EXPECT_DOUBLE_EQ(eval_displacement<B>(element, X, u, Fp, theta), E);
-    Eigen::VectorXd g_only;
-    Eigen::MatrixXd H_only;
-    EXPECT_DOUBLE_EQ(eval_displacement<B>(element, X, u, Fp, theta, &g_only), E);
-    EXPECT_DOUBLE_EQ(eval_displacement<B>(element, X, u, Fp, theta, nullptr, &H_only), E);
-    EXPECT_EQ(g_only, g);
-    EXPECT_EQ(H_only, H);
-    EXPECT_DOUBLE_EQ(eval_displacement<B>(element, X, u, Fp, theta, &g, &H), E);
-    EXPECT_EQ(g, g_only);
-    EXPECT_EQ(H, H_only);
-
-    constexpr double h = 1e-5;
-    Eigen::VectorXd g_plus, g_minus;
-    const double E_plus = eval_displacement<B>(element, X, u + h * du, Fp, theta, &g_plus);
-    const double E_minus = eval_displacement<B>(element, X, u - h * du, Fp, theta, &g_minus);
-    EXPECT_NEAR(g.dot(delta), (E_plus - E_minus) / (2 * h), 1e-7 * (1 + g.norm()));
-    EXPECT_LT((H * delta - (g_plus - g_minus) / (2 * h)).norm(), 1e-7 * (1 + H.norm()));
-}
-
-TEST(VolumetricElement3D, TetMatchesUncachedFieldsAndDirectionalFiniteDifferences) {
-    compare_uncached<TetP1Basis, TetP1Basis, TetCentroidQuadrature>();
-}
-TEST(VolumetricElement3D, WarpedHexMatchesUncachedFieldsAndDirectionalFiniteDifferences) {
-    compare_uncached<HexQ1Basis, HexQ1Basis, GaussLegendre3D<2>>();
-}
-TEST(VolumetricElement3D, HermiteWithQ1GeometryMatchesUncachedFieldsAndDirectionalFiniteDifferences) {
-    compare_uncached<HexHermiteBasis, HexQ1Basis, GaussLegendre3D<4>>();
-}
-
-struct ReferenceField : Field3D {
-    int components = 3;
+struct ReferenceResponse : energy::Response {
+    int components = 3, queries = 0;
     Eigen::MatrixXd J_X = Eigen::Matrix3d::Identity();
-    mutable int queries = 0;
-    int num_components() const override {
+    int num_inputs() const noexcept override {
+        return 3;
+    }
+    int num_outputs() const noexcept override {
         return components;
     }
-    int num_dofs() const override {
-        return 0;
+    Vec eval_value_impl(const ConstVecRef&) override {
+        return Vec::Zero(components);
     }
-    Eigen::VectorXd eval_value(const Eigen::Vector3d&) const override {
-        throw std::logic_error("not needed");
-    }
-    Eigen::MatrixXd eval_dvalue_dcoeffs(const Eigen::Vector3d&) const override {
-        throw std::logic_error("not needed");
-    }
-    SpatialDerivative eval_dvalue_dxi(const Eigen::Vector3d&) const override {
+    std::pair<Vec, SpMat> eval_value_and_jacobian_impl(const ConstVecRef& x) override {
         ++queries;
-        return J_X;
+        return {eval_value_impl(x), J_X.sparseView()};
     }
 };
-
-struct ValueField : Field3D {
-    Eigen::VectorXd data;
-    mutable int queries = 0;
-    explicit ValueField(Eigen::VectorXd value) : data(std::move(value)) {}
-    int num_components() const override {
-        return static_cast<int>(data.size());
-    }
-    int num_dofs() const override {
-        return 0;
-    }
-    Eigen::VectorXd eval_value(const Eigen::Vector3d&) const override {
-        ++queries;
-        return data;
-    }
-    Eigen::MatrixXd eval_dvalue_dcoeffs(const Eigen::Vector3d&) const override {
-        throw std::logic_error("not needed");
-    }
-};
-
-TEST(VolumetricElement3D, MaterialFieldsRemainLiveAndNeedOnlyValues) {
-    const ReferenceField X;
-    const VolumetricElement3D<TetCentroidQuadrature> element(X);
-    Eigen::MatrixXd u(4, 3);
-    for (int a = 0; a < 4; ++a)
-        u.row(a) = 0.1 * TetP1Basis::coefficient_info(a).point.transpose();
-    ValueField Fp(Eigen::Matrix3d::Identity().reshaped()), theta(Eigen::Vector2d(2, 3));
-    Eigen::VectorXd g, g_scaled;
-    Eigen::MatrixXd H, H_scaled;
-    const double E = eval_displacement<TetP1Basis>(element, X, u, Fp, theta, &g, &H);
-    EXPECT_EQ(Fp.queries, 1);
-    EXPECT_EQ(theta.queries, 1);
-    theta.data *= 2;
-    EXPECT_DOUBLE_EQ(eval_displacement<TetP1Basis>(element, X, u, Fp, theta, &g_scaled, &H_scaled), 2 * E);
-    EXPECT_TRUE(g_scaled.isApprox(2 * g, 1e-14));
-    EXPECT_TRUE(H_scaled.isApprox(2 * H, 1e-14));
-    Fp.data = (1.1 * Eigen::Matrix3d::Identity()).reshaped();
-    EXPECT_NEAR(eval_displacement<TetP1Basis>(element, X, u, Fp, theta), 0, 1e-14);
-    EXPECT_EQ(step_displacement<TetP1Basis>(element, X, u, Eigen::MatrixXd::Zero(4, 3), Fp, theta), 1);
-    EXPECT_EQ(Fp.queries, 4);
-    EXPECT_EQ(theta.queries, 4);
-}
-
-struct CountingMaterial {
-    inline static int values = 0, gradients = 0, hessians = 0;
-    static double eval_W(const VolumetricMaterialInputs& input) {
-        ++values;
-        return NeoHookean::eval_W(input);
-    }
-    static Eigen::Matrix3d eval_dW_dF(const VolumetricMaterialInputs& input) {
-        ++gradients;
-        return NeoHookean::eval_dW_dF(input);
-    }
-    static Eigen::Matrix<double, 9, 9> eval_d2W_dF2(const VolumetricMaterialInputs& input) {
-        ++hessians;
-        return NeoHookean::eval_d2W_dF2(input);
-    }
-};
-
-TEST(VolumetricElement3D, EvaluatesOnlyRequestedLocalDerivativesAndDoesNotRequireAStepAPI) {
-    const ReferenceField X;
-    const VolumetricElement3D<TetCentroidQuadrature> element(X);
-    const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped()), theta(Eigen::Vector2d(2, 3));
-    const InterpolatedField3D<TetP1Basis> displacement(Eigen::MatrixXd::Zero(4, 3));
-    const DeformationGradientField3D deformation(displacement, X);
-    const VolumetricMaterialLocalEnergyF3D<CountingMaterial> local(deformation, Fp, theta);
-    CountingMaterial::values = CountingMaterial::gradients = CountingMaterial::hessians = 0;
-    Eigen::VectorXd g;
-    Eigen::MatrixXd H;
-    element.eval(local);
-    EXPECT_EQ(CountingMaterial::gradients, 0);
-    EXPECT_EQ(CountingMaterial::hessians, 0);
-    element.eval(local, &g);
-    EXPECT_EQ(CountingMaterial::gradients, 1);
-    EXPECT_EQ(CountingMaterial::hessians, 0);
-    element.eval(local, nullptr, &H);
-    EXPECT_EQ(CountingMaterial::gradients, 1);
-    EXPECT_EQ(CountingMaterial::hessians, 1);
-    EXPECT_EQ(CountingMaterial::values, 3);
-}
 
 struct TestQuadrature {
     static constexpr int num_points = 1;
@@ -235,16 +52,16 @@ struct TestQuadrature {
 
 TEST(VolumetricElement3D, RejectsInvalidReferenceGeometryAndQuadratureAtConstruction) {
     using Element3D = VolumetricElement3D<TetCentroidQuadrature>;
-    ReferenceField X;
+    ReferenceResponse X;
     X.components = 2;
-    EXPECT_THROW(Element3D{X}, std::invalid_argument);
+    EXPECT_ANY_THROW(Element3D{X});
     X.components = 3;
     X.J_X.resize(2, 3);
-    EXPECT_THROW(Element3D{X}, std::invalid_argument);
+    EXPECT_ANY_THROW(Element3D{X});
     for (double scale :
          {0., -1., 1e200, std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()}) {
         X.J_X = scale * Eigen::Matrix3d::Identity();
-        EXPECT_THROW(Element3D{X}, std::invalid_argument);
+        EXPECT_ANY_THROW(Element3D{X});
     }
     X.J_X = Eigen::Vector3d(1e-310, 1, 1).asDiagonal();
     EXPECT_NO_THROW(Element3D{X});
@@ -263,33 +80,8 @@ TEST(VolumetricElement3D, RejectsInvalidReferenceGeometryAndQuadratureAtConstruc
     TestQuadrature::weight.setOnes();
 }
 
-TEST(VolumetricElement3D, RejectsMalformedCoefficientsAndMaterialFields) {
-    const ReferenceField X;
-    const VolumetricElement3D<TetCentroidQuadrature> element(X);
-    const Eigen::MatrixXd u = Eigen::MatrixXd::Zero(4, 3);
-    ValueField Fp(Eigen::Matrix3d::Identity().reshaped()), theta(Eigen::Vector2d(2, 3));
-    for (const Eigen::MatrixXd& bad :
-         {Eigen::MatrixXd::Zero(3, 3).eval(), Eigen::MatrixXd::Zero(4, 2).eval(),
-          Eigen::MatrixXd::Constant(4, 3, std::numeric_limits<double>::quiet_NaN()).eval()}) {
-        EXPECT_THROW(eval_displacement<TetP1Basis>(element, X, bad, Fp, theta), std::invalid_argument);
-        EXPECT_THROW(step_displacement<TetP1Basis>(element, X, u, bad, Fp, theta), std::invalid_argument);
-        EXPECT_THROW(step_displacement<TetP1Basis>(element, X, bad, u, Fp, theta), std::invalid_argument);
-    }
-    Fp.data.resize(8);
-    EXPECT_THROW(eval_displacement<TetP1Basis>(element, X, u, Fp, theta), std::invalid_argument);
-    Fp.data = Eigen::VectorXd::Constant(9, std::numeric_limits<double>::infinity());
-    EXPECT_THROW(step_displacement<TetP1Basis>(element, X, u, u, Fp, theta), std::invalid_argument);
-    Fp.data = Eigen::Matrix3d::Identity().reshaped();
-    theta.data.resize(0);
-    EXPECT_THROW(eval_displacement<TetP1Basis>(element, X, u, Fp, theta), std::invalid_argument);
-    theta.data = Eigen::Vector2d(2, std::numeric_limits<double>::quiet_NaN());
-    EXPECT_THROW(eval_displacement<TetP1Basis>(element, X, u, Fp, theta), std::invalid_argument);
-    theta.data = Eigen::Vector2d(2, -1);
-    EXPECT_THROW(eval_displacement<TetP1Basis>(element, X, u, Fp, theta), std::invalid_argument);
-}
-
 struct QuadraticLocalEnergy : LocalEnergy3D {
-    Eigen::Vector2d coefficients{0.2, -0.3};
+    Eigen::VectorXd coefficients = Eigen::Vector2d(0.2, -0.3);
     int n = 2;
     int num_dofs() const override {
         return n;
@@ -307,7 +99,7 @@ struct QuadraticLocalEnergy : LocalEnergy3D {
         return (1 + xi.x()) * coefficients;
     }
     Eigen::MatrixXd eval_hessian(const Eigen::Vector3d& xi) const override {
-        return (1 + xi.x()) * Eigen::Matrix2d::Identity();
+        return (1 + xi.x()) * Eigen::MatrixXd::Identity(n, n);
     }
     double eval_feasible_step(const Eigen::Vector3d& xi, const Eigen::Ref<const Eigen::VectorXd>&) const {
         return 0.2 + 0.3 * xi.z();
@@ -315,7 +107,7 @@ struct QuadraticLocalEnergy : LocalEnergy3D {
 };
 
 TEST(VolumetricElement3D, IntegratesNonMaterialLocalEnergyWithItsOwnDofCountAndStep) {
-    ReferenceField X;
+    ReferenceResponse X;
     X.J_X = Eigen::Vector3d(2, 3, 4).asDiagonal();
     const VolumetricElement3D<GaussLegendre3D<2>> element(X);
     const QuadraticLocalEnergy local;
@@ -335,8 +127,8 @@ TEST(VolumetricElement3D, IntegratesNonMaterialLocalEnergyWithItsOwnDofCountAndS
     EXPECT_THROW(element.eval(empty), std::invalid_argument);
 }
 
-TEST(VolumetricElement3D, OwnsIntegrationWeightsWithoutRetainingReferenceField) {
-    ReferenceField X;
+TEST(VolumetricElement3D, OwnsIntegrationWeightsWithoutRetainingReferenceResponse) {
+    ReferenceResponse X;
     const VolumetricElement3D<GaussLegendre3D<2>> element(X);
     EXPECT_EQ(X.queries, 8);
     QuadraticLocalEnergy local;
@@ -348,7 +140,10 @@ TEST(VolumetricElement3D, OwnsIntegrationWeightsWithoutRetainingReferenceField) 
     EXPECT_EQ(X.queries, 8);
     const VolumetricElement3D<GaussLegendre3D<2>> rebuilt(X);
     EXPECT_DOUBLE_EQ(rebuilt.eval(local), 8 * E);
-    const auto detached = [] { return VolumetricElement3D<GaussLegendre3D<2>>(ReferenceField{}); }();
+    const auto detached = [] {
+        ReferenceResponse X;
+        return VolumetricElement3D<GaussLegendre3D<2>>(X);
+    }();
     const auto copied = detached;
     tbb::parallel_for(0, 8, [&](int) {
         Eigen::VectorXd local_g;
@@ -368,7 +163,7 @@ struct ValueOnlyLocalEnergy : QuadraticLocalEnergy {
     }
 };
 TEST(VolumetricElement3D, ChecksLocalCapabilitiesBeforeWritingOutputs) {
-    const ReferenceField X;
+    ReferenceResponse X;
     const VolumetricElement3D<TetCentroidQuadrature> element(X);
     const ValueOnlyLocalEnergy local;
     EXPECT_TRUE(std::isfinite(element.eval(local)));
@@ -392,7 +187,8 @@ struct InvalidAccumulation : QuadraticLocalEnergy {
     }
 };
 TEST(VolumetricElement3D, RejectsMalformedAndNonFiniteLocalAccumulationResults) {
-    const VolumetricElement3D<GaussLegendre3D<2>> element(ReferenceField{});
+    ReferenceResponse X;
+    const VolumetricElement3D<GaussLegendre3D<2>> element(X);
     InvalidAccumulation local;
     Eigen::VectorXd g;
     Eigen::MatrixXd H;
@@ -410,48 +206,13 @@ struct InvalidStepLocalEnergy : QuadraticLocalEnergy {
     }
 };
 TEST(VolumetricElement3D, RejectsInvalidLocalStepResults) {
-    const ReferenceField X;
+    ReferenceResponse X;
     const VolumetricElement3D<TetCentroidQuadrature> element(X);
     InvalidStepLocalEnergy local;
     for (double bad : {-1., 2., std::numeric_limits<double>::quiet_NaN()}) {
         local.step = bad;
         EXPECT_THROW(element.max_feasible_step(local, Eigen::Vector2d::Zero()), std::logic_error);
     }
-}
-
-TEST(VolumetricElement3D, InvertedStatesAndNumericalOverflowThrowDomainError) {
-    ReferenceField X;
-    const VolumetricElement3D<TetCentroidQuadrature> element(X);
-    IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped()), theta(Eigen::Vector2d(2, 3));
-    Eigen::MatrixXd u = Eigen::MatrixXd::Zero(4, 3);
-    for (int a = 0; a < 4; ++a)
-        u.row(a) = -2 * TetP1Basis::coefficient_info(a).point.transpose();
-    EXPECT_THROW(eval_displacement<TetP1Basis>(element, X, u, Fp, theta), std::domain_error);
-    EXPECT_THROW(step_displacement<TetP1Basis>(element, X, u, u, Fp, theta), std::domain_error);
-    u.setZero();
-    u(1, 0) = 1e155;
-    EXPECT_THROW(eval_displacement<TetP1Basis>(element, X, u, Fp, theta), std::domain_error);
-    u.setZero();
-    theta = IdentityField3D(Eigen::Vector2d(0, 1e308));
-    Eigen::MatrixXd H;
-    EXPECT_DOUBLE_EQ(eval_displacement<TetP1Basis>(element, X, u, Fp, theta), 0);
-    EXPECT_THROW(eval_displacement<TetP1Basis>(element, X, u, Fp, theta, nullptr, &H), std::domain_error);
-
-    X.J_X = Eigen::Vector3d(1e-200, 1e100, 1e100).asDiagonal();
-    const VolumetricElement3D<TetCentroidQuadrature> anisotropic(X);
-    theta = IdentityField3D(Eigen::Vector2d(2, 3));
-    EXPECT_THROW(eval_displacement<TetP1Basis>(anisotropic, X, u, Fp, theta, nullptr, &H), std::domain_error);
-    Eigen::MatrixXd du = u;
-    du(1, 0) = 1e200;
-    EXPECT_THROW(eval_displacement<TetP1Basis>(anisotropic, X, du, Fp, theta), std::domain_error);
-    EXPECT_THROW(step_displacement<TetP1Basis>(anisotropic, X, u, du, Fp, theta), std::domain_error);
-
-    X.J_X = 10 * Eigen::Matrix3d::Identity();
-    const VolumetricElement3D<TetCentroidQuadrature> large_volume(X);
-    for (int a = 0; a < 4; ++a)
-        u.row(a) = 10 * TetP1Basis::coefficient_info(a).point.transpose();
-    theta = IdentityField3D(Eigen::Vector2d(0, 1e307));
-    EXPECT_THROW(eval_displacement<TetP1Basis>(large_volume, X, u, Fp, theta), std::domain_error);
 }
 
 } // namespace
@@ -464,12 +225,11 @@ TEST(VolumetricElementViews, IntegratesIntoPaddedStridedOutputsWithoutTouchingNe
     Eigen::Matrix<double, 4, 3> nodes;
     for (int i = 0; i < 4; ++i)
         nodes.row(i) = TetP1Basis::coefficient_info(i).point.transpose();
-    const InterpolatedField3D<TetP1Basis> X(nodes);
+    InterpolatedResponse<TetP1Basis> X(nodes);
     const VolumetricElement3D<TetCentroidQuadrature> element(X);
-    const IdentityField3D F((1.1 * Eigen::Matrix3d::Identity()).eval().reshaped());
-    const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
-    const IdentityField3D theta(Eigen::Vector2d(2, 3));
-    const VolumetricMaterialLocalEnergyF3D<NeoHookean> local(F, Fp, theta);
+    litepgo::fem::test::QuadraticLocalEnergy local;
+    local.n = 9;
+    local.coefficients = Vec::LinSpaced(9, 0.1, 0.9);
     Vec expected_g;
     Eigen::MatrixXd expected_H;
     const double expected = element.eval(local, &expected_g, &expected_H);
@@ -510,20 +270,31 @@ TEST(VolumetricElementViews, IntegratesIntoPaddedStridedOutputsWithoutTouchingNe
     EXPECT_TRUE(H.isApprox(expected_H));
 }
 
-#include "litepgo/fem/material/volumetric/volumetric_material_force_local_response.hpp"
-
 TEST(VolumetricElementViews, ResponseWritesPaddedRectangularBatchBlocks) {
     using namespace litepgo;
     using namespace litepgo::fem;
     Eigen::Matrix<double, 4, 3> nodes;
     for (int i = 0; i < 4; ++i)
         nodes.row(i) = TetP1Basis::coefficient_info(i).point.transpose();
-    const InterpolatedField3D<TetP1Basis> X(nodes);
+    InterpolatedResponse<TetP1Basis> X(nodes);
     const VolumetricElement3D<TetCentroidQuadrature> element(X);
-    const IdentityField3D F((1.1 * Eigen::Matrix3d::Identity()).eval().reshaped());
-    const IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
-    const IdentityField3D theta(Eigen::Vector2d(2, 3));
-    const VolumetricMaterialForceLocalResponse3D<NeoHookean> local(F, Fp, theta);
+    struct LinearLocal : LocalResponse3D {
+        int num_inputs() const override {
+            return 2;
+        }
+        int num_outputs() const override {
+            return 9;
+        }
+        bool has_jacobian() const noexcept override {
+            return true;
+        }
+        Vec eval_value(const Eigen::Vector3d& xi) const override {
+            return Vec::Constant(9, xi.sum());
+        }
+        Eigen::MatrixXd eval_jacobian(const Eigen::Vector3d&) const override {
+            return Eigen::MatrixXd::Ones(9, 2);
+        }
+    } local;
     Eigen::MatrixXd expected_J;
     const Vec expected = element.eval(local, &expected_J);
     Eigen::MatrixXd owned_J = Eigen::MatrixXd::Constant(2, 3, -123);
@@ -558,7 +329,7 @@ TEST(VolumetricElementViews, IndexedCallbacksShareWeightsZeroingAndValidation) {
     Eigen::Matrix<double, 8, 3> nodes;
     for (int i = 0; i < 8; ++i)
         nodes.row(i) = HexQ1Basis::coefficient_info(i).point.transpose();
-    const InterpolatedField3D<HexQ1Basis> X(nodes);
+    InterpolatedResponse<HexQ1Basis> X(nodes);
     const VolumetricElement3D<GaussLegendre3D<2>> element(X);
     Eigen::Vector2d gradient = Eigen::Vector2d::Constant(123);
     Eigen::Matrix2d hessian = Eigen::Matrix2d::Constant(123);

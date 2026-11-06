@@ -1,8 +1,10 @@
+#include "litepgo/fem/response/interpolated_response.hpp"
+#include <memory>
 // Fit volume material parameters from reactions using analytic equilibrium sensitivities.
 // Build: cmake --build build/release --target volume_equilibrium_material_fit
 // Run: build/release/examples/fem/fitting/volume_equilibrium_material_fit
 
-#include "litepgo/fem/field/identity_field.hpp"
+#include "litepgo/energy/response/affine_response.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
@@ -22,13 +24,11 @@
 #include <functional>
 namespace {
 using namespace litepgo;
-using XField = fem::InterpolatedField3D<fem::TetP1Basis>;
-using Field = fem::IdentityField3D;
-using Elastic =
-    fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature, XField, Field, Field>;
+
+using Elastic = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
 struct Problem {
     dof::VertexDofMap map;
-    std::vector<XField> geometry;
+    std::vector<std::shared_ptr<litepgo::energy::Response>> geometry;
     dof::ConstantDofMap parameter_map;
     dof::DofReduction fixed;
     std::vector<int> top_vertices;
@@ -38,9 +38,10 @@ struct Problem {
 Problem make_problem() {
     const auto volume = std::get<mesh::TetMesh>(mesh::read_veg(LITEPGO_ASSETS_DIR "/box-tet.veg"));
     const dof::VertexDofMap map(volume.topology, 3);
-    std::vector<XField> geometry;
+    std::vector<std::shared_ptr<litepgo::energy::Response>> geometry;
     for (int e = 0; e < volume.topology.num_cells(); ++e)
-        geometry.emplace_back(map.gather(e, volume.positions));
+        geometry.push_back(
+            std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(map.gather(e, volume.positions)));
     const auto nodes = volume.positions.reshaped<Eigen::RowMajor>(volume.topology.num_vertices(), 3);
     const double bottom = nodes.col(2).minCoeff(), top = nodes.col(2).maxCoeff();
     const double height = top - bottom;
@@ -69,8 +70,13 @@ double reaction(const Problem& problem, const Eigen::Vector2d& theta, int axis, 
     const double height = problem.height;
     if (!theta.allFinite() || (theta.array() <= 0).any())
         throw std::domain_error("Invalid material parameters");
-    Elastic elastic(map, geometry, std::vector<Field>(geometry.size(), Field(Eigen::Matrix3d::Identity().reshaped())),
-                    std::vector<Field>(geometry.size(), Field(theta)));
+    Elastic elastic(map, geometry,
+                    std::vector<std::shared_ptr<litepgo::energy::Response>>(
+                        geometry.size(), std::make_shared<litepgo::energy::AffineResponse>(
+                                             litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped())),
+                    std::vector<std::shared_ptr<litepgo::energy::Response>>(
+                        geometry.size(),
+                        std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((theta).size(), 3), theta)));
     Vec initial = Vec::Zero(map.num_dofs());
     for (int v : top_vertices)
         initial[3 * v + axis] = strain * height;
@@ -79,11 +85,13 @@ double reaction(const Problem& problem, const Eigen::Vector2d& theta, int axis, 
     options.max_iterations = 100;
     // Partial force derivative at fixed displacement; equilibrium supplies du/dp separately.
     const auto make_response = [&](const Vec& displacement) {
-        using Force = fem::VolumetricFemForceMaterialResponse<fem::NeoHookean, fem::TetP1Basis,
-                                                              fem::TetCentroidQuadrature, XField, Field>;
+        using Force =
+            fem::VolumetricFemForceMaterialResponse<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
         return std::make_shared<Force>(
             problem.parameter_map, map, geometry, displacement,
-            std::vector<Field>(geometry.size(), Field(Eigen::Matrix3d::Identity().reshaped())));
+            std::vector<std::shared_ptr<litepgo::energy::Response>>(
+                geometry.size(), std::make_shared<litepgo::energy::AffineResponse>(
+                                     litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped())));
     };
 
     solver::StaticEquilibriumResponse equilibrium(
@@ -91,8 +99,13 @@ double reaction(const Problem& problem, const Eigen::Vector2d& theta, int axis, 
         [&](const Vec& parameters) -> std::shared_ptr<energy::Energy> {
             ++problem.solves;
             return std::make_shared<Elastic>(
-                map, geometry, std::vector<Field>(geometry.size(), Field(Eigen::Matrix3d::Identity().reshaped())),
-                std::vector<Field>(geometry.size(), Field(parameters)));
+                map, geometry,
+                std::vector<std::shared_ptr<litepgo::energy::Response>>(
+                    geometry.size(), std::make_shared<litepgo::energy::AffineResponse>(
+                                         litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped())),
+                std::vector<std::shared_ptr<litepgo::energy::Response>>(
+                    geometry.size(), std::make_shared<litepgo::energy::AffineResponse>(
+                                         litepgo::SpMat((parameters).size(), 3), parameters)));
         },
         make_response);
     SpMat J = SpMat();

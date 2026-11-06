@@ -1,3 +1,4 @@
+from litepgo.energy import AffineResponse
 import gc
 import numpy as np
 import pytest
@@ -11,17 +12,17 @@ def problem():
     nodes = np.array([[0., 0., 0.], [1.2, 0., 0.], [0., 1., 0.], [0., 0., .8], [1.2, 1., .8]])
     topology = mesh.TetTopology(5, np.array([[0, 1, 2, 3], [1, 2, 3, 4]], dtype=np.int32))
     mapping = dof.VertexDofMap(topology, 3)
-    Field = fem.InterpolatedField3D[fem.TetP1Basis]
+    Field = fem.InterpolatedResponse[fem.TetP1Basis]
     geometry = [Field(mapping.gather(e, nodes.ravel())) for e in range(2)]
     F = np.array([[1.15, .12, 0.], [.03, .94, .08], [0., .02, 1.07]])
     u = (nodes @ (F - np.eye(3)).T).ravel()
-    plastic = [fem.IdentityField3D(np.array([[1.1+.05*e, 0., 0.], [0., 1., .1], [0., 0., 1.]]).ravel(order="F")) for e in range(2)]
+    plastic = [AffineResponse(np.zeros((np.asarray(np.array([[1.1+.05*e, 0., 0.], [0., 1., .1], [0., 0., 1.]]).ravel(order="F")).size, 3)), np.array([[1.1+.05*e, 0., 0.], [0., 1., .1], [0., 0., 1.]]).ravel(order="F")) for e in range(2)]
     return topology, mapping, geometry, u, plastic
 
 
 def observed(data, theta):
     _, mapping, geometry, u, plastic = data
-    fields = [fem.IdentityField3D(theta if theta.size == 2 else theta[2*e:2*e+2]) for e in range(2)]
+    fields = [AffineResponse(np.zeros((np.asarray(theta if theta.size == 2 else theta[2*e:2*e+2]).size, 3)), theta if theta.size == 2 else theta[2*e:2*e+2]) for e in range(2)]
     return Energy(mapping, geometry, plastic, fields).eval_gradient(u)
 
 
@@ -88,7 +89,7 @@ def test_validation_and_empty_mesh():
     with pytest.raises(ValueError):
         Force(params, mapping, geometry, np.full(15, np.nan), plastic)
     with pytest.raises(ValueError):
-        Force(params, mapping, geometry, u, [fem.IdentityField3D(np.ones(8))]*2)
+        Force(params, mapping, geometry, u, [AffineResponse(np.zeros((np.asarray(np.ones(8)).size, 3)), np.ones(8))]*2)
     with pytest.raises(TypeError):
         Force(dof.VertexDofMap(topology, 2), mapping, geometry, u, plastic)
     empty = mesh.TetTopology(0, np.empty((0, 4), dtype=np.int32))

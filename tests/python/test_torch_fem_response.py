@@ -1,3 +1,4 @@
+from litepgo.energy import AffineResponse
 from pathlib import Path
 import runpy
 
@@ -67,7 +68,7 @@ def test_native_value_jacobian_and_direct_products(problem, kind, shared, batch_
     (_, mapping, geometry, plastic, theta, _, E), _ = problem
     width = 2 if kind == "material" else 9
     blocks = [p] * 2 if shared else p.reshape(2, width)
-    active = [fem.IdentityField3D(block) for block in blocks]
+    active = [AffineResponse(np.zeros((np.asarray(block).size, 3)), block) for block in blocks]
     potential = bridge.TorchVolumetricFemEnergy(
         mapping,
         geometry,
@@ -119,7 +120,7 @@ def factories(problem, kind, use_torch, products_only=False):
     kwargs = {"material": example_energy.material, "batch_size": 1} if use_torch else {}
 
     def make_energy(p):
-        active = [fem.IdentityField3D(p)] * 2
+        active = [AffineResponse(np.zeros((np.asarray(p).size, 3)), p)] * 2
         return Energy(
             mapping,
             geometry,
@@ -334,7 +335,7 @@ def test_neural_mixed_derivatives(problem):
         mapping,
         geometry,
         u,
-        [fem.IdentityField3D(p)] * 2,
+        [AffineResponse(np.zeros((np.asarray(p).size, 3)), p)] * 2,
         material=material,
     )
     for model, x in ((material_response, p), (fp_response, fp)):

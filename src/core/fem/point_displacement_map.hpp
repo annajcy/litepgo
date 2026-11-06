@@ -4,25 +4,25 @@
 #include "litepgo/fem/kinematics/basis_dof_transform.hpp"
 
 namespace litepgo::fem {
-// X_fields and the DOF map use the same element order as the embedding.
-template <class UBasis, class XField>
+// geometry and the DOF map use the same element order as the embedding.
+template <class UBasis>
 SpMat build_point_displacement_map(const PointEmbedding& embedding, const dof::VertexDofMap& u_dof_map,
-                                   const std::vector<XField>& X_fields) {
+                                   const std::vector<std::shared_ptr<energy::Response>>& geometry) {
     constexpr int width = BasisDofTransform<UBasis>::dofs_per_vertex;
     constexpr int local_size = 3 * UBasis::num_basis_functions;
     if (embedding.element_ids.size() != embedding.xi.rows() || !embedding.xi.allFinite() ||
         embedding.xi.rows() > std::numeric_limits<int>::max() / 3 ||
-        X_fields.size() != static_cast<std::size_t>(u_dof_map.num_elements()) || u_dof_map.dofs_per_vertex() != width)
+        geometry.size() != static_cast<std::size_t>(u_dof_map.num_elements()) || u_dof_map.dofs_per_vertex() != width)
         throw std::invalid_argument("build_point_displacement_map: incompatible embedding, fields or DOF layout");
     std::vector<BasisDofTransform<UBasis>> transforms;
     std::vector<std::vector<int>> columns;
     for (int e = 0; e < u_dof_map.num_elements(); ++e) {
-        if (X_fields[e].num_components() != 3)
+        if (!geometry[e] || geometry[e]->num_inputs() != 3 || geometry[e]->num_outputs() != 3)
             throw std::invalid_argument("build_point_displacement_map: X must have three components");
         columns.push_back(u_dof_map.dof_indices(e));
         if (columns.back().size() != local_size)
             throw std::invalid_argument("build_point_displacement_map: element topology does not match basis");
-        transforms.emplace_back(X_fields[e]);
+        transforms.emplace_back(*geometry[e]);
     }
     std::vector<Triplet> entries;
     for (Eigen::Index i = 0; i < embedding.xi.rows(); ++i) {

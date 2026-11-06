@@ -1,8 +1,9 @@
 #include "litepgo/fem/kinematics/basis_dof_transform.hpp"
+#include <memory>
 
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
 
 #include <Eigen/Geometry>
 #include <Eigen/LU>
@@ -24,7 +25,8 @@ Eigen::Matrix<double, 8, 3> box_nodes(const Eigen::Vector3d& lengths,
 }
 
 auto make_transform(const Eigen::MatrixXd& nodes) {
-    return BasisDofTransform<HexHermiteBasis>(InterpolatedField3D<HexQ1Basis>(nodes));
+    InterpolatedResponse<HexQ1Basis> geometry(nodes);
+    return BasisDofTransform<HexHermiteBasis>(geometry);
 }
 
 TEST(HexHermiteDofTransform, ScalesEveryPhysicalDerivativeSlotAndComponent) {
@@ -59,7 +61,7 @@ TEST(HexHermiteDofTransform, RejectsInvalidNodeDimensionsAndNonFiniteCoordinates
 
 TEST(HexHermiteDofTransform, ReproducesPhysicalPolynomialWithMixedDerivatives) {
     const auto X_nodes = box_nodes({2, 3, 5}, {0.2, -0.3, 0.4});
-    const InterpolatedField3D<HexQ1Basis> X_field(X_nodes);
+    auto X_field = std::make_shared<InterpolatedResponse<HexQ1Basis>>(X_nodes);
     const auto S = make_transform(X_nodes);
     const Eigen::Vector3d factors(0.7, -1.3, 2.1);
     Eigen::MatrixXd x_local(8, 24);
@@ -71,14 +73,15 @@ TEST(HexHermiteDofTransform, ReproducesPhysicalPolynomialWithMixedDerivatives) {
         for (int slot = 0; slot < 8; ++slot)
             x_local.row(v).segment<3>(3 * slot) = (factors * derivatives[static_cast<std::size_t>(slot)]).transpose();
     }
-    const InterpolatedField3D<HexHermiteBasis> displacement(S.to_coefficients(x_local));
+    auto displacement = std::make_shared<InterpolatedResponse<HexHermiteBasis>>(S.to_coefficients(x_local));
     for (const Eigen::Vector3d xi :
          {Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(1, 1, 1), Eigen::Vector3d(0.2, 0.3, 0.4)}) {
-        const auto& X = X_field.eval_value(xi);
-        EXPECT_TRUE(displacement.eval_value(xi).isApprox(factors * X.x() * X.y() * X.z(), 1e-12));
+        const auto& X = X_field->eval_value(xi);
+        EXPECT_TRUE(displacement->eval_value(xi).isApprox(factors * X.x() * X.y() * X.z(), 1e-12));
         const Eigen::Vector3d gradient(X.y() * X.z(), X.x() * X.z(), X.x() * X.y());
-        EXPECT_TRUE((displacement.eval_dvalue_dxi(xi) * X_field.eval_dvalue_dxi(xi).inverse())
-                        .isApprox(factors * gradient.transpose(), 1e-12));
+        EXPECT_TRUE(
+            (Eigen::MatrixXd(displacement->eval_jacobian(xi)) * Eigen::MatrixXd(X_field->eval_jacobian(xi)).inverse())
+                .isApprox(factors * gradient.transpose(), 1e-12));
     }
 }
 
@@ -132,8 +135,8 @@ TEST(HexHermiteDofTransform, RejectsInconsistentCornersAndOverflowingEdgeLengths
 }
 
 template <class Basis> void check_identity_ownership(int nodes) {
-    const InterpolatedField3D<HexQ1Basis> X(box_nodes({2, 3, 5}));
-    const BasisDofTransform<Basis> transform(X);
+    auto X = std::make_shared<InterpolatedResponse<HexQ1Basis>>(box_nodes({2, 3, 5}));
+    const BasisDofTransform<Basis> transform(*X);
     Eigen::MatrixXd input = Eigen::MatrixXd::Constant(nodes, 3, 2);
     const auto& coefficients = transform.to_coefficients(input);
     input.setZero();
@@ -175,10 +178,10 @@ template <class Transform> void check_pullback_dimensions(const Transform& trans
 }
 
 TEST(BasisDofTransform, RejectsDerivativeShapesBeforeModifyingEitherOutput) {
-    const InterpolatedField3D<HexQ1Basis> X(box_nodes({2, 3, 5}));
-    check_pullback_dimensions(BasisDofTransform<TetP1Basis>(X), 12);
-    check_pullback_dimensions(BasisDofTransform<HexQ1Basis>(X), 24);
-    check_pullback_dimensions(BasisDofTransform<HexHermiteBasis>(X), 192);
+    auto X = std::make_shared<InterpolatedResponse<HexQ1Basis>>(box_nodes({2, 3, 5}));
+    check_pullback_dimensions(BasisDofTransform<TetP1Basis>(*X), 12);
+    check_pullback_dimensions(BasisDofTransform<HexQ1Basis>(*X), 24);
+    check_pullback_dimensions(BasisDofTransform<HexHermiteBasis>(*X), 192);
 }
 } // namespace
 

@@ -28,7 +28,7 @@ def main():
 
     # Tet P1 coefficients are target values sampled at its four vertices.
     coefficients = np.array([target(B.coefficient_info(i).point) for i in range(B.num_basis_functions)])[:, None]
-    field = fem.InterpolatedField3D[B](coefficients)
+    field = fem.InterpolatedResponse[B](coefficients)
     points = np.array([[0.25, 0.25, 0.25], [0.2, 0.3, 0.1], [0.1, 0.1, 0.2]])
     for point in points:
         np.testing.assert_allclose(field.eval_value(point)[0], target(point))

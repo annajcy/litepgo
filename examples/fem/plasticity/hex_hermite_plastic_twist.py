@@ -4,6 +4,7 @@ Run from the repository root after building litepgo:
     uv run --no-sync python examples/fem/plasticity/hex_hermite_plastic_twist.py
 """
 
+from litepgo.energy import AffineResponse
 import argparse
 import sys
 from pathlib import Path
@@ -68,12 +69,12 @@ def main():
     slots[:, 6, :2] = rate * np.column_stack([-c, -s])
     plastic_dofs = slots.ravel()
 
-    # DeformationGradientField3D(u_p, X) borrows both fields and keeps them alive. BasisDofTransform
+    # DeformationGradientResponse owns its fixed displacement and geometry responses. BasisDofTransform
     # converts each element's physical Hermite DOFs to basis coefficients, as the energy does for u.
     rest_position_map = dof.VertexDofMap(topology, 3)
     displacement_map = dof.VertexDofMap(topology, 24)
-    XField = fem.InterpolatedField3D[fem.HexQ1Basis]
-    PlasticField = fem.InterpolatedField3D[fem.HexHermiteBasis]
+    XField = fem.InterpolatedResponse[fem.HexQ1Basis]
+    PlasticField = fem.InterpolatedResponse[fem.HexHermiteBasis]
     rest_position_fields = [
         XField(rest_position_map.gather(e, rest_positions))
         for e in range(topology.num_cells)
@@ -87,10 +88,10 @@ def main():
             )
         )
     Fp_fields = [
-        fem.DeformationGradientField3D(u_p, X)
+        fem.DeformationGradientResponse(u_p, X)
         for u_p, X in zip(plastic_fields, rest_position_fields)
     ]
-    theta_field = fem.IdentityField3D(np.array([2.0, 3.0]))
+    theta_field = AffineResponse(np.zeros((2, 3)), np.array([2.0, 3.0]))
     elastic = fem.VolumetricFemEnergy[
         fem.NeoHookean, fem.HexHermiteBasis, fem.GaussLegendre3D[4]
     ](

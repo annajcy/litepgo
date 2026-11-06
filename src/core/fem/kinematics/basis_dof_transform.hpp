@@ -1,10 +1,10 @@
 #pragma once
 
 #include "litepgo/common/types.hpp"
+#include "litepgo/energy/response/response.hpp"
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
-#include "litepgo/fem/field/field.hpp"
 #include <array>
 #include <stdexcept>
 
@@ -17,7 +17,10 @@ namespace detail {
 template <int Nodes> class NodalDofTransform {
   public:
     static constexpr int dofs_per_vertex = 3;
-    explicit NodalDofTransform(const Field3D&) {}
+    explicit NodalDofTransform(energy::Response& geometry) {
+        if (geometry.num_inputs() != 3 || geometry.num_outputs() != 3)
+            throw std::invalid_argument("BasisDofTransform: geometry must map R3 to R3");
+    }
     Eigen::MatrixXd to_coefficients(Eigen::MatrixXd local) const {
         if (local.rows() != Nodes || local.cols() != 3 || !local.allFinite())
             throw std::invalid_argument("BasisDofTransform: invalid nodal DOFs");
@@ -59,9 +62,9 @@ template <> class BasisDofTransform<HexHermiteBasis> {
     static constexpr int dofs_per_vertex = 24;
     // X must represent a positive axis-aligned affine box throughout the reference domain.
     // shortcut: only corners are checked; curved geometry needs a different mapping.
-    explicit BasisDofTransform(const Field3D& X) {
+    explicit BasisDofTransform(energy::Response& X) {
         Eigen::MatrixXd nodes(8, 3);
-        if (X.num_components() != 3)
+        if ((X.num_inputs() != 3 || X.num_outputs() != 3))
             throw std::invalid_argument("Hermite DOFs require three reference components");
         for (int v = 0; v < 8; ++v) {
             const auto position = X.eval_value(HexQ1Basis::coefficient_info(v).point);

@@ -5,7 +5,6 @@
 #include "litepgo/fem/local/local_energy.hpp"
 #include "litepgo/fem/local/local_response.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
-#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 
@@ -20,12 +19,13 @@ using namespace nb::literals;
 namespace litepgo::fem::binding {
 namespace {
 
-template <class Q, class... Materials> void bind_volumetric_element(nb::module_& m) {
+template <class Q> void bind_volumetric_element(nb::module_& m) {
     using Element = VolumetricElement3D<Q>;
     const nb::tuple key = nb::make_tuple(nb::type<Q>());
     const std::string name = "VolumetricElement3D[" + class_name(key[0]) + "]";
     nb::class_<Element> cls(m, name.c_str());
-    cls.def(nb::init<const Field3D&>(), "X_field"_a, "Caches the reference geometry of X_field; keeps no reference.")
+    cls.def(nb::init<energy::Response&>(), "geometry"_a,
+            "Caches the reference geometry of X_field; keeps no reference.")
         .def(
             "eval",
             [](const Element& element, const LocalEnergy3D& local, bool gradient, bool hessian) {
@@ -44,20 +44,20 @@ template <class Q, class... Materials> void bind_volumetric_element(nb::module_&
             return nb::make_tuple(value, jacobian ? nb::cast(J) : nb::none());
         },
         "local_response"_a, "jacobian"_a = false, "Integrated (value, Jacobian or None) in local response order.");
-    // max_feasible_step is a C++ member template over local energies with feasible steps.
-    (cls.def(
-         "max_feasible_step",
-         [](const Element& element, const VolumetricMaterialLocalEnergyF3D<Materials>& local,
-            const Eigen::VectorXd& delta_coeffs) { return element.max_feasible_step(local, delta_coeffs); },
-         "local_energy"_a, "delta_coeffs"_a, "Smallest feasible step over the quadrature points."),
-     ...);
+    cls.def(
+        "max_feasible_step",
+        [](const Element& element, nb::callable step) {
+            return element.max_feasible_step(
+                [&](int, const typename Element::Point& point) { return nb::cast<double>(step(point.xi)); });
+        },
+        "step"_a, "Conservative bound over quadrature points; step(xi) returns a bound in [0,1].");
     register_instance(m, "VolumetricElement3D", key, nb::type<Element>());
 }
 } // namespace
 
 void bind_fem_kinematics_volumetric_element(nb::module_& m) {
-    bind_volumetric_element<TetCentroidQuadrature, NeoHookean>(m);
-    bind_volumetric_element<GaussLegendre3D<2>, NeoHookean>(m);
-    bind_volumetric_element<GaussLegendre3D<4>, NeoHookean>(m);
+    bind_volumetric_element<TetCentroidQuadrature>(m);
+    bind_volumetric_element<GaussLegendre3D<2>>(m);
+    bind_volumetric_element<GaussLegendre3D<4>>(m);
 }
 } // namespace litepgo::fem::binding

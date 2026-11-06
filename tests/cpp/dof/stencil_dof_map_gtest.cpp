@@ -1,7 +1,8 @@
 #include "litepgo/dof/stencil_dof_map.hpp"
 #include "litepgo/fem/basis/2d/triangle_p1_basis.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
+#include <memory>
 
 #include <gtest/gtest.h>
 
@@ -105,12 +106,12 @@ TEST(StencilDofMap, MidEdgeStencilsKeepCentralFaceInterpolationSeparateFromNeigh
     const auto X_local = map.gather(0, rest);
     const auto u_local = map.gather(0, displacement);
     ASSERT_EQ(u_local.rows(), 6);
-    const fem::InterpolatedField2D<fem::TriangleP1Basis> X_field(X_local.topRows(3));
-    const fem::InterpolatedField2D<fem::TriangleP1Basis> u_field(u_local.topRows(3));
+    auto X_field = std::make_shared<fem::InterpolatedResponse<fem::TriangleP1Basis>>(X_local.topRows(3));
+    auto u_field = std::make_shared<fem::InterpolatedResponse<fem::TriangleP1Basis>>(u_local.topRows(3));
     const Eigen::Vector2d xi(0.2, 0.3);
     const Eigen::Vector3d expected =
         0.5 * u_local.row(0).transpose() + 0.2 * u_local.row(1).transpose() + 0.3 * u_local.row(2).transpose();
-    EXPECT_TRUE(u_field.eval_value(xi).isApprox(expected, 1e-14));
+    EXPECT_TRUE(u_field->eval_value(xi).isApprox(expected, 1e-14));
     const int neighbor_row = stencils.opposite[0][0];
     const int neighbor = stencils.vertices[0][static_cast<std::size_t>(neighbor_row)];
     displacement[3 * neighbor] += 1;
@@ -118,7 +119,7 @@ TEST(StencilDofMap, MidEdgeStencilsKeepCentralFaceInterpolationSeparateFromNeigh
     EXPECT_DOUBLE_EQ(changed(neighbor_row, 0), u_local(neighbor_row, 0) + 1);
     EXPECT_EQ(changed.topRows(3), u_local.topRows(3));
     EXPECT_EQ(map.gather(0, rest), X_local);
-    EXPECT_TRUE(X_field.eval_value(xi).isApprox(10 * expected, 1e-14));
+    EXPECT_TRUE(X_field->eval_value(xi).isApprox(10 * expected, 1e-14));
 }
 } // namespace
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "litepgo/fem/field/field.hpp"
+#include "litepgo/energy/response/response.hpp"
 #include "litepgo/fem/local/local_energy.hpp"
 #include "litepgo/fem/local/local_response.hpp"
 #include "litepgo/fem/quadrature/quadrature.hpp"
@@ -23,12 +23,13 @@ template <Quadrature3D Q> class VolumetricElement3D final {
         double w_dV;
     };
 
-    explicit VolumetricElement3D(const Field3D& X_field) {
-        if (X_field.num_components() != 3 || !Q::points().allFinite() || !Q::weights().allFinite())
+    explicit VolumetricElement3D(energy::Response& X_field) {
+        if ((X_field.num_inputs() != 3 || X_field.num_outputs() != 3) || !Q::points().allFinite() ||
+            !Q::weights().allFinite())
             throw std::invalid_argument("VolumetricElement3D: invalid reference components or quadrature");
         for (int q = 0; q < Q::num_points; ++q) {
             const Eigen::Vector3d xi = Q::points().row(q).transpose();
-            const auto derivative = X_field.eval_dvalue_dxi(xi);
+            const Eigen::MatrixXd derivative = X_field.eval_jacobian(xi);
             if (derivative.rows() != 3 || !derivative.allFinite())
                 throw std::invalid_argument("VolumetricElement3D: invalid reference Jacobian");
             const Eigen::Matrix3d J_X = derivative;
@@ -38,6 +39,10 @@ template <Quadrature3D Q> class VolumetricElement3D final {
                 throw std::invalid_argument("VolumetricElement3D: invalid reference determinant or volume weight");
             points_[static_cast<std::size_t>(q)] = {xi, w_dV};
         }
+    }
+
+    const Point& point(int q) const {
+        return points_.at(static_cast<std::size_t>(q));
     }
 
     // Resizes and overwrites independently nullable outputs in local-energy DOF order.

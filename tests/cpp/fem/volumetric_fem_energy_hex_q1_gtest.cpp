@@ -1,14 +1,13 @@
 #include "../testing/evaluate_energy.hpp"
 
 #include "litepgo/dof/vertex_dof_map.hpp"
+#include "litepgo/energy/response/affine_response.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
-#include "litepgo/fem/field/deformation_gradient_field.hpp"
-#include "litepgo/fem/field/identity_field.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/kinematics/volumetric_element.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
-#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
+#include "litepgo/fem/response/deformation_gradient_response.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
 
 #include <memory>
@@ -33,18 +32,19 @@ inline Vec hex_q1_rest_positions() {
 inline auto make_hex_q1_energy(const Vec& rest_positions) {
     const mesh::HexTopology topology(12, {{0, 1, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 2, 5, 10, 11, 6}});
     const dof::VertexDofMap rest_position_map(topology, 3);
-    using XField = fem::InterpolatedField3D<fem::HexQ1Basis>;
-    std::vector<XField> rest_position_fields;
+
+    std::vector<std::shared_ptr<litepgo::energy::Response>> rest_position_fields;
     rest_position_fields.reserve(topology.num_cells());
     for (int e = 0; e < topology.num_cells(); ++e)
-        rest_position_fields.emplace_back(rest_position_map.gather(e, rest_positions));
-    const fem::IdentityField3D Fp_field(Eigen::Matrix3d::Identity().reshaped());
-    const fem::IdentityField3D theta_field(Eigen::Vector2d(2, 3));
-    return fem::VolumetricFemEnergy<fem::NeoHookean, fem::HexQ1Basis, fem::GaussLegendre3D<2>, XField,
-                                    fem::IdentityField3D, fem::IdentityField3D>(
+        rest_position_fields.push_back(
+            std::make_shared<fem::InterpolatedResponse<fem::HexQ1Basis>>(rest_position_map.gather(e, rest_positions)));
+    auto Fp_field =
+        std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped());
+    auto theta_field = std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(2, 3));
+    return fem::VolumetricFemEnergy<fem::NeoHookean, fem::HexQ1Basis, fem::GaussLegendre3D<2>>(
         rest_position_map, std::move(rest_position_fields),
-        std::vector<fem::IdentityField3D>(topology.num_cells(), Fp_field),
-        std::vector<fem::IdentityField3D>(topology.num_cells(), theta_field));
+        std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), Fp_field),
+        std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), theta_field));
 }
 
 TEST(HexQ1FemEnergy, GradientAndHessianMatchFiniteDifferences) {

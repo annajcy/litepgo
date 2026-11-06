@@ -1,11 +1,13 @@
+#include "litepgo/fem/response/interpolated_response.hpp"
+#include <memory>
 // release and clamp a hex bar with a plastic twist Fp.
 // Build: cmake --build build/release --target hex_q1_plastic_twist
 // Run: build/release/examples/fem/plasticity/hex_q1_plastic_twist
 
-#include "litepgo/fem/field/deformation_gradient_field.hpp"
-#include "litepgo/fem/field/identity_field.hpp"
+#include "litepgo/energy/response/affine_response.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
+#include "litepgo/fem/response/deformation_gradient_response.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include "litepgo/mesh/extract_surface.hpp"
@@ -48,26 +50,27 @@ int main(int argc, char** argv) {
             Eigen::Vector3d(c * r.x() - s * r.y() - r.x(), s * r.x() + c * r.y() - r.y(), 0);
     }
 
-    // DeformationGradientField3D(u_p, X) borrows both fields, so both vectors are filled before it takes
-    // references and outlive the energy, which keeps its own copy of the rest fields.
+    // Prescribed plastic deformation is a spatial Response; FEM snapshots it at construction.
     const dof::VertexDofMap rest_position_map(topology, 3);
-    using XField = fem::InterpolatedField3D<fem::HexQ1Basis>;
-    std::vector<XField> rest_position_fields, plastic_fields;
+
+    std::vector<std::shared_ptr<litepgo::energy::Response>> rest_position_fields, plastic_fields;
     rest_position_fields.reserve(topology.num_cells());
     plastic_fields.reserve(topology.num_cells());
     for (int e = 0; e < topology.num_cells(); ++e) {
-        rest_position_fields.emplace_back(rest_position_map.gather(e, rest_positions));
-        plastic_fields.emplace_back(rest_position_map.gather(e, plastic_displacement));
+        rest_position_fields.push_back(
+            std::make_shared<fem::InterpolatedResponse<fem::HexQ1Basis>>(rest_position_map.gather(e, rest_positions)));
+        plastic_fields.push_back(std::make_shared<fem::InterpolatedResponse<fem::HexQ1Basis>>(
+            rest_position_map.gather(e, plastic_displacement)));
     }
-    std::vector<fem::DeformationGradientField3D> Fp_fields;
+    std::vector<std::shared_ptr<litepgo::energy::Response>> Fp_fields;
     Fp_fields.reserve(topology.num_cells());
     for (std::size_t e = 0; e < plastic_fields.size(); ++e)
-        Fp_fields.emplace_back(plastic_fields[e], rest_position_fields[e]);
-    const fem::IdentityField3D theta_field(Eigen::Vector2d(2, 3));
-    fem::VolumetricFemEnergy<fem::NeoHookean, fem::HexQ1Basis, fem::GaussLegendre3D<2>, XField,
-                             fem::DeformationGradientField3D, fem::IdentityField3D>
-        elastic(rest_position_map, rest_position_fields, std::move(Fp_fields),
-                std::vector<fem::IdentityField3D>(topology.num_cells(), theta_field));
+        Fp_fields.push_back(
+            std::make_shared<fem::DeformationGradientResponse>(plastic_fields[e], rest_position_fields[e]));
+    auto theta_field = std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(2, 3));
+    fem::VolumetricFemEnergy<fem::NeoHookean, fem::HexQ1Basis, fem::GaussLegendre3D<2>> elastic(
+        rest_position_map, rest_position_fields, std::move(Fp_fields),
+        std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), theta_field));
 
     const double tolerance = height * 1e-8;
     std::vector<int> bottom, top;

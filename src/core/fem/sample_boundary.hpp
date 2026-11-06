@@ -12,10 +12,10 @@ struct SampledBoundary {
 // subdivisions=1 preserves extract_surface's vertex order, winding and diagonals.
 template <class GeometryBasis>
 SampledBoundary sample_boundary(const mesh::HexTopology& topology,
-                                const std::vector<InterpolatedField3D<GeometryBasis>>& X_fields, int subdivisions);
+                                const std::vector<std::shared_ptr<energy::Response>>& X_fields, int subdivisions);
 
 template <>
 SampledBoundary sample_boundary<HexQ1Basis>(const mesh::HexTopology& topology,
-                                            const std::vector<InterpolatedField3D<HexQ1Basis>>& X_fields,
+                                            const std::vector<std::shared_ptr<energy::Response>>& X_fields,
                                             int subdivisions);
 } // namespace litepgo::fem

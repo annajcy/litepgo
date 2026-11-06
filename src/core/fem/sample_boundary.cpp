@@ -8,7 +8,7 @@
 namespace litepgo::fem {
 template <>
 SampledBoundary sample_boundary<HexQ1Basis>(const mesh::HexTopology& topology,
-                                            const std::vector<InterpolatedField3D<HexQ1Basis>>& fields, int n) {
+                                            const std::vector<std::shared_ptr<energy::Response>>& fields, int n) {
     if (n < 1 || fields.size() != static_cast<std::size_t>(topology.num_cells()))
         throw std::invalid_argument("sample_boundary: positive subdivisions and one X field per element required");
     using Face = std::array<int, 4>;
@@ -20,11 +20,12 @@ SampledBoundary sample_boundary<HexQ1Basis>(const mesh::HexTopology& topology,
     std::vector<BoundaryFace> faces;
     std::map<int, Eigen::Vector3d> corners;
     for (int e = 0; e < topology.num_cells(); ++e) {
-        if (fields[e].num_components() != 3)
+        if (!fields[e] || !dynamic_cast<InterpolatedResponse<HexQ1Basis>*>(fields[e].get()) ||
+            fields[e]->num_outputs() != 3)
             throw std::invalid_argument("sample_boundary: X fields need three components");
         const auto& cell = topology.cell_vertices(e);
         for (int v = 0; v < 8; ++v) {
-            Eigen::Vector3d p = fields[e].eval_value(HexQ1Basis::coefficient_info(v).point);
+            Eigen::Vector3d p = fields[e]->eval_value(HexQ1Basis::coefficient_info(v).point);
             auto [it, inserted] = corners.emplace(cell[v], p);
             if (!inserted && !(it->second.array() == p.array()).all())
                 throw std::invalid_argument("sample_boundary: shared vertex has inconsistent rest positions");
@@ -80,7 +81,7 @@ SampledBoundary sample_boundary<HexQ1Basis>(const mesh::HexTopology& topology,
                         throw std::length_error("sample_boundary: vertex count exceeds coordinate index range");
                     const int id = static_cast<int>(samples.size());
                     Eigen::Vector3d xi = a + (double(i) / n) * (b - a) + (double(j) / n) * (d - a);
-                    Eigen::Vector3d position = fields[f.element].eval_value(xi);
+                    Eigen::Vector3d position = fields[f.element]->eval_value(xi);
                     samples.push_back({f.element, xi, position, key});
                     it = ids.emplace(std::move(key), id).first;
                 }

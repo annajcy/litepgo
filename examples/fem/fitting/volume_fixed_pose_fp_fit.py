@@ -7,6 +7,7 @@ Run from the repository root after building litepgo:
     uv run --no-sync python examples/fem/fitting/volume_fixed_pose_fp_fit.py
 """
 
+from litepgo.energy import AffineResponse
 from pathlib import Path
 
 import numpy as np
@@ -31,21 +32,21 @@ def make_problem():
     if topology.num_cells == 0:
         raise RuntimeError("Example requires a nonempty tetrahedral mesh")
     mapping = dof.VertexDofMap(topology, 3)
-    XField = fem.InterpolatedField3D[fem.TetP1Basis]
+    XField = fem.InterpolatedResponse[fem.TetP1Basis]
     geometry = [
         XField(mapping.gather(e, nodes.ravel())) for e in range(mapping.num_elements)
     ]
     F = np.array([[1.12, 0.08, 0.02], [0.01, 0.96, 0.06], [0.03, 0.0, 1.07]])
     displacement = ((nodes - nodes.mean(axis=0)) @ (F - np.eye(3)).T).ravel()
     truth, initial = np.array([1.08, 0.94, 1.03]), np.ones(3)
-    theta = [fem.IdentityField3D(np.array([2.0, 3.0])) for _ in geometry]
+    theta = [AffineResponse(np.zeros((2, 3)), np.array([2.0, 3.0])) for _ in geometry]
     ElasticEnergy = fem.VolumetricFemEnergy[
         fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
     ]
     elastic = ElasticEnergy(
         mapping,
         geometry,
-        [fem.IdentityField3D(np.diag(truth).ravel(order="F")) for _ in geometry],
+        [AffineResponse(np.zeros((9, 3)), np.diag(truth).ravel(order="F")) for _ in geometry],
         theta,
     )
     # Target comes from the energy gradient, independently of the force-response path.

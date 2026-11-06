@@ -1,8 +1,10 @@
 #include "litepgo/fem/point_displacement_map.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
 #include "litepgo/fem/sample_boundary.hpp"
 #include "litepgo/mesh/extract_surface.hpp"
 #include <gtest/gtest.h>
 #include <map>
+#include <memory>
 using namespace litepgo;
 using namespace litepgo::fem;
 TEST(SampleBoundary, MatchesExtractionAndWeldsEdges) {
@@ -10,7 +12,8 @@ TEST(SampleBoundary, MatchesExtractionAndWeldsEdges) {
     for (int i = 0; i < 8; ++i)
         X.row(i) = HexQ1Basis::coefficient_info(i).point.transpose();
     mesh::HexTopology topology(8, {{0, 1, 2, 3, 4, 5, 6, 7}});
-    std::vector<InterpolatedField3D<HexQ1Basis>> fields{InterpolatedField3D<HexQ1Basis>(X)};
+    std::vector<std::shared_ptr<litepgo::energy::Response>> fields{
+        std::make_shared<InterpolatedResponse<HexQ1Basis>>(X)};
     const auto extracted = mesh::extract_surface(mesh::HexMesh{X.reshaped<Eigen::RowMajor>(), topology});
     const auto one = sample_boundary<HexQ1Basis>(topology, fields, 1);
     EXPECT_EQ(one.mesh.positions, extracted.positions);

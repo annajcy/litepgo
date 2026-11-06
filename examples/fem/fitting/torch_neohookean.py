@@ -3,6 +3,7 @@
 Run: uv run --no-sync python examples/fem/fitting/torch_neohookean.py
 """
 
+from litepgo.energy import AffineResponse
 import numpy as np
 import torch
 from litepgo import dof, energy, fem, mesh, solver
@@ -39,16 +40,16 @@ def make_problem(batch_size=1):
         5, np.array([[0, 1, 2, 3], [1, 2, 3, 4]], dtype=np.int32)
     )
     mapping = dof.VertexDofMap(topology, 3)
-    XField = fem.InterpolatedField3D[fem.TetP1Basis]
+    XField = fem.InterpolatedResponse[fem.TetP1Basis]
     geometry = [XField(mapping.gather(e, nodes.ravel())) for e in range(2)]
     plastic = [
-        fem.IdentityField3D(p.ravel(order="F"))
+        AffineResponse(np.zeros((9, 3)), p.ravel(order="F"))
         for p in (
             np.array([[1.04, 0.03, 0.0], [0.0, 0.98, 0.02], [0.01, 0.0, 1.02]]),
             np.array([[0.97, 0.0, 0.02], [0.01, 1.03, 0.0], [0.0, 0.02, 1.01]]),
         )
     ]
-    theta = [fem.IdentityField3D(np.array(p)) for p in ([2.0, 3.0], [3.0, 2.0])]
+    theta = [AffineResponse(np.zeros((2, 3)), np.array(p)) for p in ([2.0, 3.0], [3.0, 2.0])]
     native = fem.VolumetricFemEnergy[
         fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
     ](mapping, geometry, plastic, theta)

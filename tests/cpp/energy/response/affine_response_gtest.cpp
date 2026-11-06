@@ -2,6 +2,7 @@
 #include "litepgo/energy/response/composed_response.hpp"
 #include "litepgo/energy/response/exp_response.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
+#include <memory>
 
 #include <gtest/gtest.h>
 #include <limits>

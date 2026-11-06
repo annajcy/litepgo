@@ -1,10 +1,11 @@
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/kinematics/volumetric_element.hpp"
 #include "litepgo/fem/local/local_response.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
 #include <gtest/gtest.h>
 #include <limits>
+#include <memory>
 
 namespace litepgo::fem::test {
 namespace {
@@ -84,8 +85,8 @@ TEST(LocalResponse, RejectsMalformedLocalResultsBeforeAccumulating) {
 TEST(LocalResponse, IntegratorUsesAccumulationAndChecksFinalOutputs) {
     Eigen::Matrix<double, 4, 3> vertices;
     vertices << 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1;
-    const InterpolatedField3D<TetP1Basis> X(vertices);
-    const VolumetricElement3D<TetCentroidQuadrature> element(X);
+    auto X = std::make_shared<InterpolatedResponse<TetP1Basis>>(vertices);
+    const VolumetricElement3D<TetCentroidQuadrature> element(*X);
     ValueOnly<3> no_jacobian;
     Eigen::MatrixXd J;
     EXPECT_THROW(element.eval(no_jacobian, &J), std::logic_error);

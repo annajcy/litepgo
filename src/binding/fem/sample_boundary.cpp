@@ -2,6 +2,7 @@
 #include "bindings.hpp"
 #include "detail/templates.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
+#include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/vector.h>
 
 #include <nanobind/eigen/dense.h>

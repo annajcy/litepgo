@@ -4,6 +4,7 @@ Run: uv run --no-sync python examples/fem/fitting/torch_equilibrium_response.py
 The adjacent torch_neohookean.py supplies the density and two-tet problem.
 """
 
+from litepgo.energy import AffineResponse
 import numpy as np
 from litepgo import dof, fem, mesh, solver
 from litepgo import torch as bridge
@@ -37,7 +38,7 @@ def make_equilibrium(kind, use_torch=True):
     ]
 
     def make_energy(p):
-        active = [fem.IdentityField3D(p)] * mapping.num_elements
+        active = [AffineResponse(np.zeros((len(p), 3)), p)] * mapping.num_elements
         Fp, material_fields = (
             (plastic, active) if kind == "material" else (active, theta)
         )

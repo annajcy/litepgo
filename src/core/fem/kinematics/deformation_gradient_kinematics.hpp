@@ -1,8 +1,10 @@
 #pragma once
 
-#include "litepgo/fem/field/deformation_gradient_field.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
+#include "litepgo/energy/response/response.hpp"
+#include "litepgo/fem/basis/basis.hpp"
 #include "litepgo/fem/quadrature/quadrature.hpp"
+#include <Eigen/LU>
+#include <unsupported/Eigen/KroneckerProduct>
 
 #include <array>
 #include <stdexcept>
@@ -13,11 +15,20 @@ namespace litepgo::fem {
 // Owns B_q in row-major displacement-coefficient order; rebuild if geometry changes.
 template <Basis3D B, Quadrature3D Q> class DeformationGradientKinematics3D final {
   public:
-    explicit DeformationGradientKinematics3D(const Field3D& X) {
-        const InterpolatedField3D<B> zero(Eigen::MatrixXd::Zero(B::num_basis_functions, 3));
-        const DeformationGradientField3D F(zero, X);
-        for (int q = 0; q < Q::num_points; ++q)
-            derivatives_[q] = F.eval_dvalue_dcoeffs(Q::points().row(q).transpose());
+    explicit DeformationGradientKinematics3D(energy::Response& X) {
+        if (X.num_inputs() != 3 || X.num_outputs() != 3)
+            throw std::invalid_argument("DeformationGradientKinematics3D: geometry must map R3 to R3");
+        for (int q = 0; q < Q::num_points; ++q) {
+            const Eigen::Vector3d xi = Q::points().row(q).transpose();
+            const Eigen::Matrix3d J = X.eval_jacobian(xi);
+            const double determinant = J.determinant();
+            if (!std::isfinite(determinant) || determinant <= 0)
+                throw std::invalid_argument("DeformationGradientKinematics3D: positive geometry determinant required");
+            const Eigen::MatrixXd gradient = B::eval_dN_dxi(xi) * J.inverse();
+            derivatives_[q] = Eigen::kroneckerProduct(gradient.transpose(), Eigen::Matrix3d::Identity());
+            if (!derivatives_[q].allFinite())
+                throw std::invalid_argument("DeformationGradientKinematics3D: non-finite physical gradient");
+        }
     }
 
     const Eigen::MatrixXd& derivative(int q) const {

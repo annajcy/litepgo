@@ -1,3 +1,4 @@
+#include <memory>
 // Fit two shared positive in-plane Fp stretches at a prescribed shell pose.
 // Build: cmake --build build/release --target shell_fixed_pose_fp_fit
 // Run: build/release/examples/fem/fitting/shell_fixed_pose_fp_fit

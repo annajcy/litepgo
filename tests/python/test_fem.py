@@ -1,3 +1,4 @@
+from litepgo.energy import AffineResponse
 import gc
 import subprocess
 import sys
@@ -20,8 +21,8 @@ def test_templates_mirror_cpp_arguments():
     Energy = fem.VolumetricFemEnergy[fem.NeoHookean, fem.HexQ1Basis, fem.GaussLegendre3D[2]]
     assert Energy.__name__ == "VolumetricFemEnergy[NeoHookean, HexQ1Basis, GaussLegendre3D[2]]"
     assert issubclass(Energy, energy.Energy) and issubclass(Energy, fem.VolumetricFemEnergy)
-    assert fem.InterpolatedField3D[fem.TetP1Basis] is fem.InterpolatedField3D[(fem.TetP1Basis,)]
-    assert issubclass(fem.InterpolatedField3D[fem.TetP1Basis], fem.Field3D)
+    assert fem.InterpolatedResponse[fem.TetP1Basis] is fem.InterpolatedResponse[(fem.TetP1Basis,)]
+    assert issubclass(fem.InterpolatedResponse[fem.TetP1Basis], energy.Response)
     assert fem.GaussLegendre3D[4].num_points == 64
     with pytest.raises(TypeError, match=r"available: .*GaussLegendre3D\[2\]"):
         fem.GaussLegendre3D[3]
@@ -165,23 +166,23 @@ def test_gauss_legendre_1d_integrates_polynomials(num_points):
 
 def test_fields():
     coeffs = np.array([fem.HexQ1Basis.coefficient_info(v).point for v in range(8)]) * [2.0, 1.0, 3.0]
-    X = fem.InterpolatedField3D[fem.HexQ1Basis](coeffs)
+    X = fem.InterpolatedResponse[fem.HexQ1Basis](coeffs)
     xi = np.array([0.2, 0.5, 0.9])
     np.testing.assert_allclose(X.eval_value(xi), [0.4, 0.5, 2.7])
-    np.testing.assert_allclose(X.eval_dvalue_dxi(xi), np.diag([2.0, 1.0, 3.0]), atol=1e-15)
-    assert (X.num_components, X.num_dofs) == (3, 24)
-    constant = fem.IdentityField3D(np.array([1.0, 2.0]))
+    np.testing.assert_allclose(X.eval_jacobian(xi).toarray(), np.diag([2.0, 1.0, 3.0]), atol=1e-15)
+    assert (X.num_outputs, X.num_inputs) == (3, 3)
+    constant = AffineResponse(np.zeros((np.asarray(np.array([1.0, 2.0])).size, 3)), np.array([1.0, 2.0]))
     np.testing.assert_array_equal(constant.eval_value(xi), [1.0, 2.0])
     with pytest.raises(ValueError):
-        fem.InterpolatedField3D[fem.HexQ1Basis](coeffs[:7])
+        fem.InterpolatedResponse[fem.HexQ1Basis](coeffs[:7])
 
 
 def test_deformation_gradient_keeps_its_fields_alive():
     def make():
         nodes = np.array([fem.TetP1Basis.coefficient_info(v).point for v in range(4)])
-        u = fem.InterpolatedField3D[fem.TetP1Basis](0.1 * nodes)
-        X = fem.InterpolatedField3D[fem.TetP1Basis](nodes)
-        return fem.DeformationGradientField3D(u, X)
+        u = fem.InterpolatedResponse[fem.TetP1Basis](0.1 * nodes)
+        X = fem.InterpolatedResponse[fem.TetP1Basis](nodes)
+        return fem.DeformationGradientResponse(u, X)
 
     F = make()
     gc.collect()
@@ -212,12 +213,12 @@ def rest_fields(XField, rest_map, positions):
 
 
 def constant_fields(value, count):
-    return [fem.IdentityField3D(np.asarray(value, dtype=float).ravel())] * count
+    return [AffineResponse(np.zeros((np.asarray(np.asarray(value, dtype=float).ravel()).size, 3)), np.asarray(value, dtype=float).ravel())] * count
 
 
 def volumetric_energy(data, basis, quadrature, dofs_per_vertex, theta_fields=None):
     rest_map = dof.VertexDofMap(data.topology, 3)
-    X_fields = rest_fields(fem.InterpolatedField3D[type_of_rest_basis(data)], rest_map, data.positions.ravel())
+    X_fields = rest_fields(fem.InterpolatedResponse[type_of_rest_basis(data)], rest_map, data.positions.ravel())
     n = data.topology.num_cells
     Energy = fem.VolumetricFemEnergy[fem.NeoHookean, basis, quadrature]
     return Energy(
@@ -246,7 +247,7 @@ def test_single_tet_energy_matches_material_times_volume():
 def test_erased_field_types_can_be_mixed():
     data = mesh.read_veg(ASSETS / "box-hex.veg")
     n = data.topology.num_cells
-    Q1 = fem.InterpolatedField3D[fem.HexQ1Basis]
+    Q1 = fem.InterpolatedResponse[fem.HexQ1Basis]
     # theta interpolated from Q1 nodal values equals the constant field everywhere.
     interpolated_theta = [Q1(np.tile(NEO_HOOKEAN_THETA, (8, 1)))] * n
     constant = volumetric_energy(data, fem.HexHermiteBasis, fem.GaussLegendre3D[2], 24)
@@ -260,7 +261,7 @@ def test_energy_rejects_bad_fields():
     data = mesh.read_veg(ASSETS / "box-tet.veg")
     Energy = fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
     rest_map = dof.VertexDofMap(data.topology, 3)
-    X = rest_fields(fem.InterpolatedField3D[fem.TetP1Basis], rest_map, data.positions.ravel())
+    X = rest_fields(fem.InterpolatedResponse[fem.TetP1Basis], rest_map, data.positions.ravel())
     n = data.topology.num_cells
     with pytest.raises(ValueError):
         Energy(rest_map, X[:-1], constant_fields(np.eye(3), n), constant_fields(NEO_HOOKEAN_THETA, n))
@@ -320,7 +321,7 @@ def test_python_examples_match_cpp(tmp_path, name, suffix):
 
 
 # examples/fem/plasticity: the plastic displacement u_p twists the bar by 90 degrees and Fp is
-# DeformationGradientField3D(u_p, X). u_p is interpolated in the displacement space (C1 Hermite for the
+# DeformationGradientResponse(u_p, X). u_p is interpolated in the displacement space (C1 Hermite for the
 # Hermite example), so the released bar takes the shape X + u_p stress-free. Clamped, it keeps residual
 # stress.
 
@@ -413,30 +414,8 @@ def single_hex(scale=1.5):
     return mesh.HexMesh(nodes, np.arange(8, dtype=np.int32)[None])
 
 
-def hex_local_energy(Local, data, u):
-    X_field = fem.InterpolatedField3D[fem.HexQ1Basis](data.positions)
-    u_field = fem.InterpolatedField3D[fem.HexQ1Basis](u.reshape(8, 3))
-    F = fem.DeformationGradientField3D(u_field, X_field)
-    Fp = fem.IdentityField3D(np.eye(3).ravel())
-    theta = fem.IdentityField3D(NEO_HOOKEAN_THETA.copy())
-    return X_field, Local[fem.NeoHookean](F, Fp, theta)
 
 
-def test_element_matches_mesh_energy():
-    data = single_hex()
-    u = 0.05 * np.sin(np.arange(24.0))
-    X_field, local = hex_local_energy(fem.VolumetricMaterialLocalEnergyF3D, data, u)
-    assert isinstance(local, fem.LocalEnergy3D) and isinstance(local, fem.VolumetricMaterialLocalEnergyF3D)
-    element = fem.VolumetricElement3D[fem.GaussLegendre3D[2]](X_field)
-    value, gradient, hessian = element.eval(local, gradient=True, hessian=True)
-    assert element.eval(local)[1:] == (None, None)
-    whole = volumetric_energy(data, fem.HexQ1Basis, fem.GaussLegendre3D[2], 3)
-    assert value == pytest.approx(whole.eval_value(u), rel=1e-14)
-    np.testing.assert_allclose(gradient, whole.eval_gradient(u), rtol=1e-12, atol=1e-14)
-    np.testing.assert_allclose(hessian, whole.eval_hessian(u).toarray(), rtol=1e-12, atol=1e-13)
-    collapse = -2 * data.positions.ravel()
-    assert 0 < element.max_feasible_step(local, collapse) < 0.5
-    assert element.max_feasible_step(local, np.zeros(24)) == 1.0
 
 
 def test_shell_local_energy_matches_shell_energy():
@@ -485,14 +464,14 @@ def test_kinematic_helpers():
 def test_basis_dof_transform_maps_physical_hermite_dofs():
     size, origin = np.array([2.0, 1.0, 3.0]), np.array([0.5, -1.0, 2.0])
     X_nodes = origin + size * np.array([fem.HexQ1Basis.coefficient_info(v).point for v in range(8)])
-    X_field = fem.InterpolatedField3D[fem.HexQ1Basis](X_nodes)
+    X_field = fem.InterpolatedResponse[fem.HexQ1Basis](X_nodes)
     transform = fem.BasisDofTransform[fem.HexHermiteBasis](X_field)
     assert transform.dofs_per_vertex == 24
     # An affine displacement u = A X: physical slots u, u_X, u_Y, u_Z, then zero mixed derivatives.
     A = np.array([[0.1, -0.2, 0.05], [0.3, 0.0, -0.1], [0.02, 0.15, 0.2]])
     local = np.hstack([X_nodes @ A.T, np.tile(A.T.ravel(), (8, 1)), np.zeros((8, 12))])
-    u_field = fem.InterpolatedField3D[fem.HexHermiteBasis](transform.to_coefficients(local))
-    F = fem.DeformationGradientField3D(u_field, X_field)
+    u_field = fem.InterpolatedResponse[fem.HexHermiteBasis](transform.to_coefficients(local))
+    F = fem.DeformationGradientResponse(u_field, X_field)
     for xi in ([0.2, 0.7, 0.4], [0.9, 0.1, 0.5]):
         np.testing.assert_allclose(F.eval_value(np.array(xi)), (np.eye(3) + A).ravel(order="F"), atol=1e-13)
     # Pullback scales each coefficient by its slot's element lengths: 1, hx, hy, hz, hx hy, hx hz, hy hz, hx hy hz.

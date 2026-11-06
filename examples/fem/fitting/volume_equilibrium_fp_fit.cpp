@@ -1,3 +1,6 @@
+#include "litepgo/energy/response/affine_response.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
+#include <memory>
 // Fit three shared log plastic stretches from equilibrium displacement and reaction.
 // Geometry, material theta=(2,3), and boundary displacements are fixed.
 // Run: build/release/examples/fem/fitting/volume_equilibrium_fp_fit
@@ -19,17 +22,14 @@
 
 namespace {
 using namespace litepgo;
-using GeometryField = fem::InterpolatedField3D<fem::TetP1Basis>;
-using Field = fem::IdentityField3D;
-using ElasticEnergy =
-    fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature, GeometryField, Field, Field>;
-using ForceFpResponse = fem::VolumetricFemForceFpResponse<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature,
-                                                          GeometryField, Field>;
+
+using ElasticEnergy = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
+using ForceFpResponse = fem::VolumetricFemForceFpResponse<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
 
 struct Problem {
     dof::VertexDofMap displacement_map;
-    std::vector<GeometryField> geometry;
-    std::vector<Field> theta;
+    std::vector<std::shared_ptr<litepgo::energy::Response>> geometry;
+    std::vector<std::shared_ptr<litepgo::energy::Response>> theta;
     dof::DofReduction fixed;
     Vec prescribed;
     dof::ConstantDofMap parameter_map;
@@ -40,10 +40,13 @@ Problem make_problem() {
     const auto volume = std::get<mesh::TetMesh>(mesh::read_veg(LITEPGO_ASSETS_DIR "/box-tet.veg"));
     const auto& topology = volume.topology;
     const dof::VertexDofMap displacement_map(topology, 3);
-    std::vector<GeometryField> geometry;
+    std::vector<std::shared_ptr<litepgo::energy::Response>> geometry;
     for (int e = 0; e < displacement_map.num_elements(); ++e)
-        geometry.emplace_back(displacement_map.gather(e, volume.positions));
-    std::vector<Field> theta(displacement_map.num_elements(), Field(Eigen::Vector2d(2, 3)));
+        geometry.push_back(
+            std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(displacement_map.gather(e, volume.positions)));
+    std::vector<std::shared_ptr<litepgo::energy::Response>> theta(
+        displacement_map.num_elements(),
+        std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(2, 3)));
 
     // Clamp the bottom; prescribe shear and extension on the top.
     const auto nodes = volume.positions.reshaped<Eigen::RowMajor>(topology.num_vertices(), 3);
@@ -85,9 +88,10 @@ Factories make_factories(const Problem& problem) {
                                                                  std::make_shared<fem::LogDiagonalFpResponse>(3));
     auto make_energy = [&problem, plastic](const Vec& p) -> std::shared_ptr<energy::Energy> {
         const Vec packed = plastic->eval_value(p);
-        std::vector<Field> fields;
+        std::vector<std::shared_ptr<litepgo::energy::Response>> fields;
         for (int e = 0; e < problem.displacement_map.num_elements(); ++e)
-            fields.emplace_back(packed.segment(9 * e, 9));
+            fields.push_back(std::make_shared<litepgo::energy::AffineResponse>(
+                litepgo::SpMat((packed.segment(9 * e, 9)).size(), 3), packed.segment(9 * e, 9)));
         return std::make_shared<ElasticEnergy>(problem.displacement_map, problem.geometry, std::move(fields),
                                                problem.theta);
     };

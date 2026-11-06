@@ -2,9 +2,11 @@
 #include "../../testing/finite_difference.hpp"
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/fem/basis/2d/quad_hermite_basis.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/local/local_energy.hpp"
 #include "litepgo/fem/quadrature/2d/gauss_legendre_2d.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
+#include "litepgo/fem/response/sampling_response.hpp"
+#include <memory>
 
 #include <Eigen/Geometry>
 #include <gtest/gtest.h>
@@ -17,16 +19,17 @@
 namespace litepgo::fem::test {
 
 namespace {
-using F = InterpolatedField2D<QuadHermiteBasis>;
+
 static_assert(std::is_same_v<LocalEnergy3D, LocalEnergyT<3>>);
 static_assert(std::is_same_v<LocalEnergy2D, LocalEnergyT<2>>);
 
-// A quadratic test density exercising values and both orders of reference derivatives.
-class QuadraticFieldEnergy final : public LocalEnergy2D {
+// Sampled value, gradient and Hessian are affine functions of the active coefficients.
+class QuadraticSamplingEnergy final : public LocalEnergy2D {
   public:
-    explicit QuadraticFieldEnergy(const Field2D& field) : field_(field) {}
+    explicit QuadraticSamplingEnergy(const Eigen::MatrixXd& C)
+        : coefficients_(C.reshaped<Eigen::RowMajor>()), components_(static_cast<int>(C.cols())) {}
     int num_dofs() const override {
-        return field_.num_dofs();
+        return static_cast<int>(coefficients_.size());
     }
     bool has_gradient() const noexcept override {
         return true;
@@ -35,28 +38,30 @@ class QuadraticFieldEnergy final : public LocalEnergy2D {
         return true;
     }
     double eval_value(const Eigen::Vector2d& xi) const override {
-        return 0.5 * (field_.eval_value(xi).squaredNorm() + field_.eval_dvalue_dxi(xi).squaredNorm() +
-                      field_.eval_d2value_dxi2(xi).squaredNorm());
+        return 0.5 * coefficients_.dot(eval_hessian(xi) * coefficients_);
     }
-    Eigen::VectorXd eval_gradient(const Eigen::Vector2d& xi) const override {
-        return field_.eval_dvalue_dcoeffs(xi).transpose() * field_.eval_value(xi) +
-               field_.eval_dgrad_xi_dcoeffs(xi).transpose() * field_.eval_dvalue_dxi(xi).reshaped() +
-               field_.eval_dhess_xi_dcoeffs(xi).transpose() * field_.eval_d2value_dxi2(xi).reshaped();
+    Vec eval_gradient(const Eigen::Vector2d& xi) const override {
+        return eval_hessian(xi) * coefficients_;
     }
     Eigen::MatrixXd eval_hessian(const Eigen::Vector2d& xi) const override {
-        const auto J = field_.eval_dvalue_dcoeffs(xi);
-        const auto G = field_.eval_dgrad_xi_dcoeffs(xi);
-        const auto H = field_.eval_dhess_xi_dcoeffs(xi);
-        return J.transpose() * J + G.transpose() * G + H.transpose() * H;
+        const Eigen::MatrixXd points = xi.transpose();
+        auto value = value_sampling_response<QuadHermiteBasis>(points, components_);
+        auto gradient = gradient_sampling_response<QuadHermiteBasis>(points, components_);
+        auto hessian = hessian_sampling_response<QuadHermiteBasis>(points, components_);
+        const Eigen::MatrixXd A = value.eval_jacobian(coefficients_);
+        const Eigen::MatrixXd B = gradient.eval_jacobian(coefficients_);
+        const Eigen::MatrixXd C = hessian.eval_jacobian(coefficients_);
+        return A.transpose() * A + B.transpose() * B + C.transpose() * C;
     }
 
   private:
-    const Field2D& field_;
+    Vec coefficients_;
+    int components_;
 };
 
 const Eigen::Vector3d tangent1(2, 0.4, 1), tangent2(0.2, 3, -0.6);
 
-F coordinates(int element) {
+std::shared_ptr<InterpolatedResponse<QuadHermiteBasis>> coordinates(int element) {
     Eigen::MatrixXd coefficients = Eigen::MatrixXd::Zero(16, 3);
     for (int v = 0; v < 4; ++v) {
         const auto xi = QuadHermiteBasis::coefficient_info(4 * v).point;
@@ -64,17 +69,16 @@ F coordinates(int element) {
         coefficients.row(4 * v + 1) = tangent1.transpose();
         coefficients.row(4 * v + 2) = tangent2.transpose();
     }
-    return F(coefficients);
+    return std::make_shared<InterpolatedResponse<QuadHermiteBasis>>(coefficients);
 }
 
 testing::ElementFormulaEnergy surface_energy() {
     const mesh::QuadTopology topology(6, {{0, 1, 2, 3}, {1, 4, 5, 2}});
     const dof::VertexDofMap map(topology, 12);
-    const std::array<F, 2> X_fields{coordinates(0), coordinates(1)};
+    const std::array<std::shared_ptr<energy::Response>, 2> X_fields{coordinates(0), coordinates(1)};
     return testing::ElementFormulaEnergy(
         map, [X_fields](int e, const Eigen::MatrixXd& x_local, Vec* g, Eigen::MatrixXd* H) {
-            const F u_field(x_local.reshaped<Eigen::RowMajor>(16, 3));
-            const QuadraticFieldEnergy local(u_field);
+            const QuadraticSamplingEnergy local(x_local.reshaped<Eigen::RowMajor>(16, 3));
             if (g)
                 g->setZero(local.num_dofs());
             if (H)
@@ -83,7 +87,7 @@ testing::ElementFormulaEnergy surface_energy() {
             double result = 0;
             for (int q = 0; q < Q::num_points; ++q) {
                 const Eigen::Vector2d xi = Q::points().row(q).transpose();
-                const auto derivative = X_fields[static_cast<std::size_t>(e)].eval_dvalue_dxi(xi);
+                const Eigen::MatrixXd derivative = X_fields[static_cast<std::size_t>(e)]->eval_jacobian(xi);
                 const Eigen::Vector3d a = derivative.col(0), b = derivative.col(1);
                 result += local.accumulate(xi, Q::weights()[q] * a.cross(b).norm(), g, H);
             }
@@ -114,8 +118,8 @@ TEST(SurfaceIntegration, AssembledGradientAndHessianMatchFiniteDifferencesWithSh
 }
 
 TEST(SurfaceIntegration, LocalEnergy2DAccumulatesAndValidatesThroughBaseReference) {
-    const F field(Eigen::MatrixXd::Constant(16, 2, 0.3));
-    const QuadraticFieldEnergy concrete(field);
+    auto field = std::make_shared<InterpolatedResponse<QuadHermiteBasis>>(Eigen::MatrixXd::Constant(16, 2, 0.3));
+    const QuadraticSamplingEnergy concrete(Eigen::MatrixXd::Constant(16, 2, 0.3));
     const LocalEnergy2D& local = concrete;
     const Eigen::Vector2d xi(0.2, 0.3);
     const double weight = -0.7;

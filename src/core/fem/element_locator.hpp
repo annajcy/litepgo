@@ -1,10 +1,11 @@
 #pragma once
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
 #include "litepgo/spatial/spatial_hash.hpp"
 #include <Eigen/LU>
 #include <limits>
+#include <memory>
 #include <string>
 #include <type_traits>
 
@@ -19,19 +20,33 @@ struct PointEmbedding {
 template <class B>
     requires(std::is_same_v<B, TetP1Basis> || std::is_same_v<B, HexQ1Basis>)
 class ElementLocator {
-    using Field = InterpolatedField3D<B>;
-    std::vector<Field> fields_;
+    std::vector<std::shared_ptr<energy::Response>> geometry_;
     std::vector<double> tolerances_;
     spatial::SpatialHash index_;
 
+    static std::vector<std::shared_ptr<energy::Response>>
+    snapshot(const std::vector<std::shared_ptr<energy::Response>>& geometry) {
+        std::vector<std::shared_ptr<energy::Response>> result;
+        for (const auto& response : geometry) {
+            // Corner bounds are conservative only for the declared P1/Q1 interpolation.
+            if (!response || !dynamic_cast<InterpolatedResponse<B>*>(response.get()) || response->num_outputs() != 3)
+                throw std::invalid_argument(
+                    "ElementLocator: expected three-component InterpolatedResponse of geometry basis");
+            Eigen::MatrixXd coefficients(B::num_basis_functions, 3);
+            for (int a = 0; a < B::num_basis_functions; ++a)
+                coefficients.row(a) = response->eval_value(B::coefficient_info(a).point).transpose();
+            result.push_back(std::make_shared<InterpolatedResponse<B>>(coefficients));
+        }
+        return result;
+    }
     std::vector<spatial::AABB> bounds() {
         std::vector<spatial::AABB> result;
-        for (const auto& field : fields_) {
-            if (field.num_components() != 3)
+        for (const auto& field : geometry_) {
+            if (field->num_outputs() != 3)
                 throw std::invalid_argument("ElementLocator: X fields must have three components");
-            Eigen::Vector3d lo = field.eval_value(B::coefficient_info(0).point), hi = lo;
+            Eigen::Vector3d lo = field->eval_value(B::coefficient_info(0).point), hi = lo;
             for (int i = 1; i < B::num_basis_functions; ++i) {
-                const Eigen::Vector3d p = field.eval_value(B::coefficient_info(i).point);
+                const Eigen::Vector3d p = field->eval_value(B::coefficient_info(i).point);
                 lo = lo.cwiseMin(p);
                 hi = hi.cwiseMax(p);
             }
@@ -54,11 +69,11 @@ class ElementLocator {
             return (xi.array() <= 1 + 1e-10).all();
     }
     bool invert(std::size_t e, const Eigen::Vector3d& p, Eigen::Vector3d& xi) const {
-        const auto& field = fields_[e];
+        const auto& field = geometry_[e];
         xi.setConstant(std::is_same_v<B, TetP1Basis> ? 0.25 : 0.5);
         for (int iteration = 0; iteration < 40; ++iteration) {
-            const Eigen::Vector3d residual = field.eval_value(xi) - p;
-            const Eigen::Matrix3d J = field.eval_dvalue_dxi(xi);
+            const Eigen::Vector3d residual = field->eval_value(xi) - p;
+            const Eigen::Matrix3d J = field->eval_jacobian(xi);
             Eigen::FullPivLU<Eigen::Matrix3d> lu(J);
             if (!J.allFinite() || !lu.isInvertible())
                 return false;
@@ -72,7 +87,7 @@ class ElementLocator {
                 const Eigen::Vector3d next = xi - alpha * step;
                 if (!next.allFinite())
                     continue;
-                const Eigen::Vector3d next_residual = field.eval_value(next) - p;
+                const Eigen::Vector3d next_residual = field->eval_value(next) - p;
                 if (next_residual.norm() < residual.norm()) {
                     xi = next;
                     accepted = true;
@@ -86,7 +101,8 @@ class ElementLocator {
     }
 
   public:
-    explicit ElementLocator(std::vector<Field> X_fields) : fields_(std::move(X_fields)), index_(bounds()) {}
+    explicit ElementLocator(const std::vector<std::shared_ptr<energy::Response>>& geometry)
+        : geometry_(snapshot(geometry)), index_(bounds()) {}
 
     // Boundary points are accepted within tolerance; lowest valid element ID wins.
     // Failure throws with the point index; no extrapolation or nearest-element fallback.

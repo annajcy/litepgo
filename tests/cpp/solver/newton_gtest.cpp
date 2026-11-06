@@ -1,13 +1,13 @@
 #include "../testing/element_formula_energy.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
 #include "litepgo/solver/newton.hpp"
 
 #include "litepgo/dof/constant_dof_map.hpp"
+#include "litepgo/energy/response/affine_response.hpp"
 #include "litepgo/energy/scalar/mesh_energy.hpp"
 #include "litepgo/energy/scalar/quadratic_energy.hpp"
 #include "litepgo/energy/scalar/weighted_sum_energy.hpp"
-#include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
-#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include "litepgo/linalg/sparse_solver/eigen_ldlt.hpp"
 
@@ -115,22 +115,25 @@ TEST(Newton, SolvesAQuadraticInOneStep) {
 
 TEST(Newton, PropagatesNeoHookeanTrialOverflowWithoutRetrying) {
     const dof::ConstantDofMap map(mesh::TetTopology(4, {{0, 1, 2, 3}}), 9);
-    const fem::IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
+    auto Fp =
+        std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped());
     // A tiny stiffness gives a finite Newton direction whose initial trial overflows ||F||^2.
-    const fem::IdentityField3D theta(Eigen::Vector2d(0, 1e-155));
+    auto theta = std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(0, 1e-155));
     int trial_evaluations = 0;
     auto elastic = std::make_shared<litepgo::testing::ElementFormulaEnergy>(
         map,
         [Fp, theta, &trial_evaluations](int, const Vec& x, Vec* g, Eigen::MatrixXd* H) {
             if (!g && !H)
                 ++trial_evaluations;
-            const fem::IdentityField3D F(x);
-            const fem::VolumetricMaterialLocalEnergyF3D<fem::NeoHookean> local(F, Fp, theta);
-            if (g)
-                g->setZero(9);
+            const fem::VolumetricMaterialInputs inputs{x.reshaped(3, 3), Eigen::Matrix3d::Identity(),
+                                                       Eigen::Vector2d(0, 1e-155)};
+            if (g) {
+                const Eigen::Matrix3d P = fem::NeoHookean::eval_dW_dF(inputs);
+                *g = P.reshaped();
+            }
             if (H)
-                H->setZero(9, 9);
-            return local.accumulate(Eigen::Vector3d::Zero(), 1, g, H);
+                *H = fem::NeoHookean::eval_d2W_dF2(inputs);
+            return fem::NeoHookean::eval_W(inputs);
         },
         [](int, const Vec& x, const Vec& dx) {
             const fem::VolumetricMaterialInputs input{x.reshaped(3, 3), Eigen::Matrix3d::Identity(),

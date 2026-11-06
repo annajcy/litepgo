@@ -1,5 +1,6 @@
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
+#include <memory>
 
 #include <gtest/gtest.h>
 
@@ -103,12 +104,12 @@ TEST(HexHermiteBasis, ReproducesAffineVectorFieldsWith192Dofs) {
         for (int d = 0; d < 3; ++d)
             coefficients.row(8 * vertex + d + 1) = A.col(d).transpose();
     }
-    const litepgo::fem::InterpolatedField3D<HexHermiteBasis> interpolation(coefficients);
-    EXPECT_EQ(interpolation.num_dofs(), 192);
+    auto interpolation = std::make_shared<litepgo::fem::InterpolatedResponse<HexHermiteBasis>>(coefficients);
+    EXPECT_EQ(interpolation->num_inputs(), 3);
     for (const auto& xi : samples) {
-        EXPECT_TRUE(interpolation.eval_value(xi).isApprox(A * xi + b, 1e-13));
-        EXPECT_TRUE(interpolation.eval_dvalue_dxi(xi).isApprox(A, 1e-13));
-        EXPECT_TRUE(interpolation.eval_d2value_dxi2(xi).isZero(1e-13));
+        EXPECT_TRUE(interpolation->eval_value(xi).isApprox(A * xi + b, 1e-13));
+        EXPECT_TRUE(Eigen::MatrixXd(interpolation->eval_jacobian(xi)).isApprox(A, 1e-13));
+        EXPECT_TRUE(Eigen::MatrixXd(interpolation->eval_hessian(xi, Vec::Ones(3))).isZero(1e-13));
     }
 }
 

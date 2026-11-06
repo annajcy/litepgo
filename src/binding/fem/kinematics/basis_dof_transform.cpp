@@ -22,7 +22,7 @@ template <class B> void bind_basis_dof_transform(nb::module_& m) {
     const std::string name = "BasisDofTransform[" + class_name(key[0]) + "]";
     nb::class_<Transform> cls(m, name.c_str());
     cls.attr("dofs_per_vertex") = Transform::dofs_per_vertex;
-    cls.def(nb::init<const Field3D&>(), "X_field"_a,
+    cls.def(nb::init<energy::Response&>(), "geometry"_a,
             "Caches the scaling for one element's geometry; keeps no reference.")
         .def(
             "to_coefficients",

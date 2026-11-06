@@ -4,6 +4,7 @@
 #include "litepgo/energy/response/exp_response.hpp"
 #include "litepgo/fem/parameter/log_diagonal_fp_response.hpp"
 #include <gtest/gtest.h>
+#include <memory>
 
 namespace litepgo::energy::test {
 TEST(ResponseComposition, SharedAndRepeatedDofsAccumulate) {

@@ -1,4 +1,3 @@
-#include "../../fem/material/volumetric/test_material_sources.hpp"
 #include "../../testing/batch_fixtures.hpp"
 #include "../../testing/element_formula_energy.hpp"
 #include "../../testing/evaluate_energy.hpp"
@@ -6,13 +5,13 @@
 #include "litepgo/dof/element_dof_map.hpp"
 #include "litepgo/dof/stencil_dof_map.hpp"
 #include "litepgo/dof/vertex_dof_map.hpp"
+#include "litepgo/energy/response/affine_response.hpp"
 #include "litepgo/energy/scalar/mesh_energy.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
-#include "litepgo/fem/field/identity_field.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
 #include <future>
 
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
-#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include <Eigen/LU>
@@ -26,26 +25,11 @@
 namespace litepgo::energy::test {
 
 namespace {
-using namespace litepgo::fem::test;
 using litepgo::testing::ElementFormulaEnergy;
 
 mesh::HexTopology two_hexes() {
     return mesh::HexTopology(12, {{1, 3, 9, 4, 7, 6, 0, 10}, {3, 8, 5, 9, 6, 2, 11, 0}});
 }
-fem::InterpolatedField3D<fem::HexQ1Basis> make_X_field() {
-    Eigen::Matrix<double, 8, 3> nodes;
-    for (int i = 0; i < 8; ++i)
-        nodes.row(i) = fem::HexQ1Basis::coefficient_info(i).point.transpose();
-    return fem::InterpolatedField3D<fem::HexQ1Basis>(nodes);
-}
-auto passive_fields() {
-    Eigen::Matrix3d F;
-    F << 1.1, 0.04, 0.02, -0.03, 0.95, 0.01, 0.02, 0.03, 1.05;
-    return MaterialSources{fem::IdentityField3D(F.reshaped()),
-                           fem::IdentityField3D(Eigen::Matrix3d::Identity().reshaped()),
-                           fem::IdentityField3D(Eigen::Vector2d(2, 3))};
-}
-
 void check_fd(ElementFormulaEnergy& energy, const Vec& x) {
     Vec gradient;
     SpMat hessian;
@@ -79,48 +63,6 @@ void check_fd(ElementFormulaEnergy& energy, const Vec& x) {
         EXPECT_EQ(Eigen::MatrixXd(h), Eigen::MatrixXd(hessian));
     }
     EXPECT_NO_THROW(energy.eval_hessian(x));
-}
-
-template <class Map, class Fields, class Bind>
-void check_material_path(const Map& map, const Vec& data, Fields fields, Bind bind) {
-    ElementFormulaEnergy energy(map, [fields, bind](int, const auto& x_local, Vec* g, Eigen::MatrixXd* h) {
-        const auto X_field = make_X_field();
-        const auto sources = fields(x_local);
-        const auto local_energy = bind(sources);
-        if (g)
-            g->setZero(local_energy.num_dofs());
-        if (h)
-            h->setZero(local_energy.num_dofs(), local_energy.num_dofs());
-        using Q = fem::GaussLegendre3D<2>;
-        double result = 0;
-        for (int q = 0; q < Q::num_points; ++q) {
-            const Eigen::Vector3d xi = Q::points().row(q).transpose();
-            const double weight = Q::weights()[q] * X_field.eval_dvalue_dxi(xi).determinant();
-            result += local_energy.accumulate(xi, weight, g, h);
-        }
-        return result;
-    });
-    // This test only evaluates nearby feasible states; it does not use the default step for a solver.
-    check_fd(energy, data);
-}
-
-TEST(MeshEnergy, HexNodeDisplacement) {
-    const auto topology = two_hexes();
-    const dof::VertexDofMap map(topology, 3);
-    Vec data = Vec::Zero(36);
-    for (int i = 0; i < data.size(); ++i)
-        data[i] = 0.01 * std::sin(i + 0.3);
-    check_material_path(
-        map, data,
-        [](const auto& x_local) {
-            EXPECT_EQ(x_local.rows(), 8);
-            EXPECT_EQ(x_local.cols(), 3);
-            auto fields = passive_fields();
-            return MaterialSources{
-                OwnedDeformationField(fem::InterpolatedField3D<fem::HexQ1Basis>(x_local), make_X_field()), fields.Fp,
-                fields.theta};
-        },
-        [](const auto& fields) { return bind_energy<fem::VolumetricMaterialLocalEnergyF3D<fem::NeoHookean>>(fields); });
 }
 
 TEST(MeshEnergy, OwnsPlanUsesCurrentXAndSupportsTriangleAndTet) {

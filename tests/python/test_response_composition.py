@@ -1,3 +1,4 @@
+from litepgo.energy import AffineResponse
 import gc
 import weakref
 
@@ -175,7 +176,7 @@ def test_fem_parameterizations_match_energy_and_equilibrium(plastic, shared):
     local = fem.LogDiagonalFpResponse() if plastic else energy.ExpResponse(2)
     transform = energy.ElementwiseResponse(parameter_map, local)
     physical_map = dof.ElementDofMap(topo, physical_width)
-    theta = [fem.IdentityField3D(np.array([2.0, 3.0])) for _ in range(2)]
+    theta = [AffineResponse(np.zeros((np.asarray(np.array([2.0, 3.0])).size, 3)), np.array([2.0, 3.0])) for _ in range(2)]
     force_type = (
         fem.VolumetricFemForceFpResponse
         if plastic
@@ -184,7 +185,7 @@ def test_fem_parameterizations_match_energy_and_equilibrium(plastic, shared):
 
     def make_energy(p):
         fields = [
-            fem.IdentityField3D(row)
+            AffineResponse(np.zeros((np.asarray(row).size, 3)), row)
             for row in transform.eval_value(p).reshape(2, physical_width)
         ]
         return Energy(

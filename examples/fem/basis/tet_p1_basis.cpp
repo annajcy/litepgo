@@ -1,8 +1,9 @@
+#include <memory>
 // Evaluate Tet P1 and reconstruct u(r,s,t) = 2*r + 3*s - t with a field.
 // Build: cmake --build build/release --target tet_p1_basis
 // Run: build/release/examples/fem/basis/tet_p1_basis
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
 #include <array>
 #include <cmath>
 #include <iostream>
@@ -30,7 +31,7 @@ int main() {
     Eigen::MatrixXd coefficients(B::num_basis_functions, 1);
     for (int i = 0; i < B::num_basis_functions; ++i)
         coefficients(i, 0) = target(B::coefficient_info(i).point);
-    const litepgo::fem::InterpolatedField3D<B> field(coefficients);
+    litepgo::fem::InterpolatedResponse<B> field(coefficients);
     const std::array<Eigen::Vector3d, 3> points{Eigen::Vector3d(0.25, 0.25, 0.25), Eigen::Vector3d(0.2, 0.3, 0.1),
                                                 Eigen::Vector3d(0.1, 0.1, 0.2)};
     for (const auto& point : points)

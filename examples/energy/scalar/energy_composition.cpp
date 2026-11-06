@@ -1,3 +1,4 @@
+#include <memory>
 // Weighted energies in reduced coordinates x = T z + offset.
 // Build: cmake --build build/release --target energy_composition
 // Run: build/release/examples/energy/scalar/energy_composition

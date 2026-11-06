@@ -1,9 +1,10 @@
+#include <memory>
 // Build Hermite coefficients from sample descriptions for u(xi) = sum(xi^2).
 // Build: cmake --build build/release --target hermite_interpolation
 // Run: build/release/examples/fem/basis/hermite_interpolation
 #include "litepgo/fem/basis/2d/quad_hermite_basis.hpp"
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
 #include <cmath>
 #include <iomanip>
 #include <iostream>
@@ -49,7 +50,7 @@ template <class B, int Dim> void run(const typename fem::CoefficientInfo<Dim>::C
     std::cout << name << ": value=" << std::fixed << std::setprecision(2) << value << ", verified=1\n";
 
     if constexpr (Dim > 1) {
-        const fem::InterpolatedFieldT<B, Dim> field(coefficients);
+        fem::InterpolatedResponse<B> field(coefficients);
         for (int sample = 0; sample < 3; ++sample) {
             Eigen::Matrix<double, Dim, 1> query;
             for (int d = 0; d < Dim; ++d)

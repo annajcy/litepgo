@@ -4,6 +4,7 @@ Run from the repository root after building litepgo:
     uv run --no-sync python examples/energy/response/mesh_response.py
 """
 
+from litepgo.energy import AffineResponse
 import argparse
 from statistics import median
 from time import perf_counter
@@ -29,12 +30,12 @@ def problem(copies=1):
     topology = mesh.TetTopology(5 * copies, cells)
     nodes = np.tile(X, (copies, 1))
     mapping = dof.VertexDofMap(topology, 3)
-    Field = fem.InterpolatedField3D[fem.TetP1Basis]
+    Field = fem.InterpolatedResponse[fem.TetP1Basis]
     geometry = [
         Field(mapping.gather(e, nodes.ravel())) for e in range(topology.num_cells)
     ]
     displacement = (nodes @ (F - np.eye(3)).T).ravel()
-    plastic = [fem.IdentityField3D(np.eye(3).ravel())] * topology.num_cells
+    plastic = [AffineResponse(np.zeros((9, 3)), np.eye(3).ravel())] * topology.num_cells
     return topology, mapping, geometry, displacement, plastic
 
 
@@ -72,7 +73,7 @@ def run(copies=1, batch_size=256, repeats=0):
         fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
     ]
     energy = Energy(
-        mapping, geometry, plastic, [fem.IdentityField3D(truth)] * topology.num_cells
+        mapping, geometry, plastic, [AffineResponse(np.zeros((2, 3)), truth)] * topology.num_cells
     )
     expected = energy.eval_gradient(displacement)
     single_value, J = single.eval_value_and_jacobian(truth)

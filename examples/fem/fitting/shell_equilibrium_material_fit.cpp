@@ -1,3 +1,4 @@
+#include <memory>
 // Fit two material parameters from equilibrium reactions.
 // Geometry, thickness, and boundary displacements are fixed.
 // Run: build/release/examples/fem/fitting/shell_equilibrium_material_fit

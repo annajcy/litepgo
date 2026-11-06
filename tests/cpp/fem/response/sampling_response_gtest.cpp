@@ -1,3 +1,4 @@
+#include "litepgo/energy/response/affine_response.hpp"
 #include "litepgo/fem/basis/1d/cubic_hermite_basis.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/response/sampling_response.hpp"

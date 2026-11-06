@@ -1,9 +1,11 @@
+#include "litepgo/fem/response/interpolated_response.hpp"
+#include <memory>
 // Fit three shared positive diagonal Fp stretches at a prescribed tetrahedral pose.
 // Build: cmake --build build/release --target volume_fixed_pose_fp_fit
 // Run: build/release/examples/fem/fitting/volume_fixed_pose_fp_fit
 
+#include "litepgo/energy/response/affine_response.hpp"
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
-#include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
@@ -59,11 +61,10 @@ Problem make_problem() {
     if (mesh.topology.num_cells() == 0)
         throw std::runtime_error("Example requires a nonempty tetrahedral mesh");
     const dof::VertexDofMap map(mesh.topology, 3);
-    using XField = fem::InterpolatedField3D<fem::TetP1Basis>;
-    using Field = fem::IdentityField3D;
-    std::vector<XField> geometry;
+
+    std::vector<std::shared_ptr<litepgo::energy::Response>> geometry;
     for (int e = 0; e < map.num_elements(); ++e)
-        geometry.emplace_back(map.gather(e, mesh.positions));
+        geometry.push_back(std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(map.gather(e, mesh.positions)));
     const auto nodes = mesh.positions.reshaped<Eigen::RowMajor>(mesh.topology.num_vertices(), 3);
     const Eigen::Vector3d center = nodes.colwise().mean().transpose();
     Eigen::Matrix3d F;
@@ -74,17 +75,21 @@ Problem make_problem() {
 
     const Eigen::Vector3d truth(1.08, .94, 1.03), initial = Eigen::Vector3d::Ones();
     const Eigen::Matrix3d true_Fp = truth.asDiagonal();
-    const std::vector<Field> theta(geometry.size(), Field(Eigen::Vector2d(2, 3)));
-    using Elastic =
-        fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature, XField, Field, Field>;
-    const Elastic elastic(map, geometry, std::vector<Field>(geometry.size(), Field(true_Fp.reshaped())), theta);
+    const std::vector<std::shared_ptr<litepgo::energy::Response>> theta(
+        geometry.size(),
+        std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(2, 3)));
+    using Elastic = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
+    const Elastic elastic(map, geometry,
+                          std::vector<std::shared_ptr<litepgo::energy::Response>>(
+                              geometry.size(), std::make_shared<litepgo::energy::AffineResponse>(
+                                                   litepgo::SpMat((true_Fp.reshaped()).size(), 3), true_Fp.reshaped())),
+                          theta);
     // Target comes from the energy gradient, independently of the force-response path.
     const Vec target = elastic.eval_gradient(u);
     const double scale = target.norm();
     if (!(scale > 0) || !std::isfinite(scale))
         throw std::runtime_error("Calibration requires finite nonzero target forces");
-    using Force =
-        fem::VolumetricFemForceFpResponse<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature, XField, Field>;
+    using Force = fem::VolumetricFemForceFpResponse<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
     auto force = std::make_shared<Force>(dof::ConstantDofMap(mesh.topology, 9), map, geometry, u, theta);
 
     auto parameterized =

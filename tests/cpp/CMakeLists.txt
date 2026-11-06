@@ -40,19 +40,12 @@ add_executable(litepgo_fem_tests
     fem/basis/1d/cubic_hermite_basis_gtest.cpp
     fem/basis/2d/quad_hermite_basis_gtest.cpp
     fem/basis/2d/triangle_p1_basis_gtest.cpp
-    fem/field/field_gtest.cpp
-    fem/field/identity_field_gtest.cpp
-    fem/field/shared_field_gtest.cpp
-    fem/field/deformation_gradient_field_gtest.cpp
-    fem/material/volumetric/material_sources_gtest.cpp
     fem/quadrature/1d/gauss_legendre_1d_gtest.cpp
     fem/basis/3d/hex_q1_basis_gtest.cpp
     fem/basis/3d/hex_hermite_basis_gtest.cpp
     fem/basis/3d/tet_p1_basis_gtest.cpp
     fem/response/sampling_response_gtest.cpp
     fem/response/interpolated_response_gtest.cpp
-    fem/field/interpolated_field_gtest.cpp
-    fem/field/interpolated_field_2d_gtest.cpp
     fem/kinematics/basis_dof_transform_gtest.cpp
     fem/basis/1d/linear_lagrange_basis_gtest.cpp
     fem/shell_fem_energy_gtest.cpp
@@ -66,7 +59,6 @@ add_executable(litepgo_fem_tests
     fem/volumetric_fem_energy_hex_q1_gtest.cpp
     fem/volumetric_fem_energy_hex_hermite_gtest.cpp
     fem/volumetric_fem_energy_tet_p1_gtest.cpp
-    fem/material/volumetric/volumetric_material_force_local_response_gtest.cpp
     fem/local/dof_derivatives_gtest.cpp
     fem/kinematics/deformation_gradient_kinematics_gtest.cpp
     fem/kinematics/volumetric_element_gtest.cpp
@@ -77,17 +69,12 @@ add_executable(litepgo_fem_tests
     fem/material/volumetric/neo_hookean_gtest.cpp
     fem/material/shell/koiter_stvk_gtest.cpp
     fem/material/shell/shell_material_local_energy_gtest.cpp
-    fem/material/shell/shell_material_force_local_response_gtest.cpp
-    fem/material/shell/shell_fp_force_local_response_gtest.cpp
-    fem/material/volumetric/volumetric_material_local_energy_gtest.cpp
     fem/quadrature/quadrature_gtest.cpp
     fem/quadrature/2d/gauss_legendre_2d_gtest.cpp
     fem/quadrature/2d/triangle_centroid_quadrature_gtest.cpp
     fem/quadrature/3d/tet_centroid_quadrature_gtest.cpp
     fem/quadrature/3d/gauss_legendre_3d_gtest.cpp
-    fem/material/volumetric/volume_integration_gtest.cpp
     fem/local/surface_integration_gtest.cpp
-    fem/material/volumetric/tet_p1_integration_gtest.cpp
 )
 target_link_libraries(litepgo_fem_tests PRIVATE
     litepgo::solver litepgo::fem litepgo::warnings GTest::gtest_main)

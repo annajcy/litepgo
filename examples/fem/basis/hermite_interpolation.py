@@ -40,7 +40,7 @@ def main():
         print(f"{name}: value={value:.2f}, verified=1")
 
         if len(point) > 1:
-            Field = fem.InterpolatedField2D if len(point) == 2 else fem.InterpolatedField3D
+            Field = fem.InterpolatedResponse
             field = Field[B](coefficients[:, None])
             points = [0.2 + 0.15 * np.arange(len(point)) + 0.1 * i for i in range(3)]
             for query in points:

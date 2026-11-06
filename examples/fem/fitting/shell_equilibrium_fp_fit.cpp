@@ -1,3 +1,4 @@
+#include <memory>
 // Fit two shared in-plane log plastic stretches from equilibrium displacement and reaction.
 // Geometry, material theta=(2,3), and boundary displacements are fixed.
 // Run: build/release/examples/fem/fitting/shell_equilibrium_fp_fit

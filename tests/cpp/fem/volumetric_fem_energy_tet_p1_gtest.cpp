@@ -1,14 +1,13 @@
 #include "../testing/evaluate_energy.hpp"
 
 #include "litepgo/dof/vertex_dof_map.hpp"
+#include "litepgo/energy/response/affine_response.hpp"
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
-#include "litepgo/fem/field/deformation_gradient_field.hpp"
-#include "litepgo/fem/field/identity_field.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/kinematics/volumetric_element.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
-#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
+#include "litepgo/fem/response/deformation_gradient_response.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
 
 #include <memory>
@@ -34,18 +33,19 @@ inline Vec tet_p1_rest_positions() {
 inline auto make_tet_p1_energy(const Vec& rest_positions) {
     const mesh::TetTopology topology(5, {{0, 1, 2, 3}, {0, 2, 1, 4}});
     const dof::VertexDofMap rest_position_map(topology, 3);
-    using XField = fem::InterpolatedField3D<fem::TetP1Basis>;
-    std::vector<XField> rest_position_fields;
+
+    std::vector<std::shared_ptr<litepgo::energy::Response>> rest_position_fields;
     rest_position_fields.reserve(topology.num_cells());
     for (int e = 0; e < topology.num_cells(); ++e)
-        rest_position_fields.emplace_back(rest_position_map.gather(e, rest_positions));
-    const fem::IdentityField3D Fp_field(Eigen::Matrix3d::Identity().reshaped());
-    const fem::IdentityField3D theta_field(Eigen::Vector2d(2, 3));
-    return fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature, XField,
-                                    fem::IdentityField3D, fem::IdentityField3D>(
+        rest_position_fields.push_back(
+            std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(rest_position_map.gather(e, rest_positions)));
+    auto Fp_field =
+        std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped());
+    auto theta_field = std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(2, 3));
+    return fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>(
         rest_position_map, std::move(rest_position_fields),
-        std::vector<fem::IdentityField3D>(topology.num_cells(), Fp_field),
-        std::vector<fem::IdentityField3D>(topology.num_cells(), theta_field));
+        std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), Fp_field),
+        std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), theta_field));
 }
 
 TEST(TetP1FemEnergy, GradientAndHessianMatchFiniteDifferences) {
@@ -173,16 +173,18 @@ TEST(TetP1FemEnergy, VolumetricFemEnergyRejectsIncompatibleMapsAndFields) {
     const dof::VertexDofMap rest_position_map(topology, 3), wrong_width(topology, 2);
     const dof::VertexDofMap wrong_count(mesh::TetTopology(5, {{0, 1, 2, 3}}), 3);
     const Vec rest_positions = tet_p1_rest_positions();
-    using XField = fem::InterpolatedField3D<fem::TetP1Basis>;
-    const std::vector<XField> X{XField(rest_position_map.gather(0, rest_positions)),
-                                XField(rest_position_map.gather(1, rest_positions))};
-    const fem::IdentityField3D Fp(Eigen::Matrix3d::Identity().reshaped());
-    const fem::IdentityField3D theta(Eigen::Vector2d(2, 3));
-    using Fem =
-        fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature,
-                                 fem::InterpolatedField3D<fem::TetP1Basis>, fem::IdentityField3D, fem::IdentityField3D>;
+
+    const std::vector<std::shared_ptr<litepgo::energy::Response>> X{
+        std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(rest_position_map.gather(0, rest_positions)),
+        std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(rest_position_map.gather(1, rest_positions))};
+    auto Fp =
+        std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped());
+    auto theta = std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(2, 3));
+    using Fem = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
     EXPECT_THROW((Fem(rest_position_map, {X[0]}, {Fp, Fp}, {theta, theta})), std::invalid_argument);
-    EXPECT_THROW((Fem(rest_position_map, {X[0], XField(Eigen::MatrixXd::Zero(4, 2))}, {Fp, Fp}, {theta, theta})),
+    EXPECT_THROW((Fem(rest_position_map,
+                      {X[0], std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(Eigen::MatrixXd::Zero(4, 2))},
+                      {Fp, Fp}, {theta, theta})),
                  std::invalid_argument);
     EXPECT_THROW((Fem(rest_position_map, X, {Fp}, {theta, theta})), std::invalid_argument);
     EXPECT_THROW((Fem(rest_position_map, X, {Fp, Fp}, {theta})), std::invalid_argument);
@@ -200,29 +202,38 @@ TEST(TetP1FemEnergy, VolumetricFemEnergyAcceptsInterpolatedFixedFields) {
         plastic.row(i) = Fp.reshaped().transpose();
         parameters.row(i) = Eigen::RowVector2d(2 + i, 3 + i);
     }
-    using Fem =
-        fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature,
-                                 fem::InterpolatedField3D<fem::TetP1Basis>, fem::IdentityField3D, fem::IdentityField3D>;
+    using Fem = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
     const Vec positions = tet_p1_rest_positions();
-    using XField = fem::InterpolatedField3D<fem::TetP1Basis>;
-    const std::vector<XField> X{XField(map.gather(0, positions)), XField(map.gather(1, positions))};
-    using InterpolatedFem =
-        fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature, XField,
-                                 fem::InterpolatedField3D<fem::TetP1Basis>, fem::InterpolatedField3D<fem::TetP1Basis>>;
-    InterpolatedFem energy(
-        map, X,
-        {fem::InterpolatedField3D<fem::TetP1Basis>(plastic), fem::InterpolatedField3D<fem::TetP1Basis>(1.1 * plastic)},
-        {fem::InterpolatedField3D<fem::TetP1Basis>(parameters),
-         fem::InterpolatedField3D<fem::TetP1Basis>(2 * parameters)});
+
+    const std::vector<std::shared_ptr<litepgo::energy::Response>> X{
+        std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(map.gather(0, positions)),
+        std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(map.gather(1, positions))};
+    using InterpolatedFem = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
+    InterpolatedFem energy(map, X,
+                           {std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(plastic),
+                            std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(1.1 * plastic)},
+                           {std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(parameters),
+                            std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(2 * parameters)});
     const Eigen::VectorXd fp_mean = plastic.colwise().mean().transpose();
     const Eigen::VectorXd theta_mean = parameters.colwise().mean().transpose();
-    Fem reference(map, X, {fem::IdentityField3D(fp_mean), fem::IdentityField3D(1.1 * fp_mean)},
-                  {fem::IdentityField3D(theta_mean), fem::IdentityField3D(2 * theta_mean)});
+    Fem reference(
+        map, X,
+        {std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((fp_mean).size(), 3), fp_mean),
+         std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((1.1 * fp_mean).size(), 3), 1.1 * fp_mean)},
+        {std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((theta_mean).size(), 3), theta_mean),
+         std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((2 * theta_mean).size(), 3),
+                                                           2 * theta_mean)});
     const Vec u = 0.03 * positions;
     const dof::VertexDofMap first_map(mesh::TetTopology(5, {{0, 1, 2, 3}}), 3);
     const dof::VertexDofMap second_map(mesh::TetTopology(5, {{0, 2, 1, 4}}), 3);
-    Fem first(first_map, {X[0]}, {fem::IdentityField3D(fp_mean)}, {fem::IdentityField3D(theta_mean)});
-    Fem second(second_map, {X[1]}, {fem::IdentityField3D(1.1 * fp_mean)}, {fem::IdentityField3D(2 * theta_mean)});
+    Fem first(first_map, {X[0]},
+              {std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((fp_mean).size(), 3), fp_mean)},
+              {std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((theta_mean).size(), 3), theta_mean)});
+    Fem second(
+        second_map, {X[1]},
+        {std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((1.1 * fp_mean).size(), 3), 1.1 * fp_mean)},
+        {std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((2 * theta_mean).size(), 3),
+                                                           2 * theta_mean)});
     EXPECT_NEAR(energy.eval_value(u), first.eval_value(u) + second.eval_value(u), 1e-12);
     EXPECT_TRUE(energy.eval_gradient(u).isApprox(first.eval_gradient(u) + second.eval_gradient(u), 1e-12));
     EXPECT_TRUE(Eigen::MatrixXd(energy.eval_hessian(u))

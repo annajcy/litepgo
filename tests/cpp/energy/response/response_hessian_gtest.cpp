@@ -5,6 +5,7 @@
 #include <array>
 #include <gtest/gtest.h>
 #include <limits>
+#include <memory>
 
 namespace litepgo::energy::test {
 namespace {

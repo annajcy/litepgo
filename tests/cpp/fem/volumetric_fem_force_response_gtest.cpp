@@ -1,19 +1,21 @@
+#include "litepgo/energy/response/affine_response.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
 #include "litepgo/fem/volumetric_fem_energy.hpp"
 #include "litepgo/fem/volumetric_fem_force_fp_response.hpp"
 #include "litepgo/fem/volumetric_fem_force_material_response.hpp"
 #include <cmath>
 #include <gtest/gtest.h>
+#include <memory>
 
 namespace litepgo::fem::test {
 namespace {
-using Geometry = InterpolatedField3D<HexQ1Basis>;
 
 template <class B, class Q> void check_hex_responses(bool warped = false) {
     const mesh::HexTopology topology(12, {{0, 1, 2, 3, 4, 5, 6, 7}, {1, 8, 9, 2, 5, 10, 11, 6}});
     const dof::VertexDofMap map(topology, BasisDofTransform<B>::dofs_per_vertex);
-    std::vector<Geometry> geometry;
+    std::vector<std::shared_ptr<litepgo::energy::Response>> geometry;
     for (int e = 0; e < 2; ++e) {
         Eigen::MatrixXd X(8, 3);
         for (int v = 0; v < 8; ++v) {
@@ -22,7 +24,7 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
             if (warped)
                 X(v, 0) += .05 * xi.y() * xi.z();
         }
-        geometry.emplace_back(X);
+        geometry.push_back(std::make_shared<InterpolatedResponse<HexQ1Basis>>(X));
     }
     Vec u(map.num_dofs());
     for (int i = 0; i < u.size(); ++i)
@@ -31,10 +33,12 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
     Eigen::Matrix3d Fp;
     Fp << 1.1, .05, 0, .02, .95, .03, 0, .04, 1.03;
     const Vec p = Fp.reshaped();
-    const std::vector<IdentityField3D> plastic(2, IdentityField3D(p)), parameters(2, IdentityField3D(theta));
-    using Energy = VolumetricFemEnergy<NeoHookean, B, Q, Geometry, IdentityField3D, IdentityField3D>;
-    using MaterialForce = VolumetricFemForceMaterialResponse<NeoHookean, B, Q, Geometry, IdentityField3D>;
-    using PlasticForce = VolumetricFemForceFpResponse<NeoHookean, B, Q, Geometry, IdentityField3D>;
+    const std::vector<std::shared_ptr<litepgo::energy::Response>> plastic(
+        2, std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((p).size(), 3), p)),
+        parameters(2, std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((theta).size(), 3), theta));
+    using Energy = VolumetricFemEnergy<NeoHookean, B, Q>;
+    using MaterialForce = VolumetricFemForceMaterialResponse<NeoHookean, B, Q>;
+    using PlasticForce = VolumetricFemForceFpResponse<NeoHookean, B, Q>;
     const Vec expected = Energy(map, geometry, plastic, parameters).eval_gradient(u);
     Eigen::MatrixXd material_reference, plastic_reference;
     for (int batch_size : {1, 3}) {
@@ -53,8 +57,11 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
         }
         const Vec direction = Vec::LinSpaced(9, -.2, .3);
         const double h = 1e-6;
-        const std::vector<IdentityField3D> plus(2, IdentityField3D(p + h * direction)),
-            minus(2, IdentityField3D(p - h * direction));
+        const std::vector<std::shared_ptr<litepgo::energy::Response>> plus(
+            2, std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((p + h * direction).size(), 3),
+                                                                 p + h * direction)),
+            minus(2, std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((p - h * direction).size(), 3),
+                                                                       p - h * direction));
         const Vec fd = (Energy(map, geometry, plus, parameters).eval_gradient(u) -
                         Energy(map, geometry, minus, parameters).eval_gradient(u)) /
                        (2 * h);
@@ -74,12 +81,17 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
         const Eigen::MatrixXd heterogeneous_M = material_elements.eval_jacobian(ts);
         const Eigen::MatrixXd heterogeneous_P = plastic_elements.eval_jacobian(ps);
         const auto material_gradient = [&](const Vec& t) -> Vec {
-            const std::vector<IdentityField3D> fields{IdentityField3D(t.head(2)), IdentityField3D(t.tail(2))};
+            const std::vector<std::shared_ptr<litepgo::energy::Response>> fields{
+                std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((t.head(2)).size(), 3), t.head(2)),
+                std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((t.tail(2)).size(), 3), t.tail(2))};
             return Energy(map, geometry, plastic, fields).eval_gradient(u);
         };
         const auto plastic_gradient = [&](const Vec& p_element) -> Vec {
-            const std::vector<IdentityField3D> fields{IdentityField3D(p_element.head(9)),
-                                                      IdentityField3D(p_element.tail(9))};
+            const std::vector<std::shared_ptr<litepgo::energy::Response>> fields{
+                std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((p_element.head(9)).size(), 3),
+                                                                  p_element.head(9)),
+                std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((p_element.tail(9)).size(), 3),
+                                                                  p_element.tail(9))};
             return Energy(map, geometry, fields, parameters).eval_gradient(u);
         };
         EXPECT_TRUE(material_elements.eval_value(ts).isApprox(material_gradient(ts), 1e-11));
@@ -135,8 +147,8 @@ TEST(BasisDofTransformResponse, HermiteScalesOnlyRowsInPaddedViews) {
     Eigen::MatrixXd X(8, 3);
     for (int v = 0; v < 8; ++v)
         X.row(v) = HexQ1Basis::coefficient_info(v).point.cwiseProduct(Eigen::Vector3d(2, 3, 4));
-    const Geometry geometry(X);
-    const BasisDofTransform<HexHermiteBasis> transform(geometry);
+    auto geometry = std::make_shared<InterpolatedResponse<HexQ1Basis>>(X);
+    const BasisDofTransform<HexHermiteBasis> transform(*geometry);
     Eigen::MatrixXd storage = Eigen::MatrixXd::Constant(194, 5, 7);
     StridedVecRef value(storage.col(0).segment(1, 192));
     StridedMatRef J(storage.block(1, 1, 192, 3));

@@ -1,3 +1,4 @@
+from litepgo.energy import AffineResponse
 from pathlib import Path
 import runpy
 
@@ -118,10 +119,10 @@ def test_field_sampling_and_input_validation(problem):
             mapping,
             geometry,
             plastic,
-            [theta[0], fem.IdentityField3D(np.ones(3))],
+            [theta[0], AffineResponse(np.zeros((np.asarray(np.ones(3)).size, 3)), np.ones(3))],
             material=original.material,
         )
-    bad = fem.IdentityField3D(np.diag([-1.0, 1.0, 1.0]).ravel())
+    bad = AffineResponse(np.zeros((np.asarray(np.diag([-1.0, 1.0, 1.0]).ravel()).size, 3)), np.diag([-1.0, 1.0, 1.0]).ravel())
     with pytest.raises(ValueError, match="positive determinant"):
         bridge.TorchVolumetricFemEnergy(
             mapping, geometry, [bad] * 2, theta, material=original.material
@@ -129,7 +130,7 @@ def test_field_sampling_and_input_validation(problem):
     with pytest.raises(ValueError, match="infeasible"):
         original.eval_value((-2 * nodes).ravel())
     # Nonconstant fields are sampled at the centroid, with the same native convention.
-    Field = fem.InterpolatedField3D[fem.TetP1Basis]
+    Field = fem.InterpolatedResponse[fem.TetP1Basis]
     theta = [Field(np.array([[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0]]))] * 2
     model = bridge.TorchVolumetricFemEnergy(
         mapping, geometry, plastic, theta, material=original.material
@@ -235,7 +236,7 @@ def test_geometry_map_and_snapshot_contract(problem):
     )
     with pytest.raises(ValueError, match="TetP1"):
         bridge.TorchVolumetricFemEnergy(hexmap, [], [], [], material=original.material)
-    Field = fem.InterpolatedField3D[fem.TetP1Basis]
+    Field = fem.InterpolatedResponse[fem.TetP1Basis]
     for nodes in (
         np.zeros((4, 3)),
         np.array([[0.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
@@ -244,8 +245,8 @@ def test_geometry_map_and_snapshot_contract(problem):
             bridge.TorchVolumetricFemEnergy(
                 mapping,
                 [Field(nodes)] * 2,
-                [fem.IdentityField3D(np.eye(3).ravel())] * 2,
-                [fem.IdentityField3D(np.ones(2))] * 2,
+                [AffineResponse(np.zeros((np.asarray(np.eye(3).ravel()).size, 3)), np.eye(3).ravel())] * 2,
+                [AffineResponse(np.zeros((np.asarray(np.ones(2)).size, 3)), np.ones(2))] * 2,
                 material=original.material,
             )
 
