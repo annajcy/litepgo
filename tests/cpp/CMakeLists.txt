@@ -55,6 +55,7 @@ add_executable(litepgo_fem_tests
     fem/assembly/detail/volumetric_fem_force_response_gtest.cpp
     fem/assembly/volumetric_fem_force_material_response_gtest.cpp
     fem/assembly/volumetric_fem_batch_material_gtest.cpp
+    fem/assembly/shell_fem_batch_material_gtest.cpp
     fem/assembly/volumetric_fem_energy_hex_q1_gtest.cpp
     fem/assembly/volumetric_fem_energy_hex_hermite_gtest.cpp
     fem/assembly/volumetric_fem_energy_tet_p1_gtest.cpp

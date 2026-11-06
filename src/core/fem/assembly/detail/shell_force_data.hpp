@@ -26,12 +26,11 @@ struct ShellForceData {
     }
 };
 
-// Overwrite the positive displacement-gradient force, including original area once.
-template <class Material>
-void eval_shell_force_value(const ShellForceData& data, const ShellMaterialInputs& inputs, StridedVecRef value) {
+// Overwrite the positive displacement-gradient force from dW/d(packed forms), including original area once.
+inline void shell_force_value(const ShellForceData& data, const Eigen::Ref<const Eigen::VectorXd>& stress,
+                              StridedVecRef value) {
     if (value.size() != data.dab_du.cols())
         throw std::invalid_argument("Shell force: invalid output dimensions");
-    const Eigen::VectorXd stress = Material::eval_dW_dab(inputs);
     if (stress.size() != 6)
         throw std::logic_error("Shell force: invalid material gradient dimensions");
     if (!stress.allFinite())
@@ -39,6 +38,13 @@ void eval_shell_force_value(const ShellForceData& data, const ShellMaterialInput
     value.noalias() = data.area * (data.dab_du.transpose() * stress);
     if (!value.allFinite())
         throw std::domain_error("Shell force: non-finite force");
+}
+
+template <class Material>
+void eval_shell_force_value(const ShellForceData& data, const ShellMaterialInputs& inputs, StridedVecRef value) {
+    if (value.size() != data.dab_du.cols())
+        throw std::invalid_argument("Shell force: invalid output dimensions");
+    shell_force_value(data, Material::eval_dW_dab(inputs), value);
 }
 
 } // namespace litepgo::fem::detail

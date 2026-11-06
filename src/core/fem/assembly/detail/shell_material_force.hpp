@@ -9,6 +9,18 @@
 
 namespace litepgo::fem {
 namespace detail {
+// Overwrites the theta Jacobian from d vec(dW/dab) / d theta (6 x k).
+inline void shell_material_force_jacobian(const ShellForceData& data, const Eigen::Ref<const Eigen::MatrixXd>& mixed,
+                                          int num_parameters, StridedMatRef& J) {
+    if (mixed.rows() != 6 || mixed.cols() != num_parameters)
+        throw std::logic_error("Shell force: invalid material mixed derivative dimensions");
+    if (!mixed.allFinite())
+        throw std::domain_error("Shell force: non-finite material mixed derivative");
+    J.noalias() = data.area * (data.dab_du.transpose() * mixed);
+    if (!J.allFinite())
+        throw std::domain_error("Shell force: non-finite Jacobian");
+}
+
 // The material parameter vector is the active input.
 template <class Material>
 void eval_shell_material_force(const ShellForceData& data, const Eigen::VectorXd& theta, StridedVecRef value,
@@ -20,16 +32,8 @@ void eval_shell_material_force(const ShellForceData& data, const Eigen::VectorXd
     auto inputs = data.inputs;
     inputs.theta = theta;
     eval_shell_force_value<Material>(data, inputs, value);
-    if (J) {
-        const Eigen::MatrixXd mixed = Material::eval_d2W_dab_dtheta(inputs);
-        if (mixed.rows() != 6 || mixed.cols() != Material::num_parameters)
-            throw std::logic_error("Shell force: invalid material mixed derivative dimensions");
-        if (!mixed.allFinite())
-            throw std::domain_error("Shell force: non-finite material mixed derivative");
-        J->noalias() = data.area * (data.dab_du.transpose() * mixed);
-    }
-    if (J && !J->allFinite())
-        throw std::domain_error("Shell force: non-finite Jacobian");
+    if (J)
+        shell_material_force_jacobian(data, Material::eval_d2W_dab_dtheta(inputs), n, *J);
 }
 } // namespace detail
 } // namespace litepgo::fem
