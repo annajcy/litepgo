@@ -4,10 +4,10 @@
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/energy/scalar/mesh_energy.hpp"
 #include "litepgo/fem/kinematics/basis_dof_transform.hpp"
-#include "litepgo/fem/kinematics/deformation_gradient_kinematics.hpp"
 #include "litepgo/fem/kinematics/volumetric_element.hpp"
 #include "litepgo/fem/local/dof_derivatives.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_inputs.hpp"
+#include "litepgo/fem/response/sampling_response.hpp"
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -30,7 +30,7 @@ template <class Material, Basis3D UBasis, Quadrature3D Q> class VolumetricFemEne
             throw std::invalid_argument("VolumetricFemEnergy: incompatible map or response counts");
         integration_.reserve(count);
         transforms_.reserve(count);
-        kinematics_.reserve(count);
+        deformation_jacobians_.reserve(count);
         Fp_.resize(count);
         theta_.resize(count);
         for (int e = 0; e < displacement_map.num_elements(); ++e) {
@@ -41,7 +41,11 @@ template <class Material, Basis3D UBasis, Quadrature3D Q> class VolumetricFemEne
                 throw std::invalid_argument("VolumetricFemEnergy: incompatible displacement basis");
             integration_.emplace_back(*rest_positions[e]);
             transforms_.emplace_back(*rest_positions[e]);
-            kinematics_.emplace_back(*rest_positions[e]);
+            deformation_jacobians_.emplace_back();
+            auto sampling = deformation_gradient_sampling_response<UBasis>(*rest_positions[e], Q::points());
+            const Eigen::MatrixXd A = sampling.eval_jacobian(Vec::Zero(3 * UBasis::num_basis_functions));
+            for (int q = 0; q < Q::num_points; ++q)
+                deformation_jacobians_.back()[q] = A.middleRows(9 * q, 9);
             for (int q = 0; q < Q::num_points; ++q) {
                 const Eigen::Vector3d xi = Q::points().row(q).transpose();
                 const Vec plastic = Fp[e]->eval_value(xi);
@@ -92,7 +96,7 @@ template <class Material, Basis3D UBasis, Quadrature3D Q> class VolumetricFemEne
             const Vec delta = delta_coefficients.reshaped<Eigen::RowMajor>();
             steps[b] = integration_[index].max_feasible_step([&](int q, const auto&) {
                 const auto input = material_inputs(index, q, flattened);
-                const Vec delta_F = kinematics_[index].derivative(q) * delta;
+                const Vec delta_F = deformation_jacobians_[index][q] * delta;
                 if (!delta_F.allFinite())
                     throw std::domain_error("VolumetricFemEnergy: non-finite input increment");
                 const VolumetricMaterialInputs direction{delta_F.reshaped(3, 3), Eigen::Matrix3d::Zero(),
@@ -103,7 +107,11 @@ template <class Material, Basis3D UBasis, Quadrature3D Q> class VolumetricFemEne
         return steps;
     }
     VolumetricMaterialInputs material_inputs(std::size_t e, int q, const Vec& coefficients) const {
-        return {kinematics_[e].eval(q, coefficients), Fp_[e][q], theta_[e][q]};
+        const Vec increment = deformation_jacobians_[e][q] * coefficients;
+        const Eigen::Matrix3d F = Eigen::Matrix3d::Identity() + increment.reshaped(3, 3);
+        if (!F.allFinite())
+            throw std::domain_error("VolumetricFemEnergy: non-finite deformation gradient");
+        return {F, Fp_[e][q], theta_[e][q]};
     }
 
     double eval_element(std::size_t e, const Vec& coefficients, StridedVecRef* gradient, StridedMatRef* hessian) const {
@@ -112,7 +120,7 @@ template <class Material, Basis3D UBasis, Quadrature3D Q> class VolumetricFemEne
             [&](int q, const auto& point, StridedVecRef* g, StridedMatRef* H) {
                 const auto input = material_inputs(e, q, coefficients);
                 const double value = point.w_dV * Material::eval_W(input);
-                const auto& derivative = kinematics_[e].derivative(q);
+                const auto& derivative = deformation_jacobians_[e][q];
                 if (g)
                     add_gradient_wrt_dofs(derivative, Material::eval_dW_dF(input), point.w_dV, *g, false);
                 if (H)
@@ -122,7 +130,7 @@ template <class Material, Basis3D UBasis, Quadrature3D Q> class VolumetricFemEne
             gradient, hessian);
     }
 
-    std::vector<DeformationGradientKinematics3D<UBasis, Q>> kinematics_;
+    std::vector<std::array<Eigen::MatrixXd, Q::num_points>> deformation_jacobians_;
     std::vector<std::array<Eigen::Matrix3d, Q::num_points>> Fp_;
     std::vector<std::array<Vec, Q::num_points>> theta_;
     std::vector<VolumetricElement3D<Q>> integration_;

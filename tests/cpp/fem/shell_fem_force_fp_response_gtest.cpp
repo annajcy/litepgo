@@ -1,5 +1,5 @@
+#include "litepgo/fem/detail/shell_element.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
-#include "litepgo/fem/material/shell/shell_material_local_energy.hpp"
 #include "litepgo/fem/shell_fem_force_fp_response.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include <gtest/gtest.h>
@@ -31,10 +31,12 @@ struct Patch {
         for (int e = 0; e < 4; ++e) {
             const Eigen::Matrix3d P = plastic.segment(plastic.size() == 9 ? 0 : 9 * e, 9).reshaped(3, 3);
             const Eigen::MatrixXd Y = rest[e].X_local * P.transpose();
-            const TriangleMidEdgeRestData natural(Y, rest[e].opposite);
+            TriangleMidEdgeRestData natural(Y, rest[e].opposite);
+            natural.sqrt_det_a_bar = rest[e].sqrt_det_a_bar;
             const Eigen::MatrixXd natural_u = rest[e].X_local + map.gather(e, u) - Y;
-            const ShellMaterialLocalEnergy2D<KoiterStVK> local(natural, natural_u, thickness[e], theta[e]);
-            const Vec f = (.5 * rest[e].sqrt_det_a_bar) * local.eval_gradient(Eigen::Vector2d::Constant(1. / 3));
+            Vec f(natural_u.size());
+            StridedVecRef gradient(f);
+            detail::eval_shell_element<KoiterStVK>(natural, natural_u, thickness[e], theta[e], &gradient);
             const auto ids = map.dof_indices(e);
             for (int j = 0; j < f.size(); ++j)
                 result[ids[j]] += f[j];

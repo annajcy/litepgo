@@ -5,7 +5,6 @@
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/energy/response/mesh_response.hpp"
 #include "litepgo/fem/basis/basis.hpp"
-#include "litepgo/fem/local/local_response.hpp"
 #include <memory>
 #include <nanobind/eigen/dense.h>
 #include <nanobind/eigen/sparse.h>
@@ -56,11 +55,6 @@ template <class Q> void bind_quadrature(nb::module_& m, const char* name) {
         .def_static(
             "weights", [] { return Eigen::VectorXd(Q::weights()); },
             "Copy of reference integration weights, shape (num_points,). Entry q corresponds to points()[q].");
-}
-
-inline nb::tuple value_and_derivatives(double value, bool gradient, const Eigen::VectorXd& g, bool hessian,
-                                       const Eigen::MatrixXd& H) {
-    return nb::make_tuple(value, gradient ? nb::cast(g) : nb::none(), hessian ? nb::cast(H) : nb::none());
 }
 
 inline std::string class_name(nb::handle cls) {

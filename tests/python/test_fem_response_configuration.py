@@ -112,3 +112,21 @@ def test_element_step_callback_uses_every_quadrature_point_and_validates_bounds(
 def test_locator_rejects_arbitrary_response_without_supported_geometry_bounds(basis):
     with pytest.raises(ValueError):
         fem.ElementLocator[basis]([energy.AffineResponse(np.eye(3))])
+
+
+def test_element_exposes_independent_reference_points_and_physical_weights():
+    Q = fem.GaussLegendre3D[2]
+    geometry = energy.AffineResponse(np.diag([2., 3., 4.]))
+    owner = weakref.ref(geometry)
+    element = fem.VolumetricElement3D[Q](geometry)
+    del geometry
+    gc.collect()
+    assert owner() is None
+    points, weights = element.points(), element.weights()
+    np.testing.assert_array_equal(points, Q.points())
+    np.testing.assert_allclose(weights, 24 * Q.weights())
+    assert weights.sum() == pytest.approx(24)
+    points[:] = 0
+    weights[:] = 0
+    np.testing.assert_array_equal(element.points(), Q.points())
+    np.testing.assert_allclose(element.weights(), 24 * Q.weights())

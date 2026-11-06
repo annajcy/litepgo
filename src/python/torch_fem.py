@@ -61,19 +61,17 @@ class _TetGeometry:
         count = mapping.num_elements
         if len(fields) != count:
             raise ValueError("expected one geometry field per element")
-        xi = np.full(3, 0.25)
+        quadrature = fem.TetCentroidQuadrature
         derivatives, weights = [], []
         for X in fields:
             if not isinstance(X, energy.Response):
                 raise TypeError("expected spatial Response entries")
-            if X.num_outputs != 3:
-                raise ValueError("reference geometry requires three components")
-            J = X.eval_jacobian(xi).toarray()
-            _positive_det(J, "reference geometry")
-            B = np.kron((fem.TetP1Basis.eval_dN_dxi(xi) @ np.linalg.inv(J)).T, np.eye(3))
+            sampling = fem.deformation_gradient_sampling_response[fem.TetP1Basis](X, quadrature.points())
+            B = sampling.eval_jacobian(np.zeros(12)).toarray()
+            element = fem.VolumetricElement3D[quadrature](X)
             # Native vec(F) is column-major; Torch reshapes matrices row-major.
             derivatives.append(B.reshape(3, 3, 12).transpose(1, 0, 2).reshape(9, 12))
-            weights.append(np.linalg.det(J) / 6)
+            weights.append(element.weights()[0])
         self.B = _finite(np.array(derivatives, dtype=np.float64).reshape(count, 9, 12))
         self.weights = np.array(weights, dtype=np.float64)
 

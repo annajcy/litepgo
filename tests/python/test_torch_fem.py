@@ -241,7 +241,7 @@ def test_geometry_map_and_snapshot_contract(problem):
         np.zeros((4, 3)),
         np.array([[0.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
     ):
-        with pytest.raises(ValueError, match="reference geometry"):
+        with pytest.raises(ValueError, match="positive geometry determinant"):
             bridge.TorchVolumetricFemEnergy(
                 mapping,
                 [Field(nodes)] * 2,
@@ -287,3 +287,17 @@ def test_large_shear_constant_density_has_zero_derivatives(problem):
     assert np.isfinite(model.eval_value(u.ravel()))
     np.testing.assert_array_equal(model.eval_gradient(u.ravel()), 0)
     np.testing.assert_array_equal(model.eval_hessian(u.ravel()).toarray(), 0)
+
+
+def test_skew_geometry_sampling_matches_native_fem(problem):
+    _, mapping, _, plastic, theta, _, original = problem
+    J = np.array([[2., .3, -.2], [.1, 1.5, .4], [.2, -.1, 3.]])
+    geometry = [energy.AffineResponse(J)] * mapping.num_elements
+    model = bridge.TorchVolumetricFemEnergy(mapping, geometry, plastic, theta, material=original.material)
+    native = fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature](
+        mapping, geometry, plastic, theta
+    )
+    u = np.random.default_rng(4).normal(scale=.02, size=mapping.num_dofs)
+    assert model.eval_value(u) == pytest.approx(native.eval_value(u), abs=1e-13)
+    np.testing.assert_allclose(model.eval_gradient(u), native.eval_gradient(u), atol=1e-13)
+    np.testing.assert_allclose(model.eval_hessian(u).toarray(), native.eval_hessian(u).toarray(), atol=1e-12)

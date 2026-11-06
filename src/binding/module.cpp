@@ -84,9 +84,6 @@ NB_MODULE(_core, m) {
     litepgo::fem::binding::bind_triangle_mid_edge_kinematics(fem);
     litepgo::fem::binding::bind_fem_element_locator(fem);
     litepgo::fem::binding::bind_sample_boundary(fem);
-    litepgo::fem::binding::bind_fem_local_local_energy(fem);
-    litepgo::fem::binding::bind_fem_local_local_response(fem);
-    litepgo::fem::binding::bind_fem_material_shell_shell_material_local_energy(fem);
     litepgo::fem::binding::bind_fem_kinematics_basis_dof_transform(fem);
     litepgo::fem::binding::bind_fem_kinematics_volumetric_element(fem);
     litepgo::fem::binding::bind_positive_det_feasible_step(fem);

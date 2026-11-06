@@ -2,9 +2,6 @@
 #include "bindings.hpp"
 #include "detail/fem_helpers.hpp"
 #include "detail/templates.hpp"
-#include "litepgo/fem/local/local_energy.hpp"
-#include "litepgo/fem/local/local_response.hpp"
-#include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 
@@ -24,26 +21,25 @@ template <class Q> void bind_volumetric_element(nb::module_& m) {
     const nb::tuple key = nb::make_tuple(nb::type<Q>());
     const std::string name = "VolumetricElement3D[" + class_name(key[0]) + "]";
     nb::class_<Element> cls(m, name.c_str());
-    cls.def(nb::init<energy::Response&>(), "geometry"_a,
-            "Caches the reference geometry of X_field; keeps no reference.")
+    cls.def(nb::init<energy::Response&>(), "geometry"_a, "Snapshots physical quadrature weights.")
         .def(
-            "eval",
-            [](const Element& element, const LocalEnergy3D& local, bool gradient, bool hessian) {
-                Eigen::VectorXd g;
-                Eigen::MatrixXd H;
-                const double value = element.eval(local, gradient ? &g : nullptr, hessian ? &H : nullptr);
-                return value_and_derivatives(value, gradient, g, hessian, H);
+            "points",
+            [](const Element& element) {
+                Eigen::MatrixXd points(Q::num_points, 3);
+                for (int q = 0; q < Q::num_points; ++q)
+                    points.row(q) = element.point(q).xi.transpose();
+                return points;
             },
-            "local_energy"_a, "gradient"_a = false, "hessian"_a = false,
-            "Integrated (value, gradient or None, Hessian or None) in the local energy's DOF order.");
-    cls.def(
-        "eval",
-        [](const Element& element, const LocalResponse3D& local, bool jacobian) {
-            Eigen::MatrixXd J;
-            const Eigen::VectorXd value = element.eval(local, jacobian ? &J : nullptr);
-            return nb::make_tuple(value, jacobian ? nb::cast(J) : nb::none());
-        },
-        "local_response"_a, "jacobian"_a = false, "Integrated (value, Jacobian or None) in local response order.");
+            "Copy of cached reference coordinates, shape (Q,3), in quadrature order.")
+        .def(
+            "weights",
+            [](const Element& element) {
+                Vec weights(Q::num_points);
+                for (int q = 0; q < Q::num_points; ++q)
+                    weights[q] = element.point(q).w_dV;
+                return weights;
+            },
+            "Physical weights, including reference quadrature weights and the geometry determinant.");
     cls.def(
         "max_feasible_step",
         [](const Element& element, nb::callable step) {

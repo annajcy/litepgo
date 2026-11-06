@@ -9,6 +9,11 @@ VolumetricFemEnergy[Material, Basis, Quadrature] samples geometry, Fp and theta
 spatial Responses at construction. Rebuild after changing fixed configuration.
 VolumetricFemForceMaterialResponse and VolumetricFemForceFpResponse similarly
 snapshot fixed displacement and configuration, differentiating active parameters.
+deformation_gradient_sampling_response[Basis](geometry, points) returns an
+AffineResponse from row-major three-component displacement coefficients to
+point-major, column-major vec(F). It snapshots geometry at (Q,3) reference points;
+no physical DOF transform or quadrature weights are included.
+
 DeformationGradientResponse(displacement, geometry) maps xi to column-major
 vec(I + Du @ inverse(DX)). Its children map R3 to R3, remain fixed and support
 Hessians. It provides exact spatial Jacobians but no Hessians of its own.
@@ -36,9 +41,10 @@ fixed parameters. ShellFemEnergy accepts optional per-face plastic matrices;
 these change natural forms, preserving original area weights and thickness.
 Shell plastic force responses differentiate nine column-major Fp entries.
 
-LocalEnergy2D/3D and LocalResponse2D/3D remain custom integration-density
-interfaces. The Field-dependent material wrappers are removed; use pointwise
-material derivatives and the existing DOF pullback helpers for custom assembly.
+Native volumetric FEM constructs its fixed maps through deformation-gradient
+sampling. Custom integration uses ordinary Energy/Response, pointwise material
+derivatives, and VolumetricElement3D.points()/weights(); weights already include
+the geometry determinant. There is no separate local-density interface.
 See the FEM guide for formulas, shapes, packing and feasibility conventions.
 """
 
@@ -126,11 +132,6 @@ eval_positive_det_feasible_step = _native.eval_positive_det_feasible_step
 eval_gradient_wrt_dofs = _native.eval_gradient_wrt_dofs
 eval_hessian_wrt_dofs = _native.eval_hessian_wrt_dofs
 
-LocalEnergy2D = _native.LocalEnergy2D
-LocalEnergy3D = _native.LocalEnergy3D
-LocalResponse2D = _native.LocalResponse2D
-LocalResponse3D = _native.LocalResponse3D
-ShellMaterialLocalEnergy2D = _templates["ShellMaterialLocalEnergy2D"]
 VolumetricElement3D = _templates["VolumetricElement3D"]
 BasisDofTransform = _templates["BasisDofTransform"]
 
@@ -178,11 +179,6 @@ __all__ = [
     "eval_positive_det_feasible_step",
     "eval_gradient_wrt_dofs",
     "eval_hessian_wrt_dofs",
-    "LocalEnergy2D",
-    "LocalEnergy3D",
-    "LocalResponse2D",
-    "LocalResponse3D",
-    "ShellMaterialLocalEnergy2D",
     "VolumetricElement3D",
     "BasisDofTransform",
     "VolumetricFemEnergy",

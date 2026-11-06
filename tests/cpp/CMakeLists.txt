@@ -52,15 +52,13 @@ add_executable(litepgo_fem_tests
     fem/shell_fem_energy_regression_gtest.cpp
     fem/shell_fem_force_material_response_gtest.cpp
     fem/shell_fem_force_fp_response_gtest.cpp
-    fem/local/local_energy_gtest.cpp
-    fem/local/local_response_gtest.cpp
     fem/volumetric_fem_force_response_gtest.cpp
     fem/volumetric_fem_force_material_response_gtest.cpp
     fem/volumetric_fem_energy_hex_q1_gtest.cpp
     fem/volumetric_fem_energy_hex_hermite_gtest.cpp
     fem/volumetric_fem_energy_tet_p1_gtest.cpp
     fem/local/dof_derivatives_gtest.cpp
-    fem/kinematics/deformation_gradient_kinematics_gtest.cpp
+    fem/response/deformation_gradient_sampling_gtest.cpp
     fem/kinematics/volumetric_element_gtest.cpp
     fem/material/volumetric/volumetric_material_inputs_gtest.cpp
     fem/material/volumetric/multiplicative_kinematics_gtest.cpp
@@ -68,13 +66,13 @@ add_executable(litepgo_fem_tests
     fem/kinematics/positive_det_feasible_step_gtest.cpp
     fem/material/volumetric/neo_hookean_gtest.cpp
     fem/material/shell/koiter_stvk_gtest.cpp
-    fem/material/shell/shell_material_local_energy_gtest.cpp
+    fem/material/shell/shell_element_gtest.cpp
     fem/quadrature/quadrature_gtest.cpp
     fem/quadrature/2d/gauss_legendre_2d_gtest.cpp
     fem/quadrature/2d/triangle_centroid_quadrature_gtest.cpp
     fem/quadrature/3d/tet_centroid_quadrature_gtest.cpp
     fem/quadrature/3d/gauss_legendre_3d_gtest.cpp
-    fem/local/surface_integration_gtest.cpp
+    fem/response/surface_integration_gtest.cpp
 )
 target_link_libraries(litepgo_fem_tests PRIVATE
     litepgo::solver litepgo::fem litepgo::warnings GTest::gtest_main)

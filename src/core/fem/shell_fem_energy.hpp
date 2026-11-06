@@ -4,7 +4,7 @@
 
 #include "litepgo/dof/stencil_dof_map.hpp"
 #include "litepgo/energy/scalar/mesh_energy.hpp"
-#include "litepgo/fem/material/shell/shell_material_local_energy.hpp"
+#include "litepgo/fem/detail/shell_element.hpp"
 #include <cmath>
 #include <utility>
 #include <vector>
@@ -43,9 +43,8 @@ template <class Material> class ShellFemEnergy final : public energy::MeshEnergy
                 rest.a_bar = natural.a;
                 rest.b_bar = natural.b;
             }
-            const ShellMaterialLocalEnergy2D<Material> local(rest, Eigen::MatrixXd::Zero(rest.X_local.rows(), 3),
-                                                             thickness_[index], theta_[index]);
-            local.eval_value(Eigen::Vector2d::Constant(1.0 / 3));
+            detail::eval_shell_element<Material>(rest, Eigen::MatrixXd::Zero(rest.X_local.rows(), 3), thickness_[index],
+                                                 theta_[index]);
         }
     }
 
@@ -65,14 +64,8 @@ template <class Material> class ShellFemEnergy final : public energy::MeshEnergy
             auto H = detail::batch_matrix_view(hessians, b, n);
             const auto index = static_cast<std::size_t>(e);
             const auto& rest = rest_data_[index];
-            const ShellMaterialLocalEnergy2D<Material> local(rest, u, thickness_[index], theta_[index]);
-            if (g)
-                g->setZero();
-            if (H)
-                H->setZero();
-            // This discretization has constant density over the reference triangle.
-            values[b] = local.accumulate_into(Eigen::Vector2d::Constant(1.0 / 3), 0.5 * rest.sqrt_det_a_bar,
-                                              g ? &*g : nullptr, H ? &*H : nullptr);
+            values[b] = detail::eval_shell_element<Material>(rest, u, thickness_[index], theta_[index],
+                                                             g ? &*g : nullptr, H ? &*H : nullptr);
         }
         return values;
     }
@@ -87,8 +80,7 @@ template <class Material> class ShellFemEnergy final : public energy::MeshEnergy
 
             const auto index = static_cast<std::size_t>(e);
             const auto& rest = rest_data_[index];
-            const ShellMaterialLocalEnergy2D<Material> local(rest, u, thickness_[index], theta_[index]);
-            local.eval_value(Eigen::Vector2d::Constant(1.0 / 3));
+            detail::eval_shell_element<Material>(rest, u, thickness_[index], theta_[index]);
             steps[b] = eval_triangle_mid_edge_feasible_step(rest.X_local + u, du, rest.opposite);
         }
         return steps;

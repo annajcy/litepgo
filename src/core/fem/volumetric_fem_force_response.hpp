@@ -5,9 +5,9 @@
 #include "litepgo/energy/response/mesh_response.hpp"
 #include "litepgo/fem/detail/batch_views.hpp"
 #include "litepgo/fem/kinematics/basis_dof_transform.hpp"
-#include "litepgo/fem/kinematics/deformation_gradient_kinematics.hpp"
 #include "litepgo/fem/kinematics/volumetric_element.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_inputs.hpp"
+#include "litepgo/fem/response/sampling_response.hpp"
 #include <concepts>
 #include <memory>
 #include <utility>
@@ -36,7 +36,7 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
     struct State {
         std::vector<std::array<Vec, Q::num_points>> fixed;
         std::vector<std::array<Eigen::Matrix3d, Q::num_points>> deformation;
-        std::vector<DeformationGradientKinematics3D<UBasis, Q>> kinematics;
+        std::vector<std::array<Eigen::MatrixXd, Q::num_points>> deformation_jacobians;
         std::vector<VolumetricElement3D<Q>> integration;
         std::vector<BasisDofTransform<UBasis>> transforms;
         State(const dof::VertexDofMap& map, const std::vector<std::shared_ptr<energy::Response>>& geometry,
@@ -47,7 +47,7 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
                 throw std::invalid_argument("VolumetricFemForceResponse: incompatible map, displacement or responses");
             fixed.resize(count);
             deformation.resize(count);
-            kinematics.reserve(count);
+            deformation_jacobians.reserve(count);
             integration.reserve(count);
             transforms.reserve(count);
             for (int e = 0; e < map.num_elements(); ++e) {
@@ -55,12 +55,17 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
                     fixed_responses[e]->num_inputs() != 3 || fixed_responses[e]->num_outputs() != fixed_size)
                     throw std::invalid_argument("VolumetricFemForceResponse: incompatible spatial response or basis");
                 transforms.emplace_back(*geometry[e]);
-                kinematics.emplace_back(*geometry[e]);
+                deformation_jacobians.emplace_back();
+                auto sampling = deformation_gradient_sampling_response<UBasis>(*geometry[e], Q::points());
+                const Eigen::MatrixXd A = sampling.eval_jacobian(Vec::Zero(output_size));
+                for (int q = 0; q < Q::num_points; ++q)
+                    deformation_jacobians.back()[q] = A.middleRows(9 * q, 9);
                 integration.emplace_back(*geometry[e]);
                 const Eigen::MatrixXd coefficients = transforms.back().to_coefficients(map.gather(e, u));
                 const Vec flattened = coefficients.reshaped<Eigen::RowMajor>();
+                const Vec values = sampling.eval_value(flattened);
                 for (int q = 0; q < Q::num_points; ++q) {
-                    deformation[e][q] = kinematics.back().eval(q, flattened);
+                    deformation[e][q] = values.segment<9>(9 * q).reshaped(3, 3);
                     fixed[e][q] = fixed_responses[e]->eval_value(Q::points().row(q).transpose());
                 }
             }
@@ -88,7 +93,7 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
                         inputs.Fp = fixed[e][q].reshaped(3, 3);
                         inputs.theta = active;
                     }
-                    const auto& B = kinematics[e].derivative(q);
+                    const auto& B = deformation_jacobians[e][q];
                     const double weight = integration[e].point(q).w_dV;
                     const auto stress = Material::eval_dW_dF(inputs);
                     if (stress.rows() != 3 || stress.cols() != 3)

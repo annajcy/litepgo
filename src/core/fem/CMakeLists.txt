@@ -4,8 +4,6 @@ add_library(litepgo_fem STATIC
     kinematics/positive_det_feasible_step.cpp
     kinematics/triangle_mid_edge_kinematics.cpp
     local/dof_derivatives.cpp
-    local/local_energy.cpp
-    local/local_response.cpp
     material/shell/koiter_stvk.cpp
     material/volumetric/multiplicative_kinematics.cpp
     material/volumetric/neo_hookean.cpp

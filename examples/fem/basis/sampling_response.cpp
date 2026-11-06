@@ -1,6 +1,10 @@
 #include "litepgo/fem/response/sampling_response.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
+#include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
+#include "litepgo/fem/volumetric_fem_energy.hpp"
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 
 int main() {
@@ -31,5 +35,47 @@ int main() {
         !gradients.eval_vjp(c, weights).isApprox(Vec(A.transpose() * weights)) ||
         hessians.eval_hessian(c, Vec::Ones(hessians.num_outputs())).nonZeros() != 0)
         throw std::runtime_error("coefficient derivative mismatch");
+    energy::AffineResponse geometry(Eigen::Vector3d(2, 3, 4).asDiagonal().toDenseMatrix().sparseView());
+    auto deformation = fem::deformation_gradient_sampling_response<B>(geometry, points);
+    Eigen::MatrixXd U(8, 3);
+    for (int a = 0; a < 8; ++a)
+        U.row(a) = .1 * B::coefficient_info(a).point.transpose();
+    const Vec u = U.reshaped<Eigen::RowMajor>();
+    const Vec F = deformation.eval_value(u);
+    const Eigen::Matrix3d expected = Eigen::Vector3d(1.05, 1 + .1 / 3, 1.025).asDiagonal();
+    for (int q = 0; q < points.rows(); ++q)
+        if (!F.segment<9>(9 * q).isApprox(expected.reshaped()))
+            throw std::runtime_error("physical deformation gradient mismatch");
+    // The same sampling factory constructs the maps used by native FEM.
+    using Q = fem::GaussLegendre3D<2>;
+    using M = fem::NeoHookean;
+    const fem::VolumetricElement3D<Q> element(geometry);
+    auto sample = fem::deformation_gradient_sampling_response<B>(geometry, Q::points());
+    const Eigen::MatrixXd J = sample.eval_jacobian(u);
+    const Vec samples = sample.eval_value(u);
+    Vec g = Vec::Zero(24);
+    Eigen::MatrixXd H = Eigen::MatrixXd::Zero(24, 24);
+    double E = 0;
+    for (int q = 0; q < Q::num_points; ++q) {
+        const fem::VolumetricMaterialInputs inputs{samples.segment<9>(9 * q).reshaped(3, 3),
+                                                   Eigen::Matrix3d::Identity(), Eigen::Vector2d(2, 3)};
+        const auto Bq = J.middleRows(9 * q, 9);
+        const double weight = element.point(q).w_dV;
+        const Eigen::Matrix3d P = M::eval_dW_dF(inputs);
+        E += weight * M::eval_W(inputs);
+        g.noalias() += weight * Bq.transpose() * P.reshaped();
+        H.noalias() += weight * Bq.transpose() * M::eval_d2W_dF2(inputs) * Bq;
+    }
+    const mesh::HexTopology topology(8, {{0, 1, 2, 3, 4, 5, 6, 7}});
+    const dof::VertexDofMap map(topology, 3);
+    auto fixed_geometry =
+        std::make_shared<energy::AffineResponse>(Eigen::Vector3d(2, 3, 4).asDiagonal().toDenseMatrix().sparseView());
+    auto fixed_Fp =
+        std::make_shared<energy::AffineResponse>(SpMat(9, 3), Eigen::Matrix3d::Identity().eval().reshaped());
+    auto fixed_theta = std::make_shared<energy::AffineResponse>(SpMat(2, 3), Eigen::Vector2d(2, 3));
+    fem::VolumetricFemEnergy<M, B, Q> native(map, {fixed_geometry}, {fixed_Fp}, {fixed_theta});
+    if (std::abs(E - native.eval_value(u)) > 1e-13 || !g.isApprox(native.eval_gradient(u), 1e-12) ||
+        !H.isApprox(Eigen::MatrixXd(native.eval_hessian(u)), 1e-12))
+        throw std::runtime_error("explicit integration differs from native FEM");
     std::cout << "coefficient value, gradient and Hessian sampling: verified\n";
 }

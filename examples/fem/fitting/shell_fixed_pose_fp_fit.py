@@ -58,18 +58,11 @@ def make_problem():
     truth, initial = np.array([1.06, 0.95]), np.ones(2)
     theta = [np.array([2.0, 3.0])] * mapping.num_elements
     true_Fp = np.diag([*truth, 1.0])
-    # Independent energy gradients: retain x=X+displacement and ORIGINAL integration areas.
-    target = np.zeros(mapping.num_dofs)
-    for e, reference in enumerate(rest):
-        Y = reference.X_local @ true_Fp.T
-        natural = fem.TriangleMidEdgeRestData(Y, reference.opposite)
-        natural_u = reference.X_local + mapping.gather(e, displacement) - Y
-        local = fem.ShellMaterialLocalEnergy2D[fem.KoiterStVK](
-            natural, natural_u, thickness[e], theta[e]
-        )
-        target[np.array(mapping.dof_indices(e))] += (
-            0.5 * reference.sqrt_det_a_bar * local.eval_gradient(np.zeros(2))
-        )
+    # The energy fixes Fp, while the force response below makes it the active input.
+    target_energy = fem.ShellFemEnergy[fem.KoiterStVK](
+        mapping, rest, thickness, theta, [true_Fp] * mapping.num_elements
+    )
+    target = target_energy.eval_gradient(displacement)
     scale = np.linalg.norm(target)
     if not np.isfinite(scale) or scale <= 0:
         raise RuntimeError("Calibration requires finite nonzero target forces")

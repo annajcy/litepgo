@@ -5,7 +5,7 @@
 
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
-#include "litepgo/fem/material/shell/shell_material_local_energy.hpp"
+#include "litepgo/fem/shell_fem_energy.hpp"
 #include "litepgo/fem/shell_fem_force_fp_response.hpp"
 #include "litepgo/mesh/io/obj.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
@@ -82,18 +82,10 @@ Problem make_problem() {
     const Eigen::Vector2d truth(1.06, .95), initial = Eigen::Vector2d::Ones();
     const Eigen::Matrix3d true_Fp = Eigen::Vector3d(truth[0], truth[1], 1).asDiagonal();
     const std::vector<Vec> theta(map.num_elements(), Eigen::Vector2d(2, 3));
-    // Independent energy gradients: retain x=X+u and ORIGINAL integration areas.
-    Vec target = Vec::Zero(map.num_dofs());
-    for (int e = 0; e < map.num_elements(); ++e) {
-        const Eigen::MatrixXd Y = rest[e].X_local * true_Fp.transpose();
-        const fem::TriangleMidEdgeRestData natural(Y, rest[e].opposite);
-        const Eigen::MatrixXd natural_u = rest[e].X_local + map.gather(e, u) - Y;
-        const fem::ShellMaterialLocalEnergy2D<fem::KoiterStVK> local(natural, natural_u, thickness[e], theta[e]);
-        const Vec value = .5 * rest[e].sqrt_det_a_bar * local.eval_gradient(Eigen::Vector2d::Zero());
-        const auto indices = map.dof_indices(e);
-        for (Eigen::Index i = 0; i < value.size(); ++i)
-            target[indices[i]] += value[i];
-    }
+    // The energy fixes Fp, while the force response below makes it the active input.
+    fem::ShellFemEnergy<fem::KoiterStVK> target_energy(map, rest, thickness, theta,
+                                                       std::vector<Eigen::Matrix3d>(map.num_elements(), true_Fp));
+    const Vec target = target_energy.eval_gradient(u);
     const double scale = target.norm();
     if (!(scale > 0) || !std::isfinite(scale))
         throw std::runtime_error("Calibration requires finite nonzero target forces");

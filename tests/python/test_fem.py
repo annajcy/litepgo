@@ -418,7 +418,7 @@ def single_hex(scale=1.5):
 
 
 
-def test_shell_local_energy_matches_shell_energy():
+def test_shell_material_integration_matches_shell_energy():
     X = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0.0]])
     topology = mesh.TriangleTopology(3, np.array([[0, 1, 2]], dtype=np.int32))
     stencils = mesh.make_triangle_mid_edge_stencils(topology)
@@ -427,11 +427,19 @@ def test_shell_local_energy_matches_shell_energy():
     theta = np.array([1.0, 2.0])
     whole = fem.ShellFemEnergy[fem.KoiterStVK](stencil_map, [rest], [0.1], [theta])
     u = 0.1 * np.cos(np.arange(9.0))
-    local = fem.ShellMaterialLocalEnergy2D[fem.KoiterStVK](rest, u.reshape(3, 3), 0.1, theta)
+    current, J, second = fem.eval_triangle_mid_edge_kinematics(
+        X + u.reshape(3, 3), rest.opposite, gradient=True, hessian=True
+    )
+    inputs = (current.a, current.b, rest.a_bar, rest.b_bar, 0.1, theta)
     area = 0.5 * rest.sqrt_det_a_bar
-    value, gradient, _ = local.accumulate(np.full(2, 1 / 3), area, gradient=True)
+    stress = fem.KoiterStVK.eval_dW_dab(*inputs)
+    tangent = fem.KoiterStVK.eval_d2W_dab2(*inputs)
+    value = area * fem.KoiterStVK.eval_W(*inputs)
+    gradient = area * J.T @ stress
+    hessian = area * (J.T @ tangent @ J + sum(stress[i] * second[i] for i in range(6)))
     assert value == pytest.approx(whole.eval_value(u), rel=1e-14)
     np.testing.assert_allclose(gradient, whole.eval_gradient(u), rtol=1e-12, atol=1e-14)
+    np.testing.assert_allclose(hessian, whole.eval_hessian(u).toarray(), rtol=1e-12, atol=1e-14)
 
 
 def test_triangle_mid_edge_kinematics():

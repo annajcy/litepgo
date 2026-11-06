@@ -47,12 +47,12 @@ TEST(ShellFemEnergy, PerFaceInputsMatchExplicitIntegrationAndScatter) {
         const auto index = static_cast<std::size_t>(e);
         const auto& rest = patch.rest[index];
         const auto local_u = patch.map.gather(e, u);
-        const ShellMaterialLocalEnergy2D<KoiterStVK> local(rest, local_u, patch.thickness[index], patch.theta[index]);
-        const double area = 0.5 * rest.sqrt_det_a_bar;
-        const Eigen::Vector2d xi = Eigen::Vector2d::Constant(1. / 3);
-        expected += area * local.eval_value(xi);
-        const Vec local_g = area * local.eval_gradient(xi);
-        const Eigen::MatrixXd local_H = area * local.eval_hessian(xi);
+        Vec local_g(local_u.size());
+        Eigen::MatrixXd local_H(local_u.size(), local_u.size());
+        StridedVecRef gradient(local_g);
+        StridedMatRef hessian(local_H);
+        expected += detail::eval_shell_element<KoiterStVK>(rest, local_u, patch.thickness[index], patch.theta[index],
+                                                           &gradient, &hessian);
         const auto indices = patch.map.dof_indices(e);
         for (std::size_t i = 0; i < indices.size(); ++i) {
             g[indices[i]] += local_g[static_cast<Eigen::Index>(i)];
@@ -135,10 +135,10 @@ TEST(ShellFemEnergy, PlasticFormsPreserveOriginalMeasureAndMatchResponse) {
     for (int e = 0; e < 4; ++e) {
         const auto& r = p.rest[e];
         const Eigen::MatrixXd Y = r.X_local * P.transpose();
-        const TriangleMidEdgeRestData natural(Y, r.opposite);
-        const ShellMaterialLocalEnergy2D<KoiterStVK> local(natural, r.X_local + p.map.gather(e, u) - Y, p.thickness[e],
+        TriangleMidEdgeRestData natural(Y, r.opposite);
+        natural.sqrt_det_a_bar = r.sqrt_det_a_bar;
+        expected += detail::eval_shell_element<KoiterStVK>(natural, r.X_local + p.map.gather(e, u) - Y, p.thickness[e],
                                                            p.theta[e]);
-        expected += .5 * r.sqrt_det_a_bar * local.eval_value(Eigen::Vector2d::Zero());
     }
     EXPECT_NEAR(elastic.eval_value(u), expected, 1e-12);
     ShellFemForceFpResponse<KoiterStVK> response(dof::ConstantDofMap(topology(), 9), p.map, p.rest, u, p.thickness,

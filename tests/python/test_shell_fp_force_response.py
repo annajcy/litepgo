@@ -19,9 +19,13 @@ def explicit_force(data, plastic, theta):
         Y = reference.X_local @ p.reshape(3, 3, order="F").T
         natural = fem.TriangleMidEdgeRestData(Y, reference.opposite)
         # Keep x = X+u, and integrate with ORIGINAL area, not the transformed area.
-        natural_u = reference.X_local + mapping.gather(e, u) - Y
-        local = fem.ShellMaterialLocalEnergy2D[fem.KoiterStVK](natural, natural_u, thickness[e], theta[e])
-        result[np.array(mapping.dof_indices(e))] += .5*reference.sqrt_det_a_bar*local.eval_gradient(np.zeros(2))
+        current, J, _ = fem.eval_triangle_mid_edge_kinematics(
+            reference.X_local + mapping.gather(e, u), reference.opposite, gradient=True
+        )
+        inputs = (current.a, current.b, natural.a_bar, natural.b_bar, thickness[e], theta[e])
+        result[np.array(mapping.dof_indices(e))] += (
+            .5 * reference.sqrt_det_a_bar * J.T @ fem.KoiterStVK.eval_dW_dab(*inputs)
+        )
     return result
 
 
