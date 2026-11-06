@@ -39,6 +39,19 @@ template <class B> void bind(nb::module_& m) {
         "point, Basis upper-triangle slot, component. Mixed entries are unscaled. "
         "The response's own coefficient Hessian is zero.");
 }
+template <class B> void bind_deformation(nb::module_& m) {
+    const std::string name =
+        std::string("deformation_gradient_sampling_response[") + nb::str(nb::type<B>().attr("__name__")).c_str() + "]";
+    auto function = nb::cpp_function(
+        [](energy::Response& geometry, const Eigen::MatrixXd& points) {
+            return new energy::AffineResponse(deformation_gradient_sampling_response<B>(geometry, points));
+        },
+        nb::scope(m), nb::name(name.c_str()), "geometry"_a, "points"_a, nb::rv_policy::take_ownership,
+        "Snapshot geometry at (Q,3) reference points. Maps row-major three-component displacement coefficients to "
+        "point-major column-major vec(F). No DOF transform or integration weights; coefficient Hessians are zero.");
+    bindings::register_instance(m, "deformation_gradient_sampling_response", nb::make_tuple(nb::type<B>()), function);
+}
+
 } // namespace
 void bind_sampling_responses(nb::module_& m) {
     bind<LinearLagrangeBasis>(m);
@@ -48,5 +61,8 @@ void bind_sampling_responses(nb::module_& m) {
     bind<TetP1Basis>(m);
     bind<HexQ1Basis>(m);
     bind<HexHermiteBasis>(m);
+    bind_deformation<TetP1Basis>(m);
+    bind_deformation<HexQ1Basis>(m);
+    bind_deformation<HexHermiteBasis>(m);
 }
 } // namespace litepgo::fem::binding

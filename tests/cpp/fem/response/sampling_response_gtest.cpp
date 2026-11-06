@@ -55,3 +55,21 @@ TEST(SamplingResponse, InvalidAndEmptyInputs) {
     EXPECT_THROW(value_sampling_response<HexQ1Basis>(points, 1), std::invalid_argument);
 }
 } // namespace litepgo::fem::test
+
+TEST(DeformationGradientSampling, PhysicalGradientAndIdentityOffset) {
+    using namespace litepgo;
+    using B = fem::HexQ1Basis;
+    energy::AffineResponse geometry(Eigen::Vector3d(2, 3, 4).asDiagonal().toDenseMatrix().sparseView());
+    Eigen::MatrixXd points(2, 3);
+    points << .2, .3, .4, .5, .6, .7;
+    Eigen::MatrixXd C(8, 3);
+    for (int a = 0; a < 8; ++a)
+        C.row(a) = .1 * B::coefficient_info(a).point.transpose();
+    const Vec c = C.reshaped<Eigen::RowMajor>();
+    auto r = fem::deformation_gradient_sampling_response<B>(geometry, points);
+    const Eigen::Matrix3d expected = Eigen::Vector3d(1.05, 1 + .1 / 3, 1.025).asDiagonal();
+    const Vec values = r.eval_value(c);
+    for (int q = 0; q < 2; ++q)
+        EXPECT_TRUE(values.segment<9>(9 * q).isApprox(expected.reshaped()));
+    EXPECT_EQ(r.eval_hessian(c, Vec::Ones(18)).nonZeros(), 0);
+}

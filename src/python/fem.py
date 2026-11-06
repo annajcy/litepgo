@@ -108,6 +108,7 @@ SampledBoundary = _native.SampledBoundary
 ElementLocator = _templates["ElementLocator"]
 PointEmbedding = _native.PointEmbedding
 
+deformation_gradient_sampling_response = _templates["deformation_gradient_sampling_response"]
 value_sampling_response = _templates["value_sampling_response"]
 gradient_sampling_response = _templates["gradient_sampling_response"]
 hessian_sampling_response = _templates["hessian_sampling_response"]
@@ -163,6 +164,7 @@ __all__ = [
     "GaussLegendre2D",
     "GaussLegendre3D",
     "value_sampling_response",
+    "deformation_gradient_sampling_response",
     "gradient_sampling_response",
     "hessian_sampling_response",
     "InterpolatedResponse",
