@@ -260,3 +260,6 @@ add_test(NAME MeshEnergySubclassExample COMMAND $<TARGET_FILE:mesh_energy_subcla
 
 add_dependencies(litepgo_tests mesh_response_subclass)
 add_test(NAME MeshResponseSubclassExample COMMAND $<TARGET_FILE:mesh_response_subclass>)
+
+add_dependencies(litepgo_tests response_hessian)
+add_test(NAME ResponseHessianExample COMMAND $<TARGET_FILE:response_hessian>)

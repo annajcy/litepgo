@@ -26,6 +26,11 @@ Jv = J_{outer}(c)(J_{inner}(p)v),\qquad
 J^T w = J_{inner}(p)^T(J_{outer}(c)^T w).
 $$
 
+`ComposedResponse` also implements exact weighted Hessians when both children
+support them. `ExpResponse` supports second derivatives; `ElementwiseResponse`
+and the FEM-specific responses currently remain first-order. See
+[Response Hessians](response-hessians.md) for the two-term chain rule.
+
 Products call the children’s products, without assembling either global numerical
 Jacobian. Children that do not override products still use their normal explicit
 Jacobian fallback. Native FEM mesh responses may form local element Jacobians.

@@ -46,3 +46,8 @@ rows/columns remain fixed while structural entries may change. The
 [response example](../../examples/energy/custom-response.md) demonstrates
 both branches and a solve. C++ writes into the supplied sparse output without
 changing its pattern.
+
+Optional second derivatives use an additional Hessian pattern and the
+`eval_hessian_values` hook. See [Response Hessians](response-hessians.md) for
+the output-weighted definition, native/Python subclass signatures, and dynamic
+pattern rules. Existing first-order subclasses need no changes.

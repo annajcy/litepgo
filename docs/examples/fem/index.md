@@ -11,6 +11,9 @@ They use generated reference-element data and write no files.
 - [Quadrature integration](quadrature-integration.md). Integrate polynomials in
   1D/2D/3D and verify reference triangle/tetrahedron measures from weights.
 
+- [Nonlinear response Hessians](response-hessian.md). Compose Triangle P1 sampling
+  with exponentiation and verify the exact second-order energy chain rule.
+
 The [basis guide](../../guide/fem/basis.md) defines the supported formulations,
 coefficient orders, and derivative layouts. Continue with
 [quadrature](../../guide/fem/quadrature.md) for reference integration rules and

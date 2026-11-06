@@ -54,6 +54,7 @@ export default defineConfig({
           { text: 'Evaluation and composition', link: '/guide/energy/evaluation' },
           { text: 'Parameter transforms', link: '/guide/energy/parameter-transforms' },
           { text: 'Custom energies and responses', link: '/guide/energy/custom' },
+          { text: 'Response Hessians', link: '/guide/energy/response-hessians' },
           { text: 'Batched assembly', link: '/guide/energy/assembly' }
         ] },
         { text: 'Finite elements', link: '/guide/fem/', collapsed: true, items: [
@@ -86,7 +87,8 @@ export default defineConfig({
         { text: 'FEM basics', link: '/examples/fem/', collapsed: true, items: [
           { text: 'Tet P1 basis and field', link: '/examples/fem/tet-p1-basis' },
           { text: 'Hermite interpolation', link: '/examples/fem/hermite-interpolation' },
-          { text: 'Quadrature integration', link: '/examples/fem/quadrature-integration' }
+          { text: 'Quadrature integration', link: '/examples/fem/quadrature-integration' },
+          { text: 'Nonlinear response Hessians', link: '/examples/fem/response-hessian' }
         ] },
         { text: 'Energies and responses', link: '/examples/energy/', collapsed: true, items: [
           { text: 'Custom scalar energies', link: '/examples/energy/custom-energy' },
