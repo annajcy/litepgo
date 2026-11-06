@@ -27,7 +27,7 @@ class AffineMappedResponse final : public FixedPatternResponse {
             throw std::domain_error("AffineMappedResponse: non-finite result");
         return result;
     }
-    Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) override {
         if (J)
             J->coeffs() = A_.coeffs();
         return checked_result(A_ * x + offset_);
@@ -38,7 +38,7 @@ class AffineMappedResponse final : public FixedPatternResponse {
     Vec eval_vjp_impl(const ConstVecRef&, const ConstVecRef& gy) override {
         return checked_result(A_.transpose() * gy);
     }
-    void eval_hessian_impl(const ConstVecRef&, const ConstVecRef&, SpMat&) const override {}
+    void eval_hessian_impl(const ConstVecRef&, const ConstVecRef&, SpMat&) override {}
 
     SpMat A_;
     Vec offset_;

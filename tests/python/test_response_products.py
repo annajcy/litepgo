@@ -15,7 +15,6 @@ class Rectangular(energy.FixedPatternResponse):
 
 
 def check_products(r, x):
-    r.update_patterns(x)
     J = r.eval_jacobian(x)
     dx = np.arange(r.num_inputs, dtype=float) + .3
     gy = np.arange(r.num_outputs, dtype=float) - .4
@@ -242,23 +241,14 @@ def test_mesh_energy_super_step_and_fem_inheritance():
     assert issubclass(fem.ShellFemEnergy[fem.KoiterStVK], energy.MeshEnergy)
 
 
-def test_super_fallback_preserves_reentry_guard():
+def test_value_reentry_without_shared_workspace():
     class Reentrant(Rectangular):
-        reenter = True
-
-        def eval_jvp_impl(self, x, dx):
-            return super().eval_jvp_impl(x, dx)
-
         def eval_impl(self, x, need):
-            if self.reenter:
-                self.eval_jvp(x, np.ones(2))
-            return super().eval_impl(x, need)
+            if need:
+                return self.eval_value(x), self.A
+            return super().eval_impl(x, False)
 
-    r = Reentrant()
-    with pytest.raises(RuntimeError):
-        r.eval_jvp(np.ones(2), np.ones(2))
-    r.reenter = False
-    check_products(r, np.array([.2, .4]))
+    check_products(Reentrant(), np.array([.2, .4]))
 
 
 def test_direct_products_accept_infeasible_none():

@@ -2,6 +2,7 @@
 #include "litepgo/energy/response/dynamic_pattern_response.hpp"
 #include "litepgo/energy/response/exp_response.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
+#include <array>
 #include <gtest/gtest.h>
 #include <limits>
 
@@ -14,24 +15,27 @@ class Affine final : public FixedPatternResponse {
           A_(std::move(A)) {}
 
   private:
-    Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) override {
         if (J)
             for (int c = 0; c < J->outerSize(); ++c)
                 for (SpMat::InnerIterator it(*J, c); it; ++it)
                     it.valueRef() = A_(it.row(), c);
         return A_ * x + Vec::Ones(num_outputs());
     }
-    void eval_hessian_impl(const ConstVecRef&, const ConstVecRef&, SpMat&) const override {}
+    void eval_hessian_impl(const ConstVecRef&, const ConstVecRef&, SpMat&) override {}
     Eigen::MatrixXd A_;
 };
 // C2 at zero. Its Jacobian pattern is conservative and fixed; only its Hessian pattern changes.
 class Flip final : public DynamicPatternResponse {
   public:
-    Flip() : DynamicPatternResponse(Eigen::Matrix2d::Ones().sparseView(), SpMat(2, 2)) {}
+    Flip() : DynamicPatternResponse(2, 2) {}
+    bool has_hessian() const override {
+        return true;
+    }
 
   private:
     SpMat jacobian_pattern_at(const ConstVecRef&) const override {
-        return jacobian_pattern();
+        return Eigen::Matrix2d::Ones().sparseView();
     }
     SpMat hessian_pattern_at(const ConstVecRef& x) const override {
         SpMat H(2, 2);
@@ -40,7 +44,7 @@ class Flip final : public DynamicPatternResponse {
         H.makeCompressed();
         return H;
     }
-    Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) override {
         const double s = std::max(0., x[0]);
         if (J) {
             J->coeffRef(0, 0) = -1;
@@ -50,29 +54,25 @@ class Flip final : public DynamicPatternResponse {
         }
         return Eigen::Vector2d(-x[0], x[1] + s * s * s);
     }
-    void eval_hessian_impl(const ConstVecRef& x, const ConstVecRef& w, SpMat& H) const override {
+    void eval_hessian_impl(const ConstVecRef& x, const ConstVecRef& w, SpMat& H) override {
         if (!linalg::same_pattern(H, hessian_pattern_at(x)))
-            throw std::logic_error("call update_patterns");
+            throw std::logic_error("Incorrect Hessian structure");
         if (H.nonZeros())
             H.valuePtr()[0] = 6 * x[0] * w[1];
     }
 };
 void check_hessian(Response& r, const Vec& x, const Vec& w) {
-    r.update_patterns(x);
     const Eigen::MatrixXd H = r.eval_hessian(x, w);
     Eigen::MatrixXd numerical(x.size(), x.size());
     for (int j = 0; j < x.size(); ++j) {
         Vec plus = x, minus = x;
         plus[j] += 1e-6;
         minus[j] -= 1e-6;
-        r.update_patterns(plus);
         const Vec gp = r.eval_vjp(plus, w);
-        r.update_patterns(minus);
         numerical.col(j) = (gp - r.eval_vjp(minus, w)) / 2e-6;
     }
     EXPECT_LT((H - numerical).norm(), 2e-7);
     EXPECT_TRUE(H.isApprox(H.transpose(), 1e-12));
-    r.update_patterns(x);
 }
 } // namespace
 
@@ -83,13 +83,10 @@ TEST(ResponseHessian, AffineAndUnsupportedAreDistinct) {
     const Vec x = Vec::Ones(3), w = Eigen::Vector2d(2, -1);
     EXPECT_TRUE(r.has_hessian());
     EXPECT_FALSE(old.has_hessian());
-    EXPECT_TRUE(r.has_fixed_pattern());
-    EXPECT_FALSE(r.update_patterns(x));
     const SpMat H = r.eval_hessian(x, w);
     EXPECT_EQ(H.rows(), 3);
     EXPECT_EQ(H.cols(), 3);
     EXPECT_EQ(H.nonZeros(), 0);
-    EXPECT_THROW(old.hessian_pattern(), std::logic_error);
     EXPECT_THROW(old.eval_hessian(x, w), std::logic_error);
     EXPECT_TRUE(old.eval_jacobian(x).isApprox(r.eval_jacobian(x)));
     check_hessian(r, x, w);
@@ -103,8 +100,6 @@ TEST(ResponseHessian, ExponentialWeightsDoNotChangeStructure) {
     const SpMat zero = r.eval_hessian(x, Vec::Zero(3));
     EXPECT_EQ(zero.nonZeros(), 3);
     EXPECT_TRUE(zero.coeffs().isZero());
-    EXPECT_TRUE(linalg::same_pattern(zero, r.hessian_pattern()));
-    EXPECT_TRUE(r.hessian_pattern().coeffs().isZero());
     check_hessian(r, x, w);
     EXPECT_THROW(r.eval_hessian(Vec::Zero(2), w), std::invalid_argument);
     EXPECT_THROW(r.eval_hessian(x, Vec::Zero(2)), std::invalid_argument);
@@ -132,25 +127,13 @@ TEST(ResponseHessian, CompositionIncludesBothNonlinearTerms) {
     EXPECT_FALSE(unsupported.has_hessian());
     EXPECT_THROW(unsupported.eval_hessian(x, w), std::logic_error);
 }
-TEST(ResponseHessian, DynamicHessianOnlyChangesAndSharedChildRestoration) {
+TEST(ResponseHessian, DynamicHessianPatternsAndSharedChildEvaluation) {
     auto child = std::make_shared<Flip>();
     const Vec x = Eigen::Vector2d(.3, .4), w = Eigen::Vector2d(.2, -.7);
-    const SpMat J = child->jacobian_pattern();
-    EXPECT_TRUE(child->update_patterns(x));
-    EXPECT_TRUE(linalg::same_pattern(J, child->jacobian_pattern()));
-    EXPECT_FALSE(child->update_patterns(x));
-    EXPECT_TRUE(child->update_patterns(-x));
-    EXPECT_EQ(child->hessian_pattern().nonZeros(), 0);
-    SpMat stale = child->hessian_pattern();
-    EXPECT_THROW(child->eval_hessian_into(x, w, stale), std::logic_error);
     ComposedResponse r(child, child);
-    SpMat stale_composed = r.hessian_pattern();
-    EXPECT_THROW(r.eval_hessian_into(x, w, stale_composed), std::logic_error);
     for (double sign : {1., -1.}) {
         const Vec point = sign * x;
         EXPECT_TRUE(r.has_hessian());
-        r.update_patterns(point);
-        child->update_patterns(-point);
         Eigen::Matrix2d expected = Eigen::Matrix2d::Zero();
         expected(0, 0) = w[1] * 6 * std::abs(point[0]);
         EXPECT_TRUE(Eigen::MatrixXd(r.eval_hessian(point, w)).isApprox(expected));
@@ -164,7 +147,7 @@ TEST(ResponseHessian, MixedComponentHessiansAndNestedComposition) {
             : FixedPatternResponse(Eigen::Matrix2d::Ones().sparseView(), Eigen::Matrix2d::Ones().sparseView()) {}
 
       private:
-        Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
+        Vec eval_impl(const ConstVecRef& x, SpMat* J) override {
             if (J) {
                 J->coeffRef(0, 0) = 2 * x[0];
                 J->coeffRef(0, 1) = 1;
@@ -173,7 +156,7 @@ TEST(ResponseHessian, MixedComponentHessiansAndNestedComposition) {
             }
             return Eigen::Vector2d(x[0] * x[0] + x[1], x[0] * x[1]);
         }
-        void eval_hessian_impl(const ConstVecRef&, const ConstVecRef& w, SpMat& H) const override {
+        void eval_hessian_impl(const ConstVecRef&, const ConstVecRef& w, SpMat& H) override {
             H.coeffRef(0, 0) = 2 * w[0];
             H.coeffRef(0, 1) = H.coeffRef(1, 0) = w[1];
             H.coeffRef(1, 1) = 0;
@@ -203,10 +186,10 @@ TEST(ResponseHessian, InvalidPatternsAndResultsAreRejected) {
         int mode = 0;
 
       private:
-        Vec eval_impl(const ConstVecRef& x, SpMat*) const override {
+        Vec eval_impl(const ConstVecRef& x, SpMat*) override {
             return x;
         }
-        void eval_hessian_impl(const ConstVecRef&, const ConstVecRef&, SpMat& H) const override {
+        void eval_hessian_impl(const ConstVecRef&, const ConstVecRef&, SpMat& H) override {
             if (mode == 0)
                 H.resize(1, 1);
             if (mode == 1)
@@ -222,7 +205,12 @@ TEST(ResponseHessian, InvalidPatternsAndResultsAreRejected) {
     asymmetric.insert(0, 1) = 1;
     EXPECT_THROW(Broken{asymmetric}, std::invalid_argument);
     Broken r(Eigen::Matrix2d::Ones().sparseView());
-    for (int mode : {0, 1, 2, 3}) {
+#ifndef NDEBUG
+    const std::array modes{0, 1, 2, 3};
+#else
+    const std::array modes{0, 1};
+#endif
+    for (int mode : modes) {
         r.mode = mode;
         EXPECT_THROW(r.eval_hessian(Vec::Zero(2), Vec::Ones(2)), std::logic_error);
     }
@@ -233,7 +221,10 @@ namespace litepgo::energy::test {
 namespace {
 class PositiveCube final : public DynamicPatternResponse {
   public:
-    PositiveCube() : DynamicPatternResponse(SpMat(1, 1), SpMat(1, 1)) {}
+    PositiveCube() : DynamicPatternResponse(1, 1) {}
+    bool has_hessian() const override {
+        return true;
+    }
     mutable int jacobian_queries = 0, hessian_queries = 0;
     bool invalid_hessian = false;
 
@@ -253,20 +244,20 @@ class PositiveCube final : public DynamicPatternResponse {
         ++hessian_queries;
         return invalid_hessian ? SpMat(2, 2) : pattern(x);
     }
-    Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) override {
         const double s = std::max(0., x[0]);
         if (J && J->nonZeros())
             J->valuePtr()[0] = 3 * s * s;
         return Vec::Constant(1, s * s * s);
     }
-    void eval_hessian_impl(const ConstVecRef& x, const ConstVecRef& w, SpMat& H) const override {
+    void eval_hessian_impl(const ConstVecRef& x, const ConstVecRef& w, SpMat& H) override {
         if (H.nonZeros())
             H.valuePtr()[0] = 6 * x[0] * w[0];
     }
 };
 } // namespace
 
-TEST(ResponseEvaluation, PreparesOnlyRequiredPatternsAndUpdatesAtomically) {
+TEST(ResponseEvaluation, IndependentPatternsAndRecovery) {
     PositiveCube r;
     const Vec x = Vec::Ones(1), w = Vec::Constant(1, 2);
     EXPECT_DOUBLE_EQ(r.eval_value(x)[0], 1);
@@ -276,43 +267,123 @@ TEST(ResponseEvaluation, PreparesOnlyRequiredPatternsAndUpdatesAtomically) {
     const int queries = r.jacobian_queries;
     EXPECT_DOUBLE_EQ(r.eval_hessian(x, w).coeff(0, 0), 12);
     EXPECT_EQ(r.jacobian_queries, queries);
-    EXPECT_FALSE(r.update_patterns(x));
-    EXPECT_TRUE(r.update_patterns(-x));
+    const SpMat saved = r.eval_jacobian(x);
+    EXPECT_EQ(r.eval_jacobian(-x).nonZeros(), 0);
+    EXPECT_DOUBLE_EQ(saved.coeff(0, 0), 3);
     r.invalid_hessian = true;
-    EXPECT_THROW(r.update_patterns(x), std::invalid_argument);
-    EXPECT_EQ(r.jacobian_pattern().nonZeros(), 0);
-    EXPECT_EQ(r.hessian_pattern().nonZeros(), 0);
+    EXPECT_THROW(r.eval_hessian(x, w), std::invalid_argument);
+    EXPECT_DOUBLE_EQ(r.eval_jacobian(x).coeff(0, 0), 3);
     r.invalid_hessian = false;
-    EXPECT_TRUE(r.update_patterns(x));
-    EXPECT_TRUE(r.jacobian_pattern().coeffs().isZero());
-    EXPECT_TRUE(r.hessian_pattern().coeffs().isZero());
-}
-
-TEST(ResponseEvaluation, IntoReusesStorageAndRejectsStalePatternsBeforeWriting) {
-    PositiveCube r;
-    const Vec x = Vec::Ones(1), w = Vec::Constant(1, 2);
-    r.update_patterns(x);
-    SpMat J = r.jacobian_pattern(), H = r.hessian_pattern();
-    const auto* j_data = J.valuePtr();
-    const auto* h_data = H.valuePtr();
-    EXPECT_DOUBLE_EQ(r.eval_value_and_jacobian_into(2 * x, J)[0], 8);
-    EXPECT_DOUBLE_EQ(J.coeff(0, 0), 12);
-    r.eval_hessian_into(2 * x, w, H);
-    EXPECT_DOUBLE_EQ(H.coeff(0, 0), 24);
-    EXPECT_EQ(J.valuePtr(), j_data);
-    EXPECT_EQ(H.valuePtr(), h_data);
-    EXPECT_THROW(r.eval_jacobian_into(-x, J), std::logic_error);
-    EXPECT_THROW(r.eval_hessian_into(-x, w, H), std::logic_error);
-    EXPECT_DOUBLE_EQ(J.coeff(0, 0), 12);
-    EXPECT_DOUBLE_EQ(H.coeff(0, 0), 24);
-    EXPECT_EQ(r.jacobian_pattern().nonZeros(), 1);
-    EXPECT_EQ(r.hessian_pattern().nonZeros(), 1);
-    EXPECT_THROW(r.eval_hessian_into(x, Vec(0), H), std::invalid_argument);
-    EXPECT_DOUBLE_EQ(H.coeff(0, 0), 24);
-    r.eval_jacobian(-x);
-    EXPECT_THROW(r.eval_jacobian_into(-x, J), std::invalid_argument);
-    EXPECT_DOUBLE_EQ(J.coeff(0, 0), 12);
-    J = r.jacobian_pattern();
-    EXPECT_NO_THROW(r.eval_jacobian_into(-x, J));
+    EXPECT_DOUBLE_EQ(r.eval_hessian(x, w).coeff(0, 0), 12);
+    EXPECT_EQ(r.eval_hessian(-x, w).nonZeros(), 0);
 }
 } // namespace litepgo::energy::test
+
+namespace litepgo::energy::test {
+TEST(ResponseEvaluation, MathematicalSubclassNeedsNoSparseProtocolAndAllowsValueReentry) {
+    class Map final : public Response {
+      public:
+        int num_inputs() const noexcept override {
+            return 1;
+        }
+        int num_outputs() const noexcept override {
+            return 1;
+        }
+        bool has_hessian() const override {
+            return true;
+        }
+        bool bad_shape = false;
+
+      private:
+        Vec eval_value_impl(const ConstVecRef& x) override {
+            return x.array().square();
+        }
+        std::pair<Vec, SpMat> eval_value_and_jacobian_impl(const ConstVecRef& x) override {
+            SpMat J(bad_shape ? 2 : 1, 1);
+            J.insert(0, 0) = 2 * x[0];
+            J.makeCompressed();
+            return {eval_value(x), J};
+        }
+        SpMat eval_weighted_hessian_impl(const ConstVecRef&, const ConstVecRef& weights) override {
+            return Eigen::MatrixXd::Constant(1, 1, 2 * weights[0]).sparseView();
+        }
+    } r;
+    const Vec x = Vec::Constant(1, 3), w = Vec::Constant(1, 2);
+    auto [value, J] = r.eval_value_and_jacobian(x);
+    EXPECT_DOUBLE_EQ(value[0], 9);
+    EXPECT_DOUBLE_EQ(J.coeff(0, 0), 6);
+    EXPECT_DOUBLE_EQ(r.eval_jvp(x, w)[0], 12);
+    EXPECT_DOUBLE_EQ(r.eval_vjp(x, w)[0], 12);
+    EXPECT_DOUBLE_EQ(r.eval_hessian(x, w).coeff(0, 0), 4);
+    r.bad_shape = true;
+    EXPECT_THROW(r.eval_jacobian(x), std::logic_error);
+    r.bad_shape = false;
+    EXPECT_DOUBLE_EQ(r.eval_jacobian(x).coeff(0, 0), 6);
+}
+} // namespace litepgo::energy::test
+
+namespace litepgo::energy::test {
+TEST(ResponseEvaluation, PatternNormalizationReusesOwnedStorageAndPreservesZeroSlots) {
+    struct PatternAccess : detail::SparseResponse {
+        using SparseResponse::checked_pattern;
+    };
+    SpMat input(2, 2);
+    input.insert(0, 0) = 7;
+    input.insert(1, 1) = 0;
+    input.makeCompressed();
+    const double* values = input.valuePtr();
+    const int* indices = input.innerIndexPtr();
+    SpMat normalized = PatternAccess::checked_pattern(std::move(input), 2, 2, true);
+    EXPECT_EQ(normalized.valuePtr(), values);
+    EXPECT_EQ(normalized.innerIndexPtr(), indices);
+    EXPECT_EQ(normalized.nonZeros(), 2);
+    EXPECT_TRUE(normalized.coeffs().isZero());
+    normalized.coeffs().setConstant(3);
+    const SpMat snapshot = PatternAccess::checked_pattern(normalized, 2, 2, true);
+    EXPECT_TRUE(snapshot.coeffs().isZero());
+    EXPECT_TRUE(normalized.coeffs().isConstant(3));
+    EXPECT_THROW(PatternAccess::checked_pattern(normalized, 3, 3), std::invalid_argument);
+    SpMat asymmetric(2, 2);
+    asymmetric.insert(0, 1) = 1;
+    EXPECT_THROW(PatternAccess::checked_pattern(std::move(asymmetric), 2, 2, true), std::invalid_argument);
+}
+} // namespace litepgo::energy::test
+
+#ifndef NDEBUG
+namespace litepgo::energy::test {
+TEST(ResponseEvaluation, DebugRejectsNoncanonicalOwningResults) {
+    class Uncompressed final : public Response {
+      public:
+        int num_inputs() const noexcept override {
+            return 2;
+        }
+        int num_outputs() const noexcept override {
+            return 2;
+        }
+        bool has_hessian() const override {
+            return true;
+        }
+
+      private:
+        Vec eval_value_impl(const ConstVecRef& x) override {
+            return x;
+        }
+        std::pair<Vec, SpMat> eval_value_and_jacobian_impl(const ConstVecRef& x) override {
+            return {x, matrix()};
+        }
+        SpMat eval_weighted_hessian_impl(const ConstVecRef&, const ConstVecRef&) override {
+            return matrix();
+        }
+        static SpMat matrix() {
+            SpMat result(2, 2);
+            result.insert(0, 0) = 1;
+            result.insert(1, 1) = 1;
+            EXPECT_FALSE(result.isCompressed());
+            return result;
+        }
+    } r;
+    EXPECT_THROW(r.eval_jacobian(Vec::Ones(2)), std::logic_error);
+    EXPECT_THROW(r.eval_hessian(Vec::Ones(2), Vec::Ones(2)), std::logic_error);
+}
+} // namespace litepgo::energy::test
+#endif

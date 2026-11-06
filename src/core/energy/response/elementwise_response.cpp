@@ -15,14 +15,14 @@ Vec ElementwiseResponse::gather(int e, const ConstVecRef& x) const {
         q[i] = x[ids[i]];
     return q;
 }
-Vec ElementwiseResponse::eval_impl(const ConstVecRef& x, SpMat* J) const {
+Vec ElementwiseResponse::eval_impl(const ConstVecRef& x, SpMat* J) {
     auto& local = transform();
     const int count = assembler_.num_elements();
     std::vector<Vec> values(count);
     std::vector<Eigen::MatrixXd> jacobians(J ? count : 0);
     std::vector<dof::ResponseAssembler::ElementView> views;
     views.reserve(count);
-    // shortcut: local Response calls are serial because instances reject concurrent evaluation; batch transforms if
+    // shortcut: local Response calls are serial because children may own shared workspaces; batch transforms if
     // profiling warrants it.
     for (int e = 0; e < count; ++e) {
         const Vec q = gather(e, x);

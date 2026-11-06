@@ -41,7 +41,6 @@ TEST(ShellFemForceMaterialResponse, SharedAndPerFaceParametersMatchEnergyAndFini
     for (int batch : {1, 3, 256}) {
         Force shared(dof::ConstantDofMap(p.topology, 2), p.map, p.rest, p.u, p.thickness, batch);
         Force element(dof::ElementDofMap(p.topology, 2), p.map, p.rest, p.u, p.thickness, batch);
-        EXPECT_TRUE(shared.has_fixed_pattern());
         const Eigen::MatrixXd J = shared.eval_jacobian(theta), E = element.eval_jacobian(per);
         EXPECT_TRUE(shared.eval_value(theta).isApprox(p.force(theta), 1e-12));
         EXPECT_TRUE(element.eval_value(per).isApprox(p.force(per), 1e-12));
@@ -62,7 +61,6 @@ TEST(ShellFemForceMaterialResponse, SharedAndPerFaceParametersMatchEnergyAndFini
         }
         EXPECT_THROW(shared.eval_value(Eigen::Vector2d(1, 0)), std::invalid_argument);
         EXPECT_TRUE(shared.eval_value(theta).isApprox(p.force(theta), 1e-12));
-        EXPECT_FALSE(shared.update_patterns(theta));
     }
 }
 TEST(ShellFemForceMaterialResponse, SnapshotsFixedInputsAndRejectsInvalidConstruction) {

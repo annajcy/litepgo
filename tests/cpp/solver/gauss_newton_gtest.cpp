@@ -17,7 +17,7 @@ class TestResponse final : public energy::FixedPatternResponse {
     TestResponse(const SpMat& pattern, Evaluator f) : FixedPatternResponse(pattern), evaluator(std::move(f)) {}
 
   private:
-    Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) override {
         return evaluator(x, J);
     }
     Evaluator evaluator;
@@ -147,24 +147,23 @@ TEST(Response, PatternAndInputContracts) {
             J->coeffRef(0, 0) = 2;
         return (Vec(2) << 2 * x[0], 0).finished();
     });
-    EXPECT_TRUE(r.has_fixed_pattern());
-    EXPECT_FALSE(r.update_patterns(Vec::Ones(1)));
     EXPECT_THROW(r.eval_value(Vec::Zero(2)), std::invalid_argument);
     SpMat wrong(2, 1);
-    EXPECT_THROW(r.eval_value_and_jacobian_into(Vec::Zero(1), wrong), std::invalid_argument);
     EXPECT_EQ(r.eval_jacobian(Vec::Zero(1)).coeff(0, 0), 2);
     TestResponse broken(pattern, [](const ConstVecRef&, SpMat* J) -> Vec {
         if (J)
             J->coeffRef(1, 0) = 1;
         return Vec::Zero(2);
     });
+#ifndef NDEBUG
     EXPECT_THROW(broken.eval_jacobian(Vec::Zero(1)), std::logic_error);
+#endif
 }
 
 TEST(Response, DynamicPatternRefreshesAtAcceptedStates) {
     class Changing final : public energy::DynamicPatternResponse {
       public:
-        Changing() : DynamicPatternResponse(SpMat(1, 1)) {}
+        Changing() : DynamicPatternResponse(1, 1) {}
 
       private:
         SpMat jacobian_pattern_at(const ConstVecRef&) const override {
@@ -172,7 +171,7 @@ TEST(Response, DynamicPatternRefreshesAtAcceptedStates) {
             p.insert(0, 0) = 0;
             return p;
         }
-        Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
+        Vec eval_impl(const ConstVecRef& x, SpMat* J) override {
             if (J)
                 J->coeffRef(0, 0) = 1;
             return Vec::Constant(1, x[0] - 2);
@@ -216,7 +215,7 @@ TEST(GaussNewton, SparseRectangularProblem) {
 TEST(GaussNewton, PatternChangesDuringSolve) {
     class Piecewise final : public energy::DynamicPatternResponse {
       public:
-        Piecewise() : DynamicPatternResponse(SpMat(2, 2)) {}
+        Piecewise() : DynamicPatternResponse(2, 2) {}
         mutable int changes = 0;
 
       private:
@@ -230,7 +229,7 @@ TEST(GaussNewton, PatternChangesDuringSolve) {
             ++changes;
             return p;
         }
-        Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
+        Vec eval_impl(const ConstVecRef& x, SpMat* J) override {
             const double positive = std::max(0., x[0]);
             if (J) {
                 J->coeffRef(0, 0) = 1;
@@ -246,7 +245,7 @@ TEST(GaussNewton, PatternChangesDuringSolve) {
     auto result = gauss_newton_solve(residual, Vec::Constant(2, -1), options);
     EXPECT_EQ(result.status, GaussNewtonStatus::Converged);
     EXPECT_LT((result.x - Vec::Ones(2)).norm(), 1e-8);
-    EXPECT_EQ(residual.jacobian_pattern().nonZeros(), 3);
+    EXPECT_EQ(residual.eval_jacobian(result.x).nonZeros(), 3);
     EXPECT_GT(residual.changes, 2);
 }
 
@@ -298,4 +297,32 @@ TEST(GaussNewton, NearlyDependentColumns) {
     auto result = gauss_newton_solve(residual, Vec::Zero(2), options);
     EXPECT_EQ(result.status, GaussNewtonStatus::Converged);
     EXPECT_LT((result.x - Eigen::Vector2d(1, 2)).norm(), 1e-4);
+}
+
+TEST(GaussNewton, DoesNotPrepareUnusedHessianPattern) {
+    class Residual final : public energy::DynamicPatternResponse {
+      public:
+        Residual() : DynamicPatternResponse(1, 1) {}
+        bool has_hessian() const override {
+            return true;
+        }
+
+      private:
+        SpMat jacobian_pattern_at(const ConstVecRef&) const override {
+            return Eigen::MatrixXd::Identity(1, 1).sparseView();
+        }
+        SpMat hessian_pattern_at(const ConstVecRef&) const override {
+            throw std::logic_error("Gauss-Newton must not request Hessian structure");
+        }
+        Vec eval_impl(const ConstVecRef& x, SpMat* J) override {
+            if (J)
+                J->coeffs().setOnes();
+            return x - Vec::Ones(1);
+        }
+    } residual;
+    GaussNewtonOptions options;
+    options.gradient_tolerance = 1e-9;
+    const auto result = gauss_newton_solve(residual, Vec::Zero(1), options);
+    EXPECT_EQ(result.status, GaussNewtonStatus::Converged);
+    EXPECT_NEAR(result.x[0], 1, 1e-8);
 }

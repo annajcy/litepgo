@@ -131,18 +131,14 @@ def test_dynamic_products_restore_saved_point_and_input_copy():
     b = torch.tensor([-0.3, 0.4], dtype=torch.float64, requires_grad=True)
     saved_a = a.detach().clone()
     ya, yb = bridge.response(model, a), bridge.response(model, b)
-    model.update_patterns(b.detach().numpy())
     with torch.no_grad():
         a.add_(10)  # Forward owns an independent input copy.
     ga, gb = torch.autograd.grad(ya.sum() + yb.sum(), (a, b))
     for point, actual in [(saved_a, ga), (b.detach(), gb)]:
-        model.update_patterns(point.numpy())
         expected = model.eval_jacobian(point.numpy()).T @ np.ones(2)
         np.testing.assert_allclose(actual.numpy(), expected)
         tangent = torch.tensor([0.5, -0.2], dtype=torch.float64)
-        model.update_patterns(
-            -point.numpy()
-        )  # Deliberately leave the opposite active pattern.
+        model.eval_jacobian(-point.numpy())  # Interleave another input.
         _, product = forward_product(model, point, tangent)
         np.testing.assert_allclose(
             product.numpy(), model.eval_jvp(point.numpy(), tangent.numpy())

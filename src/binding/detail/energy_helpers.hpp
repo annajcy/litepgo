@@ -70,6 +70,7 @@ template <class Base> class PyResponse : public Base {
     explicit PyResponse(const linalg::binding::SparseArgument& pattern,
                         const std::optional<linalg::binding::SparseArgument>& hessian_pattern = std::nullopt)
         : Base(pattern.matrix, hessian_pattern ? std::optional<SpMat>(hessian_pattern->matrix) : std::nullopt) {}
+    PyResponse(int num_inputs, int num_outputs) : Base(num_inputs, num_outputs) {}
     Vec default_jvp(const ConstVecRef& x, const ConstVecRef& dx) {
         return Base::eval_jvp_impl(x, dx);
     }
@@ -78,38 +79,40 @@ template <class Base> class PyResponse : public Base {
     }
 
   private:
-    void eval_hessian_impl(const ConstVecRef& x, const ConstVecRef& weights, SpMat& H) const override {
-        nb::detail::ticket ticket(this->nb_trampoline, "eval_hessian_impl", nb::detail::str_hash("eval_hessian_impl"),
-                                  true);
-        nb::object result = this->nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x)), nb::cast(Vec(weights)));
+    void eval_hessian_impl(const ConstVecRef& x, const ConstVecRef& weights, SpMat& H) override {
+        nb::gil_scoped_acquire gil;
+        nb::handle self = this->nb_trampoline.base();
+        if (!nb::hasattr(self, "eval_hessian_impl"))
+            throw std::logic_error("Response: missing eval_hessian_impl");
+        nb::object result = self.attr("eval_hessian_impl")(nb::cast(Vec(x)), nb::cast(Vec(weights)));
         if (result.is_none())
             throw std::domain_error("Response is infeasible");
         const SpMat source = nb::cast<linalg::binding::SparseArgument>(result).matrix;
-        copy_derivative_values(source, H, "Response: invalid Hessian",
-                               "Response: Hessian outside pattern; call update_patterns");
+        copy_derivative_values(source, H, "Response: invalid Hessian", "Response: Hessian outside pattern");
     }
     Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& dx) override {
-        nb::detail::ticket ticket(this->nb_trampoline, "eval_jvp_impl", nb::detail::str_hash("eval_jvp_impl"), false);
-        if (!ticket.key.is_valid())
-            return Base::eval_jvp_impl(x, dx);
-        nb::object result = this->nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x)), nb::cast(Vec(dx)));
+        nb::gil_scoped_acquire gil;
+        // The bound base method selects the fallback; Python overrides may reenter normally.
+        nb::object result = this->nb_trampoline.base().attr("eval_jvp_impl")(nb::cast(Vec(x)), nb::cast(Vec(dx)));
         if (result.is_none())
             throw std::domain_error("Response is infeasible");
         return nb::cast<Vec>(result);
     }
     Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& gy) override {
-        nb::detail::ticket ticket(this->nb_trampoline, "eval_vjp_impl", nb::detail::str_hash("eval_vjp_impl"), false);
-        if (!ticket.key.is_valid())
-            return Base::eval_vjp_impl(x, gy);
-        nb::object result = this->nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x)), nb::cast(Vec(gy)));
+        nb::gil_scoped_acquire gil;
+        // The bound base method selects the fallback; Python overrides may reenter normally.
+        nb::object result = this->nb_trampoline.base().attr("eval_vjp_impl")(nb::cast(Vec(x)), nb::cast(Vec(gy)));
         if (result.is_none())
             throw std::domain_error("Response is infeasible");
         return nb::cast<Vec>(result);
     }
-    Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) override {
         using linalg::binding::SparseArgument;
-        nb::detail::ticket ticket(this->nb_trampoline, "eval_impl", nb::detail::str_hash("eval_impl"), true);
-        nb::object value = this->nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x)), J != nullptr);
+        nb::gil_scoped_acquire gil;
+        nb::handle self = this->nb_trampoline.base();
+        if (!nb::hasattr(self, "eval_impl"))
+            throw std::logic_error("Response: missing eval_impl");
+        nb::object value = self.attr("eval_impl")(nb::cast(Vec(x)), J != nullptr);
         if (value.is_none())
             throw std::domain_error("Response is infeasible");
         if (!J)

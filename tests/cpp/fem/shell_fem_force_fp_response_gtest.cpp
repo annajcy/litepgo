@@ -82,7 +82,6 @@ TEST(ShellFemForceFpResponse, OriginalAreaAssemblyAndFullJacobianForSharedAndPer
         EXPECT_TRUE(sum.isApprox(J, 1e-12));
         EXPECT_THROW(shared.eval_value(Vec::Zero(9)), std::domain_error);
         EXPECT_TRUE(shared.eval_value(shared_P).isApprox(p.force(shared_P), 1e-11));
-        EXPECT_FALSE(shared.update_patterns(shared_P));
     }
 }
 TEST(ShellFemForceFpResponse, FixedInputSnapshotsValidationAndEmptyMesh) {

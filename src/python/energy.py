@@ -52,20 +52,19 @@ Check has_hessian first; unsupported calls raise RuntimeError. AffineMappedRespo
 ExpResponse and compositions with two second-order children support it.
 
 Subclass FixedPatternResponse(pattern, hessian_pattern=None) or
-DynamicPatternResponse(initial_pattern, initial_hessian_pattern=None).
+DynamicPatternResponse(num_inputs, num_outputs).
 Implement eval_impl(x, need_jacobian), returning value or (value, Jacobian).
 Return None for infeasibility. Optional eval_hessian_impl(x, weights) returns a
-matrix. Omitting the Hessian pattern means unsupported; an empty square pattern
-means zero curvature. Dynamic subclasses implement jacobian_pattern_at(x), and
-optionally hessian_pattern_at(x), whose default keeps its current structure.
+matrix. A fixed empty square Hessian pattern means zero curvature; omission
+means unsupported. Dynamic subclasses implement jacobian_pattern_at(x), and
+second-order subclasses override the has_hessian property and hessian_pattern_at(x).
+No previous input or current pattern is retained by the dynamic base.
 Patterns describe structural supersets, independent of numerical output weights.
 Arguments own their data; matrices can be dense or SciPy sparse. Public calls
-validate inputs/results and reject concurrent or reentrant calls.
-
-update_patterns(x) explicitly prepares both supported derivative patterns and
-reports whether either changed. Pattern accessors return copies; has_fixed_pattern
-covers both structures. Native *_into calls use this protocol for buffer reuse;
-Python exposes only owning evaluation. See guide/energy/responses for migration.
+validate inputs/results. Response has no global concurrency guard; implementations
+with shared workspaces, including MeshResponse, reject overlapping evaluation.
+Public pattern access/update and native _into methods have been removed.
+See guide/energy/responses for the execution contract and migration.
 
 MeshResponse(input_map, output_map, batch_size=256) groups equal-sized
 local inputs/outputs. eval_batch(ids, inputs, need_jacobian) receives (B, ni) inputs

@@ -158,8 +158,6 @@ def test_response_pattern_and_object_protocol():
     r = TestResponse(sp.eye(2, format="csc"),
                              lambda x, need: (x*x, np.diag(2*x)) if need else x*x)
     assert isinstance(r, Response)
-    assert r.num_inputs == r.num_outputs == 2 and r.has_fixed_pattern
-    assert not r.update_patterns(np.zeros(2))
     np.testing.assert_array_equal(r.eval_value(np.array([2., 3.])), [4., 9.])
     J = r.eval_jacobian(np.zeros(2))
     assert J.nnz == 2  # Numerical zeros do not remove structural slots.

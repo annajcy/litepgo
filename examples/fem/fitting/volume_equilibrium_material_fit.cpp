@@ -95,9 +95,13 @@ double reaction(const Problem& problem, const Eigen::Vector2d& theta, int axis, 
                 std::vector<Field>(geometry.size(), Field(parameters)));
         },
         make_response);
-    SpMat J = equilibrium.jacobian_pattern();
-    const Vec displacement =
-        (derivative ? equilibrium.eval_value_and_jacobian_into(theta, J) : equilibrium.eval_value(theta));
+    SpMat J = SpMat();
+    const Vec displacement = (derivative ? ([&] {
+        auto result = equilibrium.eval_value_and_jacobian(theta);
+        J = std::move(result.second);
+        return std::move(result.first);
+    }())
+                                         : equilibrium.eval_value(theta));
     const Vec gradient = elastic.eval_gradient(displacement);
     double force = 0;
     for (int v : top_vertices)
@@ -119,7 +123,7 @@ class MaterialResidual final : public energy::FixedPatternResponse {
           scales(scale) {}
 
   private:
-    Vec eval_impl(const ConstVecRef& q, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& q, SpMat* J) override {
         Eigen::MatrixXd dense_J;
         const Eigen::Vector2d theta = q.array().exp().matrix();
         const Eigen::Vector2d forces = measurements_(theta, J ? &dense_J : nullptr);

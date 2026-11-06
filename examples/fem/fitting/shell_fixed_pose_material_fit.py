@@ -16,7 +16,7 @@ from litepgo import dof, energy, fem, mesh, solver
 
 class MaterialResidual(energy.FixedPatternResponse):
     def __init__(self, force, target, scale):
-        super().__init__(force.jacobian_pattern)
+        super().__init__(np.ones((force.num_outputs, force.num_inputs)))
         self.force, self.target, self.scale = force, target, scale
 
     def eval_impl(self, theta, need_jacobian):

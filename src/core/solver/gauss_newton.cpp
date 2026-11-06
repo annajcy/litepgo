@@ -25,12 +25,14 @@ GaussNewtonResult gauss_newton_solve(energy::Response& residual, const ConstVecR
     SpMat J, analyzed_pattern;
     auto evaluate = [&](const Vec& x, bool derivatives) {
         ++result.evaluations;
+        Vec r;
         if (derivatives) {
-            if (residual.update_patterns(x) || J.rows() == 0) {
-                J = residual.jacobian_pattern();
-            }
+            auto evaluated = residual.eval_value_and_jacobian(x);
+            r = std::move(evaluated.first);
+            J = std::move(evaluated.second);
+        } else {
+            r = residual.eval_value(x);
         }
-        Vec r = (derivatives ? residual.eval_value_and_jacobian_into(x, J) : residual.eval_value(x));
         if (!std::isfinite(r.squaredNorm()))
             throw std::logic_error("Gauss-Newton: residual norm overflow");
         return r;

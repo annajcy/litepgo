@@ -20,12 +20,14 @@ TEST(AffineMappedResponse, RectangularValuesDerivativesAndZeroHessian) {
     AffineMappedResponse r(A.sparseView(), b);
     EXPECT_EQ(r.num_inputs(), 3);
     EXPECT_EQ(r.num_outputs(), 2);
-    EXPECT_TRUE(r.has_fixed_pattern());
     EXPECT_TRUE(r.has_hessian());
-    EXPECT_FALSE(r.update_patterns(x));
-    SpMat J = r.jacobian_pattern();
-    EXPECT_TRUE(J.coeffs().isZero());
-    EXPECT_TRUE(r.eval_value_and_jacobian_into(x, J).isApprox(Eigen::Vector2d(11, 5.5)));
+    SpMat J;
+    EXPECT_TRUE(([&] {
+                    auto result = r.eval_value_and_jacobian(x);
+                    J = std::move(result.second);
+                    return std::move(result.first);
+                }())
+                    .isApprox(Eigen::Vector2d(11, 5.5)));
     EXPECT_TRUE(Eigen::MatrixXd(J).isApprox(A));
     EXPECT_TRUE(r.eval_jvp(x, dx).isApprox(A * dx));
     EXPECT_TRUE(r.eval_vjp(x, w).isApprox(A.transpose() * w));
@@ -35,7 +37,6 @@ TEST(AffineMappedResponse, RectangularValuesDerivativesAndZeroHessian) {
         EXPECT_EQ(H.rows(), 3);
         EXPECT_EQ(H.cols(), 3);
         EXPECT_EQ(H.nonZeros(), 0);
-        EXPECT_TRUE(linalg::same_pattern(H, r.hessian_pattern()));
     }
     EXPECT_TRUE(r.eval_value(-x).isApprox(-A * x + b));
 }
@@ -53,11 +54,10 @@ TEST(AffineMappedResponse, OwnsSnapshotsAndPreservesStoredZeros) {
     EXPECT_TRUE(r.eval_value(x).isApprox(Eigen::Vector2d(3, 5)));
     SpMat J = r.eval_jacobian(x);
     EXPECT_EQ(J.nonZeros(), 3);
-    EXPECT_TRUE(linalg::same_pattern(J, r.jacobian_pattern()));
+    EXPECT_TRUE(linalg::same_pattern(J, r.eval_jacobian(x)));
     J.coeffs().setConstant(99);
     EXPECT_DOUBLE_EQ(r.eval_jacobian(x).coeff(0, 0), 2);
     EXPECT_DOUBLE_EQ(r.eval_jacobian(x).coeff(1, 1), 0);
-    EXPECT_TRUE(r.jacobian_pattern().coeffs().isZero());
 }
 
 TEST(AffineMappedResponse, DefaultOffsetIdentityRankDeficientAndEmptyMaps) {
@@ -117,7 +117,6 @@ TEST(AffineMappedResponse, RejectsInvalidConfigurationInputsAndNumericalOverflow
     EXPECT_THROW(r.eval_hessian(x, Vec::Zero(3)), std::invalid_argument);
     EXPECT_THROW(r.eval_hessian(x, Vec::Constant(2, nan)), std::invalid_argument);
     SpMat wrong(2, 3);
-    EXPECT_THROW(r.eval_value_and_jacobian_into(x, wrong), std::invalid_argument);
     const double huge = std::numeric_limits<double>::max();
     AffineMappedResponse overflow(Eigen::Matrix<double, 1, 1>::Constant(huge).sparseView());
     EXPECT_THROW(overflow.eval_value(Vec::Constant(1, 2)), std::domain_error);

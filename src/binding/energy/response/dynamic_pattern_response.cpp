@@ -12,6 +12,12 @@ namespace {
 class PyDynamicResponse : public PyResponse<DynamicPatternResponse> {
   public:
     using PyResponse<DynamicPatternResponse>::PyResponse;
+    bool has_hessian() const override {
+        nb::detail::ticket ticket(nb_trampoline, "has_hessian", nb::detail::str_hash("has_hessian"), false);
+        if (!ticket.key.is_valid())
+            return false;
+        return nb::cast<bool>(nb_trampoline.base().attr(ticket.key));
+    }
     SpMat default_hessian_pattern(const ConstVecRef& x) const {
         return DynamicPatternResponse::hessian_pattern_at(x);
     }
@@ -55,8 +61,7 @@ void bind_dynamic_pattern_response(nb::module_& m) {
                 return dynamic_cast<PyResponse<DynamicPatternResponse>&>(r).default_vjp(x, d);
             },
             "x"_a, "weights"_a)
-        .def(nb::init<const SparseArgument&, const std::optional<SparseArgument>&>(), "initial_pattern"_a,
-             "initial_hessian_pattern"_a = nb::none(),
+        .def(nb::init<int, int>(), "num_inputs"_a, "num_outputs"_a,
              "Subclass and override jacobian_pattern_at(x) and eval_impl(x, need_jacobian). Dimensions remain fixed.");
 }
 } // namespace litepgo::energy::binding

@@ -295,7 +295,7 @@ def test_response_factory_direct_products_and_invalid_results():
 def test_factory_response_dynamic_pattern_is_refreshed():
     class Force(energy.DynamicPatternResponse):
         def __init__(self, u):
-            super().__init__(sparse.eye(2, format="csc"))
+            super().__init__(2, 2)
             self.u = u.copy()
 
         def jacobian_pattern_at(self, p):

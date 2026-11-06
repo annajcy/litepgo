@@ -26,11 +26,20 @@ using Force = fem::VolumetricFemForceMaterialResponse<fem::NeoHookean, fem::TetP
 class ForceResidual final : public energy::FixedPatternResponse {
   public:
     ForceResidual(energy::Response& force, Vec observed)
-        : FixedPatternResponse(force.jacobian_pattern()), force_(force), observed_(std::move(observed)) {}
+        : FixedPatternResponse(Eigen::MatrixXd::Ones(force.num_outputs(), force.num_inputs()).sparseView()),
+          force_(force), observed_(std::move(observed)) {}
 
   private:
-    Vec eval_impl(const ConstVecRef& theta, SpMat* J) const override {
-        return (J ? force_.eval_value_and_jacobian_into(theta, *J) : force_.eval_value(theta)) - observed_;
+    Vec eval_impl(const ConstVecRef& theta, SpMat* J) override {
+        return (J ? ([&] {
+                   auto [value, derivative] = force_.eval_value_and_jacobian(theta);
+                   for (int c = 0; c < J->outerSize(); ++c)
+                       for (SpMat::InnerIterator it(*J, c); it; ++it)
+                           it.valueRef() = derivative.coeff(it.row(), c);
+                   return value;
+               }())
+                  : force_.eval_value(theta)) -
+               observed_;
     }
     energy::Response& force_;
     Vec observed_;
@@ -104,13 +113,23 @@ int main(int argc, char** argv) {
             std::vector<double> times;
             for (energy::Response* force :
                  {static_cast<energy::Response*>(&single), static_cast<energy::Response*>(&batched)}) {
-                SpMat jacobian = force->jacobian_pattern();
+                SpMat jacobian = Eigen::MatrixXd::Ones(force->num_outputs(), force->num_inputs()).sparseView();
                 for (int i = 0; i < 3; ++i)
-                    (need ? force->eval_value_and_jacobian_into(truth, jacobian) : force->eval_value(truth));
+                    (need ? ([&] {
+                        auto result = force->eval_value_and_jacobian(truth);
+                        jacobian = std::move(result.second);
+                        return std::move(result.first);
+                    }())
+                          : force->eval_value(truth));
                 std::vector<double> samples;
                 for (int i = 0; i < repeats; ++i) {
                     const auto start = std::chrono::steady_clock::now();
-                    (need ? force->eval_value_and_jacobian_into(truth, jacobian) : force->eval_value(truth));
+                    (need ? ([&] {
+                        auto result = force->eval_value_and_jacobian(truth);
+                        jacobian = std::move(result.second);
+                        return std::move(result.first);
+                    }())
+                          : force->eval_value(truth));
                     samples.push_back(
                         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
                 }

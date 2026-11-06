@@ -22,14 +22,25 @@ using namespace litepgo;
 class MaterialResidual final : public energy::FixedPatternResponse {
   public:
     MaterialResidual(std::shared_ptr<energy::Response> force, const Vec& target, double scale)
-        : FixedPatternResponse(force->jacobian_pattern()), force_(force), target_(target), scale_(scale) {}
+        : FixedPatternResponse(Eigen::MatrixXd::Ones(force->num_outputs(), force->num_inputs()).sparseView()),
+          force_(force), target_(target), scale_(scale) {}
 
   private:
-    Vec eval_impl(const ConstVecRef& theta, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& theta, SpMat* J) override {
         // Tell Gauss-Newton to reject infeasible trials without changing parameterization.
         if (!theta.allFinite() || theta[1] <= 0 || theta.sum() <= 0)
             throw std::domain_error("Require mu > 0 and lambda_ps + mu > 0");
-        const Vec value = (J ? force_->eval_value_and_jacobian_into(theta, *J) : force_->eval_value(theta));
+        Vec value;
+        if (J) {
+            auto evaluated = force_->eval_value_and_jacobian(theta);
+            value = std::move(evaluated.first);
+            const SpMat& derivative = evaluated.second;
+            for (int c = 0; c < J->outerSize(); ++c)
+                for (SpMat::InnerIterator it(*J, c); it; ++it)
+                    it.valueRef() = derivative.coeff(it.row(), c);
+        } else {
+            value = force_->eval_value(theta);
+        }
         if (J)
             *J /= scale_;
         return (value - target_) / scale_;

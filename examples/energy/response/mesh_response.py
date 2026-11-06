@@ -53,7 +53,7 @@ def make_responses(topology, mapping, geometry, displacement, plastic, batch_siz
 
 class ForceResidual(energy.FixedPatternResponse):
     def __init__(self, force, observed):
-        super().__init__(force.jacobian_pattern)
+        super().__init__(np.ones((force.num_outputs, force.num_inputs)))
         self.force, self.observed = force, observed
 
     def eval_impl(self, theta, need_jacobian):

@@ -23,7 +23,6 @@ def test_shared_scatter_and_solver():
     r = BatchResponseFixture(dof.ConstantDofMap(t, 2), dof.VertexDofMap(t, 1), local)
     del t, local
     gc.collect()
-    assert r.num_inputs == 2 and r.num_outputs == 5 and r.has_fixed_pattern
     np.testing.assert_allclose(r.eval_value(np.zeros(2)), expected @ [-2., -3.])
     assert not saved[-1][2]
     np.testing.assert_array_equal(r.eval_jacobian(np.zeros(2)).toarray(), expected)

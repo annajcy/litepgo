@@ -20,7 +20,7 @@ class LinearResidual(energy.FixedPatternResponse):
 
 class NonlinearResidual(energy.DynamicPatternResponse):
     def __init__(self):
-        super().__init__(np.eye(2))
+        super().__init__(2, 2)
 
     def jacobian_pattern_at(self, x):
         return np.array([[1.0, 0.0], [float(x[0] > 0), 1.0]])
@@ -44,7 +44,7 @@ def main():
         raise RuntimeError("Response fit failed")
     print(
         f"fixed Jacobian={J.shape[0]}x{J.shape[1]}, dynamic solution={result.x[0]:g} {result.x[1]:g}, "
-        f"Jacobian nnz={dynamic.jacobian_pattern.nnz}"
+        f"Jacobian nnz={dynamic.eval_jacobian(result.x).nnz}"
     )
 
 

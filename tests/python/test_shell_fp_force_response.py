@@ -35,7 +35,6 @@ def test_shared_and_element_fp_jacobians_and_original_area(batch_size):
     packed = P.ravel(order="F")
     per = np.concatenate([(1+.02*e)*packed for e in range(4)])
     assert isinstance(shared, energy.MeshResponse) and isinstance(shared, fem.ShellFemForceFpResponse)
-    assert shared.num_inputs == 9 and shared.num_outputs == 18 and shared.has_fixed_pattern
     value, J = shared.eval_value_and_jacobian(packed)
     per_value, E = element.eval_value_and_jacobian(per)
     np.testing.assert_allclose(value, explicit_force(data, packed, theta), rtol=1e-11, atol=1e-12)
@@ -52,7 +51,6 @@ def test_shared_and_element_fp_jacobians_and_original_area(batch_size):
     identity = np.eye(3).ravel(order="F")
     original = fem.ShellFemEnergy[fem.KoiterStVK](mapping, rest, thickness, theta)
     np.testing.assert_allclose(shared.eval_value(identity), original.eval_gradient(u), atol=1e-12)
-    assert not shared.update_patterns(packed)
     with pytest.raises(ValueError):
         shared.eval_value(np.zeros(9))
     np.testing.assert_array_equal(shared.eval_jacobian(packed).indices, J.indices)

@@ -7,7 +7,7 @@ from litepgo import energy, solver
 
 class Piecewise(energy.DynamicPatternResponse):
     def __init__(self):
-        super().__init__(sp.eye(2, format="csc"))
+        super().__init__(2, 2)
         self.inputs = []
 
     def jacobian_pattern_at(self, x):
@@ -22,29 +22,23 @@ class Piecewise(energy.DynamicPatternResponse):
 
 def test_pattern_growth_shrinkage_and_newton():
     r = Piecewise()
-    assert not r.has_fixed_pattern
     np.testing.assert_array_equal(r.eval_value(np.ones(2)), [0., 0.])
     assert r.eval_jacobian(np.ones(2)).nnz == 3
-    assert not r.update_patterns(np.ones(2))
-    assert not r.update_patterns(np.array([2., 1.]))
     assert r.eval_jacobian(np.ones(2)).nnz == 3
     # Ordinary evaluation automatically shrinks the structure at the new point.
     J = r.eval_jacobian(-np.ones(2))
     assert J.nnz == 2 and J[1, 0] == 0
-    assert not r.update_patterns(-np.ones(2))
-    assert r.jacobian_pattern.nnz == 2
     result = solver.gauss_newton_solve(r, -np.ones(2), solver.GaussNewtonOptions(gradient_tolerance=1e-9))
     assert result.status == solver.GaussNewtonStatus.Converged
     np.testing.assert_allclose(result.x, [1., 1.], atol=1e-8)
-    assert r.jacobian_pattern.nnz == 3
     for x, saved in r.inputs:
         np.testing.assert_array_equal(x, saved)
 
 
 def test_required_overrides_and_invalid_pattern():
-    base = energy.DynamicPatternResponse(sp.eye(2))
+    base = energy.DynamicPatternResponse(2, 2)
     with pytest.raises(RuntimeError, match="jacobian_pattern_at"):
-        base.update_patterns(np.ones(2))
+        base.eval_jacobian(np.ones(2))
     with pytest.raises(RuntimeError, match="eval_impl"):
         base.eval_value(np.ones(2))
 
@@ -52,15 +46,14 @@ def test_required_overrides_and_invalid_pattern():
         def jacobian_pattern_at(self, x):
             return sp.eye(3)
     r = WrongShape()
-    with pytest.raises(RuntimeError, match="dimensions changed"):
-        r.update_patterns(np.ones(2))
-    assert r.num_inputs == r.num_outputs == 2 and r.jacobian_pattern.nnz == 2
+    with pytest.raises(ValueError, match="pattern dimensions"):
+        r.eval_jacobian(np.ones(2))
 
     class Broken(Piecewise):
         def jacobian_pattern_at(self, x):
             raise KeyError("pattern bug")
     with pytest.raises(KeyError, match="pattern bug"):
-        Broken().update_patterns(np.ones(2))
+        Broken().eval_jacobian(np.ones(2))
 
 
 @pytest.mark.parametrize("kind", ["response", "energy"])
@@ -102,7 +95,6 @@ def test_products_prepare_dynamic_jacobian_without_explicit_update():
         J = np.array([[1., 0.], [2 * max(0., sign), 1.]])
         np.testing.assert_allclose(r.eval_jvp(x, np.ones(2)), J @ np.ones(2))
         np.testing.assert_allclose(r.eval_vjp(x, weights=np.ones(2)), J.T @ np.ones(2))
-        assert r.jacobian_pattern.nnz == (3 if sign > 0 else 2)
 
 
 def test_value_and_direct_products_do_not_prepare_patterns():
@@ -121,10 +113,9 @@ def test_value_and_direct_products_do_not_prepare_patterns():
     np.testing.assert_allclose(r.eval_value(x), [0, 0])
     np.testing.assert_allclose(r.eval_jvp(x, x), [1, 3])
     np.testing.assert_allclose(r.eval_vjp(x, x), [3, 1])
-    assert r.jacobian_pattern.nnz == 2
 
 
-def test_pattern_hook_reentry_is_rejected_and_guard_recovers():
+def test_pattern_hook_can_call_value_without_shared_state():
     class Reentrant(Piecewise):
         reenter = True
 
@@ -134,9 +125,7 @@ def test_pattern_hook_reentry_is_rejected_and_guard_recovers():
             return super().jacobian_pattern_at(x)
 
     r = Reentrant()
-    with pytest.raises(RuntimeError):
-        r.eval_jacobian(np.ones(2))
-    r.reenter = False
+    r.eval_jacobian(np.ones(2))
     value, J = r.eval_value_and_jacobian(np.ones(2))
     np.testing.assert_allclose(value, [0, 0])
     np.testing.assert_allclose(J.toarray(), [[1, 0], [2, 1]])

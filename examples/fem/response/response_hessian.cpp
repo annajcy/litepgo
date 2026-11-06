@@ -16,7 +16,6 @@ int main() {
     const Eigen::Vector3d N = fem::TriangleP1Basis::eval_N(xi);
     const auto sample = std::make_shared<energy::AffineMappedResponse>(SpMat(N.transpose().sparseView()));
     energy::ComposedResponse response(std::make_shared<energy::ExpResponse>(1), sample);
-    response.update_patterns(c);
     const double theta = response.eval_value(c)[0];
     const Eigen::MatrixXd J = response.eval_jacobian(c);
     const Eigen::MatrixXd H = response.eval_hessian(c, Vec::Ones(1));

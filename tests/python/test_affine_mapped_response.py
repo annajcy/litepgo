@@ -20,8 +20,6 @@ def test_values_derivatives_snapshots_and_export(convert):
         source[:] = np.nan
     assert isinstance(r, energy.Response)
     assert (r.num_inputs, r.num_outputs) == (3, 2)
-    assert r.has_fixed_pattern and r.has_hessian
-    assert not r.update_patterns(x)
     value, J = r.eval_value_and_jacobian(x)
     np.testing.assert_allclose(value, [11., 5.5])
     np.testing.assert_array_equal(J.toarray(), A)
@@ -29,10 +27,9 @@ def test_values_derivatives_snapshots_and_export(convert):
     np.testing.assert_allclose(r.eval_vjp(x, w), A.T @ w)
     H = r.eval_hessian(x, weights=w)
     assert H.shape == (3, 3) and H.nnz == 0
-    assert r.hessian_pattern.nnz == 0
+    assert r.eval_hessian(x, w).nnz == 0
     J.data[:] = 99
     np.testing.assert_array_equal(r.eval_jacobian(x).toarray(), A)
-    np.testing.assert_array_equal(r.jacobian_pattern.data, 0)
     np.testing.assert_allclose(r.eval_value(-x), -A @ x + [4., -1.])
 
 

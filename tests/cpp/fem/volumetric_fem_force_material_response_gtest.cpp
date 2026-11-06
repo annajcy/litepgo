@@ -51,7 +51,6 @@ TEST(VolumetricFemForceMaterialResponse, MatchesEnergySharedAndPerElementAndBatc
         Force per_element(dof::ElementDofMap(f.topology, 2), f.map, f.X, f.u, f.plastic, size);
         EXPECT_EQ(shared.num_inputs(), 2);
         EXPECT_EQ(shared.num_outputs(), 15);
-        EXPECT_TRUE(shared.has_fixed_pattern());
         EXPECT_TRUE(shared.eval_value(theta).isApprox(f.force(theta), 1e-12));
         EXPECT_TRUE(per_element.eval_value(independent).isApprox(f.force(independent), 1e-12));
         const Eigen::MatrixXd J = shared.eval_jacobian(theta), E = per_element.eval_jacobian(independent);
@@ -61,7 +60,7 @@ TEST(VolumetricFemForceMaterialResponse, MatchesEnergySharedAndPerElementAndBatc
             reference = J;
         else
             EXPECT_EQ((reference - J).norm(), 0);
-        const SpMat before = shared.jacobian_pattern();
+        const SpMat before = shared.eval_jacobian(theta);
         EXPECT_THROW(shared.eval_value(Eigen::Vector2d(2, 0)), std::invalid_argument);
         EXPECT_TRUE(shared.eval_value(theta).isApprox(f.force(theta), 1e-12));
         EXPECT_EQ(before.nonZeros(), shared.eval_jacobian(theta).nonZeros());

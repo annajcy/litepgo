@@ -1,6 +1,7 @@
 #pragma once
 #include "litepgo/dof/response_assembler.hpp"
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
+#include <atomic>
 #include <utility>
 
 namespace litepgo::energy {
@@ -28,12 +29,13 @@ class MeshResponse : public FixedPatternResponse {
                              bool transpose) const;
     Vec product(const ConstVecRef& x, const ConstVecRef& direction, bool transpose) const;
     MeshResponse(dof::ResponseAssembler assembler, int batch_size);
-    Vec eval_impl(const ConstVecRef& x, SpMat* J) const override;
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) override;
     dof::ResponseAssembler assembler_;
     std::vector<std::vector<int>> batches_;
     struct Storage {
         BatchMatrix inputs, values, jacobian;
     };
+    mutable std::atomic<bool> busy_ = false;
     mutable std::vector<Storage> storage_;
     mutable std::vector<dof::ResponseAssembler::ElementView> views_;
 };

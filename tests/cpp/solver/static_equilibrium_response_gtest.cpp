@@ -41,8 +41,7 @@ TEST(StaticEquilibriumResponse, FemDisplacementAndReactionMatchResolveFiniteDiff
     StaticEquilibriumResponse response(2, fixed, initial, options, make_energy,
                                        testing::force_factory(2, make_energy, partial));
     const Vec p = Eigen::Vector2d(2, 3);
-    SpMat J = response.jacobian_pattern();
-    const Vec u = response.eval_value_and_jacobian_into(p, J);
+    auto [u, J] = response.eval_value_and_jacobian(p);
     ASSERT_EQ(partial_calls, 1);
     EXPECT_GT(J.norm(), 1e-4);
     const Vec v = Eigen::Vector2d(.4, -.7);
@@ -162,8 +161,7 @@ TEST(StaticEquilibriumResponse, InterleavedFixedDofsMatchResolveFiniteDifference
             },
             [&](const Vec&, const Vec&) -> SpMat { return (-A).sparseView(); }));
     const Vec p = Eigen::Vector2d(.6, -1.1);
-    SpMat J = response.jacobian_pattern();
-    const Vec u = response.eval_value_and_jacobian_into(p, J);
+    auto [u, J] = response.eval_value_and_jacobian(p);
     EXPECT_EQ(u[1], initial[1]);
     EXPECT_EQ(Eigen::MatrixXd(J).row(1).norm(), 0);
     EXPECT_LT(fixed.reduce(Vec(K * u - A * p)).norm(), 1e-12);
@@ -189,7 +187,7 @@ TEST(StaticEquilibriumResponse, ResponseProductsAvoidExplicitParameterJacobian) 
         Eigen::Matrix<double, 2, 3> A = (Eigen::Matrix<double, 2, 3>() << 1, 2, -1, 3, -2, .5).finished();
 
       private:
-        Vec eval_impl(const ConstVecRef&, SpMat*) const override {
+        Vec eval_impl(const ConstVecRef&, SpMat*) override {
             throw std::logic_error("explicit B requested");
         }
         Vec eval_jvp_impl(const ConstVecRef&, const ConstVecRef& v) override {

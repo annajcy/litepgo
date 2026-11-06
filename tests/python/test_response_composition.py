@@ -11,7 +11,6 @@ def topology():
 
 
 def check_products(response, x):
-    response.update_patterns(x)
     J = response.eval_jacobian(x).toarray()
     v = np.linspace(0.2, 0.7, len(x))
     w = np.linspace(-0.3, 0.8, response.num_outputs)
@@ -104,7 +103,7 @@ def test_direct_products_do_not_request_child_jacobians():
 def test_dynamic_children_and_external_pattern_updates():
     class Dynamic(energy.DynamicPatternResponse):
         def __init__(self):
-            super().__init__(np.eye(2))
+            super().__init__(2, 2)
 
         def jacobian_pattern_at(self, x):
             return np.array([[1.0, 0.0], [float(x[0] > 0), 1.0]])
@@ -117,14 +116,11 @@ def test_dynamic_children_and_external_pattern_updates():
     child = Dynamic()
     composed = energy.ComposedResponse(child, energy.ExpResponse(2))
     x = np.array([0.3, -0.4])
-    assert not composed.has_fixed_pattern
     assert composed.eval_jacobian(x).shape == (2, 2)
     check_products(composed, x)
-    child.update_patterns(-np.ones(2))
     check_products(composed, x)
     element = energy.ElementwiseResponse(dof.ElementDofMap(topology(), 2), child)
     check_products(element, np.array([0.2, 0.3, -0.4, 0.5]))
-    assert element.has_fixed_pattern
     with pytest.raises(ValueError):
         energy.ComposedResponse(energy.ExpResponse(3), energy.ExpResponse(2))
 
@@ -221,7 +217,7 @@ def test_fem_parameterizations_match_energy_and_equilibrium(plastic, shared):
 def test_composition_reuses_dynamic_child_at_different_inputs():
     class Flip(energy.DynamicPatternResponse):
         def __init__(self):
-            super().__init__(np.eye(2))
+            super().__init__(2, 2)
 
         def jacobian_pattern_at(self, x):
             return np.array([[1.0, 0.0], [float(x[0] > 0), 1.0]])
@@ -235,7 +231,6 @@ def test_composition_reuses_dynamic_child_at_different_inputs():
     obj = energy.ComposedResponse(child, child)
     for x in [np.array([0.3, 0.4]), np.array([-0.3, 0.4])]:
         # Flip composed with itself is (x0, x1+x0²), on either side of zero.
-        obj.update_patterns(x)
         np.testing.assert_allclose(
             obj.eval_jacobian(x).toarray(), [[1.0, 0.0], [2 * x[0], 1.0]]
         )

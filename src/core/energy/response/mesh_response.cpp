@@ -1,4 +1,5 @@
 #include "litepgo/energy/response/mesh_response.hpp"
+#include "litepgo/common/busy_scope.hpp"
 #include <algorithm>
 #include <limits>
 #include <map>
@@ -23,7 +24,8 @@ MeshResponse::MeshResponse(dof::ResponseAssembler assembler, int batch_size)
     views_.resize(assembler_.num_elements());
 }
 
-Vec MeshResponse::eval_impl(const ConstVecRef& x, SpMat* J) const {
+Vec MeshResponse::eval_impl(const ConstVecRef& x, SpMat* J) {
+    ::litepgo::detail::BusyScope scope(busy_, "MeshResponse");
     tbb::parallel_for(std::size_t(0), batches_.size(), [&](std::size_t k) {
         const auto& ids = batches_[k];
         const Eigen::Index count = ids.size();
@@ -66,6 +68,7 @@ Vec MeshResponse::eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& gy) {
     return product(x, gy, true);
 }
 Vec MeshResponse::product(const ConstVecRef& x, const ConstVecRef& direction, bool transpose) const {
+    ::litepgo::detail::BusyScope scope(busy_, "MeshResponse");
     std::vector<BatchMatrix> products(batches_.size());
     tbb::parallel_for(std::size_t(0), batches_.size(), [&](std::size_t k) {
         const auto& ids = batches_[k];

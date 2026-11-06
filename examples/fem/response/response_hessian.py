@@ -13,7 +13,6 @@ def main():
     N = fem.TriangleP1Basis.eval_N(xi)
     sample = energy.AffineMappedResponse(N[None, :])
     response = energy.ComposedResponse(energy.ExpResponse(1), sample)
-    response.update_patterns(c)
     theta = response.eval_value(c)[0]
     J = response.eval_jacobian(c).toarray()
     H = response.eval_hessian(c, weights=np.ones(1)).toarray()
