@@ -88,9 +88,9 @@ interior points and positive weights whose sum is one.
 
 ## Tensor products
 
-`TensorProductQuadrature2D<Rule1D>` and
-`TensorProductQuadrature3D<Rule1D>` form Cartesian products of a 1D rule.
-The named 2D/3D Gauss types are aliases of these implementations.
+`GaussLegendre2D<n>` and `GaussLegendre3D<n>` directly form Cartesian
+products of `GaussLegendre1D<n>`, with `n` equal to 2 or 4.
+Each class constructs its points and product weights with nested loops.
 For 1D points $x_i$ and weights $w_i$:
 
 $$
@@ -102,8 +102,9 @@ $$
 
 The last axis varies fastest: `q=i*n+j` in 2D and
 `q=(i*n+j)*n+k` in 3D. Points and weights share this order.
-Generic tensor-product types are available in C++; Python exposes the named
-Gauss instantiations.
+C++ and Python expose these named Gauss rules. Points and weights are
+initialized once and cached; C++ returns constant references to the cached
+matrices. This is not a guarantee of compile-time evaluation.
 
 For example, a two-point-per-axis 2D rule integrates $r^3s^3$ exactly.
 The guarantee concerns the degree in each variable, even though this

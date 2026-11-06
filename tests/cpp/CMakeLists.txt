@@ -79,10 +79,10 @@ add_executable(litepgo_fem_tests
     fem/material/shell/shell_fp_force_local_response_gtest.cpp
     fem/material/volumetric/volumetric_material_local_energy_gtest.cpp
     fem/quadrature/quadrature_gtest.cpp
-    fem/quadrature/2d/tensor_product_quadrature_2d_gtest.cpp
+    fem/quadrature/2d/gauss_legendre_2d_gtest.cpp
     fem/quadrature/2d/triangle_centroid_quadrature_gtest.cpp
     fem/quadrature/3d/tet_centroid_quadrature_gtest.cpp
-    fem/quadrature/3d/tensor_product_quadrature_3d_gtest.cpp
+    fem/quadrature/3d/gauss_legendre_3d_gtest.cpp
     fem/material/volumetric/volume_integration_gtest.cpp
     fem/local/surface_integration_gtest.cpp
     fem/material/volumetric/tet_p1_integration_gtest.cpp

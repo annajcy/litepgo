@@ -13,7 +13,6 @@
 #include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/1d/gauss_legendre_1d.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
-#include "litepgo/fem/quadrature/3d/tensor_product_quadrature_3d.hpp"
 
 #include <array>
 #include <cmath>
