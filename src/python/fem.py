@@ -41,6 +41,11 @@ fixed parameters. ShellFemEnergy accepts optional per-face plastic matrices;
 these change natural forms, preserving original area weights and thickness.
 Shell plastic force responses differentiate nine column-major Fp entries.
 
+Python materials: subclass PyVolumetricMaterial or PyShellMaterial and use the
+class in the Material slot, e.g. VolumetricFemEnergy[MyMaterial, Basis, Quadrature].
+Constructors are unchanged; assembly stays native and the material is called once
+per batch through eval(..., outputs=names) -> dict. See those classes.
+
 Native volumetric FEM constructs its fixed maps through deformation-gradient
 sampling. Custom integration uses ordinary Energy/Response, pointwise material
 derivatives, and VolumetricElement3D.points()/weights(); weights already include
@@ -51,15 +56,130 @@ See the FEM guide for formulas, shapes, packing and feasibility conventions.
 from litepgo._core import fem as _native
 
 
+class PyVolumetricMaterial:
+    """Base class for volumetric materials written in Python (NumPy, Numba, Torch, ...).
+
+    Subclass it and put the subclass, not an instance, in the Material slot of
+    VolumetricFemEnergy, VolumetricFemForceMaterialResponse or
+    VolumetricFemForceFpResponse. Like NeoHookean, a material is a class whose
+    methods are static or class methods; fixed state such as network weights
+    lives in class attributes. Constructors match the native instantiations.
+
+    Required:
+
+    - ``num_parameters``: int, the width k of theta.
+    - ``eval(F, Fp, theta, *, outputs) -> dict``. F and Fp have shape (N,3,3)
+      and theta (N,k), CPU float64 NumPy arrays whose rows are independent
+      points. ``outputs`` is a tuple of the names below; return a dict holding
+      at least those entries (extra entries are ignored). Arrays are converted
+      with numpy.ascontiguousarray(..., float64).
+
+    ==================  ===============  =============================================
+    name                shape            entry
+    ==================  ===============  =============================================
+    ``W``               (N,)             energy density per original reference volume
+    ``dW_dF``           (N,3,3)          [n,i,j] = dW/dF_ij
+    ``d2W_dF2``         (N,3,3,3,3)      [n,i,j,k,l] = d2W/dF_ij dF_kl
+    ``d2W_dF_dtheta``   (N,3,3,k)        [n,i,j,a] = d2W/dF_ij dtheta_a
+    ``d2W_dF_dFp``      (N,3,3,3,3)      [n,i,j,k,l] = d2W/dF_ij dFp_kl
+    ==================  ===============  =============================================
+
+    Derivatives hold the other inputs fixed. Energies request ("W",),
+    ("W","dW_dF") or ("W","dW_dF","d2W_dF2"); material force responses request
+    ("dW_dF",) or ("dW_dF","d2W_dF_dtheta"); Fp force responses ("dW_dF",) or
+    ("dW_dF","d2W_dF_dFp").
+
+    Optional:
+
+    - ``eval_feasible_step(F, Fp, theta, dF) -> (N,)``: a conservative bound in
+      [0,1] keeping each point feasible on F + t dF, t in [0, bound]. When
+      absent (None), the bound keeps det(F) > 0.
+
+    Non-finite returned values reject the evaluation like a native domain error
+    (a Newton trial step is then shortened); exceptions raised by eval propagate.
+    Each batch is one call made with the GIL held, so calls never overlap.
+    """
+
+    num_parameters = None
+    eval_feasible_step = None
+
+    @staticmethod
+    def eval(F, Fp, theta, *, outputs):
+        raise NotImplementedError("PyVolumetricMaterial subclasses must implement eval")
+
+
+class PyShellMaterial:
+    """Base class for triangle mid-edge shell materials written in Python.
+
+    Subclass it and use the subclass in the Material slot of ShellFemEnergy,
+    ShellFemForceMaterialResponse or ShellFemForceFpResponse, as for
+    PyVolumetricMaterial.
+
+    Required:
+
+    - ``num_parameters``: int, the width k of theta.
+    - ``eval(ab, ab_bar, thickness, theta, *, outputs) -> dict``. ab and ab_bar
+      hold packed current and natural forms (a11,a12,a22,b11,b12,b22) with
+      shape (N,6); thickness has shape (N,) and theta (N,k). Mixed entries are
+      independent, unscaled variables, so differentiating W with respect to the
+      packed vector gives the expected derivatives.
+
+    ======================  =========  ===========================================
+    name                    shape      entry
+    ======================  =========  ===========================================
+    ``W``                   (N,)       energy density per original reference area
+    ``dW_dab``              (N,6)      [n,r] = dW/dab_r
+    ``d2W_dab2``            (N,6,6)    [n,r,s] = d2W/dab_r dab_s
+    ``d2W_dab_dtheta``      (N,6,k)    [n,r,a] = d2W/dab_r dtheta_a
+    ``d2W_dab_dabarbbar``   (N,6,6)    [n,r,s] = d2W/dab_r dab_bar_s
+    ======================  =========  ===========================================
+
+    Energies request ("W",), ("W","dW_dab") or ("W","dW_dab","d2W_dab2");
+    force responses request "dW_dab" with "d2W_dab_dtheta" or
+    "d2W_dab_dabarbbar" for Jacobians. Plastic Fp responses chain the natural
+    forms to Fp natively. Line searches use only the geometric shell bound, so
+    the material must be finite wherever the current forms stay positive definite.
+    """
+
+    num_parameters = None
+
+    @staticmethod
+    def eval(ab, ab_bar, thickness, theta, *, outputs):
+        raise NotImplementedError("PyShellMaterial subclasses must implement eval")
+
+
+_material_bases = {"PyVolumetricMaterial": PyVolumetricMaterial, "PyShellMaterial": PyShellMaterial}
+
+
 class Template:
     """A C++ template whose bound classes or factory functions are looked up by argument tuple."""
 
     def __init__(self, name, instances):
         self.__name__ = name
-        self._instances = dict(instances)
+        self._instances = {
+            tuple(_material_bases.get(arg, arg) if isinstance(arg, str) else arg for arg in key): value
+            for key, value in instances.items()
+        }
 
     def __getitem__(self, args):
         key = args if isinstance(args, tuple) else (args,)
+        material = key[0] if key else None
+        base = next(
+            (b for b in _material_bases.values() if isinstance(material, type) and issubclass(material, b)),
+            None,
+        )
+        if base is material and (base, *key[1:]) in self._instances:
+            raise TypeError(f"{self.__name__}[{_format(key)}]: use a subclass of {base.__name__}")
+        if base is not None and (base, *key[1:]) in self._instances:
+            # Cache on the material class itself so both are collected together.
+            cache = material.__dict__.get("_litepgo_fem_bound")
+            if cache is None:
+                cache = {}
+                setattr(material, "_litepgo_fem_bound", cache)
+            name = (self.__name__, *key[1:])
+            if name not in cache:
+                cache[name] = _bind_material(self._instances[(base, *key[1:])], material, self.__name__, key)
+            return cache[name]
         try:
             return self._instances[key]
         except KeyError:
@@ -70,7 +190,10 @@ class Template:
 
     @property
     def instances(self):
-        """A copy of {argument tuple: class or function} for every bound instantiation."""
+        """A copy of {argument tuple: class or function} for every bound instantiation.
+
+        Python-material instantiations are keyed by PyVolumetricMaterial or
+        PyShellMaterial; index them with a subclass."""
         return dict(self._instances)
 
     def __instancecheck__(self, obj):
@@ -81,6 +204,25 @@ class Template:
 
     def __repr__(self):
         return f"<template litepgo.fem.{self.__name__}>"
+
+
+def _bind_material(native, material, template_name, key):
+    """The native Python-material instantiation with this material class bound in."""
+
+    def __init__(self, *args, **kwargs):
+        native.__init__(self, material, *args, **kwargs)
+
+    name = f"{template_name}[{_format(key)}]"
+    return type(
+        name,
+        (native,),
+        {
+            "__init__": __init__,
+            "__doc__": f"{name}: native assembly calling {material.__qualname__}.eval once per batch.",
+            "__module__": __name__,
+            "material": material,
+        },
+    )
 
 
 def _format(key):
@@ -172,6 +314,8 @@ __all__ = [
     "DeformationGradientResponse",
     "NeoHookean",
     "KoiterStVK",
+    "PyVolumetricMaterial",
+    "PyShellMaterial",
     "TriangleMidEdgeRestData",
     "TriangleMidEdgeKinematics",
     "eval_triangle_mid_edge_kinematics",

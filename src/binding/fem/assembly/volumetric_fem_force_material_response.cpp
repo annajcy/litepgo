@@ -14,18 +14,16 @@ using namespace nb::literals;
 namespace litepgo::fem::binding {
 namespace {
 
-template <class M, class B, class Q> void bind_volumetric_fem_force_material_response(nb::module_& m) {
-    using Force = VolumetricFemForceMaterialResponse<M, B, Q>;
-    bind_force<Force, M, B, Q>(m, "VolumetricFemForceMaterialResponse", "Fp",
-                               "Fixed displacement/geometry/Fp; force and material-parameter Jacobian.");
-}
+template <class M, class B, class Q> struct BindForce {
+    static void apply(nb::module_& m) {
+        bind_force<VolumetricFemForceMaterialResponse<M, B, Q>, M, B, Q>(
+            m, "VolumetricFemForceMaterialResponse", "Fp",
+            "Fixed displacement/geometry/Fp; force and material-parameter Jacobian.");
+    }
+};
 } // namespace
 
 void bind_fem_volumetric_fem_force_material_response(nb::module_& m) {
-    bind_volumetric_fem_force_material_response<NeoHookean, TetP1Basis, TetCentroidQuadrature>(m);
-    bind_volumetric_fem_force_material_response<NeoHookean, HexQ1Basis, GaussLegendre3D<2>>(m);
-    bind_volumetric_fem_force_material_response<NeoHookean, HexQ1Basis, GaussLegendre3D<4>>(m);
-    bind_volumetric_fem_force_material_response<NeoHookean, HexHermiteBasis, GaussLegendre3D<2>>(m);
-    bind_volumetric_fem_force_material_response<NeoHookean, HexHermiteBasis, GaussLegendre3D<4>>(m);
+    for_each_volumetric_instance<BindForce>(m);
 }
 } // namespace litepgo::fem::binding

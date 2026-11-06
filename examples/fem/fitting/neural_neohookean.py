@@ -14,7 +14,7 @@ import time
 import numpy as np
 import torch
 from litepgo import dof, fem, mesh, solver, tbb_thread_limit
-from litepgo.torch import TorchVolumetricFemEnergy
+from litepgo.torch import TorchVolumetricMaterial
 
 
 class InvariantMaterial(torch.nn.Module):
@@ -261,6 +261,20 @@ def errors(model, F, Fp=None):
     return report
 
 
+def fem_material(model):
+    """A Python material class for native FEM; the trained model stays fixed."""
+
+    class LearnedNeoHookean(TorchVolumetricMaterial):
+        num_parameters = 2
+        module = model
+
+        @classmethod
+        def W(cls, F, Fp, theta):
+            return cls.module(F, Fp, theta)
+
+    return LearnedNeoHookean
+
+
 def equilibrium_errors(model):
     nodes = np.array(
         [
@@ -282,13 +296,16 @@ def equilibrium_errors(model):
     Native = fem.VolumetricFemEnergy[
         fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
     ]
+    Learned = fem.VolumetricFemEnergy[
+        fem_material(model), fem.TetP1Basis, fem.TetCentroidQuadrature
+    ]
     reports = []
     for plastic in (
         np.eye(3),
         np.array([[1.04, 0.03, 0.0], [0.0, 0.98, 0.02], [0.01, 0.0, 1.02]]),
     ):
         Fp = [AffineResponse(np.zeros((9, 3)), plastic.ravel(order="F"))] * 2
-        learned = TorchVolumetricFemEnergy(mapping, geometry, Fp, theta, material=model)
+        learned = Learned(mapping, geometry, Fp, theta)
         native = Native(mapping, geometry, Fp, theta)
         for load in ([0.04, -0.02, 0.06], [-0.03, 0.02, -0.04], [0.1, 0.04, 0.08]):
             u = np.zeros(15)

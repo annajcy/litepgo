@@ -1,4 +1,4 @@
-"""Differentiate equilibrium with Torch material/Fp force responses.
+"""Differentiate equilibrium with force responses of a Torch material.
 
 Run: uv run --no-sync python examples/fem/fitting/torch_equilibrium_response.py
 The adjacent torch_neohookean.py supplies the density and two-tet problem.
@@ -7,55 +7,39 @@ The adjacent torch_neohookean.py supplies the density and two-tet problem.
 from litepgo.energy import AffineResponse
 import numpy as np
 from litepgo import dof, fem, mesh, solver
-from litepgo import torch as bridge
-from torch_neohookean import make_problem
+from torch_neohookean import TorchNeoHookean, make_problem
 
 
 def make_equilibrium(kind, use_torch=True):
-    _, mapping, geometry, plastic, theta, _, torch_energy = make_problem()
+    _, mapping, geometry, plastic, theta, _, _ = make_problem()
+    material = TorchNeoHookean if use_torch else fem.NeoHookean
+    key = (material, fem.TetP1Basis, fem.TetCentroidQuadrature)
     topology = mesh.TetTopology(
         5, np.array([[0, 1, 2, 3], [1, 2, 3, 4]], dtype=np.int32)
     )
     if kind == "material":
         parameters = np.array([2.0, 3.0])
         fixed_fields = plastic
-        TorchResponse = bridge.TorchVolumetricFemMaterialResponse
-        NativeResponse = fem.VolumetricFemForceMaterialResponse[
-            fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
-        ]
+        Response = fem.VolumetricFemForceMaterialResponse[key]
     elif kind == "fp":
         parameters = plastic[0].eval_value(np.full(3, 0.25))
         fixed_fields = theta
-        TorchResponse = bridge.TorchVolumetricFemFpResponse
-        NativeResponse = fem.VolumetricFemForceFpResponse[
-            fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
-        ]
+        Response = fem.VolumetricFemForceFpResponse[key]
     else:
         raise ValueError("kind must be material or fp")
     parameter_map = dof.ConstantDofMap(topology, len(parameters))
-    NativeEnergy = fem.VolumetricFemEnergy[
-        fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
-    ]
+    Energy = fem.VolumetricFemEnergy[key]
 
     def make_energy(p):
         active = [AffineResponse(np.zeros((len(p), 3)), p)] * mapping.num_elements
         Fp, material_fields = (
             (plastic, active) if kind == "material" else (active, theta)
         )
-        if use_torch:
-            return bridge.TorchVolumetricFemEnergy(
-                mapping, geometry, Fp, material_fields, material=torch_energy.material
-            )
-        return NativeEnergy(mapping, geometry, Fp, material_fields)
+        return Energy(mapping, geometry, Fp, material_fields)
 
     def make_response(u):
         # Same density and field convention as make_energy: response(p) = dE(u,p)/du.
-        args = (parameter_map, mapping, geometry, u, fixed_fields)
-        return (
-            TorchResponse(*args, material=torch_energy.material)
-            if use_torch
-            else NativeResponse(*args)
-        )
+        return Response(parameter_map, mapping, geometry, u, fixed_fields)
 
     fixed = dof.DofReduction(15, [*range(9), 12, 13, 14])
     initial = np.zeros(15)
