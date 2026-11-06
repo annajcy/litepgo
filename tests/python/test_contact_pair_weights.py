@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from litepgo import contact, mesh
+from litepgo import contact, energy, mesh
 
 
 def surface():
@@ -42,13 +42,11 @@ def test_uniform_table_scales_energy_derivatives_and_snapshot(make, area, scale)
     s = surface()
     base, weighted = make(s, area=area), make(s, uniform(s, scale), area)
     x = s.positions.ravel()
-    for e in (base, weighted):
-        e.update_pattern(x)
     assert weighted.eval_value(x) == pytest.approx(scale * base.eval_value(x), rel=1e-12)
     np.testing.assert_allclose(weighted.eval_gradient(x), scale * base.eval_gradient(x), atol=1e-12)
     np.testing.assert_allclose(weighted.eval_hessian(x).toarray(), scale * base.eval_hessian(x).toarray(), atol=1e-11)
-    np.testing.assert_allclose(weighted.eval_projected_hessian(x).toarray(),
-                               scale * base.eval_projected_hessian(x).toarray(), atol=1e-10)
+    np.testing.assert_allclose(weighted.eval_hessian(x, kind=energy.HessianKind.Projected).toarray(),
+                               scale * base.eval_hessian(x, kind=energy.HessianKind.Projected).toarray(), atol=1e-10)
     a, b = base.contact_snapshot(x), weighted.contact_snapshot(x)
     assert a.types == b.types and len(b.types) == weighted.num_active_pairs(x)
     np.testing.assert_array_equal(a.vertex_ids, b.vertex_ids)
@@ -85,7 +83,6 @@ def test_parent_multipliers_are_applied_before_vertex_vertex_merging(make, area)
     basis = np.eye(len(x)) * 1e-6
     fd_gradient = [(e.eval_value(x + dx) - e.eval_value(x - dx)) / 2e-6 for dx in basis]
     np.testing.assert_allclose(e.eval_gradient(x), fd_gradient, atol=1e-9)
-    e.update_pattern(x)
     fd_hessian = np.column_stack([(e.eval_gradient(x + dx) - e.eval_gradient(x - dx)) / 2e-6 for dx in basis])
     np.testing.assert_allclose(e.eval_hessian(x).toarray(), fd_hessian, atol=1e-8)
     reordered = mesh.TriangleMesh(p, s.cells[::-1, ::-1].copy())
@@ -111,7 +108,7 @@ def test_zero_removes_pairs_and_ccd_while_global_intersections_remain_invalid(ma
     np.testing.assert_array_equal(zero.eval_gradient(x), np.zeros_like(x))
     assert zero.num_active_pairs(x) == 0 and zero.min_active_distance(x) == float("inf")
     assert zero.contact_snapshot(x).types == ()
-    assert not zero.update_pattern(x)
+
     assert zero.eval_hessian(x).nnz == 0
     x[11] = .01  # Below min_distance, still excluded from this contact item.
     assert zero.eval_value(x) == 0 and zero.max_feasible_step(x, np.zeros_like(x)) == 1
@@ -191,8 +188,6 @@ def test_mixed_groups_match_toolkit_including_mollified_features(p, area):
     for other in (toolkit, renamed):
         assert other.eval_value(x) == pytest.approx(native.eval_value(x), rel=1e-11, abs=1e-13)
         np.testing.assert_allclose(other.eval_gradient(x), native.eval_gradient(x), rtol=1e-8, atol=1e-10)
-        for energy in (native, other):
-            energy.update_pattern(x)
         np.testing.assert_allclose(other.eval_hessian(x).toarray(), native.eval_hessian(x).toarray(), rtol=1e-7, atol=1e-8)
         assert other.num_active_pairs(x) == native.num_active_pairs(x)
         assert other.min_active_distance(x) == native.min_active_distance(x)

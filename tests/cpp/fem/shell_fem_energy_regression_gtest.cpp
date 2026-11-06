@@ -93,7 +93,7 @@ TEST(ShellFemEnergyRegression, BentStateHasCorrectGradientHessianAndNeighborCoup
     energy::test::expect_derivatives_match(energy, u, 2e-6);
     const SpMat H = energy.eval_hessian(u);
     EXPECT_GT(std::abs(H.coeff(3 * 3 + 2, 3 * 4 + 2)), 1e-8);
-    EXPECT_FALSE(energy.update_pattern(u));
+    EXPECT_NO_THROW(energy.eval_hessian(u));
 }
 
 TEST(ShellFemEnergyRegression, FeasibleStepPreventsInteriorCollapseEvenWhenEndpointIsFeasible) {

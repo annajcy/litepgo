@@ -43,3 +43,8 @@ Inspect `result.status`: `Converged`, `MaxIterations`, `StepTooSmall`, or
 `NoDescentDirection`. `result.x` is full-sized; `energy` and `gradient_norm`
 describe the returned state. A small free gradient is a stationarity criterion,
 not proof of a global minimum. Rigid modes must be constrained or penalized.
+
+Newton requests value, gradient and Hessian in one Energy evaluation. It compares
+returned full Hessian structures, rebuilding the reduced assembly and symbolic
+analysis when they change. `pattern_changed` is true on the first evaluation.
+The factorization is reused symbolically when only numerical values change.

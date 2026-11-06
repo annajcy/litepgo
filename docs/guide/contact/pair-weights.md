@@ -87,7 +87,7 @@ $$
 
 where $a_q$ is the [reference-area weight](barrier.md), or one when area
 weighting is disabled. $m_q$ is the EE mollifier, or one for VF. An external
-stiffness can still multiply the complete energy through `WeightedEnergySum`.
+stiffness can still multiply the complete energy through `WeightedSumEnergy`.
 All group multipliers are fixed with respect to positions, so value, gradient,
 and exact/projected Hessians use the same weight.
 

@@ -18,8 +18,8 @@ $$
 $$
 
 **API walkthrough.** `QuadraticEnergy(I)` and `VertexPullingEnergy` supply the
-terms. `WeightedEnergySum` weights them by 0.5 and 2.0. `AffineMappedEnergy(total,
-T, c)` performs the pullback; refresh its pattern before requesting the Hessian.
+terms. `WeightedSumEnergy` weights them by 0.5 and 2.0. `AffineMappedEnergy(total,
+T, c)` performs the pullback. Joint evaluation prepares the Hessian structure automatically.
 
 **Expected result.** The program prints energy, a two-entry gradient, and a
 2-by-2 Hessian, comparing each to the equations above. No optimization occurs;

@@ -10,33 +10,28 @@ ElementwiseResponse(input_map, transform) concatenates per-element transformed
 values and sums shared-DOF VJP contributions. ExpResponse(size) maps log parameters
 to positive coefficients. See guide/energy/parameter-transforms.
 
-Hessians are returned as scipy.sparse.csc_matrix. Before assembling a Hessian of
-an energy whose pattern is not fixed, call update_pattern(x) at that x. Values are
-always finite; evaluating at an infeasible state raises ValueError.
+Energy evaluates E(x), its gradient (n,), and full symmetric Hessian (n,n).
+Hessians are independent scipy.sparse.csc_matrix results. Required structure is
+prepared automatically for each input; no public pattern management is needed.
+eval_value, eval_gradient, and eval_hessian(x, kind=HessianKind.Exact) return
+independent results. eval(x, gradient=False, hessian=None) returns
+(value, gradient_or_None, hessian_or_None) in one numerical assembly.
+Projected is an implementation-provided solver approximation, not necessarily PSD.
+max_feasible_step bounds the entire closed segment conservatively, not maximally.
 
-MeshEnergy(map, batch_size=256) subclasses implement eval_batch.
-eval_batch(ids, x, need_gradient, need_hessian) returns (values, gradients, Hessians)
-with shapes (B,), (B,n), (B*n,n); x is (B,n), including when B=1.
-Return None for an infeasible batch (ValueError). Unrequested derivatives may be None. Optional eval_feasible_step_batch(ids, x, dx) returns (B,) bounds.
-TBB may invoke hooks concurrently; shared model state must be safe and hook
-order is unspecified. Python inputs own their data. Python execution acquires
-the GIL, so parallel speedup requires work that releases it.
+Subclass FixedPatternEnergy(pattern) or DynamicPatternEnergy(num_dofs).
+Implement eval_values(x, want_gradient, hessian_kind), returning the triple above;
+return None for infeasibility (public calls raise ValueError). Other exceptions
+propagate. Dynamic subclasses implement hessian_pattern_at(x). Optional
+feasible_step(x, dx) defaults to 1, appropriate only for unrestricted domains.
+Python inputs own their data. Hessians may be dense or sparse and must fit the
+declared structure. Fixed structure is snapshotted; dynamic structure is per call.
+The mathematical base permits reentry. MeshEnergy and composites with shared
+workspaces reject overlapping evaluation. Batch hooks may run concurrently.
 
-Numerical entry points are eval_value, eval_gradient, eval_hessian, and
-eval_projected_hessian. eval(x, gradient=False, hessian=None) returns the value
-and requested derivatives together.
-
-Subclass FixedPatternEnergy(num_dofs, pattern) or
-DynamicPatternEnergy(num_dofs, initial_pattern). Override
- eval_values(x, want_gradient, hessian_kind)
-returning (value, gradient_or_None, hessian_or_None). hessian_kind is None when
-unrequested; otherwise implement Exact or Projected as requested (there is no
-automatic projection). Hessians may be dense or SciPy sparse and must fit the
-current structural pattern. Return None for an infeasible state; other Python
-exceptions propagate. Optional feasible_step(x, dx) returns a bound in [0, 1]
-and defaults to 1. Dynamic subclasses must also override pattern_at(x).
-Evaluation arguments own their data. Call update_pattern(x) before requesting
-a dynamic Hessian; Newton manages this automatically.
+MeshEnergy(map, batch_size=256) implements eval_batch(ids, x, need_gradient,
+need_hessian), returning shapes (B,), (B,n), (B*n,n). Optional
+ eval_feasible_step_batch(ids, x, dx) returns (B,) conservative bounds.
 
 Vector responses and analytic sparse derivatives.
 
@@ -94,10 +89,10 @@ FixedPatternEnergy = _native.FixedPatternEnergy
 DynamicPatternEnergy = _native.DynamicPatternEnergy
 QuadraticEnergy = _native.QuadraticEnergy
 VertexPullingEnergy = _native.VertexPullingEnergy
-WeightedEnergySum = _native.WeightedEnergySum
+WeightedSumEnergy = _native.WeightedSumEnergy
 AffineMappedEnergy = _native.AffineMappedEnergy
 
-__all__ = ["FixedPatternEnergy", "DynamicPatternEnergy", "HessianKind", "Energy", "QuadraticEnergy", "VertexPullingEnergy", "WeightedEnergySum", "AffineMappedEnergy"]
+__all__ = ["FixedPatternEnergy", "DynamicPatternEnergy", "HessianKind", "Energy", "QuadraticEnergy", "VertexPullingEnergy", "WeightedSumEnergy", "AffineMappedEnergy"]
 
 from litepgo._core.energy import Response, FixedPatternResponse, DynamicPatternResponse
 

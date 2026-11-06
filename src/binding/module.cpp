@@ -51,7 +51,7 @@ NB_MODULE(_core, m) {
     litepgo::energy::binding::bind_mesh_energy(energy);
     litepgo::energy::binding::bind_quadratic_energy(energy);
     litepgo::energy::binding::bind_vertex_pulling_energy(energy);
-    litepgo::energy::binding::bind_weighted_energy_sum(energy);
+    litepgo::energy::binding::bind_weighted_sum_energy(energy);
     litepgo::energy::binding::bind_affine_mapped_energy(energy);
     litepgo::energy::binding::bind_response(energy);
     litepgo::energy::binding::bind_fixed_pattern_response(energy);

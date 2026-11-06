@@ -4,7 +4,7 @@
 #include "litepgo/dof/constant_dof_map.hpp"
 #include "litepgo/energy/scalar/mesh_energy.hpp"
 #include "litepgo/energy/scalar/quadratic_energy.hpp"
-#include "litepgo/energy/scalar/weighted_energy_sum.hpp"
+#include "litepgo/energy/scalar/weighted_sum_energy.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
@@ -66,7 +66,7 @@ NewtonResult solve(litepgo::energy::Energy& energy, const Vec& x0, std::vector<i
 // raises the energy, so the line search must give up.
 class WrongGradientEnergy final : public litepgo::energy::FixedPatternEnergy {
   public:
-    explicit WrongGradientEnergy(int n) : energy::FixedPatternEnergy(n, energy::test::chain_pattern(n, {})) {}
+    explicit WrongGradientEnergy(int n) : energy::FixedPatternEnergy(energy::test::chain_pattern(n, {})) {}
 
   private:
     double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian,
@@ -84,7 +84,7 @@ class WrongGradientEnergy final : public litepgo::energy::FixedPatternEnergy {
 // A broken energy must be rejected before the linear solve.
 class BrokenHessianEnergy final : public litepgo::energy::FixedPatternEnergy {
   public:
-    explicit BrokenHessianEnergy(int n) : energy::FixedPatternEnergy(n, energy::test::chain_pattern(n, {})) {}
+    explicit BrokenHessianEnergy(int n) : energy::FixedPatternEnergy(energy::test::chain_pattern(n, {})) {}
 
   private:
     double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian,
@@ -150,7 +150,7 @@ TEST(Newton, PropagatesNeoHookeanTrialOverflowWithoutRetrying) {
     Vec load = Vec::Zero(9);
     load[0] = -1;
     auto loading = std::make_shared<energy::QuadraticEnergy>(SpMat(9, 9), load);
-    energy::WeightedEnergySum energy({{elastic, 1}, {loading, 1}});
+    energy::WeightedSumEnergy energy({{elastic, 1}, {loading, 1}});
     ASSERT_TRUE(std::isfinite(energy.eval_value(x0)));
     NewtonOptions opts = options();
     opts.max_iterations = 1;
@@ -251,7 +251,7 @@ TEST(Newton, StaysFeasibleAgainstABarrier) {
     SpMat A(3, 3);
     A.setIdentity();
     const Vec b = (Vec(3) << -3.0, 0.0, 0.0).finished();
-    auto energy = litepgo::energy::WeightedEnergySum({{std::make_shared<litepgo::energy::QuadraticEnergy>(A, b), 1.0},
+    auto energy = litepgo::energy::WeightedSumEnergy({{std::make_shared<litepgo::energy::QuadraticEnergy>(A, b), 1.0},
                                                       {std::make_shared<HalfSpaceBarrier>(3, 0), 1.0}});
     std::vector<NewtonStep> steps;
     const NewtonResult result = solve(energy, Vec::Zero(3), {}, options(1e-9), &steps);
@@ -324,3 +324,33 @@ TEST(Newton, ChecksItsArguments) {
 }
 
 } // namespace litepgo::solver::test
+
+TEST(Newton, ReusesSymbolicAnalysisForUnchangedReturnedStructure) {
+    using namespace litepgo;
+    struct CountingSolver final : linalg::SparseSolver {
+        int analyses = 0;
+        linalg::EigenLDLT solver;
+        bool analyze_pattern(const SpMat& A) override {
+            ++analyses;
+            return solver.analyze(A);
+        }
+        bool factor_values(const SpMat& A) override {
+            return solver.factorize(A);
+        }
+        void solve_factored(const ConstVecRef& rhs, VecRef x) const override {
+            solver.solve(rhs, x);
+        }
+    } linear;
+    energy::test::DoubleWellChain energy(3);
+    solver::NewtonOptions options;
+    options.gradient_tolerance = 1e-8;
+    std::vector<solver::NewtonStep> steps;
+    const auto result = solver::newton_solve(energy, dof::DofReduction(3, {}), Vec::Constant(3, 2.), options, linear,
+                                             [&](const auto& step) { steps.push_back(step); });
+    EXPECT_EQ(result.status, solver::NewtonStatus::Converged);
+    ASSERT_GT(steps.size(), 2);
+    EXPECT_EQ(linear.analyses, 1);
+    EXPECT_TRUE(steps.front().pattern_changed);
+    for (size_t i = 1; i < steps.size(); ++i)
+        EXPECT_FALSE(steps[i].pattern_changed);
+}

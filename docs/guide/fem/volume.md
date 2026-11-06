@@ -79,7 +79,6 @@ Energy = fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis,
                                   fem.TetCentroidQuadrature]
 elastic = Energy(mapping, geometry, plastic, material)
 u = np.zeros(mapping.num_dofs)
-elastic.update_pattern(u)
 value, gradient, hessian = elastic.eval(u, gradient=True,
                                        hessian=energy.HessianKind.Exact)
 assert abs(value) < 1e-12

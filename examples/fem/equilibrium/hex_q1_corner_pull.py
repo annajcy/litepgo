@@ -77,7 +77,7 @@ def main():
 
     # Static equilibrium minimizes Pi(u) = E_elastic(u) + E_pulling(u); the springs
     # remove all rigid motions, so no DOF is fixed.
-    potential = energy.WeightedEnergySum([(elastic, 1.0), (pulling, 1.0)])
+    potential = energy.WeightedSumEnergy([(elastic, 1.0), (pulling, 1.0)])
     unconstrained = dof.DofReduction(elastic.num_dofs, [])
     initial = np.zeros(elastic.num_dofs)
     options = solver.NewtonOptions()

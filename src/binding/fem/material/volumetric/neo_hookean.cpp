@@ -33,7 +33,7 @@ template <class M> void bind_neo_hookean(nb::module_& m, const char* name) {
                                          VolumetricMaterialInputs{dF, dFp, dtheta});
         },
         "F"_a, "Fp"_a, "theta"_a, "dF"_a, "dFp"_a, "dtheta"_a,
-        "Largest alpha in [0, 1] keeping the inputs valid along inputs + t * increments.");
+        "A conservative alpha in [0, 1] keeping inputs + t * increments valid for every t in [0, alpha].");
 }
 } // namespace
 

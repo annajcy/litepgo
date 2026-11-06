@@ -3,7 +3,7 @@
 // Run: build/release/examples/fem/equilibrium/hex_hermite_corner_pull
 
 #include "litepgo/energy/scalar/vertex_pulling_energy.hpp"
-#include "litepgo/energy/scalar/weighted_energy_sum.hpp"
+#include "litepgo/energy/scalar/weighted_sum_energy.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
 
     // Static equilibrium minimizes Pi(u) = E_elastic(u) + E_pulling(u); the springs
     // remove all rigid motions, so no DOF is fixed.
-    energy::WeightedEnergySum potential({{elastic, 1}, {pulling, 1}});
+    energy::WeightedSumEnergy potential({{elastic, 1}, {pulling, 1}});
     const dof::DofReduction unconstrained(elastic->num_dofs(), {});
     const Vec initial = Vec::Zero(elastic->num_dofs());
     solver::NewtonOptions options;

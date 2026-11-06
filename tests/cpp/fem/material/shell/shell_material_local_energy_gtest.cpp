@@ -244,7 +244,7 @@ TEST(ShellMaterialLocalEnergy2D, MeshEnergyAssemblesIntegratedStencilDerivatives
     const double uniform_density = 0.2 / 2 * 5 * 0.21 * 0.21;
     EXPECT_NEAR(energy.eval_value(0.1 * X_packed), 5.5 * uniform_density, 1e-13);
     EXPECT_DOUBLE_EQ(energy.eval_value(Vec::Zero(18)), 0);
-    EXPECT_FALSE(energy.update_pattern(u));
+    EXPECT_NO_THROW(energy.eval_hessian(u));
 }
 } // namespace
 

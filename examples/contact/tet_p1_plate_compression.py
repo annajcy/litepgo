@@ -99,7 +99,7 @@ def main():
         positive_side=False,
     )
     kappa = 1e7
-    potential = energy.WeightedEnergySum(
+    potential = energy.WeightedSumEnergy(
         [
             (elastic, 1.0),
             (energy.AffineMappedEnergy(barrier, W, rest_surface), kappa),

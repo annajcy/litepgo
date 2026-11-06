@@ -83,7 +83,6 @@ def test_energy_example_independent_analytic_values(api_modules, x, value, g, H)
     x = np.array(x)
     assert obj.eval_value(x) == value
     np.testing.assert_array_equal(obj.eval_gradient(x), g)
-    obj.update_pattern(x)
     for kind in (energy.HessianKind.Exact, energy.HessianKind.Projected):
         for want_g in (False, True):
             actual, gradient, hessian = obj.eval(x, gradient=want_g, hessian=kind)
@@ -131,15 +130,13 @@ def test_example_pattern_errors_and_zeroing(api_modules):
     import numpy as np
 
     obj = api_modules[0].Coupled()
-    with pytest.raises(RuntimeError, match="outside pattern"):
-        obj.eval_hessian(np.ones(2))
-    assert obj.update_pattern(np.ones(2))
+    assert obj.eval_hessian(np.ones(2)).nnz == 4
+
     for x in (-np.ones(2), np.zeros(2)):
         np.testing.assert_array_equal(obj.eval_hessian(x).toarray(), np.eye(2))
-    assert obj.update_pattern(-np.ones(2))
-    assert not obj.update_pattern(-np.ones(2))
-    with pytest.raises(RuntimeError, match="outside pattern"):
-        obj.eval_hessian(np.ones(2))
+
+
+    assert obj.eval_hessian(np.ones(2)).nnz == 4
 
     response = api_modules[1].NonlinearResidual()
     for x in (np.ones(2), -np.ones(2), np.zeros(2), np.ones(2)):

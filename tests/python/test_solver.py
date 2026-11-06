@@ -4,7 +4,7 @@ import scipy.sparse as sp
 
 from litepgo.energy import FixedPatternResponse
 from litepgo.dof import DofReduction
-from litepgo.energy import AffineMappedEnergy, HessianKind, QuadraticEnergy, WeightedEnergySum
+from litepgo.energy import AffineMappedEnergy, HessianKind, QuadraticEnergy, WeightedSumEnergy
 from litepgo.linalg.sparse_solver import AutoIndefiniteSparseSolver, EigenLDLT
 from litepgo.solver import NewtonOptions, NewtonStatus, newton_solve
 
@@ -51,7 +51,7 @@ def test_fixed_dofs_keep_their_initial_values():
 def test_solves_through_composites():
     first, second = QuadraticEnergy(spd(4), np.ones(4)), QuadraticEnergy(sp.identity(4, format="csc"))
     T = sp.csc_matrix(np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 0.0], [0.0, -1.0]]))
-    energy = AffineMappedEnergy(WeightedEnergySum([(first, 1.0), (second, 0.5)]), T)
+    energy = AffineMappedEnergy(WeightedSumEnergy([(first, 1.0), (second, 0.5)]), T)
     result = newton_solve(energy, free(2), np.zeros(2), NewtonOptions(gradient_tolerance=1e-12), EigenLDLT())
     H = T.T @ (spd(4) + 0.5 * sp.identity(4)) @ T
     np.testing.assert_allclose(result.x, np.linalg.solve(H.toarray(), -(T.T @ np.ones(4))), atol=1e-12)

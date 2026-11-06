@@ -60,11 +60,14 @@ def test_required_overrides_and_invalid_pattern():
 def test_sparse_column_merge_retains_zero_slots_and_rejects_outside_entries(kind):
     shape = (7, 1) if kind == "response" else (7, 7)
     pattern = sp.csc_matrix(([1., 1., 1.], ([1, 3, 5], [0, 0, 0])), shape=shape)
+    if kind == "energy":
+        pattern = (pattern + pattern.T).tocsc()
     outside = 0.
 
     def derivative():
-        return sp.csc_matrix(([0., 2., outside, 4., 0.],
+        matrix = sp.csc_matrix(([0., 2., outside, 4., 0.],
                               ([0, 1, 2, 3, 6], [0, 0, 0, 0, 0])), shape=shape)
+        return (matrix + matrix.T).tocsc() if kind == "energy" else matrix
 
     class SparseResponse(energy.FixedPatternResponse):
         def eval_impl(self, x, need):
@@ -74,18 +77,18 @@ def test_sparse_column_merge_retains_zero_slots_and_rejects_outside_entries(kind
         def eval_values(self, x, want_gradient, hessian_kind):
             return 0., np.zeros(7) if want_gradient else None, derivative() if hessian_kind is not None else None
 
-    obj = SparseResponse(pattern) if kind == "response" else SparseEnergy(7, pattern)
+    obj = SparseResponse(pattern) if kind == "response" else SparseEnergy(pattern)
     evaluate = obj.eval_jacobian if kind == "response" else obj.eval_hessian
     x = np.zeros(shape[1])
     actual = evaluate(x)
-    np.testing.assert_array_equal(actual.indices, [1, 3, 5])
+    np.testing.assert_array_equal(actual.indices, pattern.indices)
     np.testing.assert_array_equal(actual.indptr, pattern.indptr)
-    np.testing.assert_array_equal(actual.data, [2., 4., 0.])
+    np.testing.assert_array_equal(actual.data, [2., 4., 0.] if kind == "response" else [2., 4., 0., 2., 4., 0.])
     outside = 1.
     with pytest.raises(RuntimeError, match="outside pattern"):
         evaluate(x)
     outside = 0.
-    np.testing.assert_array_equal(evaluate(x).data, [2., 4., 0.])
+    np.testing.assert_array_equal(evaluate(x).data, actual.data)
 
 
 def test_products_prepare_dynamic_jacobian_without_explicit_update():

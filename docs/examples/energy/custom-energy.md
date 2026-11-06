@@ -17,14 +17,14 @@ $$
 $$
 
 **API walkthrough.** `Quadratic` derives from `FixedPatternEnergy` with diagonal
-structure. `Coupled` derives from `DynamicPatternEnergy`; `pattern_at` returns
+structure. `Coupled` derives from `DynamicPatternEnergy`; `hessian_pattern_at` returns
 full structure when $x_0+x_1>0$, diagonal otherwise. Both implement
 `eval_values`, returning requested derivatives and `None` for unused outputs.
 Both energies are convex, so Exact and Projected Hessians can coincide here.
 
-Refresh structure with `update_pattern` before Hessian assembly. Value-only
-calls do not need a refresh. C++ receives output pointers; Python returns owning
-arrays. A second refresh at the same state reports no structural change.
+Hessian calls automatically prepare structure for the supplied input. Public C++
+and Python calls return independent results. Native subclass hooks receive
+prepared local buffers; Python hooks return arrays mapped into that structure.
 
 **Expected result.** At $(1,1)$, $E_0=0.5$, $E_1=5$, and
 $\nabla E_1=(9,9)$. The stored Hessian count follows `2 -> 4 -> 2` as the

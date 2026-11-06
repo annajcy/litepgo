@@ -4,7 +4,7 @@
 #include "litepgo/dof/surface_kinematics.hpp"
 #include "litepgo/dof/vertex_displacement_map.hpp"
 #include "litepgo/energy/scalar/affine_mapped_energy.hpp"
-#include "litepgo/energy/scalar/weighted_energy_sum.hpp"
+#include "litepgo/energy/scalar/weighted_sum_energy.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
     auto bottom_plate = std::make_shared<contact::PlanePenaltyEnergy>(n, 2, bottom + 0.2 * height, 20.0);
     auto top_plate = std::make_shared<contact::PlanePenaltyEnergy>(n, 2, bottom + 1.8 * height + gap, 20.0, false);
     const double kappa = 1e7;
-    energy::WeightedEnergySum potential({
+    energy::WeightedSumEnergy potential({
         {elastic, 1},
         {std::make_shared<energy::AffineMappedEnergy>(barrier, W, kinematics.rest_positions()), kappa},
         {std::make_shared<energy::AffineMappedEnergy>(bottom_plate, W, kinematics.rest_positions()), 1},

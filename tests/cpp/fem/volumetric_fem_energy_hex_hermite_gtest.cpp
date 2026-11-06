@@ -1,4 +1,5 @@
 #include "../testing/element_formula_energy.hpp"
+#include "../testing/evaluate_energy.hpp"
 
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
@@ -162,8 +163,8 @@ TEST(HexHermiteFemEnergy, PhysicalDofGradientAndHessianMatchFiniteDifferences) {
         x[j] += 0.005 * std::sin(0.7 * j + 0.3);
     ASSERT_EQ(x.size(), 288);
     Vec g;
-    SpMat sparse_h = energy.hessian_pattern();
-    const double value = energy.eval(x, &g, &sparse_h);
+    SpMat sparse_h;
+    const double value = litepgo::testing::evaluate_energy(energy, x, &g, &sparse_h);
     const Eigen::MatrixXd H(sparse_h);
     ASSERT_EQ(g.size(), x.size());
     ASSERT_EQ(H.rows(), x.size());
@@ -178,7 +179,9 @@ TEST(HexHermiteFemEnergy, PhysicalDofGradientAndHessianMatchFiniteDifferences) {
         Vec plus = x, minus = x, plus_g, minus_g;
         plus[j] += h;
         minus[j] -= h;
-        fd_g[j] = (energy.eval(plus, &plus_g, nullptr) - energy.eval(minus, &minus_g, nullptr)) / (2 * h);
+        fd_g[j] = (litepgo::testing::evaluate_energy(energy, plus, &plus_g, nullptr) -
+                   litepgo::testing::evaluate_energy(energy, minus, &minus_g, nullptr)) /
+                  (2 * h);
         fd_h.col(j) = (plus_g - minus_g) / (2 * h);
     }
     EXPECT_LT((g - fd_g).norm() / (1 + g.norm()), 2e-7);
@@ -198,8 +201,8 @@ TEST(HexHermiteFemEnergy, PhysicalDofGradientAndHessianMatchFiniteDifferences) {
                              (4 * step * step);
         EXPECT_NEAR(d.dot(H * v), mixed, (10 * step * step + 1e-7) * (1 + H.norm()));
     }
-    SpMat h_only = energy.hessian_pattern();
-    EXPECT_NEAR(energy.eval(x, nullptr, &h_only), value, 1e-13);
+    SpMat h_only;
+    EXPECT_NEAR(litepgo::testing::evaluate_energy(energy, x, nullptr, &h_only), value, 1e-13);
     EXPECT_LT((Eigen::MatrixXd(h_only) - H).norm(), 1e-13 * (1 + H.norm()));
 }
 

@@ -86,11 +86,10 @@ Always state which quantity a vector represents before reshaping it.
 ## Sparse structure is part of the contract
 
 A sparse **pattern** records every entry that may be nonzero, including entries
-whose present value is zero. Before a standalone Hessian or Jacobian request,
-call `update_pattern(z)`. When it returns true, native callers replace their
-output buffer with a copy of the current pattern. Python allocates that buffer
-for you. Values and gradients use the current input without requiring a pattern
-refresh. Solvers manage pattern updates themselves.
+whose present value is zero. Ordinary Energy and Response evaluation prepares
+required structure automatically and returns independent results. Solvers compare
+returned matrix structures to reuse symbolic factorization; callers do not manage
+current patterns or output buffers.
 
 Exact derivatives and solver approximations have distinct meanings.
 `HessianKind.Exact` is the energy's exact second derivative.
@@ -105,9 +104,10 @@ objects borrow other fields; those inputs must outlive them. Python bindings kee
 borrowed field inputs alive. An energy may own arrays of fields while a field
 inside that array still borrows an external input: keep that dependency alive too.
 
-Energy objects and Response implementations with shared workspaces (such as
-MeshResponse) reject overlapping calls. The mathematical Response base has no
-global concurrency guard; custom implementations own their thread-safety contract.
+Energy and Response implementations with shared workspaces (such as MeshEnergy,
+MeshResponse, and cached energy composites) reject overlapping evaluation. The
+mathematical Energy and Response bases have no global concurrency guard; custom
+implementations own their thread-safety contract.
 Batched callbacks can
 run concurrently through TBB, so captured data must support concurrent reads and
 must not depend on callback order. Python callbacks acquire the GIL; numerical

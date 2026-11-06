@@ -49,7 +49,7 @@ Area weighting does not change the activation distance, minimum separation or CC
 It alone does not implement the full convergent IPC formulation or add friction.
 
 The raw barrier formula above is unchanged by area weighting. Set its coefficient
-directly through `WeightedEnergySum`; no normalization conversion is applied.
+directly through `WeightedSumEnergy`; no normalization conversion is applied.
 Calibrate the coefficient for the barrier definition, area weighting and length
 unit being used.
 

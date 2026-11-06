@@ -25,7 +25,7 @@ add_executable(litepgo_energy_tests
     energy/scalar/fixed_pattern_energy_gtest.cpp
     energy/scalar/quadratic_energy_gtest.cpp
     energy/scalar/vertex_pulling_energy_gtest.cpp
-    energy/scalar/weighted_energy_sum_gtest.cpp
+    energy/scalar/weighted_sum_energy_gtest.cpp
 )
 target_link_libraries(litepgo_energy_tests PRIVATE
     litepgo::fem litepgo::warnings GTest::gtest_main)

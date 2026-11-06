@@ -7,9 +7,9 @@ before overriding the numerical hooks.
 
 ## Implement a scalar energy
 
-Derive from `FixedPatternEnergy(num_dofs, pattern)` or
-`DynamicPatternEnergy(num_dofs, initial_pattern)`. The latter additionally
-implements `pattern_at(x)`. In Python, override
+Derive from `FixedPatternEnergy(pattern)` or
+`DynamicPatternEnergy(num_dofs)`. The latter additionally
+implements `hessian_pattern_at(x)`. In Python, override
 
 ```python
 def eval_values(self, x, want_gradient, hessian_kind):
@@ -18,17 +18,28 @@ def eval_values(self, x, want_gradient, hessian_kind):
     ...
 ```
 
-Return `None` for an infeasible state. Return dense or SciPy sparse derivatives
+Return `None` for an infeasible state. Return a dense gradient and a dense or SciPy sparse Hessian
 with correct dimensions and no nonzero entries outside the declared structure.
 Implement both requested Hessian kinds; no automatic projection is added to a
 custom scalar subclass. Optional `feasible_step(x, dx)` defaults to one, which
 is appropriate only if the complete finite segment is feasible.
 
-C++ overrides `eval_values(x, gradient*, hessian*, kind)` and, for a dynamic
-energy, `refresh_pattern(x)` returning an optional sparse pattern. Private hooks
-belong to the derived class; callers use the validated public API. The
+C++ overrides `double eval_values(x, gradient*, hessian*, kind) const` and, for a
+dynamic energy, `SpMat hessian_pattern_at(x) const`. Null derivative pointers
+mean that output was not requested; `kind` matters only when the Hessian pointer
+is non-null. Overwrite every requested gradient and stored Hessian entry,
+including zeros, without changing the prepared Hessian structure. Subclass hooks
+belong to the implementation; callers use the validated public API. The
 [custom-energy example](../../examples/energy/custom-energy.md) includes
 complete implementations in both languages.
+
+For implementations that naturally produce their own sparse matrices, derive
+from `Energy(num_dofs)` directly in C++ and override
+`eval_impl(x, need_gradient, optional_hessian_kind) const`, returning an
+`EnergyEvaluation` with exactly the requested outputs. `feasible_step` is shared
+by both construction paths. The internal `detail::SparseEnergy` adapter supplies
+prepared local buffers for Fixed/Dynamic subclasses; callers never use those
+buffers. `MeshEnergy` retains its batch hooks and protects its shared workspace.
 
 ## Implement a vector response
 

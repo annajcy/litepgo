@@ -11,7 +11,7 @@ from litepgo.energy import (
     HessianKind,
     QuadraticEnergy,
     VertexPullingEnergy,
-    WeightedEnergySum,
+    WeightedSumEnergy,
 )
 
 
@@ -36,8 +36,8 @@ def test_quadratic_energy_matches_numpy():
     hessian = energy.eval_hessian(x)
     assert isinstance(hessian, sp.csc_matrix)
     np.testing.assert_array_equal(hessian.toarray(), dense)
-    np.testing.assert_array_equal(energy.eval_projected_hessian(x).toarray(), dense)
-    assert energy.num_dofs == 5 and energy.has_fixed_pattern
+    np.testing.assert_array_equal(energy.eval_hessian(x, kind=HessianKind.Projected).toarray(), dense)
+    assert energy.num_dofs == 5
 
 
 def test_quadratic_energy_rejects_invalid_input():
@@ -58,18 +58,18 @@ def test_eval_returns_what_was_asked():
     np.testing.assert_array_equal(hessian.toarray(), laplacian(3).toarray())
 
 
-def test_pattern_queries():
+def test_hessian_result_and_feasibility():
     energy = QuadraticEnergy(laplacian(4))
-    pattern = energy.hessian_pattern
+    pattern = energy.eval_hessian(np.zeros(4))
     assert isinstance(pattern, sp.csc_matrix)
-    assert pattern.nnz == laplacian(4).nnz and not pattern.data.any()
-    assert energy.update_pattern(np.zeros(4)) is False
+    assert pattern.nnz == laplacian(4).nnz
+
     assert energy.max_feasible_step(np.zeros(4), np.ones(4)) == 1.0
 
 
-def test_weighted_energy_sum_matches_the_weighted_terms():
+def test_weighted_sum_energy_matches_the_weighted_terms():
     first, second = quadratic(6, 0), quadratic(6, 1)
-    total = WeightedEnergySum([(first, 2.0), (second, 0.5)])
+    total = WeightedSumEnergy([(first, 2.0), (second, 0.5)])
     x = np.linspace(-1.0, 1.0, 6)
     assert total.eval_value(x) == pytest.approx(2.0 * first.eval_value(x) + 0.5 * second.eval_value(x))
     np.testing.assert_allclose(total.eval_gradient(x), 2.0 * first.eval_gradient(x) + 0.5 * second.eval_gradient(x))
@@ -81,9 +81,9 @@ def test_weighted_energy_sum_matches_the_weighted_terms():
                                    [(QuadraticEnergy(laplacian(3)), float("nan"))],
                                    [(QuadraticEnergy(laplacian(3)), 1.0), (QuadraticEnergy(laplacian(4)), 1.0)]],
                          ids=["empty", "zero_weight", "nan_weight", "mismatched_dofs"])
-def test_weighted_energy_sum_rejects_invalid_terms(terms):
+def test_weighted_sum_energy_rejects_invalid_terms(terms):
     with pytest.raises(ValueError):
-        WeightedEnergySum(terms)
+        WeightedSumEnergy(terms)
 
 
 def test_affine_mapped_energy_matches_dense_products():
@@ -100,9 +100,9 @@ def test_affine_mapped_energy_matches_dense_products():
     np.testing.assert_allclose(mapped.eval_hessian(z).toarray(), dense_T.T @ inner.eval_hessian(x).toarray() @ dense_T)
 
 
-def test_weighted_energy_sum_allows_negative_weights():
+def test_weighted_sum_energy_allows_negative_weights():
     first, second = quadratic(4, 6), quadratic(4, 7)
-    total = WeightedEnergySum([(first, 1.0), (second, -0.25)])
+    total = WeightedSumEnergy([(first, 1.0), (second, -0.25)])
     x = np.linspace(-1.0, 1.0, 4)
     assert total.eval_value(x) == pytest.approx(first.eval_value(x) - 0.25 * second.eval_value(x))
 
@@ -120,7 +120,7 @@ def test_composites_keep_their_children_alive():
     first, second = quadratic(4, 4), quadratic(4, 5)
     x = np.ones(4)
     expected = first.eval_value(x) + second.eval_value(x)
-    total = WeightedEnergySum([(first, 1.0), (second, 1.0)])
+    total = WeightedSumEnergy([(first, 1.0), (second, 1.0)])
     mapped = AffineMappedEnergy(total, sp.identity(4, format="csc"))
     del first, second, total
     gc.collect()
@@ -138,7 +138,7 @@ def test_checks_vector_sizes_and_types():
 def test_energy_base_is_abstract():
     with pytest.raises(TypeError):
         Energy()
-    assert issubclass(WeightedEnergySum, Energy) and issubclass(AffineMappedEnergy, Energy)
+    assert issubclass(WeightedSumEnergy, Energy) and issubclass(AffineMappedEnergy, Energy)
 
 
 def test_vertex_pulling_energy_matches_numpy():
@@ -153,7 +153,7 @@ def test_vertex_pulling_energy_matches_numpy():
     np.testing.assert_allclose(energy.eval_gradient(x), expected_gradient)
     expected_hessian = np.zeros((7, 7))
     expected_hessian[dofs.ravel(), dofs.ravel()] = 2.0
-    np.testing.assert_array_equal(energy.eval_projected_hessian(x).toarray(), expected_hessian)
+    np.testing.assert_array_equal(energy.eval_hessian(x, kind=HessianKind.Projected).toarray(), expected_hessian)
     with pytest.raises(ValueError, match="distinct"):
         VertexPullingEnergy(7, np.array([[0, 1, 2], [2, 4, 5]], dtype=np.int32), targets, 2.0)
     with pytest.raises(ValueError):
@@ -180,7 +180,7 @@ def test_mesh_energy_stencil_assembly_and_callback_lifetime():
     assert assembled.eval_value(x) == pytest.approx(0.5 * x @ H @ x)
     np.testing.assert_allclose(assembled.eval_gradient(x), H @ x)
     np.testing.assert_allclose(assembled.eval_hessian(x).toarray(), H)
-    np.testing.assert_allclose(assembled.eval_projected_hessian(x).toarray(), H, atol=1e-14)
+    np.testing.assert_allclose(assembled.eval_hessian(x, kind=HessianKind.Projected).toarray(), H, atol=1e-14)
     for owned, snapshot in retained:
         np.testing.assert_array_equal(owned, snapshot)
     assert assembled.max_feasible_step(x, x) == 1.
@@ -221,7 +221,7 @@ def test_batched_mesh_energy_variable_stencils(batch_size):
     np.testing.assert_allclose(actual.eval_value(x), expected.eval_value(x))
     np.testing.assert_allclose(actual.eval_gradient(x), expected.eval_gradient(x))
     np.testing.assert_allclose(actual.eval_hessian(x).toarray(), expected.eval_hessian(x).toarray())
-    np.testing.assert_allclose(actual.eval_projected_hessian(x).toarray(), expected.eval_projected_hessian(x).toarray())
+    np.testing.assert_allclose(actual.eval_hessian(x, kind=HessianKind.Projected).toarray(), expected.eval_hessian(x, kind=HessianKind.Projected).toarray())
     for ids, retained, copy in seen:
         assert len(ids) <= batch_size
         np.testing.assert_array_equal(retained, copy)
@@ -264,7 +264,7 @@ def test_batched_mesh_energy_projection_empty_and_recovery():
         obj.eval_hessian(np.zeros(1))
     fail = False
     np.testing.assert_allclose(obj.eval_hessian(np.zeros(1)).toarray(), [[1.]])
-    np.testing.assert_allclose(obj.eval_projected_hessian(np.zeros(1)).toarray(), [[2.]])
+    np.testing.assert_allclose(obj.eval_hessian(np.zeros(1), kind=HessianKind.Projected).toarray(), [[2.]])
     empty = BatchEnergyFixture(StencilDofMap(1, [], 3), lambda *args: pytest.fail('empty batch invoked'))
     assert empty.eval_value(np.zeros(3)) == 0.
     np.testing.assert_array_equal(empty.eval_gradient(np.zeros(3)), np.zeros(3))

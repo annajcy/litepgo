@@ -13,11 +13,13 @@ namespace {
 
 // A, compressed, after checking that it is square and symmetric in pattern and
 // values (up to a relative 1e-12, for products like B + B^T computed in floating point).
-SpMat checked_symmetric(SpMat A) {
+const SpMat& checked_symmetric(SpMat& A) {
     if (A.rows() != A.cols()) {
         throw std::invalid_argument("QuadraticEnergy requires a square matrix");
     }
     A.makeCompressed();
+    if (!A.coeffs().allFinite())
+        throw std::invalid_argument("QuadraticEnergy requires finite matrix entries");
     if (!linalg::is_canonical(A)) {
         throw std::invalid_argument("QuadraticEnergy requires sorted row indices and no duplicate entries");
     }
@@ -39,21 +41,15 @@ SpMat checked_symmetric(SpMat A) {
 
 } // namespace
 
-QuadraticEnergy::Setup QuadraticEnergy::checked_setup(SpMat A, Vec b) {
-    A = checked_symmetric(std::move(A));
-    if (b.size() == 0) {
-        b = Vec::Zero(A.rows());
-    }
-    if (b.size() != A.rows()) {
+QuadraticEnergy::QuadraticEnergy(SpMat A, Vec b)
+    : FixedPatternEnergy(checked_symmetric(A)), A_(std::move(A)), b_(std::move(b)) {
+    if (b_.size() == 0)
+        b_ = Vec::Zero(A_.rows());
+    if (!b_.allFinite())
+        throw std::invalid_argument("QuadraticEnergy requires finite linear coefficients");
+    if (b_.size() != A_.rows())
         throw std::invalid_argument("QuadraticEnergy: b must have as many entries as A has rows");
-    }
-    return {std::move(A), std::move(b)};
 }
-
-QuadraticEnergy::QuadraticEnergy(SpMat A, Vec b) : QuadraticEnergy(checked_setup(std::move(A), std::move(b))) {}
-
-QuadraticEnergy::QuadraticEnergy(Setup setup)
-    : FixedPatternEnergy(static_cast<int>(setup.A.rows()), setup.A), A_(std::move(setup.A)), b_(std::move(setup.b)) {}
 
 double QuadraticEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const {
     const Vec Ax = A_ * x;

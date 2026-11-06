@@ -1,3 +1,4 @@
+#include "../testing/evaluate_energy.hpp"
 
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
@@ -59,8 +60,8 @@ TEST(HexQ1FemEnergy, GradientAndHessianMatchFiniteDifferences) {
             for (int j = 0; j < x.size(); ++j)
                 x[j] += 0.02 * std::sin(j + 0.3);
         Vec g;
-        SpMat sparse_h = energy.hessian_pattern();
-        energy.eval(x, &g, &sparse_h);
+        SpMat sparse_h;
+        litepgo::testing::evaluate_energy(energy, x, &g, &sparse_h);
         const Eigen::MatrixXd H(sparse_h);
         ASSERT_EQ(g.size(), x.size());
         ASSERT_EQ(H.rows(), x.size());
@@ -74,7 +75,9 @@ TEST(HexQ1FemEnergy, GradientAndHessianMatchFiniteDifferences) {
                 Vec plus = x, minus = x, plus_g, minus_g;
                 plus[j] += h;
                 minus[j] -= h;
-                fd_g[j] = (energy.eval(plus, &plus_g, nullptr) - energy.eval(minus, &minus_g, nullptr)) / (2 * h);
+                fd_g[j] = (litepgo::testing::evaluate_energy(energy, plus, &plus_g, nullptr) -
+                           litepgo::testing::evaluate_energy(energy, minus, &minus_g, nullptr)) /
+                          (2 * h);
                 fd_h.col(j) = (plus_g - minus_g) / (2 * h);
             }
             EXPECT_LT((g - fd_g).norm() / (1 + g.norm()), 10 * h * h + 1e-9);
@@ -121,8 +124,8 @@ TEST(HexQ1FemEnergy, CachedElementIntegratesTranslatedWarpedGeometryAndIndepende
     auto energy = make_hex_q1_energy(X_nodes);
     const Vec x = 0.1 * X_nodes;
     Vec g = Vec::Ones(1);
-    SpMat H = energy.hessian_pattern();
-    const double value = energy.eval(x, &g, &H);
+    SpMat H;
+    const double value = litepgo::testing::evaluate_energy(energy, x, &g, &H);
     // det(dX/dxi) = cell_width * (1 - 0.08*z^2); integrate over both cells.
     const double volume = 3 * (1 - 0.08 / 3);
     EXPECT_NEAR(value,
@@ -130,13 +133,13 @@ TEST(HexQ1FemEnergy, CachedElementIntegratesTranslatedWarpedGeometryAndIndepende
                              {1.1 * Eigen::Matrix3d::Identity(), Eigen::Matrix3d::Identity(), Eigen::Vector2d(2, 3)}),
                 1e-13);
     Vec g_only = Vec::Constant(2, 7);
-    SpMat H_only = energy.hessian_pattern();
+    SpMat H_only;
     EXPECT_DOUBLE_EQ(energy.eval_value(x), value);
-    EXPECT_DOUBLE_EQ(energy.eval(x, &g_only, nullptr), value);
-    EXPECT_DOUBLE_EQ(energy.eval(x, nullptr, &H_only), value);
+    EXPECT_DOUBLE_EQ(litepgo::testing::evaluate_energy(energy, x, &g_only, nullptr), value);
+    EXPECT_DOUBLE_EQ(litepgo::testing::evaluate_energy(energy, x, nullptr, &H_only), value);
     EXPECT_TRUE(g_only.isApprox(g, 1e-13));
     EXPECT_TRUE(Eigen::MatrixXd(H_only).isApprox(Eigen::MatrixXd(H), 1e-13));
-    EXPECT_DOUBLE_EQ(energy.eval(x, &g, &H), value);
+    EXPECT_DOUBLE_EQ(litepgo::testing::evaluate_energy(energy, x, &g, &H), value);
     EXPECT_TRUE(g.isApprox(g_only, 1e-13));
     EXPECT_TRUE(Eigen::MatrixXd(H).isApprox(Eigen::MatrixXd(H_only), 1e-13));
 }

@@ -1,8 +1,9 @@
+#include "../../testing/evaluate_energy.hpp"
 #include "litepgo/energy/scalar/energy.hpp"
 
 #include "../../testing/finite_difference.hpp"
 #include "litepgo/energy/scalar/affine_mapped_energy.hpp"
-#include "litepgo/energy/scalar/weighted_energy_sum.hpp"
+#include "litepgo/energy/scalar/weighted_sum_energy.hpp"
 
 #include "../../testing/test_energies.hpp"
 
@@ -22,13 +23,14 @@ class MisbehavingEnergy final : public litepgo::energy::FixedPatternEnergy {
   public:
     double step = 1.0;
     double returned = 0.0;
-    bool reenter = false;
+    mutable bool reenter = false;
 
-    MisbehavingEnergy() : FixedPatternEnergy(2, chain_pattern(2, {})) {}
+    MisbehavingEnergy() : FixedPatternEnergy(chain_pattern(2, {})) {}
 
   private:
     double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const override {
         if (reenter) {
+            reenter = false;
             eval_value(x);
         }
         if (gradient != nullptr) {
@@ -50,8 +52,8 @@ TEST(Energy, ConveniencesAgreeWithEvaluate) {
     const DoubleWellChain energy(5);
     const Vec x = Vec::LinSpaced(5, -1.2, 0.9);
     Vec gradient;
-    SpMat hessian = energy.hessian_pattern();
-    const double value = energy.eval(x, &gradient, &hessian, HessianKind::Projected);
+    SpMat hessian;
+    const double value = litepgo::testing::evaluate_energy(energy, x, &gradient, &hessian, HessianKind::Projected);
     EXPECT_DOUBLE_EQ(value, energy.eval_value(x));
     EXPECT_EQ(gradient, energy.eval_gradient(x));
     EXPECT_EQ(Eigen::MatrixXd(hessian), Eigen::MatrixXd(energy.eval_hessian(x, HessianKind::Projected)));
@@ -77,7 +79,7 @@ TEST(Energy, ChecksArgumentsBeforeWriting) {
 
     SpMat wrong = chain_pattern(4, {});
     Vec gradient = Vec::Constant(2, 7.0);
-    EXPECT_THROW(energy.eval(Vec::Zero(4), &gradient, &wrong), std::invalid_argument);
+    EXPECT_THROW(litepgo::testing::evaluate_energy(energy, Vec::Zero(3), &gradient, &wrong), std::invalid_argument);
     EXPECT_EQ(gradient, Vec::Constant(2, 7.0)); // untouched
 
     EXPECT_THROW(energy.max_feasible_step(Vec::Zero(4), Vec::Zero(3)), std::invalid_argument);
@@ -86,7 +88,7 @@ TEST(Energy, ChecksArgumentsBeforeWriting) {
 TEST(Energy, ResizesTheGradient) {
     const DoubleWellChain energy(4);
     Vec gradient;
-    energy.eval(Vec::Zero(4), &gradient, nullptr);
+    litepgo::testing::evaluate_energy(energy, Vec::Zero(4), &gradient, nullptr);
     EXPECT_EQ(gradient.size(), 4);
 }
 
@@ -103,10 +105,10 @@ TEST(Energy, RejectsAFeasibleStepOutsideTheUnitInterval) {
     EXPECT_THROW(energy.max_feasible_step(Vec::Zero(2), Vec::Ones(2)), std::logic_error);
 }
 
-TEST(Energy, RejectsOverlappingCalls) {
+TEST(Energy, SupportsFiniteReentry) {
     MisbehavingEnergy energy;
     energy.reenter = true;
-    EXPECT_THROW(energy.eval_value(Vec::Zero(2)), std::logic_error);
+    EXPECT_NO_THROW(energy.eval_value(Vec::Zero(2)));
     energy.reenter = false;
     EXPECT_NO_THROW(energy.eval_value(Vec::Zero(2)));
 }
@@ -118,7 +120,7 @@ TEST(Energy, RejectsNonFiniteValuesAsABrokenEnergy) {
         energy->returned = returned;
         EXPECT_THROW(energy->eval_value(Vec::Zero(2)), std::logic_error);
         // The error surfaces through composites too, and is not mistaken for infeasibility.
-        const litepgo::energy::WeightedEnergySum sum({{energy, -1.0}});
+        const litepgo::energy::WeightedSumEnergy sum({{energy, -1.0}});
         EXPECT_THROW(sum.eval_value(Vec::Zero(2)), std::logic_error);
         const litepgo::energy::AffineMappedEnergy mapped(energy, SpMat(Eigen::MatrixXd::Identity(2, 2).sparseView()));
         EXPECT_THROW(mapped.eval_value(Vec::Zero(2)), std::logic_error);
@@ -143,7 +145,7 @@ TEST(EnergyContract, RejectsBrokenRequestedDerivativesAndRecovers) {
             p.insert(0, 0) = 0;
             return p;
         }
-        Broken() : FixedPatternEnergy(2, pattern()) {}
+        Broken() : FixedPatternEnergy(pattern()) {}
         double eval_values(const ConstVecRef&, Vec* g, SpMat* H, energy::HessianKind) const override {
             ++calls;
             if (g) {
@@ -164,7 +166,12 @@ TEST(EnergyContract, RejectsBrokenRequestedDerivativesAndRecovers) {
         }
     } e;
     const Vec x = Vec::Zero(2);
-    for (int mode : {1, 2, 3, 4}) {
+    for (int mode : {1, 2, 3
+#ifndef NDEBUG
+                     ,
+                     4
+#endif
+         }) {
         e.mode = mode;
         EXPECT_DOUBLE_EQ(e.eval_value(x), 1);
         if (mode <= 2)
@@ -179,7 +186,7 @@ TEST(EnergyContract, RejectsBrokenRequestedDerivativesAndRecovers) {
     bad[0] = std::numeric_limits<double>::quiet_NaN();
     const int calls = e.calls;
     EXPECT_THROW(e.eval_value(bad), std::invalid_argument);
-    EXPECT_THROW(e.update_pattern(bad), std::invalid_argument);
+    EXPECT_THROW(e.eval_hessian(bad), std::invalid_argument);
     EXPECT_THROW(e.max_feasible_step(x, bad), std::invalid_argument);
     EXPECT_EQ(e.calls, calls);
 }

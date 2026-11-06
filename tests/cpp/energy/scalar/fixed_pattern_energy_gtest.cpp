@@ -10,11 +10,11 @@ namespace litepgo::energy::test {
 
 TEST(FixedPatternEnergy, NeverChangesItsPattern) {
     DoubleWellChain energy(4);
-    const litepgo::SpMat before = energy.hessian_pattern();
-    EXPECT_TRUE(energy.has_fixed_pattern());
+    const litepgo::SpMat before = energy.eval_hessian(Vec::Zero(4));
+
     for (const double scale : {-2.0, 0.0, 0.5, 3.0}) {
-        EXPECT_FALSE(energy.update_pattern(litepgo::Vec::Constant(4, scale)));
-        EXPECT_TRUE(litepgo::linalg::same_pattern(energy.hessian_pattern(), before));
+        EXPECT_NO_THROW(energy.eval_hessian(litepgo::Vec::Constant(4, scale)));
+        EXPECT_TRUE(litepgo::linalg::same_pattern(energy.eval_hessian(Vec::Constant(4, scale)), before));
     }
 }
 

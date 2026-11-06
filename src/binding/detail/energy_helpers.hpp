@@ -28,17 +28,20 @@ inline void copy_derivative_values(const SpMat& source, SpMat& output, const cha
     }
 }
 
-// Both bases share scalar evaluation and feasibility; only the dynamic base calls pattern_at.
+// Both bases share scalar evaluation and feasibility; only the dynamic base requests hessian_pattern_at.
 template <class Base> class PyEnergy : public Base {
   public:
     NB_TRAMPOLINE(Base);
-    PyEnergy(int n, const linalg::binding::SparseArgument& pattern) : Base(n, pattern.matrix) {}
+    explicit PyEnergy(const linalg::binding::SparseArgument& pattern) : Base(pattern.matrix) {}
+    explicit PyEnergy(int n) : Base(n) {}
 
   private:
     double eval_values(const ConstVecRef& x, Vec* g, SpMat* H, HessianKind kind) const override {
-        nb::detail::ticket ticket(this->nb_trampoline, "eval_values", nb::detail::str_hash("eval_values"), true);
-        nb::object out = this->nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x)), g != nullptr,
-                                                                     H ? nb::cast(kind) : nb::none());
+        nb::gil_scoped_acquire gil;
+        if (!nb::hasattr(this->nb_trampoline.base(), "eval_values"))
+            throw std::logic_error("Energy: missing eval_values");
+        nb::object out = this->nb_trampoline.base().attr("eval_values")(nb::cast(Vec(x)), g != nullptr,
+                                                                        H ? nb::cast(kind) : nb::none());
         if (out.is_none())
             throw std::domain_error("Energy is infeasible");
         if (!nb::isinstance<nb::tuple>(out) || nb::len(out) != 3)
@@ -51,8 +54,7 @@ template <class Base> class PyEnergy : public Base {
         }
         if (H) {
             const SpMat source = nb::cast<linalg::binding::SparseArgument>(values[2]).matrix;
-            copy_derivative_values(source, *H, "Energy: invalid Hessian",
-                                   "Energy: Hessian outside pattern; call update_pattern");
+            copy_derivative_values(source, *H, "Energy: invalid Hessian", "Energy: Hessian outside pattern");
         }
         return nb::cast<double>(values[0]);
     }

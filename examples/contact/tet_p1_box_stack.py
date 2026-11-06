@@ -98,7 +98,7 @@ def main():
     )
     kappa = 1e3
 
-    potential = energy.WeightedEnergySum(
+    potential = energy.WeightedSumEnergy(
         [(elastic, 1.0), (pulling, 1.0), (contact_energy, kappa)]
     )
     fixed = dof.DofReduction(num_dofs, clamped)

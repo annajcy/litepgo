@@ -60,9 +60,7 @@ def test_snapshot_contains_complete_assembly_records(make_barrier, weighted):
     reconstructed = np.sum(snapshot.weights * snapshot.mollifiers * -(s - h)**2 * np.log(s / h))
     assert reconstructed == pytest.approx(before, rel=1e-12)
     assert barrier.eval_value(x) == before
-    assert barrier.hessian_pattern.nnz == 0
-    barrier.update_pattern(x)
-    pattern = barrier.hessian_pattern
+    pattern = barrier.eval_hessian(x)
     far = x.reshape(5, 6, 3).copy()
     far[:, 3:, 2] += 20
     empty = barrier.contact_snapshot(far.ravel())
@@ -70,10 +68,8 @@ def test_snapshot_contains_complete_assembly_records(make_barrier, weighted):
     assert empty.vertex_ids.shape == (0, 4)
     assert empty.distances.shape == empty.weights.shape == empty.mollifiers.shape == (0,)
     assert barrier.min_active_distance(far.ravel()) == float("inf")
-    np.testing.assert_array_equal(barrier.hessian_pattern.indices, pattern.indices)
-    np.testing.assert_array_equal(barrier.hessian_pattern.indptr, pattern.indptr)
-    assert not barrier.update_pattern(x)
-
+    np.testing.assert_array_equal(barrier.eval_hessian(x).indices, pattern.indices)
+    np.testing.assert_array_equal(barrier.eval_hessian(x).indptr, pattern.indptr)
 
 @pytest.mark.parametrize("empty", [False, True])
 def test_snapshot_is_readonly_and_owns_its_data(make_barrier, empty):

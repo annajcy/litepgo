@@ -45,7 +45,7 @@ void bind_dynamic_pattern_energy(nanobind::module_& m);
 void bind_mesh_energy(nanobind::module_& m);
 void bind_quadratic_energy(nanobind::module_& m);
 void bind_vertex_pulling_energy(nanobind::module_& m);
-void bind_weighted_energy_sum(nanobind::module_& m);
+void bind_weighted_sum_energy(nanobind::module_& m);
 void bind_affine_mapped_energy(nanobind::module_& m);
 void bind_affine_response(nanobind::module_& m);
 void bind_composed_response(nanobind::module_& m);

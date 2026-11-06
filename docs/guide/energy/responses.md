@@ -122,7 +122,7 @@ The public `has_fixed_pattern`, `update_patterns`, `jacobian_pattern`,
 and inspect the returned matrix when structure is needed. Dynamic constructors take
 dimensions, and dynamic Hessian support is declared through `has_hessian`, not a
 constructor flag or initial Hessian pattern. Sparse numerical hooks are non-const;
-structure hooks remain const. Energy and FEM LocalResponse keep their own protocols.
+structure hooks remain const. Energy has its own scalar evaluation API; FEM LocalResponse retains its local assembly protocol.
 
 Returned matrices may allocate. This API does not promise allocation-free evaluation
 or expose a symbolic preparation protocol.

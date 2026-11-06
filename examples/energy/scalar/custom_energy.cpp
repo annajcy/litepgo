@@ -12,7 +12,7 @@ using namespace litepgo;
 // E(x) = 0.5 ||x - (1,2)||^2.
 class Quadratic final : public energy::FixedPatternEnergy {
   public:
-    Quadratic() : FixedPatternEnergy(2, Eigen::Matrix2d::Identity().sparseView()) {}
+    Quadratic() : FixedPatternEnergy(Eigen::Matrix2d::Identity().sparseView()) {}
 
   private:
     double eval_values(const ConstVecRef& x, Vec* g, SpMat* H, energy::HessianKind) const override {
@@ -30,10 +30,10 @@ class Quadratic final : public energy::FixedPatternEnergy {
 // E(x) = 0.5 ||x||^2 + 0.25 max(x0+x1,0)^4; C2 across the activation boundary.
 class Coupled final : public energy::DynamicPatternEnergy {
   public:
-    Coupled() : DynamicPatternEnergy(2, Eigen::Matrix2d::Identity().sparseView()) {}
+    Coupled() : DynamicPatternEnergy(2) {}
 
   private:
-    SpMat pattern_at(const ConstVecRef& x) const override {
+    SpMat hessian_pattern_at(const ConstVecRef& x) const override {
         if (x.sum() > 0)
             return Eigen::Matrix2d::Ones().sparseView();
         return Eigen::Matrix2d::Identity().sparseView();
@@ -44,7 +44,7 @@ class Coupled final : public energy::DynamicPatternEnergy {
             *g = x.array() + s * s * s;
         if (H) {
             if (s > 0 && H->nonZeros() != 4)
-                throw std::logic_error("Call update_pattern before Hessian evaluation");
+                throw std::logic_error("Invalid prepared Hessian structure");
             for (int c = 0; c < H->outerSize(); ++c)
                 for (SpMat::InnerIterator it(*H, c); it; ++it)
                     it.valueRef() = (it.row() == c ? 1. : 0.) + 3 * s * s;
@@ -57,17 +57,10 @@ class Coupled final : public energy::DynamicPatternEnergy {
 int main() {
     Quadratic fixed;
     const Vec x = Eigen::Vector2d(1, 1);
-    Vec g;
-    SpMat H = fixed.hessian_pattern();
-    const double value = fixed.eval(x, &g, &H);
+    const auto fixed_result = fixed.eval(x, true, energy::HessianKind::Exact);
     Coupled dynamic;
-    const double active_value = dynamic.eval_value(x);
-    dynamic.update_pattern(x);
-    H = dynamic.hessian_pattern(); // Refresh the buffer after a structural change.
-    dynamic.eval(x, &g, &H);
-    const auto active_nnz = H.nonZeros();
-    dynamic.update_pattern(-x);
-    H = dynamic.eval_hessian(-x);
-    std::cout << "fixed value=" << value << ", active value=" << active_value << ", Hessian nnz=2->" << active_nnz
-              << "->" << H.nonZeros() << '\n';
+    const auto active = dynamic.eval(x, true, energy::HessianKind::Exact);
+    const auto inactive = dynamic.eval_hessian(-x);
+    std::cout << "fixed value=" << fixed_result.value << ", active value=" << active.value << ", Hessian nnz=2->"
+              << active.hessian->nonZeros() << "->" << inactive.nonZeros() << '\n';
 }

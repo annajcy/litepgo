@@ -1,5 +1,6 @@
 #include "litepgo/energy/scalar/affine_mapped_energy.hpp"
 
+#include "litepgo/common/busy_scope.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <algorithm>
@@ -9,22 +10,23 @@
 
 namespace litepgo::energy {
 
-AffineMappedEnergy::Setup AffineMappedEnergy::checked_setup(std::shared_ptr<Energy> energy, SpMat T, Vec offset) {
-    if (energy == nullptr) {
+AffineMappedEnergy::AffineMappedEnergy(std::shared_ptr<Energy> energy, SpMat T, Vec offset)
+    : Energy(static_cast<int>(T.cols())), energy_(std::move(energy)), map_(std::move(T)), offset_(std::move(offset)) {
+    if (energy_ == nullptr) {
         throw std::invalid_argument("AffineMappedEnergy requires an energy");
     }
-    if (T.rows() != energy->num_dofs()) {
+    if (map_.rows() != energy_->num_dofs()) {
         throw std::invalid_argument("AffineMappedEnergy: T must have energy.num_dofs rows");
     }
-    if (offset.size() == 0) {
-        offset = Vec::Zero(T.rows());
+    if (offset_.size() == 0) {
+        offset_ = Vec::Zero(map_.rows());
     }
-    if (offset.size() != T.rows()) {
+    if (offset_.size() != map_.rows()) {
         throw std::invalid_argument("AffineMappedEnergy: offset must have energy.num_dofs entries");
     }
-    T.makeCompressed();
-    HessianPlan plan = plan_hessian(energy->hessian_pattern(), T);
-    return {std::move(energy), std::move(T), std::move(offset), std::move(plan)};
+    map_.makeCompressed();
+    if (!linalg::is_canonical(map_) || !map_.coeffs().allFinite() || !offset_.allFinite())
+        throw std::invalid_argument("AffineMappedEnergy: invalid finite map or offset");
 }
 
 AffineMappedEnergy::HessianPlan AffineMappedEnergy::plan_hessian(const SpMat& inner_pattern, const SpMat& map) {
@@ -78,55 +80,29 @@ AffineMappedEnergy::HessianPlan AffineMappedEnergy::plan_hessian(const SpMat& in
     return {std::move(pattern), std::move(contributions)};
 }
 
-AffineMappedEnergy::AffineMappedEnergy(std::shared_ptr<Energy> energy, SpMat T, Vec offset)
-    : AffineMappedEnergy(checked_setup(std::move(energy), std::move(T), std::move(offset))) {}
-
-AffineMappedEnergy::AffineMappedEnergy(Setup setup)
-    : Energy(static_cast<int>(setup.map.cols()), setup.plan.pattern, setup.energy->has_fixed_pattern()),
-      energy_(std::move(setup.energy)), map_(std::move(setup.map)), offset_(std::move(setup.offset)),
-      contributions_(std::move(setup.plan.contributions)), hessian_full_(energy_->hessian_pattern()) {}
-
-std::optional<SpMat> AffineMappedEnergy::refresh_pattern(const ConstVecRef& z) {
-    x_full_ = map_ * z + offset_;
-    energy_->update_pattern(x_full_);
-    // Compare patterns rather than trust the return value: the inner energy may
-    // have been updated elsewhere, in which case its own update reports no change.
-    if (linalg::same_pattern(energy_->hessian_pattern(), hessian_full_)) {
-        return std::nullopt;
-    }
-    hessian_full_ = energy_->hessian_pattern();
-    HessianPlan plan = plan_hessian(hessian_full_, map_);
-    contributions_ = std::move(plan.contributions);
-    return std::move(plan.pattern);
-}
-
-double AffineMappedEnergy::eval_values(const ConstVecRef& z, Vec* gradient, SpMat* hessian, HessianKind kind) const {
-    if (hessian != nullptr && !energy_->has_fixed_pattern() &&
-        !linalg::same_pattern(energy_->hessian_pattern(), hessian_full_)) {
-        throw std::logic_error("AffineMappedEnergy: the inner energy's pattern changed after this energy's last "
-                               "update_pattern(); call update_pattern() on the outermost energy");
-    }
-    x_full_ = map_ * z + offset_;
-    const double value = energy_->eval(x_full_, gradient != nullptr ? &gradient_full_ : nullptr,
-                                       hessian != nullptr ? &hessian_full_ : nullptr, kind);
-    if (gradient != nullptr) {
-        *gradient = map_.transpose() * gradient_full_;
-    }
-    if (hessian != nullptr) {
-        double* values = hessian->valuePtr();
-        const double* inner_values = hessian_full_.valuePtr();
-        std::fill(values, values + hessian->nonZeros(), 0.0);
-        for (const Contribution& contribution : contributions_) {
-            values[contribution.output] += contribution.coefficient * inner_values[contribution.input];
+EnergyEvaluation AffineMappedEnergy::eval_impl(const ConstVecRef& z, bool gradient,
+                                               std::optional<HessianKind> kind) const {
+    ::litepgo::detail::BusyScope scope(busy_, "AffineMappedEnergy");
+    const Vec x = map_ * z + offset_;
+    auto child = energy_->eval(x, gradient, kind);
+    EnergyEvaluation result{child.value, std::nullopt, std::nullopt};
+    if (gradient)
+        result.gradient = map_.transpose() * *child.gradient;
+    if (kind) {
+        if (!plan_ || !linalg::same_pattern(*child.hessian, plan_->inner_pattern)) {
+            CachedPlan next{linalg::pattern_of(*child.hessian), plan_hessian(*child.hessian, map_)};
+            plan_ = std::move(next);
         }
+        result.hessian = plan_->hessian.pattern;
+        for (const auto& contribution : plan_->hessian.contributions)
+            result.hessian->valuePtr()[contribution.output] +=
+                contribution.coefficient * child.hessian->valuePtr()[contribution.input];
     }
-    return value;
+    return result;
 }
-
 double AffineMappedEnergy::feasible_step(const ConstVecRef& z, const ConstVecRef& dz) const {
-    x_full_ = map_ * z + offset_;
-    dx_full_ = map_ * dz;
-    return energy_->max_feasible_step(x_full_, dx_full_);
+    const Vec x = map_ * z + offset_;
+    const Vec dx = map_ * dz;
+    return energy_->max_feasible_step(x, dx);
 }
-
 } // namespace litepgo::energy

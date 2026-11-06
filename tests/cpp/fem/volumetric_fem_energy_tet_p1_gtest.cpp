@@ -1,3 +1,4 @@
+#include "../testing/evaluate_energy.hpp"
 
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
@@ -60,8 +61,8 @@ TEST(TetP1FemEnergy, GradientAndHessianMatchFiniteDifferences) {
             for (int j = 0; j < x.size(); ++j)
                 x[j] += 0.02 * std::sin(j + 0.3);
         Vec g;
-        SpMat sparse_h = energy.hessian_pattern();
-        const double value = energy.eval(x, &g, &sparse_h);
+        SpMat sparse_h;
+        const double value = litepgo::testing::evaluate_energy(energy, x, &g, &sparse_h);
         const Eigen::MatrixXd H(sparse_h);
         ASSERT_EQ(g.size(), x.size());
         ASSERT_EQ(H.rows(), x.size());
@@ -90,7 +91,9 @@ TEST(TetP1FemEnergy, GradientAndHessianMatchFiniteDifferences) {
                 Vec plus = x, minus = x, plus_g, minus_g;
                 plus[j] += h;
                 minus[j] -= h;
-                fd_g[j] = (energy.eval(plus, &plus_g, nullptr) - energy.eval(minus, &minus_g, nullptr)) / (2 * h);
+                fd_g[j] = (litepgo::testing::evaluate_energy(energy, plus, &plus_g, nullptr) -
+                           litepgo::testing::evaluate_energy(energy, minus, &minus_g, nullptr)) /
+                          (2 * h);
                 fd_h.col(j) = (plus_g - minus_g) / (2 * h);
             }
             EXPECT_LT((g - fd_g).norm() / (1 + g.norm()), 10 * h * h + 1e-9);

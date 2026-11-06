@@ -51,8 +51,7 @@ int main(int argc, char** argv) {
             x[18 * group + 3 * v + 2] -= .05;
     const auto snapshot = barrier.contact_snapshot(x);
     const auto count = snapshot.distances.size();
-    if (count != barrier.num_active_pairs(x) || barrier.hessian_pattern().nonZeros() != 0 ||
-        snapshot.distances.minCoeff() != barrier.min_active_distance(x) ||
+    if (count != barrier.num_active_pairs(x) || snapshot.distances.minCoeff() != barrier.min_active_distance(x) ||
         std::set<std::string>(snapshot.types.begin(), snapshot.types.end()) !=
             std::set<std::string>{"VV", "VE", "VF", "EE"} ||
         !(snapshot.mollifiers.array() == 0).any())

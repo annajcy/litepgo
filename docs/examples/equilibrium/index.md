@@ -8,7 +8,7 @@ $$
 
 Here $\mathcal C$ is the pulled-corner set and $t_i$ is an anchor displacement,
 not an absolute position. The springs remove rigid motions; the examples use
-`DofReduction(num_dofs, [])`, with no hard constraints. `WeightedEnergySum`
+`DofReduction(num_dofs, [])`, with no hard constraints. `WeightedSumEnergy`
 combines elastic and spring energies; Newton uses projected element Hessians,
 feasible steps, and free-gradient tolerance $10^{-8}$.
 

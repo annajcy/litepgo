@@ -58,13 +58,11 @@ TYPED_TEST(ContactPairWeightsTest, UniformWeightsScaleDerivativesAndOwnData) {
     const auto s = surface();
     for (bool area : {false, true}) {
         auto base = make<TypeParam>(s, std::nullopt, area);
-        base->update_pattern(s.positions);
         for (double scale : {1.0, .5, 2.0}) {
             auto config = uniform(s, scale);
             auto weighted = make<TypeParam>(s, config, area);
             config.weights.setZero();
             config.vertex_groups.assign(6, 999); // Caller mutations cannot change the energy.
-            weighted->update_pattern(s.positions);
             EXPECT_NEAR(weighted->eval_value(s.positions), scale * base->eval_value(s.positions), 1e-12);
             EXPECT_TRUE(weighted->eval_gradient(s.positions).isApprox(scale * base->eval_gradient(s.positions), 1e-12));
             EXPECT_TRUE(Eigen::MatrixXd(weighted->eval_hessian(s.positions))
@@ -113,7 +111,7 @@ TYPED_TEST(ContactPairWeightsTest, ZeroExcludesActiveAndCCDButNotGlobalIntersect
     EXPECT_LT(step, 1);
     EXPECT_DOUBLE_EQ(zero->eval_value(s.positions), 0);
     EXPECT_EQ(zero->eval_gradient(s.positions), Vec::Zero(18));
-    EXPECT_FALSE(zero->update_pattern(s.positions));
+    EXPECT_NO_THROW(zero->eval_hessian(s.positions));
     EXPECT_EQ(zero->contact_snapshot(s.positions).distances.size(), 0);
     EXPECT_DOUBLE_EQ(zero->max_feasible_step(s.positions, dx), 1);
     for (double scale : {.001, .5, 2.0})

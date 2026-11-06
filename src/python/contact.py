@@ -1,7 +1,7 @@
 """IPC self-contact, optional IPC Toolkit, and a one-sided plane penalty.
 
-Energies act on vertex-major xyz positions, with unit stiffness. Call
-update_pattern(x) before Hessian assembly. Compose with AffineMappedEnergy and
+Energies act on vertex-major xyz positions, with unit stiffness.
+Hessian structure is prepared automatically during evaluation. Compose with AffineMappedEnergy and
 SurfaceKinematics for displacement DOFs. Native ACCD uses floating-point arithmetic;
 it does not provide formal floating-point robustness guarantees. Native energies
 require an explicit broad_phase=SpatialHash() and retain shared

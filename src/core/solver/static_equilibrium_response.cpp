@@ -55,7 +55,6 @@ Vec StaticEquilibriumResponse::evaluate(const ConstVecRef& p, SpMat* J, const Ve
         auto force = make_response_(result.x);
         if (!force || force->num_inputs() != num_inputs() || force->num_outputs() != num_outputs())
             throw std::invalid_argument("StaticEquilibriumResponse: incompatible force response");
-        potential->update_pattern(result.x);
         const SpMat K = fixed_.reduce(potential->eval_hessian(result.x, energy::HessianKind::Exact));
         if (!linear_solver.compute(K))
             throw std::domain_error("StaticEquilibriumResponse: singular equilibrium stiffness");

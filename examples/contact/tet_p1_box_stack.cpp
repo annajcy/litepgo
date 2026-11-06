@@ -8,7 +8,7 @@
 #include "litepgo/dof/vertex_displacement_map.hpp"
 #include "litepgo/energy/scalar/affine_mapped_energy.hpp"
 #include "litepgo/energy/scalar/vertex_pulling_energy.hpp"
-#include "litepgo/energy/scalar/weighted_energy_sum.hpp"
+#include "litepgo/energy/scalar/weighted_sum_energy.hpp"
 #include "litepgo/fem/field/identity_field.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
@@ -121,7 +121,7 @@ int main(int argc, char** argv) {
                                                                 kinematics.rest_positions());
     const double kappa = 1e3;
 
-    energy::WeightedEnergySum potential({{elastic, 1}, {pulling, 1}, {contact, kappa}});
+    energy::WeightedSumEnergy potential({{elastic, 1}, {pulling, 1}, {contact, kappa}});
     const dof::DofReduction fixed(num_dofs, clamped);
     const Vec initial = Vec::Zero(num_dofs);
     solver::NewtonOptions options;

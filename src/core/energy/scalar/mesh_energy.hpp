@@ -1,6 +1,7 @@
 #pragma once
 #include "litepgo/dof/energy_assembler.hpp"
 #include "litepgo/energy/scalar/fixed_pattern_energy.hpp"
+#include <atomic>
 #include <stdexcept>
 #include <utility>
 
@@ -42,6 +43,7 @@ class MeshEnergy : public FixedPatternEnergy {
         BatchMatrix inputs, gradient, hessian, delta;
         Vec values;
     };
+    mutable std::atomic<bool> busy_ = false;
     mutable std::vector<Storage> storage_;
     mutable std::vector<double> values_;
     mutable std::vector<dof::EnergyAssembler::ElementView> views_;

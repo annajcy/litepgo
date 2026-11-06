@@ -81,8 +81,8 @@ dy = R.eval_jvp(x, dx)
 gx = R.eval_vjp(x, gy)
 ```
 
-Objects store their declared patterns even when direct product overrides avoid
-evaluating explicit Jacobians. See [Response evaluation](responses.md) for
+Fixed sparse subclasses retain their declared patterns even when direct product
+overrides avoid explicit Jacobians; dynamic subclasses query patterns only when needed. See [Response evaluation](responses.md) for
 ordinary evaluation and subclass contracts.
 
 The ARAP and Laplacian examples define named `MeshEnergy` subclasses in both
