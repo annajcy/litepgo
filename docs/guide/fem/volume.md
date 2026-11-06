@@ -100,7 +100,9 @@ and displacement may use different bases.
 | Hex Hermite | 24 | Axis-aligned affine Hex Q1 boxes | Gauss–Legendre 2 or 4 per axis |
 
 C++ and Python both have three template arguments: Material, DisplacementBasis and Quadrature.
-Python `.instances` lists compiled combinations. See [Hex Hermite](hermite.md) before constructing a 24-DOF map.
+Python `.instances` lists compiled combinations. The Material slot also accepts a
+[material written in Python](python-materials.md), a `PyVolumetricMaterial` subclass,
+for every listed basis and quadrature. See [Hex Hermite](hermite.md) before constructing a 24-DOF map.
 
 The global energy is
 

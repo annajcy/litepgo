@@ -3,8 +3,9 @@
 [Back to PyTorch examples](./index.md)
 
 This Python example learns an energy from native Neo-Hookean energy and first
-Piola stress samples, then freezes the network and uses it in
-`TorchVolumetricFemEnergy`. No analytic Neo-Hookean energy is added to the network.
+Piola stress samples, then freezes the network and uses it as the Material of
+`fem.VolumetricFemEnergy` through a `TorchVolumetricMaterial` subclass
+(`fem_material` in the source). No analytic Neo-Hookean energy is added to the network.
 The physical parameters are fixed at lambda = 2 and mu = 3; other `theta` values
 are rejected. Network weights are trained directly with Torch, independently of
 the native equilibrium response parameter interface.
@@ -107,13 +108,15 @@ To reuse the checkpoint from a script alongside the example:
 
 ```python
 import torch
-from neural_neohookean import InvariantMaterial
+from neural_neohookean import InvariantMaterial, fem_material
 
 material = InvariantMaterial()
 checkpoint = torch.load("output/neural_neohookean/material.pt", weights_only=True)
 material.load_state_dict(checkpoint["state_dict"])
 material.eval().requires_grad_(False)
-# Pass material=material to TorchVolumetricFemEnergy, with theta fields (2, 3).
+# fem_material(material) is a TorchVolumetricMaterial class for the Material slot,
+# e.g. fem.VolumetricFemEnergy[fem_material(material), fem.TetP1Basis,
+# fem.TetCentroidQuadrature], with theta fields (2, 3).
 ```
 
 ## Directional tangent supervision comparison

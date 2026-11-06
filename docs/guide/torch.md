@@ -2,7 +2,9 @@
 
 `litepgo.torch` is a Python module connecting an `Energy` or `Response`
 to PyTorch autograd. It supplies a derivative bridge around an existing model;
-Torch owns the outer tensor graph and optimizer.
+Torch owns the outer tensor graph and optimizer. In the other direction, it
+provides base classes for [materials written in Torch](#constitutive-energy-written-in-torch)
+that native FEM assembles.
 
 ## Module architecture
 
@@ -90,154 +92,82 @@ Derivative exceptions propagate. Repeated backward calls recompute products.
 
 ## Constitutive energy written in Torch
 
-`TorchVolumetricFemEnergy` is the reverse direction of the adapters above: write
-an energy density in Torch, and let native FEM assembly and Newton consume its
-value, force, and stiffness. It is a Python `MeshEnergy` subclass, available from
-`litepgo.torch`:
+The reverse direction of the adapters above is a material written in Torch and
+assembled by native FEM. Subclass `TorchVolumetricMaterial` or
+`TorchShellMaterial`, define the density `W`, and put the class in the Material
+slot of any compiled FEM template:
 
 ```python
-from litepgo.torch import TorchVolumetricFemEnergy
+import torch
+from litepgo import energy, fem
+from litepgo.torch import TorchVolumetricMaterial
 
-potential = TorchVolumetricFemEnergy(
-    displacement_map, rest_position_fields, Fp, theta,
-    material=material, batch_size=256,
-)
+class TorchNeoHookean(TorchVolumetricMaterial):
+    num_parameters = 2
+
+    @staticmethod
+    def W(F, Fp, theta):  # (N,3,3), (N,3,3), (N,k) -> (N,) per original volume
+        Fe = F @ torch.linalg.inv(Fp)
+        log_J = torch.linalg.det(Fe).log()
+        lam, mu = theta.unbind(-1)
+        psi = 0.5 * mu * (Fe.square().sum((-2, -1)) - 3) - mu * log_J + 0.5 * lam * log_J.square()
+        return torch.linalg.det(Fp) * psi
+
+Energy = fem.VolumetricFemEnergy[TorchNeoHookean, fem.HexHermiteBasis, fem.GaussLegendre3D[4]]
+potential = Energy(displacement_map, rest_position_fields, Fp, theta)
 E, force, stiffness = potential.eval(u, gradient=True, hessian=energy.HessianKind.Exact)
 ```
 
-The first version fixes TetP1 displacement interpolation, centroid quadrature,
-and CPU float64. `displacement_map` is a `VertexDofMap` with four vertices per
-element and three DOFs per vertex. As with native volumetric FEM, the three lists
-have one spatial `Response` per element: reference positions (3 components), `Fp` (9
-column-major components), and `theta` (a common positive component count).
-Reference geometry derivatives and field samples are cached at construction.
-Rebuild the energy after changing those fields. `u` is displacement, not position.
+Native code computes the deformation gradients of a whole batch, calls the
+material once, then integrates, pulls back, projects (`Projected`) and assembles.
+Every basis and quadrature rule compiled for `NeoHookean` is available. Rows
+must be independent and `W` twice differentiable in the inputs whose
+derivatives are requested. The class owns the multiplicative split and any
+`det(Fp)` factor. Network weights captured as class attributes are constants:
+the native solver does not populate their `.grad`, does not call `.eval()`, and
+does not change dtype or device. Batch-coupled operations such as training-mode
+batch normalization are outside this contract.
 
-The callable contract is:
+The full contract (shapes, index conventions, which outputs each operation
+requests, domains and threading) is in [materials written in Python](fem/python-materials.md).
+The [Neo-Hookean comparison](../examples/torch/torch-neohookean.md) checks the
+Torch density against the native one on tetrahedra and hexahedra. The
+[neural material example](../examples/torch/neural-neohookean.md) trains an
+invariant MLP on native energy/stress samples and then solves equilibrium with the
+frozen network. Training those weights through equilibrium still needs an
+explicit parameter-to-weight mapping and a corresponding `Response`.
 
-```python
-class Material(torch.nn.Module):
-    def forward(self, F, Fp, theta):
-        # F, Fp: (B, 3, 3); theta: (B, k), all CPU float64.
-        # Return W: (B,), per ORIGINAL reference volume.
-        ...
-```
+## Force responses of a Torch material
 
-Each row must be independent and the formula twice differentiable in `F`.
-The callable owns the multiplicative split and any `det(Fp)` factor. No material
-factor is added automatically. It can be a plain function or an `nn.Module`;
-module parameters and buffers remain fixed for this energy. The adapter does
-not call `.eval()`, change dtype/device, or populate network `.grad` buffers.
-Use deterministic, read-only, thread-safe material evaluation; batch-coupled
-operations such as training-mode batch normalization are outside this contract.
-Do not detach `F` from autograd when implementing a nonconstant density.
-
-The adapter caches the local linear map returned by
-`deformation_gradient_sampling_response`, using the supplied geometry Response. It differentiates the density in the nine `F`
-components, pulls the derivatives back to the twelve local displacement DOFs,
-and returns batches to C++. There is no global Torch Hessian. Value-only calls
-skip derivative construction. `Projected` uses the same per-element eigenvalue
-clamp as native `MeshEnergy`, after the displacement pullback and before assembly.
-
-The Torch FEM adapter uses the same deformation-gradient sampling factory as native
-FEM and obtains physical integration weights from `VolumetricElement3D`.
-Only the matrix row ordering is converted: native sampling packs each $F$ by
-column, whereas Torch flattens it by row. Both maps and weights are construction-time
-snapshots; runtime differentiation remains in PyTorch.
-
-The supported domain requires positive reference, plastic, and current deformation
-determinants. The native determinant-step routine limits trial steps before a
-singularity, including paths that cross zero and return to a positive determinant.
-Non-finite densities/derivatives and inverted trial states reject the native trial;
-wrong tensor types/shapes remain programming errors. Additional material-domain
-restrictions require a suitable `eval_feasible_step_batch` override. This is an
-orientation-preserving volumetric material interface, not a plastic evolution law.
-
-The [Neo-Hookean comparison](../examples/torch/torch-neohookean.md) is a complete
-working example. Replacing its callable with a neural density is supported for
-fixed network weights. The [neural material example](../examples/torch/neural-neohookean.md)
-trains an invariant MLP on native energy/stress samples and checks independent
-loading paths, tangent stiffness, and equilibrium. An optional directional tangent
-loss demonstrates that aggregate accuracy can improve while one component's
-maximum error increases. This is a workflow example, not a guarantee of material
-stability or extrapolation accuracy.
-
-Optimizing those weights through equilibrium still needs
-an explicit parameter-to-weight mapping and a corresponding `Response`; capturing a module does not make its weights
-implicit inputs to `litepgo.torch.energy` or the native solver.
-
-## Torch material and plastic force responses
-
-The two fixed-state responses return the **positive energy gradient**
-`g(u,p) = dE(u,p)/du`, assembled in global displacement-DOF order:
+The same class works in the fixed-pose force responses, which return the
+**positive energy gradient** `g(u,p) = dE(u,p)/du` and its Jacobian with respect
+to physical `theta` or column-major `vec(Fp)`:
 
 ```python
-from litepgo.torch import (
-    TorchVolumetricFemMaterialResponse,
-    TorchVolumetricFemFpResponse,
-)
-
-material_force = TorchVolumetricFemMaterialResponse(
-    parameter_map, displacement_map, rest_position_fields, u, Fp,
-    material=material, batch_size=256,
-)
-plastic_force = TorchVolumetricFemFpResponse(
-    parameter_map, displacement_map, rest_position_fields, u, theta,
-    material=material, batch_size=256,
-)
-```
-
-Choose a parameter map with the appropriate local width for each constructor:
-
-| Response | Active inputs per element | Fixed material fields | Explicit Jacobian |
-|---|---|---|---|
-| `TorchVolumetricFemMaterialResponse` | physical theta, width k > 0 | Fp, width 9 | dg/dtheta |
-| `TorchVolumetricFemFpResponse` | column-major vec(Fp), width 9 | theta, common width k > 0 | dg/dvec(Fp) |
-
-`ConstantDofMap` shares one parameter block across all elements;
-`ElementDofMap` assigns an independent block to each element. Active inputs are
-constant within each element, matching the native force responses. Fixed fields
-are sampled at the centroid; geometry and displacement are snapshotted. All
-other material conventions match `TorchVolumetricFemEnergy`, including the
-reference-volume density and CPU float64 contract. The density must be twice
-differentiable jointly in F and the active input. Network weights stay fixed.
-
-```python
+key = (TorchNeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature)
+material_force = fem.VolumetricFemForceMaterialResponse[key](
+    parameter_map, displacement_map, rest_position_fields, u, Fp)
+plastic_force = fem.VolumetricFemForceFpResponse[key](
+    parameter_map, displacement_map, rest_position_fields, u, theta)
 force, J = material_force.eval_value_and_jacobian(p)
-jv = material_force.eval_jvp(p, v)
-jtw = material_force.eval_vjp(p, w)
 ```
 
-The explicit path differentiates the nine stress components with respect to
-local parameters, then pulls back and assembles a sparse Jacobian. The product
-paths do not build a local mixed-derivative matrix or a global Jacobian. Writing
-`A = d vec(F)/du` in the adapter's row-major tensor convention and `a` for the
-reference integration weight, their local computations are
+They request `d2W_dF_dtheta` or `d2W_dF_dFp` from the material, which the Torch
+base computes with nine extra backward passes, and assemble explicit Jacobians
+natively; JVP and VJP use those Jacobians. Shell responses work the same way with
+`TorchShellMaterial`. See [force responses](fem/force-responses.md) for parameter
+maps and conventions.
 
-$$
-Jv = a A^T\,\partial_F[(\partial_p W)^T v],\qquad
-J^Tw = \partial_p[(\partial_F W)^T(a A w)].
-$$
-
-Native assembly sums force contributions at shared nodes and VJP contributions
-at shared parameter indices. Constant or parameter-independent densities have
-zero mixed derivatives and are supported. Invalid Fp, non-finite density/force,
-or non-finite products are rejected; malformed callable outputs raise errors.
-
-For equilibrium differentiation, pass these objects through the existing
-factories:
+For equilibrium differentiation, pass both objects through the usual factories:
 
 ```python
 def make_energy(p):
     active_theta = [energy.AffineResponse(np.zeros((len(p), 3)), p)] * displacement_map.num_elements
-    return TorchVolumetricFemEnergy(
-        displacement_map, rest_position_fields, Fp, active_theta, material=material,
-    )
+    return fem.VolumetricFemEnergy[key](displacement_map, rest_position_fields, Fp, active_theta)
 
 def make_response(u):
-    return TorchVolumetricFemMaterialResponse(
-        parameter_map, displacement_map, rest_position_fields, u, Fp, material=material,
-    )
+    return fem.VolumetricFemForceMaterialResponse[key](
+        parameter_map, displacement_map, rest_position_fields, u, Fp)
 
 equilibrium = solver.StaticEquilibriumResponse(
     num_parameters, fixed, initial, options, make_energy, make_response,
@@ -245,30 +175,20 @@ equilibrium = solver.StaticEquilibriumResponse(
 ```
 
 Both factories must describe the same total energy system. The response supplies
-the fixed-state partial `B = dg/dp`; `StaticEquilibriumResponse` adds implicit state
-dependence through its directional/adjoint stiffness solves. Its explicit state
-Jacobian remains available. `litepgo.torch.response(equilibrium, p_tensor)` uses
-these products in reverse/forward AD.
-
-Compose the force response with `ExpResponse` or `LogDiagonalFpResponse` to
-optimize transformed parameters. For independent element blocks, use
-`ElementwiseResponse` for the transform. The energy factory must use the same
-transform to construct its field list. These force responses do not convert
-captured `nn.Module` weights into implicit inputs; training those through equilibrium still requires
-an explicit mapping from optimization inputs to weights. Direct training on
-constitutive samples uses ordinary Torch optimizers, as shown in the
-[neural Neo-Hookean example](../examples/torch/neural-neohookean.md), which then
-uses frozen weights in native FEM equilibrium solves.
-
-See [the complete equilibrium example](../examples/torch/torch-equilibrium-response.md)
-and `tests/python/test_torch_fem_response.py` for native comparisons, finite
-differences, and tests that forbid explicit Jacobians while evaluating products.
+the fixed-state partial `B = dg/dp`; `StaticEquilibriumResponse` adds the implicit
+state dependence through directional/adjoint stiffness solves, and
+`litepgo.torch.response(equilibrium, p_tensor)` uses those products in
+reverse/forward AD. Compose the force response with `ExpResponse` or
+`LogDiagonalFpResponse` (and `ElementwiseResponse` for element blocks) to
+optimize transformed parameters; the energy factory must use the same transform.
+See the [equilibrium example](../examples/torch/torch-equilibrium-response.md) and the
+[Torch shell fit](../examples/torch/torch-shell-material-fit.md).
 
 ## Configuration lifetime and scale
 
 Treat geometry, fixed fields, and captured material configuration as immutable
-after construction; rebuild objects when they change. Native volumetric Python
-FEM and Torch FEM both snapshot the fixed spatial responses at their quadrature points.
+after construction; rebuild objects when they change. Native FEM snapshots the
+fixed spatial responses at its quadrature points, whichever material it uses.
 Mutating a custom field's captured data is not a portable update mechanism.
 
 Equilibrium JVP/VJP avoid numerical Jacobian assembly, but the declared dense

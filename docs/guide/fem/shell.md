@@ -209,6 +209,10 @@ the geometric second derivative shown above. Fixed-pose force Responses can cach
 current geometry because displacement is not their active input. Rebuild them
 after changing the pose or any other fixed configuration.
 
+All three accept a [shell material written in Python](python-materials.md#shell-materials),
+a `PyShellMaterial` subclass, in place of `KoiterStVK`. It receives the packed
+forms $s$ of a whole batch of faces in one call; the geometric parts above stay native.
+
 The paired [material fitting](../../examples/fitting/shell-fixed-pose-material-fit.md)
 and [plastic fitting](../../examples/fitting/shell-fixed-pose-fp-fit.md) examples
 check their force predictions against the displacement gradient of `ShellFemEnergy`

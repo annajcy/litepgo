@@ -18,6 +18,14 @@ They use generated reference-element data and write no files.
 - [Nonlinear response Hessians](response-hessian.md). Compose Triangle P1 sampling
   with exponentiation and verify the exact second-order energy chain rule.
 
+Two Python-only examples write a material in NumPy and let native FEM assemble it;
+see [materials written in Python](../../guide/fem/python-materials.md).
+
+- [Volumetric material in NumPy](numpy-neohookean.md). Closed-form Neo-Hookean
+  derivatives, Hermite hexes, both force responses and an equilibrium solve.
+- [Shell material in NumPy](numpy-koiter-shell.md). Koiter StVK in packed forms,
+  including the natural-form mixed derivative.
+
 The [basis guide](../../guide/fem/basis.md) defines the supported formulations,
 coefficient orders, and derivative layouts. Continue with
 [quadrature](../../guide/fem/quadrature.md) for reference integration rules and

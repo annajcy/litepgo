@@ -68,7 +68,8 @@ export default defineConfig({
           { text: 'Shells and natural geometry', link: '/guide/fem/shell' },
           { text: 'Hex Hermite DOFs', link: '/guide/fem/hermite' },
           { text: 'Point embedding and boundary sampling', link: '/guide/fem/embedding' },
-          { text: 'Force responses', link: '/guide/fem/force-responses' }
+          { text: 'Force responses', link: '/guide/fem/force-responses' },
+          { text: 'Materials written in Python', link: '/guide/fem/python-materials' }
         ] },
         { text: 'Solvers', link: '/guide/solver/', collapsed: true, items: [
           { text: 'Newton method', link: '/guide/solver/newton' },
@@ -93,7 +94,9 @@ export default defineConfig({
           { text: 'Tet P1 basis and field', link: '/examples/fem/tet-p1-basis' },
           { text: 'Hermite interpolation', link: '/examples/fem/hermite-interpolation' },
           { text: 'Quadrature integration', link: '/examples/fem/quadrature-integration' },
-          { text: 'Nonlinear response Hessians', link: '/examples/fem/response-hessian' }
+          { text: 'Nonlinear response Hessians', link: '/examples/fem/response-hessian' },
+          { text: 'Volumetric material in NumPy', link: '/examples/fem/numpy-neohookean' },
+          { text: 'Shell material in NumPy', link: '/examples/fem/numpy-koiter-shell' }
         ] },
         { text: 'Energies and responses', link: '/examples/energy/', collapsed: true, items: [
           { text: 'Custom scalar energies', link: '/examples/energy/custom-energy' },
@@ -151,6 +154,7 @@ export default defineConfig({
           { text: 'Learn a neural material', link: '/examples/torch/neural-neohookean' },
           { text: 'Force responses through equilibrium', link: '/examples/torch/torch-equilibrium-response' },
           { text: 'Constitutive energy in Torch', link: '/examples/torch/torch-neohookean' },
+          { text: 'Shell material written in Torch', link: '/examples/torch/torch-shell-material-fit' },
           { text: 'Volume material with L-BFGS', link: '/examples/torch/volume-equilibrium-material-fit-torch' },
           { text: 'Shell material with L-BFGS', link: '/examples/torch/shell-equilibrium-material-fit-torch' },
           { text: 'Volume plastic stretches with L-BFGS', link: '/examples/torch/volume-equilibrium-fp-fit-torch' },

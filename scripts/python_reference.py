@@ -61,12 +61,12 @@ def main() -> None:
     ), "Missing Torch adapters"
     assert all(
         isinstance(modules["litepgo.torch"].get(name), doc.Class)
-        for name in (
-            "TorchVolumetricFemEnergy",
-            "TorchVolumetricFemMaterialResponse",
-            "TorchVolumetricFemFpResponse",
-        )
-    ), "Missing Torch FEM classes"
+        for name in ("TorchVolumetricMaterial", "TorchShellMaterial")
+    ), "Missing Torch material classes"
+    assert all(
+        isinstance(modules["litepgo.fem"].get(name), doc.Class)
+        for name in ("PyVolumetricMaterial", "PyShellMaterial")
+    ), "Missing Python material base classes"
     assert any(
         name.startswith("VolumetricFemEnergy[") and isinstance(member, doc.Class)
         for name, member in modules["litepgo.fem"].members.items()

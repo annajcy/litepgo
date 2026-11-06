@@ -23,8 +23,12 @@ $u_0$ fixed. No displacement solve or equilibrium sensitivity appears here.
 | --- | --- | --- |
 | `VolumetricFemForceMaterialResponse[M,B,Q]` | parameter map, displacement map, rest fields, displacement, Fp fields, batch size | Material parameters |
 | `VolumetricFemForceFpResponse[M,B,Q]` | parameter map, displacement map, rest fields, displacement, theta fields, batch size | Nine column-packed Fp entries |
-| `ShellFemForceMaterialResponse[M]` | parameter map, stencil map, rest data, displacement, thickness, batch size | Two plane-stress parameters |
+| `ShellFemForceMaterialResponse[M]` | parameter map, stencil map, rest data, displacement, thickness, batch size | Material parameters (two for `KoiterStVK`) |
 | `ShellFemForceFpResponse[M]` | parameter map, stencil map, rest data, displacement, thickness, theta, batch size | Nine column-packed Fp entries |
+
+`M` may be a native material or a [material written in Python](python-materials.md);
+a Python material then also supplies the mixed second derivative requested by
+the Jacobian (`d2W_dF_dtheta`, `d2W_dF_dFp`, `d2W_dab_dtheta` or `d2W_dab_dabarbbar`).
 
 Use `ConstantDofMap` for a shared block or `ElementDofMap` for independent
 per-element blocks. Fixed geometry/pose arrays and maps must describe the same

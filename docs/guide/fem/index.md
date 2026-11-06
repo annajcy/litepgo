@@ -14,11 +14,11 @@ interfaces consumed by solvers.
 ```mermaid
 flowchart TB
   accTitle: FEM module evaluation architecture
-  accDescr: Fixed spatial responses are sampled at construction. Physical displacement DOFs pass through basis transforms and affine deformation-gradient sampling blocks, or shell stencil kinematics, into material formulas and global assembly.
+  accDescr: Fixed spatial responses are sampled at construction. Physical displacement DOFs pass through basis transforms and affine deformation-gradient sampling blocks, or shell stencil kinematics, into material formulas (native pointwise or one batch call, such as a Python material) and global assembly.
   inputs["Rest geometry, DOF maps and state"] --> solid["Solid: DOF transform and cached sampling blocks"]
   inputs --> shell["Shell: triangle stencils and forms"]
-  solid --> solidLocal["Pointwise volumetric material formulas"]
-  shell --> shellLocal["Internal shell energy formula"]
+  solid --> solidLocal["Volumetric material: pointwise C++ or one batch call"]
+  shell --> shellLocal["Shell material: pointwise C++ or one batch call"]
   solidLocal --> volume["Volume quadrature and rest measure"]
   shellLocal --> area["Face density and original area"]
   volume --> assembly["MeshEnergy / MeshResponse assembly"]
@@ -48,7 +48,7 @@ separate mathematical components from assembly and geometry queries:
 | --- | --- |
 | `basis/` | Reference shape functions and coefficient conventions |
 | `quadrature/` | Reference points and integration weights |
-| `material/` | Pointwise shell and volumetric constitutive laws |
+| `material/` | Pointwise shell and volumetric constitutive laws; batch-material interfaces |
 | `response/` | Spatial interpolation, coefficient sampling and parameter maps |
 | `kinematics/` | Geometric quantities and feasible-step formulas |
 | `integration/` | Physical quadrature data and integration helpers |
@@ -79,6 +79,7 @@ The old include paths have no compatibility forwarding headers. Headers under
 | Interpolation and integration | Sampling maps, material formulas, quadrature, `VolumetricElement3D` | [Spatial responses and coefficient maps](fields.md) |
 | Solid elasticity | `deformation_gradient_sampling_response`, `NeoHookean`, `VolumetricFemEnergy` | [Volumetric elasticity](volume.md) |
 | Shell elasticity | Mid-edge stencils/forms, `KoiterStVK`, `ShellFemEnergy` | [Shells and natural geometry](shell.md) |
+| Materials in Python | `PyVolumetricMaterial`, `PyShellMaterial`, Torch subclasses | [Materials written in Python](python-materials.md) |
 | Physical derivative DOFs | `BasisDofTransform[HexHermiteBasis]` | [Hex Hermite](hermite.md) |
 | Geometry queries and sampling | `ElementLocator`, `PointEmbedding`, displacement maps, `sample_boundary` | [Embedding and boundary sampling](embedding.md) |
 | Fixed-pose parameter derivatives | Volumetric/shell material-force and plastic-force responses | [Force responses](force-responses.md) |

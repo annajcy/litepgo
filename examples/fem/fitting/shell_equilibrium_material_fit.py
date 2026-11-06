@@ -10,8 +10,6 @@ from functools import partial
 import numpy as np
 from litepgo import dof, energy, fem, mesh, solver
 
-ElasticEnergy = fem.ShellFemEnergy[fem.KoiterStVK]
-ForceParameterResponse = fem.ShellFemForceMaterialResponse[fem.KoiterStVK]
 
 
 @dataclass
@@ -56,7 +54,11 @@ def make_problem():
     )
 
 
-def make_factories(problem):
+def make_factories(problem, material=fem.KoiterStVK):
+    """Energy and force-parameter response factories; material fills the Material slot."""
+    ElasticEnergy = fem.ShellFemEnergy[material]
+    ForceParameterResponse = fem.ShellFemForceMaterialResponse[material]
+
     def make_energy(theta):
         return ElasticEnergy(
             problem.displacement_map,

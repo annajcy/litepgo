@@ -16,8 +16,8 @@ together. Run commands below from its root.
 | --- | --- |
 | `src/core/` | C++ public modules and their implementations |
 | `src/binding/` | nanobind registrations |
-| `src/python/` | Public Python facades and Torch adapters |
-| `examples/` | Standalone paired programs and Python-only Torch examples |
+| `src/python/` | Public Python facades, Python-material bases and Torch adapters |
+| `examples/` | Standalone paired programs and Python-only material and Torch examples |
 | `tests/cpp/`, `tests/python/` | Unit and integration/regression tests |
 | `docs/` | User manual, formulations, example explanations, and site configuration |
 | `assets/` | Bundled test/example geometry and provenance notes |
