@@ -86,7 +86,7 @@ def test_dynamic_capability_errors_propagate_through_native_composition():
 
 
 def test_public_pattern_protocol_is_removed_and_dimensions_validated():
-    r = energy.AffineMappedResponse(np.eye(2))
+    r = energy.AffineResponse(np.eye(2))
     for name in ("update_patterns", "has_fixed_pattern", "jacobian_pattern", "hessian_pattern",
                  "eval_jacobian_into", "eval_hessian_into", "eval_value_and_jacobian_into"):
         assert not hasattr(r, name)
@@ -95,9 +95,9 @@ def test_public_pattern_protocol_is_removed_and_dimensions_validated():
 
 
 def test_composition_retains_structure_under_numerical_cancellation():
-    duplicate = energy.AffineMappedResponse(np.ones((2, 1)))
+    duplicate = energy.AffineResponse(np.ones((2, 1)))
     nonlinear = energy.ComposedResponse(energy.ExpResponse(2), duplicate)
-    r = energy.ComposedResponse(energy.AffineMappedResponse(np.array([[1., -1.]])), nonlinear)
+    r = energy.ComposedResponse(energy.AffineResponse(np.array([[1., -1.]])), nonlinear)
     x = np.array([.3])
     J = r.eval_jacobian(x)
     H = r.eval_hessian(x, np.ones(1))

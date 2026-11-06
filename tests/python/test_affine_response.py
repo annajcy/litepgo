@@ -6,11 +6,11 @@ from litepgo import energy
 
 @pytest.mark.parametrize("convert", [np.asarray, sp.csc_matrix, sp.csr_matrix, sp.coo_matrix, sp.csc_array])
 def test_values_derivatives_snapshots_and_export(convert):
-    assert "AffineMappedResponse" in energy.__all__
+    assert "AffineResponse" in energy.__all__
     A = np.array([[1., 0., -2.], [.5, 3., 0.]])
     source = convert(A.copy())
     offset = np.array([4., -1.])
-    r = energy.AffineMappedResponse(A=source, offset=offset)
+    r = energy.AffineResponse(A=source, offset=offset)
     x = np.array([1., 2., -3.])
     dx, w = np.array([.2, -.5, .7]), np.array([2., -3.])
     offset[:] = np.nan
@@ -35,7 +35,7 @@ def test_values_derivatives_snapshots_and_export(convert):
 
 def test_duplicate_sparse_entries_stored_zeros_and_strided_input():
     A = sp.coo_matrix(([1., 2., 0., -1.], ([0, 0, 1, 1], [0, 0, 1, 2])), shape=(2, 3))
-    r = energy.AffineMappedResponse(A)
+    r = energy.AffineResponse(A)
     x = np.arange(6.)[::2]
     J = r.eval_jacobian(x)
     np.testing.assert_array_equal(J.toarray(), [[3., 0., 0.], [0., 0., -1.]])
@@ -43,15 +43,15 @@ def test_duplicate_sparse_entries_stored_zeros_and_strided_input():
     np.testing.assert_array_equal(r.eval_value(x), [0., -4.])
     assert A.nnz == 4  # Conversion does not mutate the caller's sparse matrix.
     dense = np.arange(12.).reshape(3, 4).T[::2]
-    np.testing.assert_allclose(energy.AffineMappedResponse(dense).eval_value(x), dense @ x)
+    np.testing.assert_allclose(energy.AffineResponse(dense).eval_value(x), dense @ x)
 
 
 @pytest.mark.parametrize("offset", [None, np.empty(0)])
 def test_zero_offset_identity_and_rank_deficient_maps(offset):
     x = np.array([1., -2., 3.])
-    np.testing.assert_array_equal(energy.AffineMappedResponse(np.eye(3), offset).eval_value(x), x)
-    np.testing.assert_array_equal(energy.AffineMappedResponse(np.ones((2, 3)), offset).eval_value(x), [2., 2.])
-    constant = energy.AffineMappedResponse(np.zeros((2, 3)), np.array([2., -1.]))
+    np.testing.assert_array_equal(energy.AffineResponse(np.eye(3), offset).eval_value(x), x)
+    np.testing.assert_array_equal(energy.AffineResponse(np.ones((2, 3)), offset).eval_value(x), [2., 2.])
+    constant = energy.AffineResponse(np.zeros((2, 3)), np.array([2., -1.]))
     np.testing.assert_array_equal(constant.eval_value(x), [2., -1.])
     assert constant.eval_jacobian(x).nnz == 0
     np.testing.assert_array_equal(constant.eval_jvp(x, x), 0)
@@ -59,7 +59,7 @@ def test_zero_offset_identity_and_rank_deficient_maps(offset):
 
 @pytest.mark.parametrize("m,n", [(0, 0), (0, 3), (2, 0)])
 def test_empty_spaces(m, n):
-    r = energy.AffineMappedResponse(np.zeros((m, n)), np.ones(m))
+    r = energy.AffineResponse(np.zeros((m, n)), np.ones(m))
     x = np.zeros(n)
     np.testing.assert_array_equal(r.eval_value(x), np.ones(m))
     assert r.eval_jacobian(x).shape == (m, n)
@@ -71,7 +71,7 @@ def test_empty_spaces(m, n):
 def test_composition_exact_hessian_and_finite_differences():
     A = np.array([[1., 0., -2.], [.5, 3., 0.]])
     b = np.array([.1, -.2])
-    affine = energy.AffineMappedResponse(A, b)
+    affine = energy.AffineResponse(A, b)
     r = energy.ComposedResponse(energy.ExpResponse(2), affine)
     x, w = np.array([-.3, .1, .2]), np.array([.4, -.7])
     y = np.exp(A @ x + b)
@@ -86,14 +86,14 @@ def test_composition_exact_hessian_and_finite_differences():
 def test_invalid_inputs_and_overflow():
     for bad in [np.nan, np.inf, -np.inf]:
         with pytest.raises(ValueError):
-            energy.AffineMappedResponse([[bad]])
+            energy.AffineResponse([[bad]])
         with pytest.raises(ValueError):
-            energy.AffineMappedResponse(np.eye(2), np.array([1., bad]))
+            energy.AffineResponse(np.eye(2), np.array([1., bad]))
     with pytest.raises(ValueError):
-        energy.AffineMappedResponse(np.ones((2, 3)), np.zeros(3))
+        energy.AffineResponse(np.ones((2, 3)), np.zeros(3))
     with pytest.raises(TypeError):
-        energy.AffineMappedResponse(np.ones(3))
-    r = energy.AffineMappedResponse(np.ones((2, 3)))
+        energy.AffineResponse(np.ones(3))
+    r = energy.AffineResponse(np.ones((2, 3)))
     for x in [np.zeros(2), np.full(3, np.nan)]:
         with pytest.raises(ValueError):
             r.eval_value(x)
@@ -101,7 +101,7 @@ def test_invalid_inputs_and_overflow():
         r.eval_hessian(np.zeros(3), np.ones(3))
     with pytest.raises(ValueError):
         r.eval_hessian(np.zeros(3), np.full(2, np.inf))
-    huge = energy.AffineMappedResponse([[np.finfo(float).max]])
+    huge = energy.AffineResponse([[np.finfo(float).max]])
     for evaluate in [lambda: huge.eval_value(np.array([2.])),
                      lambda: huge.eval_jvp(np.zeros(1), np.array([2.])),
                      lambda: huge.eval_vjp(np.zeros(1), np.array([2.]))]:

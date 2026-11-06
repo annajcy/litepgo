@@ -11,7 +11,7 @@ def main():
     xi = np.array([0.2, 0.3])
     c = np.array([-0.2, 0.1, 0.4])
     N = fem.TriangleP1Basis.eval_N(xi)
-    sample = energy.AffineMappedResponse(N[None, :])
+    sample = energy.AffineResponse(N[None, :])
     response = energy.ComposedResponse(energy.ExpResponse(1), sample)
     theta = response.eval_value(c)[0]
     J = response.eval_jacobian(c).toarray()

@@ -1,5 +1,5 @@
 // Fixed-point Triangle P1 interpolation composed with a positive nonlinear response.
-#include "litepgo/energy/response/affine_mapped_response.hpp"
+#include "litepgo/energy/response/affine_response.hpp"
 #include "litepgo/energy/response/composed_response.hpp"
 #include "litepgo/energy/response/exp_response.hpp"
 #include "litepgo/fem/basis/2d/triangle_p1_basis.hpp"
@@ -14,7 +14,7 @@ int main() {
     const Eigen::Vector2d xi(0.2, 0.3);
     const Eigen::Vector3d c(-0.2, 0.1, 0.4);
     const Eigen::Vector3d N = fem::TriangleP1Basis::eval_N(xi);
-    const auto sample = std::make_shared<energy::AffineMappedResponse>(SpMat(N.transpose().sparseView()));
+    const auto sample = std::make_shared<energy::AffineResponse>(SpMat(N.transpose().sparseView()));
     energy::ComposedResponse response(std::make_shared<energy::ExpResponse>(1), sample);
     const double theta = response.eval_value(c)[0];
     const Eigen::MatrixXd J = response.eval_jacobian(c);

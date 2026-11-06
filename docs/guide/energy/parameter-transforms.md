@@ -27,7 +27,7 @@ J^T w = J_{inner}(p)^T(J_{outer}(c)^T w).
 $$
 
 `ComposedResponse` also implements exact weighted Hessians when both children
-support them. `AffineMappedResponse` and `ExpResponse` support second derivatives; `ElementwiseResponse`
+support them. `AffineResponse` and `ExpResponse` support second derivatives; `ElementwiseResponse`
 and the FEM-specific responses currently remain first-order. See
 [Response Hessians](response-hessians.md) for the two-term chain rule.
 
@@ -37,7 +37,7 @@ Jacobian fallback. Native FEM mesh responses may form local element Jacobians.
 
 ## Affine maps
 
-`energy.AffineMappedResponse(A, offset=None)` directly represents
+`energy.AffineResponse(A, offset=None)` directly represents
 
 $$
 y=Ax+b,\qquad J=A,\qquad Jv=Av,\qquad J^Tw=A^Tw,\qquad H_R(x,w)=0.
@@ -53,7 +53,7 @@ import numpy as np
 from litepgo import energy
 
 A = np.array([[1.0, 0.0, -2.0], [0.5, 3.0, 0.0]])
-r = energy.AffineMappedResponse(A, offset=np.array([4.0, -1.0]))
+r = energy.AffineResponse(A, offset=np.array([4.0, -1.0]))
 x = np.array([1.0, 2.0, -3.0])
 np.testing.assert_allclose(r.eval_value(x), [11.0, 5.5])
 np.testing.assert_array_equal(r.eval_jacobian(x).toarray(), A)
@@ -72,11 +72,11 @@ Non-finite numerical results, including overflow in JVP/VJP, raise a domain erro
 C++ accepts a `SpMat` and an optional `Vec` (an empty vector means zero):
 
 ```cpp
-#include "litepgo/energy/response/affine_mapped_response.hpp"
+#include "litepgo/energy/response/affine_response.hpp"
 
 Eigen::Matrix<double, 2, 3> A;
 A << 1, 0, -2, 0.5, 3, 0;
-litepgo::energy::AffineMappedResponse r(A.sparseView(), Eigen::Vector2d(4, -1));
+litepgo::energy::AffineResponse r(A.sparseView(), Eigen::Vector2d(4, -1));
 const auto y = r.eval_value(Eigen::Vector3d(1, 2, -3));
 ```
 

@@ -33,7 +33,7 @@ symmetric matrix**, including both off-diagonal entries. Inputs and weights must
 be finite and have the declared dimensions. Unsupported second derivatives raise
 `std::logic_error` / Python `RuntimeError`, even when weights are zero.
 
-`AffineMappedResponse`, `ExpResponse`, and compositions whose children both support Hessians implement
+`AffineResponse`, `ExpResponse`, and compositions whose children both support Hessians implement
 this interface. Existing first-order subclasses remain valid and report
 `has_hessian == false` unless they explicitly opt in. `ElementwiseResponse`,
 `MeshResponse`, FEM force responses, and equilibrium responses currently remain

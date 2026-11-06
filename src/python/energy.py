@@ -1,6 +1,6 @@
 """Energies and their composites, mirroring src/core/energy.
 
-AffineMappedResponse(A, offset=None) owns a fixed sparse matrix and offset, and evaluates
+AffineResponse(A, offset=None) owns a fixed sparse matrix and offset, and evaluates
 A @ x + offset. Dense 2-D arrays and SciPy sparse matrices are accepted. Omitted
 or empty offset means zero. Jacobian = A, JVP = A @ dx, VJP = A.T @ weights;
 weighted Hessians are zero. Rectangular, rank-deficient, and empty maps are valid.
@@ -48,7 +48,7 @@ defaults prepare and multiply the explicit Jacobian.
 
 Response.eval_hessian returns the exact Hessian of weights @ R(x), holding
 weights fixed, as a full symmetric (num_inputs, num_inputs) sparse matrix.
-Check has_hessian first; unsupported calls raise RuntimeError. AffineMappedResponse,
+Check has_hessian first; unsupported calls raise RuntimeError. AffineResponse,
 ExpResponse and compositions with two second-order children support it.
 
 Subclass FixedPatternResponse(pattern, hessian_pattern=None) or
@@ -107,8 +107,8 @@ MeshEnergy = _native.MeshEnergy
 MeshResponse = _native.MeshResponse
 __all__ += ["MeshEnergy", "MeshResponse"]
 
-AffineMappedResponse = _native.AffineMappedResponse
+AffineResponse = _native.AffineResponse
 ComposedResponse = _native.ComposedResponse
 ElementwiseResponse = _native.ElementwiseResponse
 ExpResponse = _native.ExpResponse
-__all__ += ["AffineMappedResponse", "ComposedResponse", "ElementwiseResponse", "ExpResponse"]
+__all__ += ["AffineResponse", "ComposedResponse", "ElementwiseResponse", "ExpResponse"]

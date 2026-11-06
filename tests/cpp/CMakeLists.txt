@@ -14,7 +14,7 @@ add_dependencies(litepgo_tests litepgo_solver_tests)
 gtest_discover_tests(litepgo_solver_tests DISCOVERY_MODE PRE_TEST)
 
 add_executable(litepgo_energy_tests
-    energy/response/affine_mapped_response_gtest.cpp
+    energy/response/affine_response_gtest.cpp
     energy/response/response_hessian_gtest.cpp
     energy/response/composed_response_gtest.cpp
     energy/response/mesh_response_gtest.cpp
