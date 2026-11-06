@@ -27,7 +27,7 @@ flowchart TB
 
 1. **Mesh:** rest positions and element connectivity.
 2. **DOF map:** ordered global scalar indices used by each element or stencil.
-3. **Field/element:** interpolation, coordinate conversion, and integration.
+3. **Response/element:** interpolation, coordinate conversion, and integration.
 4. **Energy or response:** a scalar objective or vector-valued measurement.
 5. **Solver:** an optimization algorithm using the assembled derivatives.
 
@@ -99,10 +99,10 @@ equilibrium sensitivities.
 
 ## Ownership and concurrency
 
-Meshes and basic fields own snapshots. Some composed C++ fields/local material
-objects borrow other fields; those inputs must outlive them. Python bindings keep
-borrowed field inputs alive. An energy may own arrays of fields while a field
-inside that array still borrows an external input: keep that dependency alive too.
+Meshes and interpolated Responses own snapshots. Composed Responses own their
+children, whose configuration must remain fixed. FEM energies and force responses
+sample their fixed spatial configuration at construction and retain numerical
+data rather than the source Responses. Rebuild them after changing configuration.
 
 ### Python ownership must remain acyclic
 
@@ -112,7 +112,7 @@ C++. Do not give a child a strong reference back to its owner, directly or throu
 a list, closure, bound method, or another model object. Violating this contract
 can leak the entire ownership cycle even after `gc.collect()`.
 
-This applies to Energy/Response composites, contact broad phases, FEM Field
+This applies to Energy/Response composites, contact broad phases, spatial Response
 dependencies, and equilibrium factories. Native Energy and Response instances
 support `weakref.ref`; use a weak reference when a child needs to reach its owner:
 

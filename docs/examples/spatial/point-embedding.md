@@ -20,7 +20,7 @@ or Hex Hermite. Hermite has 24 physical DOFs per vertex on these axis-aligned bo
 returns element IDs and $\xi$. Construct a second `PointEmbedding` from known
 IDs/coordinates. `build_point_displacement_map[B]` creates $W$ for each
 embedding. Independently gather physical DOFs, apply `BasisDofTransform`, create
-an `InterpolatedField3D`, and evaluate it directly. `SurfaceKinematics` then uses
+an `InterpolatedResponse`, and evaluate it directly. `SurfaceKinematics` then uses
 that same $W$ for positions/displacements.
 
 **Expected result.** Three lines, one each for TetP1, HexQ1, and HexHermite,

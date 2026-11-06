@@ -46,8 +46,8 @@ reference vertex from `B.coefficient_info(i).point` and evaluate the target:
 | $(0,0,1)$ | -1 |
 
 The scalar field's coefficient matrix is therefore `[[0],[2],[3],[-1]]`,
-with shape `(4,1)`. Construct `fem.InterpolatedField3D[B](coefficients)` in
-Python or `fem::InterpolatedField3D<B>` in C++. Query `field.eval_value(xi)[0]`
+with shape `(4,1)`. Construct `fem.InterpolatedResponse[B](coefficients)` in
+Python or `fem::InterpolatedResponse<B>` in C++. Query `field.eval_value(xi)[0]`
 to evaluate the interpolant. Its single component follows
 
 $$

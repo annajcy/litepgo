@@ -8,9 +8,8 @@ checks the identity plastic state, then advances the prescribed twist through
 four nonzero increments, warm-starting each equilibrium.
 
 **API walkthrough.** A width-3 `VertexDofMap` gathers rest and plastic nodal
-values. Build `InterpolatedField3D[TetP1Basis]` for each, then
-`DeformationGradientField3D(u_p, X)` for each $F_p$. Those borrowed inputs
-must stay alive. Pass the fields to `VolumetricFemEnergy`, construct fixed xyz
+values. Build `InterpolatedResponse[TetP1Basis]` for each, then
+`DeformationGradientResponse(u_p, X)` for each $F_p$. The response owns its fixed children. Pass the spatial responses to `VolumetricFemEnergy`, construct fixed xyz
 indices for the bottom/top faces, and call Newton on the elastic energy alone.
 
 **Expected result.** Both runs converge; the released run matches its compatible

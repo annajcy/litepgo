@@ -108,7 +108,7 @@ E, force, stiffness = potential.eval(u, gradient=True, hessian=energy.HessianKin
 The first version fixes TetP1 displacement interpolation, centroid quadrature,
 and CPU float64. `displacement_map` is a `VertexDofMap` with four vertices per
 element and three DOFs per vertex. As with native volumetric FEM, the three lists
-have one `Field3D` per element: reference positions (3 components), `Fp` (9
+have one spatial `Response` per element: reference positions (3 components), `Fp` (9
 column-major components), and `theta` (a common positive component count).
 Reference geometry derivatives and field samples are cached at construction.
 Rebuild the energy after changing those fields. `u` is displacement, not position.
@@ -132,8 +132,8 @@ Use deterministic, read-only, thread-safe material evaluation; batch-coupled
 operations such as training-mode batch normalization are outside this contract.
 Do not detach `F` from autograd when implementing a nonconstant density.
 
-The adapter reuses native `DeformationGradientField3D` to cache the local linear
-map from displacement to `F`. It differentiates the density in the nine `F`
+The adapter constructs the local linear map from basis derivatives and the geometry
+Response Jacobian, then caches it. It differentiates the density in the nine `F`
 components, pulls the derivatives back to the twelve local displacement DOFs,
 and returns batches to C++. There is no global Torch Hessian. Value-only calls
 skip derivative construction. `Projected` uses the same per-element eigenvalue
@@ -223,7 +223,7 @@ factories:
 
 ```python
 def make_energy(p):
-    active_theta = [fem.IdentityField3D(p)] * displacement_map.num_elements
+    active_theta = [energy.AffineResponse(np.zeros((len(p), 3)), p)] * displacement_map.num_elements
     return TorchVolumetricFemEnergy(
         displacement_map, rest_position_fields, Fp, active_theta, material=material,
     )
@@ -262,7 +262,7 @@ differences, and tests that forbid explicit Jacobians while evaluating products.
 
 Treat geometry, fixed fields, and captured material configuration as immutable
 after construction; rebuild objects when they change. Native volumetric Python
-FEM shares field objects, whereas Torch FEM snapshots their centroid samples.
+FEM and Torch FEM both snapshot the fixed spatial responses at their quadrature points.
 Mutating a custom field's captured data is not a portable update mechanism.
 
 Equilibrium JVP/VJP avoid numerical Jacobian assembly, but the declared dense

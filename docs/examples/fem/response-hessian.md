@@ -26,8 +26,7 @@ H_E=J_\theta^TJ_\theta+H_\theta(c,\theta)
 $$
 
 Both terms contribute equally. This demonstrates the
-[weighted Hessian API](../../guide/energy/response-hessians.md) without changing
-Field or introducing an Energy adapter. It evaluates one point, not a quadrature
+[weighted Hessian API](../../guide/energy/response-hessians.md) without introducing an Energy adapter. It evaluates one point, not a quadrature
 integral, so it applies no geometric measure.
 
 ## Run

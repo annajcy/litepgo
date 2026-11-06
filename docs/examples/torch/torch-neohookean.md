@@ -20,7 +20,7 @@ $$
 `Fp` fields store column-major vectors; the callable receives ordinary `(B,3,3)`
 matrices. The callable rejects lambda < 0 or mu <= 0, matching the native material domain.
 It includes `det(Fp)` itself; the adapter only multiplies the reference
-integration weight. Field lists are sampled and snapshotted at the centroid.
+integration weight. Spatial Response lists are sampled and snapshotted at the centroid.
 The material object is retained and must remain fixed during evaluation/solving.
 
 Read `NeoHookean.forward` for the formula, `make_problem` for the shared native/Torch

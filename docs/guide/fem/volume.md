@@ -7,7 +7,7 @@ solve. This chapter defines the implemented model and builds one complete elemen
 ## Solid evaluation pipeline
 
 The high-level energy gathers physical displacement DOFs and transforms them
-before field evaluation. Material derivatives travel back through the same
+before applying cached deformation-gradient matrices. Material derivatives travel back through the same
 kinematics and transform; reference volume is applied once during integration.
 
 ```mermaid
@@ -15,11 +15,11 @@ flowchart TB
   accTitle: Volumetric energy and derivative pipeline
   accDescr: Physical displacement DOFs become reference coefficients and a displacement field. Rest geometry converts its derivative to F. Material evaluation uses F, prescribed Fp and theta; quadrature and pullbacks return physical local derivatives for assembly.
   dofs["Physical element displacement DOFs"] --> transform["BasisDofTransform"]
-  transform --> field["Displacement field coefficients"]
-  field --> F["DeformationGradientField3D: F"]
-  geometry["Rest coordinate field"] --> F
+  transform --> field["Displacement coefficients"]
+  field --> F["vec(F) = vec(I) + B_q c"]
+  geometry["Rest geometry response (sampled at construction)"] --> F
   F --> material["Material density and derivatives"]
-  fixed["Prescribed Fp and theta fields"] --> material
+  fixed["Cached Fp and theta samples"] --> material
   material --> integrate["Rest-volume quadrature"]
   integrate --> pullback["Physical DOF pullback and assembly"]
 ```
@@ -71,10 +71,10 @@ from litepgo import dof, energy, fem, mesh
 X = np.array([[0., 0., 0.], [1., 0., 0.], [0., 1., 0.], [0., 0., 1.]])
 topology = mesh.TetTopology(4, np.array([[0, 1, 2, 3]], dtype=np.int32))
 mapping = dof.VertexDofMap(topology, 3)
-XField = fem.InterpolatedField3D[fem.TetP1Basis]
+XField = fem.InterpolatedResponse[fem.TetP1Basis]
 geometry = [XField(mapping.gather(0, X.ravel()))]
-plastic = [fem.IdentityField3D(np.eye(3).ravel(order="F"))]
-material = [fem.IdentityField3D(np.array([2., 3.]))]
+plastic = [energy.AffineResponse(np.zeros((9, 3)), np.eye(3).ravel(order="F"))]
+material = [energy.AffineResponse(np.zeros((2, 3)), np.array([2., 3.]))]
 Energy = fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis,
                                   fem.TetCentroidQuadrature]
 elastic = Energy(mapping, geometry, plastic, material)
@@ -86,10 +86,10 @@ assert np.linalg.norm(gradient) < 1e-12
 assert hessian.shape == (12, 12)
 ```
 
-For multiple elements, pass one geometry, plastic, and material field per element,
-in the same order as the DOF map. Python shares ownership of the bound fields;
-C++ stores field vectors by value, whose internally borrowed dependencies must
-still remain alive. The geometry basis is independent of the displacement basis.
+For multiple elements, pass one geometry, plastic and material spatial response per element,
+in the same order as the DOF map. Construction snapshots the needed values and derivatives;
+no configuration response is retained. Rebuild after changing fixed configuration. Geometry
+and displacement may use different bases.
 
 ## Basis and quadrature choices
 
@@ -99,10 +99,8 @@ still remain alive. The geometry basis is independent of the displacement basis.
 | Hex Q1 | 3 | Hex Q1 | Gauss–Legendre 2 or 4 per axis |
 | Hex Hermite | 24 | Axis-aligned affine Hex Q1 boxes | Gauss–Legendre 2 or 4 per axis |
 
-The Python template has arguments `[Material, DisplacementBasis, Quadrature]`.
-Its field-type arguments are erased to shared `Field3D` objects. C++ additionally
-selects concrete field types. `.instances` lists the compiled Python combinations.
-See [Hex Hermite](hermite.md) before constructing a 24-DOF map.
+C++ and Python both have three template arguments: Material, DisplacementBasis and Quadrature.
+Python `.instances` lists compiled combinations. See [Hex Hermite](hermite.md) before constructing a 24-DOF map.
 
 The global energy is
 
@@ -111,28 +109,16 @@ E(u)=\sum_{e,q}w_q\det J_{X,e}(\xi_q)
  W\!\left(I+u_{e,\xi}J_{X,e}^{-1},F_{p,e},\theta_e\right).
 $$
 
-`VolumetricFemEnergy` composes transforms, deformation fields, local material
-energies, cached integration, and batched `MeshEnergy` assembly. For a custom
-integrator, the lower-level C++ construction is
-
-```cpp
-fem::DeformationGradientField3D F(u_field, X_field);
-fem::VolumetricMaterialLocalEnergyF3D<fem::NeoHookean> local(F, Fp_field, theta_field);
-fem::VolumetricElement3D<fem::TetCentroidQuadrature> element(X_field);
-Eigen::VectorXd g;
-Eigen::MatrixXd H;
-const double E = element.eval(local, &g, &H);
-```
-
-The `fem` alias denotes `litepgo::fem`. Keep all named fields alive. The local
-energy differentiates the active $F$-field coefficients; a composed deformation
-field makes these displacement coefficients. The element applies quadrature
-weights and reference volume exactly once.
+`VolumetricFemEnergy` caches geometry weights and dense kinematics, evaluates the material,
+and assembles through `MeshEnergy`. For custom integration, use pointwise material functions
+and the indexed accumulation callback of `VolumetricElement3D`; see
+[spatial responses and coefficient maps](fields.md#integration-and-local-material-code) for
+formulas, packing and the replacement for the removed Field-dependent local wrappers.
 
 ## Plastic fields and parameter-force derivatives
 
-An identity field describes a constant $F_p$; a
-`DeformationGradientField3D(u_p, X)` describes
+An affine response with a zero matrix describes a constant $F_p$; a
+`DeformationGradientResponse(u_p, X)` describes
 $F_p=I+\nabla_Xu_p$, where $u_p$ is a prescribed compatible displacement.
 The latter includes shear induced by a spatially varying rotation. It is not
 merely a rotation matrix field. If the displacement space contains $u_p$,

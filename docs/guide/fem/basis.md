@@ -8,7 +8,7 @@ u(\xi)=\sum_{a=0}^{n_b-1}N_a(\xi)c_a.
 $$
 
 The basis defines $N_a$ and its reference-coordinate derivatives; an
-[interpolated field](fields.md#interpolate-a-field) owns the coefficients.
+[interpolated response](fields.md#fixed-coefficients-variable-coordinates) owns the coefficients.
 For an $m$-component field, each $c_a$ becomes an $m$-component row. Tet P1 has
 four scalar basis functions, so a three-component Tet P1 field has twelve
 scalar coefficients.
@@ -91,7 +91,7 @@ Indices must be in `[0, num_basis_functions)`; invalid indices throw
 The [Hermite interpolation example](../../examples/fem/hermite-interpolation.md)
 uses these descriptions to prepare coefficients for a known polynomial and
 check its interpolated values, gradients, and Hessians in 1D, 2D, and 3D.
-Its 2D/3D cases also construct Fields and compare their values directly with
+Its 2D/3D cases also construct Responses and compare their values directly with
 the target at interior points.
 This query describes coefficient samples; `eval_N` and the two derivative
 methods evaluate an interpolant after its coefficients are known.
@@ -333,7 +333,7 @@ Quadrature point ordering is independent and remains last-coordinate-fastest.
 The runnable [Tet P1 basis example](../../examples/fem/tet-p1-basis.md)
 evaluates the shape functions and both derivative orders at the reference
 centroid. It then samples $u(r,s,t)=2r+3s-t$ at the four vertices, builds an
-`InterpolatedField3D`, and checks that the Field reconstructs the target at
+`InterpolatedResponse`, and checks that the response reconstructs the target at
 interior points. Its page includes run commands, expected results, and complete
 Python and C++ sources imported from `examples/fem/basis/`.
 

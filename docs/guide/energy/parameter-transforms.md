@@ -85,7 +85,7 @@ it returns the affine map itself. Use `ComposedResponse(outer, affine)` for
 `outer(Ax+b)`, or `ComposedResponse(affine, inner)` for `A*inner(x)+b`.
 The [Triangle P1 response example](../../examples/fem/response-hessian.md)
 uses this built-in map for sampling and composes it with `ExpResponse`.
-It introduces no Field or Basis API changes.
+It composes ordinary Responses without changing the Basis API.
 
 ## Plastic parameters
 
@@ -104,7 +104,7 @@ plastic = energy.ElementwiseResponse(parameter_map, fem.LogDiagonalFpResponse())
 # ElasticEnergy and ForceFp are the usual selected FEM template instantiations.
 def make_energy(p):
     packed = plastic.eval_value(p).reshape(-1, 9)
-    fields = [fem.IdentityField3D(row) for row in packed]
+    fields = [energy.AffineResponse(np.zeros((9, 3)), row) for row in packed]
     return ElasticEnergy(displacement_map, geometry, fields, theta)
 
 def make_response(u):
@@ -176,6 +176,6 @@ sparse gather/scatter structure, and refresh dynamic local child patterns at eac
 local input. Sparse patterns are still explicitly stored even for product-only use.
 
 This parameterization transforms physical **coefficients**. It does not change the
-existing affine Field contract, implement `exp(interpolated log field)` semantics,
+affine coefficient-map contract, implement `exp(interpolated log field)` semantics,
 or supply automatic differentiation. The two equilibrium factories still must
 represent the same total potential, including any parameter-dependent loads.

@@ -162,7 +162,7 @@ See the [composition example](../../examples/energy/energy-composition.md).
 Children must not strongly reference their owner; use `weakref.ref` for a
 back-reference. The bindings do not collect cross-language ownership cycles.
 See the [Python ownership contract](../concepts.md#python-ownership-must-remain-acyclic),
-which also applies to callbacks, contact broad phases, and FEM Field dependencies.
+which also applies to callbacks, contact broad phases, and spatial Response dependencies.
 
 Composites retain their child energies, which may be shared. They consume
 independent child results and cache only internal assembly plans keyed by returned

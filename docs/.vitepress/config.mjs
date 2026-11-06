@@ -63,7 +63,7 @@ export default defineConfig({
           { text: 'Quadrature', link: '/guide/fem/quadrature' },
           { text: 'Spatial interpolation response', link: '/guide/fem/interpolated-response' },
           { text: 'Coefficient sampling responses', link: '/guide/fem/sampling-responses' },
-          { text: 'Fields and quadrature', link: '/guide/fem/fields' },
+          { text: 'Spatial responses', link: '/guide/fem/fields' },
           { text: 'Volumetric elasticity', link: '/guide/fem/volume' },
           { text: 'Shells and natural geometry', link: '/guide/fem/shell' },
           { text: 'Hex Hermite DOFs', link: '/guide/fem/hermite' },

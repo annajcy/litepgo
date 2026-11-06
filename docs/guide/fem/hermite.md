@@ -18,7 +18,7 @@ flowchart TB
   physical["Shared physical slots at vertices"] --> gather["Gather element 8 by 24 data"]
   gather --> scale["Cell-size transform T"]
   scale --> coefficients["Reference coefficients: 64 by 3"]
-  coefficients --> evaluation["Field and local model evaluation"]
+  coefficients --> evaluation["Response and local model evaluation"]
   evaluation --> derivatives["Coefficient gradient and Hessian"]
   derivatives --> pullback["Transpose pullback to physical DOFs"]
 ```
@@ -54,7 +54,7 @@ For manual field evaluation:
 ```python
 transform = fem.BasisDofTransform[fem.HexHermiteBasis](X_field)
 coefficients = transform.to_coefficients(displacement_map.gather(e, u))
-u_field = fem.InterpolatedField3D[fem.HexHermiteBasis](coefficients)
+u_field = fem.InterpolatedResponse[fem.HexHermiteBasis](coefficients)
 ```
 
 Here `X_field` is the element's fixed coordinate field, `e` the element index,

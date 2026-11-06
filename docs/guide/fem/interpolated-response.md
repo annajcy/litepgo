@@ -78,7 +78,7 @@ $$
 
 where $c$ flattens $C$ in row-major order. Use [value_sampling_response](sampling-responses.md), which returns an
 `AffineResponse`; it is not the Jacobian of `InterpolatedResponse`.
-Existing Field and FEM consumers have not yet been migrated to the new component.
+FEM consumers now use spatial Responses and cache fixed configuration at construction; see [migration and contracts](fields.md).
 
 See the [paired spatial interpolation example](../../examples/fem/interpolated-response.md)
 for Tet geometry and a two-output Hex map with a nonzero weighted Hessian.

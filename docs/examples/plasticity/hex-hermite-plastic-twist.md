@@ -9,7 +9,7 @@ compatible plastic displacement belong to the same Hermite space.
 
 **API walkthrough.** `VertexDofMap(topology,24)` gathers physical DOFs.
 `BasisDofTransform[HexHermiteBasis]` converts plastic slots to reference
-coefficients before constructing `DeformationGradientField3D`. End clamps fix
+coefficients before constructing `DeformationGradientResponse`. End clamps fix
 slots 0, 1, 2, and 4: $u,u_{,X},u_{,Y},u_{,XY}$, which determine a face
 at constant $Z$. Fixing value slots alone would not fix that face field.
 

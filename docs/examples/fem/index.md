@@ -8,10 +8,10 @@ They use generated reference-element data and write no files.
 - [Spatial interpolation response](interpolated-response.md). Fixed coefficients,
   spatial Jacobians and exact weighted Hessians.
 - [Tet P1 basis and field interpolation](tet-p1-basis.md). Evaluate shape functions,
-  sample an affine target at vertices, and reconstruct it through a scalar Field.
+  sample an affine target at vertices, and reconstruct it through a scalar Response.
 - [Hermite interpolation](hermite-interpolation.md). Prepare value and derivative
   coefficients using sample descriptions; reconstruct a polynomial with the basis
-  in 1D and with Fields in 2D/3D.
+  in 1D and with Responses in 2D/3D.
 - [Quadrature integration](quadrature-integration.md). Integrate polynomials in
   1D/2D/3D and verify reference triangle/tetrahedron measures from weights.
 

@@ -95,15 +95,15 @@ root `litepgo` namespace, rather than through a `litepgo.common` Python module.
 
 ## What a model owns
 
-A mesh owns geometry; a DOF map owns the indexing convention. Fields provide
-interpolation, while local material objects evaluate densities and derivatives.
+A mesh owns geometry; a DOF map owns the indexing convention. Spatial Responses provide interpolation; coefficient sampling maps take explicit
+coefficient inputs. Material functions evaluate densities and derivatives.
 Integration adds the geometric measure, and assembly scatters local results into
 global vectors and sparse matrices. An optimizer then advances a caller-supplied
 unknown vector.
 
 Model geometry, prescribed plastic state, and callback configuration stay fixed
-during the corresponding evaluation. Composed native fields may borrow other
-fields; Python retains those dependencies. See [ownership and concurrency](concepts.md#ownership-and-concurrency)
+during the corresponding evaluation. FEM snapshots geometry and prescribed material samples at construction. Composed
+Responses own their children, which must remain fixed. See [ownership and concurrency](concepts.md#ownership-and-concurrency)
 before building custom model objects.
 
 For a complete path through these layers, start with the [chain solve](quickstart.md),

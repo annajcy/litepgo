@@ -5,7 +5,7 @@
 **Problem.** Reconstruct $u(\xi)=\sum_{d=1}^D\xi_d^2$ using cubic Hermite
 in 1D, Quad Hermite in 2D, and Hex Hermite in 3D. Prepare the coefficients
 using the basis descriptions rather than manually numbering derivative slots.
-In 2D and 3D, also put these coefficients into an interpolated Field and
+In 2D and 3D, also put these coefficients into an interpolated Response and
 compare its values with the target at three interior points.
 
 For `info = B.coefficient_info(i)`, the entry in coefficient row $i$ is
@@ -33,7 +33,7 @@ contractions must reproduce $u$, $\nabla_\xi u=2\xi$, and the packed Hessian
 $2I$. All coordinates and derivatives are reference quantities; physical
 Hermite DOFs use a [separate transform](../../guide/fem/hermite.md).
 
-## Reconstruct through a Field
+## Reconstruct through a Response
 
 The target is implemented explicitly as `target(point)`. For each corner,
 `coefficient_info` specifies whether to fill a value or a derivative slot:
@@ -42,19 +42,18 @@ first-derivative slots, and fill mixed derivative slots with zero.
 
 For a scalar field, reshape the coefficient vector into one column:
 `(16,1)` for Quad Hermite or `(64,1)` for Hex Hermite. Construct
-`fem.InterpolatedField2D[B](coefficients)` or
-`fem.InterpolatedField3D[B](coefficients)` and call `field.eval_value(query)[0]`.
-The C++ example uses the corresponding `InterpolatedFieldT<B,Dim>`.
-The Field owns the sampled coefficients and performs the basis-weighted sum.
+`fem.InterpolatedResponse[B](coefficients)` and call `field.eval_value(query)[0]`.
+The C++ example uses the corresponding `InterpolatedResponse<B>`.
+The response owns the sampled coefficients and performs the basis-weighted sum.
 
 The 2D query points are $(0.2,0.35)$, $(0.3,0.45)$, and $(0.4,0.55)$.
 The 3D points append coordinates $0.5$, $0.6$, and $0.7$, respectively.
-At each query, the examples compare the Field value directly with the target
+At each query, the examples compare the response value directly with the target
 formula. The quadratic target belongs to the bicubic/tricubic interpolation
 space, so these values should agree up to floating-point error.
 
-Fields currently have 2D or 3D parameter domains. The 1D case demonstrates
-the same interpolation with direct basis contractions.
+`InterpolatedResponse` supports 1D, 2D and 3D reference coordinates. This example also
+shows the equivalent direct basis contraction in 1D.
 
 **Expected result.** Both programs print:
 

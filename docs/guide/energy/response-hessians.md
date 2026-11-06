@@ -40,8 +40,7 @@ be finite and have the declared dimensions. Unsupported second derivatives raise
 this interface. Existing first-order subclasses remain valid and report
 `has_hessian == false` unless they explicitly opt in. `ElementwiseResponse`,
 `MeshResponse`, FEM force responses, and equilibrium responses currently remain
-first-order. This addition does not change the affine Field contract or add an
-automatic Energy/Response adapter.
+first-order. Coefficient sampling maps remain affine. There is no automatic Energy/Response adapter.
 
 ## Composition and the energy chain rule
 

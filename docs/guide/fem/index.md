@@ -15,7 +15,7 @@ interfaces consumed by solvers.
 flowchart TB
   accTitle: FEM module evaluation architecture
   accDescr: Rest geometry and maps feed solid field kinematics or shell stencil kinematics. Material laws produce local densities or force responses; integration and global assembly expose Energy and Response interfaces.
-  inputs["Rest geometry, DOF maps and state"] --> solid["Solid: bases, transforms and fields"]
+  inputs["Rest geometry, DOF maps and state"] --> solid["Solid: bases, transforms and cached kinematics"]
   inputs --> shell["Shell: triangle stencils and forms"]
   solid --> solidLocal["Volumetric material local terms"]
   shell --> shellLocal["Shell material local terms"]
@@ -40,8 +40,8 @@ exactly once.
 | Coefficient sampling | Value, reference gradient and Hessian sampling factories | [Sampling responses](sampling-responses.md) |
 | Spatial interpolation | `InterpolatedResponse[Basis]`, fixed coefficients and coordinate derivatives | [Spatial Response](interpolated-response.md) |
 | Reference integration rules | Gauss-Legendre tensor products and simplex centroid rules | [Quadrature](quadrature.md) |
-| Interpolation and integration | `Field2D/3D`, local terms, quadrature, `VolumetricElement3D` | [Fields and quadrature](fields.md) |
-| Solid elasticity | `DeformationGradientField3D`, `NeoHookean`, `VolumetricFemEnergy` | [Volumetric elasticity](volume.md) |
+| Interpolation and integration | `Response`, local terms, quadrature, `VolumetricElement3D` | [Spatial responses and coefficient maps](fields.md) |
+| Solid elasticity | `DeformationGradientResponse`, `NeoHookean`, `VolumetricFemEnergy` | [Volumetric elasticity](volume.md) |
 | Shell elasticity | Mid-edge stencils/forms, `KoiterStVK`, `ShellFemEnergy` | [Shells and natural geometry](shell.md) |
 | Physical derivative DOFs | `BasisDofTransform[HexHermiteBasis]` | [Hex Hermite](hermite.md) |
 | Geometry queries and sampling | `ElementLocator`, `PointEmbedding`, displacement maps, `sample_boundary` | [Embedding and boundary sampling](embedding.md) |

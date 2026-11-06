@@ -104,4 +104,4 @@ For example, exponentiating sampled values computes $\exp(Ac)$; exponentiating
 coefficients before sampling computes $A\exp(c)$. The two are generally different.
 
 See the [paired sampling example](../../examples/fem/sampling-response.md).
-Existing Field/FEM APIs have not yet been migrated by these factories.
+The Field hierarchy has been removed. See [migration and contracts](fields.md) for the spatial-query and coefficient-map replacements.
