@@ -33,21 +33,25 @@ complete implementations in both languages.
 ## Implement a vector response
 
 `FixedPatternResponse(pattern)` gets $m,n$ from the pattern's rows and columns.
-`DynamicPatternResponse(initial_pattern)` adds `pattern_at(x)` in Python.
-Override `eval_values(x, need_jacobian)` and return `r` for a value-only call or
-`(r, J)` when a Jacobian is requested. Return `None` for an infeasible point.
+`DynamicPatternResponse(initial_pattern)` additionally implements
+`jacobian_pattern_at(x)`. Override `eval_impl(x, need_jacobian)` and return the
+value for a value-only call or `(value, J)` for a Jacobian request. Return `None`
+for an infeasible point. Native `eval_impl(x, SpMat* J) const` uses a nullable
+Jacobian pointer and overwrites its prepared numerical entries.
 
 ```python
-r, J = response.eval(x, need_jacobian=True)  # J has shape (m, n)
+value = response.eval_value(x)
+value, J = response.eval_value_and_jacobian(x)  # J has shape (m, n)
 ```
 
-For standalone derivatives, refresh the pattern first. A dynamic response's
-rows/columns remain fixed while structural entries may change. The
-[response example](../../examples/energy/custom-response.md) demonstrates
-both branches and a solve. C++ writes into the supplied sparse output without
-changing its pattern.
+Ordinary calls automatically prepare the required structure. Native buffer reuse
+uses `update_patterns(x)` and the `_into` methods. See
+[Response evaluation](responses.md) for all public methods, subclass hooks, and
+migration from the previous API. The
+[response example](../../examples/energy/custom-response.md) demonstrates fixed
+and dynamic structure and a Gauss–Newton solve.
 
 Optional second derivatives use an additional Hessian pattern and the
-`eval_hessian_values` hook. See [Response Hessians](response-hessians.md) for
-the output-weighted definition, native/Python subclass signatures, and dynamic
-pattern rules. Existing first-order subclasses need no changes.
+`eval_hessian_impl` hook. See [Response Hessians](response-hessians.md) for the
+weighted definition and constructor signatures. First-order subclasses need no
+Hessian hook, but must use the current evaluation hook names.

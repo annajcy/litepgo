@@ -41,7 +41,7 @@ from litepgo import solver
 
 equilibrium = solver.StaticEquilibriumResponse(
     num_parameters, fixed, initial, options, make_energy, make_response)
-u, du_dp = equilibrium.eval(p, need_jacobian=True)
+u, du_dp = equilibrium.eval_value_and_jacobian(p)
 ```
 
 C++ uses the same argument order. `MakeEnergy` returns `shared_ptr<Energy>` and

@@ -66,25 +66,24 @@ Every `Response` supports `eval_jvp(x, dx)` = `J(x) @ dx` and
 `eval_vjp(x, gy)` = `J(x).T @ gy`. Inputs and results are finite dense vectors.
 The base default evaluates the explicit Jacobian on each call. C++ subclasses
 and Python `FixedPatternResponse`/`DynamicPatternResponse` subclasses can override
-`eval_jvp_values(x, dx)` and `eval_vjp_values(x, gy)` to compute products directly.
-Python overrides can call `super().eval_jvp_values(x, dx)` or
-`super().eval_vjp_values(x, gy)` to fall back to the explicit Jacobian.
+`eval_jvp_impl(x, dx)` and `eval_vjp_impl(x, gy)` to compute products directly.
+Python overrides can call `super().eval_jvp_impl(x, dx)` or
+`super().eval_vjp_impl(x, gy)` to fall back to the explicit Jacobian.
 Use the public `eval_jvp` / `eval_vjp` entry points for evaluation; they retain
 validation and the one-call-at-a-time guard. Hooks are subclass implementation
 methods, not independent evaluation entry points.
-For dynamic patterns, call `update_pattern(x)` first, just as for explicit Jacobians.
+Ordinary products prepare required patterns automatically when using the explicit Jacobian fallback.
 
 ```python
-R.update_pattern(x)
 y = R.eval_value(x)
 J = R.eval_jacobian(x)
 dy = R.eval_jvp(x, dx)
 gx = R.eval_vjp(x, gy)
 ```
 
-Explicit Jacobians and Gauss–Newton retain their existing behavior. This change
-does not make Jacobian patterns lazy: objects still store their declared pattern,
-even when direct product overrides avoid evaluating its numerical entries.
+Objects store their declared patterns even when direct product overrides avoid
+evaluating explicit Jacobians. See [Response evaluation](responses.md) for
+automatic preparation and explicit native buffer reuse.
 
 The ARAP and Laplacian examples define named `MeshEnergy` subclasses in both
 C++ and Python, with model state stored on the object and `eval_batch` overridden.

@@ -23,7 +23,6 @@ response = energy.ExpResponse(2)
 x = np.array([0.1, -0.2])
 weights = np.array([2.0, -3.0])
 assert response.has_hessian
-response.update_pattern(x)
 H = response.eval_hessian(x, weights=weights)  # scipy.sparse.csc_matrix, (2, 2)
 np.testing.assert_allclose(H.toarray(), np.diag(weights * np.exp(x)))
 ```
@@ -34,7 +33,7 @@ symmetric matrix**, including both off-diagonal entries. Inputs and weights must
 be finite and have the declared dimensions. Unsupported second derivatives raise
 `std::logic_error` / Python `RuntimeError`, even when weights are zero.
 
-`ExpResponse` and compositions whose children both support Hessians implement
+`AffineMappedResponse`, `ExpResponse`, and compositions whose children both support Hessians implement
 this interface. Existing first-order subclasses remain valid and report
 `has_hessian == false` unless they explicitly opt in. `ElementwiseResponse`,
 `MeshResponse`, FEM force responses, and equilibrium responses currently remain
@@ -81,11 +80,11 @@ class Square(energy.FixedPatternResponse):
     def __init__(self, size):
         super().__init__(np.eye(size), hessian_pattern=np.eye(size))
 
-    def eval_values(self, x, need_jacobian):
+    def eval_impl(self, x, need_jacobian):
         value = x * x
         return (value, np.diag(2 * x)) if need_jacobian else value
 
-    def eval_hessian_values(self, x, weights):
+    def eval_hessian_impl(self, x, weights):
         return np.diag(2 * weights)
 ```
 
@@ -99,7 +98,7 @@ C++ derives from `FixedPatternResponse(jacobian_pattern, hessian_pattern)` and
 implements
 
 ```cpp
-void eval_hessian_values(const ConstVecRef& x, const ConstVecRef& weights,
+void eval_hessian_impl(const ConstVecRef& x, const ConstVecRef& weights,
                          SpMat& H) const override;
 ```
 
@@ -122,11 +121,12 @@ An entry does not disappear merely because a weight or a derivative happens to
 be zero at the current point. The pattern accessor contains zero values and the
 Python accessor returns a copy.
 
-`update_pattern(x)` prepares both supported derivative patterns and returns true
+`update_patterns(x)` prepares both supported derivative patterns and returns true
 if **either** changes. `has_fixed_pattern` now describes both supported patterns;
 `FixedPatternResponse` promises both are fixed. Existing one-pattern subclasses
-keep their previous meaning. Call `update_pattern` on the outermost dynamic
-response before derivatives. The composition's Hessian pattern is the structural
+keep their previous meaning. Ordinary evaluation prepares required patterns
+automatically; native `_into` calls require explicit preparation. See
+[Response evaluation](responses.md) for buffer reuse. The composition's Hessian pattern is the structural
 union of $P_{J_g}^TP_{H_f}P_{J_g}$ and $P_{H_g}$, with no numerical cancellation.
 
 The public update validates both candidate patterns before installing either.

@@ -54,6 +54,7 @@ export default defineConfig({
           { text: 'Evaluation and composition', link: '/guide/energy/evaluation' },
           { text: 'Parameter transforms', link: '/guide/energy/parameter-transforms' },
           { text: 'Custom energies and responses', link: '/guide/energy/custom' },
+          { text: 'Response evaluation', link: '/guide/energy/responses' },
           { text: 'Response Hessians', link: '/guide/energy/response-hessians' },
           { text: 'Batched assembly', link: '/guide/energy/assembly' }
         ] },

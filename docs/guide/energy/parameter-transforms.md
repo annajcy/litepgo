@@ -27,13 +27,65 @@ J^T w = J_{inner}(p)^T(J_{outer}(c)^T w).
 $$
 
 `ComposedResponse` also implements exact weighted Hessians when both children
-support them. `ExpResponse` supports second derivatives; `ElementwiseResponse`
+support them. `AffineMappedResponse` and `ExpResponse` support second derivatives; `ElementwiseResponse`
 and the FEM-specific responses currently remain first-order. See
 [Response Hessians](response-hessians.md) for the two-term chain rule.
 
 Products call the children’s products, without assembling either global numerical
 Jacobian. Children that do not override products still use their normal explicit
 Jacobian fallback. Native FEM mesh responses may form local element Jacobians.
+
+## Affine maps
+
+`energy.AffineMappedResponse(A, offset=None)` directly represents
+
+$$
+y=Ax+b,\qquad J=A,\qquad Jv=Av,\qquad J^Tw=A^Tw,\qquad H_R(x,w)=0.
+$$
+
+For $A\in\mathbb R^{m\times n}$, inputs have length $n$, outputs have length
+$m$, and every weighted Hessian is an empty sparse $n\times n$ matrix.
+`has_hessian` and `has_fixed_pattern` are both true. Rectangular, rank-deficient,
+zero, and zero-dimensional maps are allowed; no inverse is required.
+
+```python
+import numpy as np
+from litepgo import energy
+
+A = np.array([[1.0, 0.0, -2.0], [0.5, 3.0, 0.0]])
+r = energy.AffineMappedResponse(A, offset=np.array([4.0, -1.0]))
+x = np.array([1.0, 2.0, -3.0])
+np.testing.assert_allclose(r.eval_value(x), [11.0, 5.5])
+np.testing.assert_array_equal(r.eval_jacobian(x).toarray(), A)
+assert r.eval_hessian(x, weights=np.ones(2)).nnz == 0
+```
+
+Python accepts dense two-dimensional arrays or SciPy sparse matrices/arrays,
+using the existing sparse conversion (duplicate entries are summed). The object
+owns snapshots of $A$ and $b$; changing the constructor arguments later does not
+change the response. The matrix is stored sparsely. Stored zeros are retained
+in its fixed Jacobian pattern. An omitted, `None`, or empty offset means zero;
+a nonempty offset must have length $m$. Matrix entries and offsets must be finite.
+Non-finite numerical results, including overflow in JVP/VJP, raise a domain error
+(`ValueError` in Python). Input and direction checks follow the Response API.
+
+C++ accepts a `SpMat` and an optional `Vec` (an empty vector means zero):
+
+```cpp
+#include "litepgo/energy/response/affine_mapped_response.hpp"
+
+Eigen::Matrix<double, 2, 3> A;
+A << 1, 0, -2, 0.5, 3, 0;
+litepgo::energy::AffineMappedResponse r(A.sparseView(), Eigen::Vector2d(4, -1));
+const auto y = r.eval_value(Eigen::Vector3d(1, 2, -3));
+```
+
+Unlike `AffineMappedEnergy(E, T, offset)`, this class has no inner function:
+it returns the affine map itself. Use `ComposedResponse(outer, affine)` for
+`outer(Ax+b)`, or `ComposedResponse(affine, inner)` for `A*inner(x)+b`.
+The [Triangle P1 response example](../../examples/fem/response-hessian.md)
+uses this built-in map for sampling and composes it with `ExpResponse`.
+It introduces no Field or Basis API changes.
 
 ## Plastic parameters
 
@@ -114,8 +166,9 @@ implementation may be appropriate for very large parameter fields.
 
 ## Sparse patterns and limits
 
-Call `update_pattern(p)` on the outermost response before derivatives when its
-pattern is dynamic. A composition's pattern is the structural product of its
+Ordinary evaluation automatically prepares the required dynamic patterns.
+Native buffer reuse calls `update_patterns(p)` before `_into` evaluation; see
+[Response evaluation](responses.md). A composition's pattern is the structural product of its
 children's patterns. A dynamic child may be reused in both composition roles;
 each role evaluates its derivatives at its own input. Elementwise responses declare full local blocks in a fixed
 sparse gather/scatter structure, and refresh dynamic local child patterns at each

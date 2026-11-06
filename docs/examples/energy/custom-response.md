@@ -15,9 +15,11 @@ J_1=\begin{bmatrix}1&0\\2\max(0,x_0)&1\end{bmatrix}.
 $$
 
 **API walkthrough.** Derive the linear class from `FixedPatternResponse` and the
-nonlinear class from `DynamicPatternResponse`. Implement `eval_values` to return
+nonlinear class from `DynamicPatternResponse`. Implement `eval_impl` to return
 `r` or `(r, J)` according to `need_jacobian`. The dynamic class adds/removes the
-lower-left entry. Pass the residual object to `gauss_newton_solve`; its pattern
+lower-left entry through `jacobian_pattern_at`. Ordinary Jacobian evaluation
+automatically prepares the pattern for each input. The C++ example also shows
+explicit preparation and `_into` buffer reuse. Pass the residual object to `gauss_newton_solve`; its pattern
 is refreshed automatically at current iterates.
 
 **Expected result.** The linear residual vanishes at $(1,2)$, with four

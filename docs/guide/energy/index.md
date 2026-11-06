@@ -38,8 +38,9 @@ is under `src/core/energy/`; Python uses `litepgo.energy`.
 | --- | --- |
 | Evaluate derivatives and compose scalar objectives | [Evaluation and composition](evaluation.md) |
 | Implement fixed/dynamic-pattern scalar or vector terms | [Custom energies and responses](custom.md) |
+| Evaluate vector maps and reuse sparse buffers | [Response evaluation](responses.md) |
 | Evaluate and compose exact weighted second derivatives | [Response Hessians](response-hessians.md) |
-| Parameterize Fp/theta and compose vector derivatives | [Parameter transforms](parameter-transforms.md) |
+| Affine maps, Fp/theta parameterization, and vector composition | [Parameter transforms](parameter-transforms.md) |
 | Gather, batch and assemble local contributions | [Batched assembly](assembly.md) |
 
 All paths share the sparse-pattern and feasibility contracts below and in

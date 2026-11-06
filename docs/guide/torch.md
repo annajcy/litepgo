@@ -197,7 +197,7 @@ reference-volume density and CPU float64 contract. The density must be twice
 differentiable jointly in F and the active input. Network weights stay fixed.
 
 ```python
-force, J = material_force.eval(p, need_jacobian=True)
+force, J = material_force.eval_value_and_jacobian(p)
 jv = material_force.eval_jvp(p, v)
 jtw = material_force.eval_vjp(p, w)
 ```

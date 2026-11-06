@@ -11,9 +11,10 @@ z=N^Tc,\qquad \theta(c)=\exp(z),\qquad
 J_\theta=\theta N^T,\qquad H_\theta(c,w)=w\theta NN^T.
 $$
 
-`TriangleSample` is a custom affine Response: it stores the basis values for
-this query point, and takes the coefficients as its input. Its Hessian pattern
-is an empty $3\times3$ matrix. `ComposedResponse(ExpResponse(1), sample)` supplies
+`AffineMappedResponse(N.transpose())` in C++, or `AffineMappedResponse(N[None, :])`
+in Python, stores the sampling matrix for this query point and takes the
+coefficients as input. C++ converts the matrix with `.sparseView()`. Its Hessian
+pattern is an empty $3\times3$ matrix. `ComposedResponse(ExpResponse(1), sample)` supplies
 the nonlinear derivative through the shared composition implementation.
 The reference point stays fixed; no coordinate derivatives are requested.
 
