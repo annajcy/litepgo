@@ -5,7 +5,7 @@ namespace litepgo::energy {
 // Positive physical parameters from unconstrained logarithms.
 class ExpResponse final : public FixedPatternResponse {
   public:
-    explicit ExpResponse(int size) : FixedPatternResponse(pattern(size)) {}
+    explicit ExpResponse(int size) : FixedPatternResponse(pattern(size), pattern(size)) {}
 
   private:
     static SpMat pattern(int size) {
@@ -27,6 +27,9 @@ class ExpResponse final : public FixedPatternResponse {
             for (int i = 0; i < num_inputs(); ++i)
                 J->valuePtr()[i] = y[i];
         return y;
+    }
+    void eval_hessian_values(const ConstVecRef& x, const ConstVecRef& weights, SpMat& H) const override {
+        H.coeffs() = values(x).cwiseProduct(weights);
     }
     Vec eval_jvp_values(const ConstVecRef& x, const ConstVecRef& v) const override {
         return values(x).cwiseProduct(v);

@@ -22,7 +22,8 @@ void bind_fixed_pattern_response(nb::module_& m) {
                 return dynamic_cast<const PyResponse<FixedPatternResponse>&>(r).default_vjp(x, d);
             },
             "x"_a, "gy"_a)
-        .def(nb::init<const SparseArgument&>(), "pattern"_a,
+        .def(nb::init<const SparseArgument&, const std::optional<SparseArgument>&>(), "pattern"_a,
+             "hessian_pattern"_a = nb::none(),
              "Subclass and override eval_values(x, need_jacobian). Return value or (value, J); None means infeasible.");
 }
 } // namespace litepgo::energy::binding

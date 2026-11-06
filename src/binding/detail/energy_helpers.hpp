@@ -3,6 +3,7 @@
 #include "litepgo/energy/scalar/energy.hpp"
 #include <nanobind/eigen/dense.h>
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/trampoline.h>
 #include <stdexcept>
 namespace nb = nanobind;
@@ -66,7 +67,9 @@ template <class Base> class PyEnergy : public Base {
 template <class Base> class PyResponse : public Base {
   public:
     NB_TRAMPOLINE(Base);
-    explicit PyResponse(const linalg::binding::SparseArgument& pattern) : Base(pattern.matrix) {}
+    explicit PyResponse(const linalg::binding::SparseArgument& pattern,
+                        const std::optional<linalg::binding::SparseArgument>& hessian_pattern = std::nullopt)
+        : Base(pattern.matrix, hessian_pattern ? std::optional<SpMat>(hessian_pattern->matrix) : std::nullopt) {}
     Vec default_jvp(const ConstVecRef& x, const ConstVecRef& dx) const {
         return Base::eval_jvp_values(x, dx);
     }
@@ -75,6 +78,16 @@ template <class Base> class PyResponse : public Base {
     }
 
   private:
+    void eval_hessian_values(const ConstVecRef& x, const ConstVecRef& weights, SpMat& H) const override {
+        nb::detail::ticket ticket(this->nb_trampoline, "eval_hessian_values",
+                                  nb::detail::str_hash("eval_hessian_values"), true);
+        nb::object result = this->nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x)), nb::cast(Vec(weights)));
+        if (result.is_none())
+            throw std::domain_error("Response is infeasible");
+        const SpMat source = nb::cast<linalg::binding::SparseArgument>(result).matrix;
+        copy_derivative_values(source, H, "Response: invalid Hessian",
+                               "Response: Hessian outside pattern; call update_pattern");
+    }
     Vec eval_jvp_values(const ConstVecRef& x, const ConstVecRef& dx) const override {
         nb::detail::ticket ticket(this->nb_trampoline, "eval_jvp_values", nb::detail::str_hash("eval_jvp_values"),
                                   false);

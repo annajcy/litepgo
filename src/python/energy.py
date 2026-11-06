@@ -35,6 +35,20 @@ a dynamic Hessian; Newton manages this automatically.
 
 Vector responses and analytic sparse Jacobians.
 
+Response.eval_hessian(x, weights) returns the exact Hessian of weights @ R(x),
+with weights held fixed, as a full symmetric sparse (num_inputs, num_inputs) matrix.
+Check has_hessian first; unsupported calls raise RuntimeError. ExpResponse and
+ComposedResponse with two second-order children support it. To opt in, pass
+hessian_pattern to FixedPatternResponse, or initial_hessian_pattern to
+DynamicPatternResponse, then implement eval_hessian_values(x, weights).
+An empty square pattern declares zero second derivatives; None means unsupported.
+The Python hook returns a dense/sparse matrix, or None for infeasibility.
+Dynamic subclasses may override hessian_pattern_at(x); the default keeps the
+current Hessian pattern. Patterns are independent of weights. update_pattern(x)
+returns true when either derivative pattern changes; has_fixed_pattern covers
+both supported patterns. See guide/energy/response-hessians for composition.
+
+
 Subclass FixedPatternResponse(pattern) and override eval_values(x, need_jacobian).
 Return (value, Jacobian) when requested, otherwise value; None marks an infeasible
 point. Jacobians may be dense or SciPy sparse, but nonzero entries outside the

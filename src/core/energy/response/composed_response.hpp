@@ -16,6 +16,8 @@ class ComposedResponse final : public Response {
     template <class T> friend struct binding::ResponseOwnerGC;
     void check_children() const;
     std::optional<SpMat> refresh_pattern(const ConstVecRef& x) override;
+    std::optional<SpMat> refresh_hessian_pattern(const ConstVecRef& x) override;
+    void eval_hessian_values(const ConstVecRef& x, const ConstVecRef& weights, SpMat& H) const override;
     Vec eval_values(const ConstVecRef& x, SpMat* J) const override;
     Vec eval_jvp_values(const ConstVecRef& x, const ConstVecRef& v) const override;
     Vec eval_vjp_values(const ConstVecRef& x, const ConstVecRef& w) const override;
