@@ -45,7 +45,7 @@ $$
 
 For $A\in\mathbb R^{m\times n}$, inputs have length $n$, outputs have length
 $m$, and every weighted Hessian is an empty sparse $n\times n$ matrix.
-`has_hessian` and `has_fixed_pattern` are both true. Rectangular, rank-deficient,
+`has_hessian` is true; its declared derivative structures are fixed. Rectangular, rank-deficient,
 zero, and zero-dimensional maps are allowed; no inverse is required.
 
 ```python
@@ -157,8 +157,8 @@ auto response = std::make_shared<energy::ComposedResponse>(force, plastic);
 Headers are `litepgo/energy/response/{elementwise_response,composed_response,exp_response}.hpp`
 and `litepgo/fem/parameter/log_diagonal_fp_response.hpp`. Child responses are
 shared-owned; Python subclass lifetimes and ownership cycles are handled by the
-bindings. Captured model configuration must remain fixed. As with other Responses,
-concurrent or reentrant evaluation of a shared child is unsupported and rejected.
+bindings. Captured model configuration must remain fixed. Thread safety depends on each child implementation; children with shared
+workspaces protect their own evaluation.
 
 Elementwise evaluation calls the local Response sequentially, including Python
 subclass overrides. It is intended for small local parameter transforms; a batched
@@ -167,7 +167,7 @@ implementation may be appropriate for very large parameter fields.
 ## Sparse patterns and limits
 
 Ordinary evaluation automatically prepares the required dynamic patterns.
-Native buffer reuse calls `update_patterns(p)` before `_into` evaluation; see
+All callers use ordinary evaluation and own the returned matrices; see
 [Response evaluation](responses.md). A composition's pattern is the structural product of its
 children's patterns. A dynamic child may be reused in both composition roles;
 each role evaluates its derivatives at its own input. Elementwise responses declare full local blocks in a fixed

@@ -105,7 +105,10 @@ objects borrow other fields; those inputs must outlive them. Python bindings kee
 borrowed field inputs alive. An energy may own arrays of fields while a field
 inside that array still borrows an external input: keep that dependency alive too.
 
-One energy/response object is evaluated one call at a time. Batched callbacks can
+Energy objects and Response implementations with shared workspaces (such as
+MeshResponse) reject overlapping calls. The mathematical Response base has no
+global concurrency guard; custom implementations own their thread-safety contract.
+Batched callbacks can
 run concurrently through TBB, so captured data must support concurrent reads and
 must not depend on callback order. Python callbacks acquire the GIL; numerical
 operations that release it can still perform parallel work. Rebuild model objects

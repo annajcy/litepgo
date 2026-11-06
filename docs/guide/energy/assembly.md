@@ -70,7 +70,7 @@ and Python `FixedPatternResponse`/`DynamicPatternResponse` subclasses can overri
 Python overrides can call `super().eval_jvp_impl(x, dx)` or
 `super().eval_vjp_impl(x, gy)` to fall back to the explicit Jacobian.
 Use the public `eval_jvp` / `eval_vjp` entry points for evaluation; they retain
-validation and the one-call-at-a-time guard. Hooks are subclass implementation
+validation and any implementation-specific workspace protection. Hooks are subclass implementation
 methods, not independent evaluation entry points.
 Ordinary products prepare required patterns automatically when using the explicit Jacobian fallback.
 
@@ -83,7 +83,7 @@ gx = R.eval_vjp(x, gy)
 
 Objects store their declared patterns even when direct product overrides avoid
 evaluating explicit Jacobians. See [Response evaluation](responses.md) for
-automatic preparation and explicit native buffer reuse.
+ordinary evaluation and subclass contracts.
 
 The ARAP and Laplacian examples define named `MeshEnergy` subclasses in both
 C++ and Python, with model state stored on the object and `eval_batch` overridden.

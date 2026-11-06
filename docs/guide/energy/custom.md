@@ -33,10 +33,10 @@ complete implementations in both languages.
 ## Implement a vector response
 
 `FixedPatternResponse(pattern)` gets $m,n$ from the pattern's rows and columns.
-`DynamicPatternResponse(initial_pattern)` additionally implements
+`DynamicPatternResponse(num_inputs, num_outputs)` additionally implements
 `jacobian_pattern_at(x)`. Override `eval_impl(x, need_jacobian)` and return the
 value for a value-only call or `(value, J)` for a Jacobian request. Return `None`
-for an infeasible point. Native `eval_impl(x, SpMat* J) const` uses a nullable
+for an infeasible point. Native `eval_impl(x, SpMat* J)` uses a nullable
 Jacobian pointer and overwrites its prepared numerical entries.
 
 ```python
@@ -44,8 +44,8 @@ value = response.eval_value(x)
 value, J = response.eval_value_and_jacobian(x)  # J has shape (m, n)
 ```
 
-Ordinary calls automatically prepare the required structure. Native buffer reuse
-uses `update_patterns(x)` and the `_into` methods. See
+Ordinary calls prepare their required structure in local storage. No explicit
+pattern preparation or output buffer protocol is exposed. See
 [Response evaluation](responses.md) for all public methods, subclass hooks, and
 migration from the previous API. The
 [response example](../../examples/energy/custom-response.md) demonstrates fixed
