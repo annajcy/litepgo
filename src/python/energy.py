@@ -1,5 +1,10 @@
 """Energies and their composites, mirroring src/core/energy.
 
+AffineMappedResponse(A, offset=None) owns a fixed sparse matrix and offset, and evaluates
+A @ x + offset. Dense 2-D arrays and SciPy sparse matrices are accepted. Omitted
+or empty offset means zero. Jacobian = A, JVP = A @ dx, VJP = A.T @ weights;
+weighted Hessians are zero. Rectangular, rank-deficient, and empty maps are valid.
+
 ComposedResponse(outer, inner) evaluates outer(inner(x)) with chained products.
 ElementwiseResponse(input_map, transform) concatenates per-element transformed
 values and sums shared-DOF VJP contributions. ExpResponse(size) maps log parameters
@@ -43,7 +48,8 @@ defaults prepare and multiply the explicit Jacobian.
 
 Response.eval_hessian returns the exact Hessian of weights @ R(x), holding
 weights fixed, as a full symmetric (num_inputs, num_inputs) sparse matrix.
-Check has_hessian first; unsupported calls raise RuntimeError. ExpResponse and compositions with two second-order children support it.
+Check has_hessian first; unsupported calls raise RuntimeError. AffineMappedResponse,
+ExpResponse and compositions with two second-order children support it.
 
 Subclass FixedPatternResponse(pattern, hessian_pattern=None) or
 DynamicPatternResponse(initial_pattern, initial_hessian_pattern=None).
@@ -102,7 +108,8 @@ MeshEnergy = _native.MeshEnergy
 MeshResponse = _native.MeshResponse
 __all__ += ["MeshEnergy", "MeshResponse"]
 
+AffineMappedResponse = _native.AffineMappedResponse
 ComposedResponse = _native.ComposedResponse
 ElementwiseResponse = _native.ElementwiseResponse
 ExpResponse = _native.ExpResponse
-__all__ += ["ComposedResponse", "ElementwiseResponse", "ExpResponse"]
+__all__ += ["AffineMappedResponse", "ComposedResponse", "ElementwiseResponse", "ExpResponse"]
