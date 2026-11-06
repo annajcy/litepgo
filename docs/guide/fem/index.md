@@ -39,6 +39,35 @@ affine coefficient maps. Shell evaluation recomputes nonlinear stencil geometry
 from the current displacement; fixed-pose shell force Responses cache that geometry.
 Neither path creates spatial Responses or a LocalEnergy/LocalResponse layer during assembly.
 
+## Source layout
+
+C++ headers use `litepgo/fem/<directory>/<file>.hpp`. The source directories
+separate mathematical components from assembly and geometry queries:
+
+| Directory | Responsibility |
+| --- | --- |
+| `basis/` | Reference shape functions and coefficient conventions |
+| `quadrature/` | Reference points and integration weights |
+| `material/` | Pointwise shell and volumetric constitutive laws |
+| `response/` | Spatial interpolation, coefficient sampling and parameter maps |
+| `kinematics/` | Geometric quantities and feasible-step formulas |
+| `integration/` | Physical quadrature data and integration helpers |
+| `assembly/` | Physical DOF transforms, derivative pullbacks, FEM energies and force Responses |
+| `assembly/detail/` | Internal face caches, batch views and shared assembly implementations |
+| `embedding/` | Element location, point displacement maps and boundary sampling |
+
+Bindings under `src/binding/fem/` and C++ tests under `tests/cpp/fem/` follow
+these responsibilities. Python keeps the flat `litepgo.fem` API; directory names
+do not create new Python submodules. Class names and C++ namespaces are unchanged.
+
+Existing C++ callers must update include paths: assembled energies and force
+Responses are under `assembly/`, `basis_dof_transform.hpp` and
+`dof_derivatives.hpp` are also under `assembly/`, `volumetric_element.hpp` is under
+`integration/`, and geometry-query headers are under `embedding/`.
+`log_diagonal_fp_response.hpp` now belongs to `response/`.
+The old include paths have no compatibility forwarding headers. Headers under
+`assembly/detail/` are implementation details, not additional public API layers.
+
 ## Choose a layer
 
 | Layer | Main objects | Read |
