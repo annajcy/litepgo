@@ -3,8 +3,8 @@
 // Geometry, thickness, and boundary displacements are fixed.
 // Run: build/release/examples/fem/fitting/shell_equilibrium_material_fit
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
-#include "litepgo/fem/shell_fem_energy.hpp"
-#include "litepgo/fem/shell_fem_force_material_response.hpp"
+#include "litepgo/fem/assembly/shell_fem_energy.hpp"
+#include "litepgo/fem/assembly/shell_fem_force_material_response.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
 #include "litepgo/solver/static_equilibrium_response.hpp"

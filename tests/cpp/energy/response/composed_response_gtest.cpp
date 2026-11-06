@@ -2,7 +2,7 @@
 #include "litepgo/energy/response/composed_response.hpp"
 #include "litepgo/energy/response/elementwise_response.hpp"
 #include "litepgo/energy/response/exp_response.hpp"
-#include "litepgo/fem/parameter/log_diagonal_fp_response.hpp"
+#include "litepgo/fem/response/log_diagonal_fp_response.hpp"
 #include <gtest/gtest.h>
 #include <memory>
 

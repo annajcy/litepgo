@@ -3,11 +3,11 @@ add_library(litepgo_fem STATIC
     basis/3d/tet_p1_basis.cpp
     kinematics/positive_det_feasible_step.cpp
     kinematics/triangle_mid_edge_kinematics.cpp
-    local/dof_derivatives.cpp
+    assembly/dof_derivatives.cpp
     material/shell/koiter_stvk.cpp
     material/volumetric/multiplicative_kinematics.cpp
     material/volumetric/neo_hookean.cpp
-    sample_boundary.cpp
+    embedding/sample_boundary.cpp
 )
 add_library(litepgo::fem ALIAS litepgo_fem)
 target_link_libraries(litepgo_fem

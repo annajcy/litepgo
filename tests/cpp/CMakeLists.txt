@@ -33,9 +33,9 @@ add_dependencies(litepgo_tests litepgo_energy_tests)
 gtest_discover_tests(litepgo_energy_tests DISCOVERY_MODE PRE_TEST)
 
 add_executable(litepgo_fem_tests
-    fem/sample_boundary_gtest.cpp
-    fem/point_displacement_map_gtest.cpp
-    fem/element_locator_gtest.cpp
+    fem/embedding/sample_boundary_gtest.cpp
+    fem/embedding/point_displacement_map_gtest.cpp
+    fem/embedding/element_locator_gtest.cpp
     fem/basis/basis_gtest.cpp
     fem/basis/1d/cubic_hermite_basis_gtest.cpp
     fem/basis/2d/quad_hermite_basis_gtest.cpp
@@ -46,33 +46,33 @@ add_executable(litepgo_fem_tests
     fem/basis/3d/tet_p1_basis_gtest.cpp
     fem/response/sampling_response_gtest.cpp
     fem/response/interpolated_response_gtest.cpp
-    fem/kinematics/basis_dof_transform_gtest.cpp
+    fem/assembly/basis_dof_transform_gtest.cpp
     fem/basis/1d/linear_lagrange_basis_gtest.cpp
-    fem/shell_fem_energy_gtest.cpp
-    fem/shell_fem_energy_regression_gtest.cpp
-    fem/shell_fem_force_material_response_gtest.cpp
-    fem/shell_fem_force_fp_response_gtest.cpp
-    fem/volumetric_fem_force_response_gtest.cpp
-    fem/volumetric_fem_force_material_response_gtest.cpp
-    fem/volumetric_fem_energy_hex_q1_gtest.cpp
-    fem/volumetric_fem_energy_hex_hermite_gtest.cpp
-    fem/volumetric_fem_energy_tet_p1_gtest.cpp
-    fem/local/dof_derivatives_gtest.cpp
+    fem/assembly/shell_fem_energy_gtest.cpp
+    fem/assembly/shell_fem_energy_regression_gtest.cpp
+    fem/assembly/shell_fem_force_material_response_gtest.cpp
+    fem/assembly/shell_fem_force_fp_response_gtest.cpp
+    fem/assembly/detail/volumetric_fem_force_response_gtest.cpp
+    fem/assembly/volumetric_fem_force_material_response_gtest.cpp
+    fem/assembly/volumetric_fem_energy_hex_q1_gtest.cpp
+    fem/assembly/volumetric_fem_energy_hex_hermite_gtest.cpp
+    fem/assembly/volumetric_fem_energy_tet_p1_gtest.cpp
+    fem/assembly/dof_derivatives_gtest.cpp
     fem/response/deformation_gradient_sampling_gtest.cpp
-    fem/kinematics/volumetric_element_gtest.cpp
+    fem/integration/volumetric_element_gtest.cpp
     fem/material/volumetric/volumetric_material_inputs_gtest.cpp
     fem/material/volumetric/multiplicative_kinematics_gtest.cpp
     fem/kinematics/triangle_mid_edge_kinematics_gtest.cpp
     fem/kinematics/positive_det_feasible_step_gtest.cpp
     fem/material/volumetric/neo_hookean_gtest.cpp
     fem/material/shell/koiter_stvk_gtest.cpp
-    fem/material/shell/shell_element_gtest.cpp
+    fem/assembly/detail/shell_element_gtest.cpp
     fem/quadrature/quadrature_gtest.cpp
     fem/quadrature/2d/gauss_legendre_2d_gtest.cpp
     fem/quadrature/2d/triangle_centroid_quadrature_gtest.cpp
     fem/quadrature/3d/tet_centroid_quadrature_gtest.cpp
     fem/quadrature/3d/gauss_legendre_3d_gtest.cpp
-    fem/response/surface_integration_gtest.cpp
+    fem/integration/surface_integration_gtest.cpp
 )
 target_link_libraries(litepgo_fem_tests PRIVATE
     litepgo::solver litepgo::fem litepgo::warnings GTest::gtest_main)

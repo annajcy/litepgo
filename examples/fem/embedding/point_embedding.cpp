@@ -5,7 +5,7 @@
 // Run: build/release/examples/fem/embedding/point_embedding
 
 #include "litepgo/dof/surface_kinematics.hpp"
-#include "litepgo/fem/point_displacement_map.hpp"
+#include "litepgo/fem/embedding/point_displacement_map.hpp"
 #include <iostream>
 #include <stdexcept>
 using namespace litepgo;

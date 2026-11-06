@@ -5,8 +5,8 @@
 
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
-#include "litepgo/fem/shell_fem_energy.hpp"
-#include "litepgo/fem/shell_fem_force_material_response.hpp"
+#include "litepgo/fem/assembly/shell_fem_energy.hpp"
+#include "litepgo/fem/assembly/shell_fem_force_material_response.hpp"
 #include "litepgo/mesh/io/obj.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include "litepgo/solver/gauss_newton.hpp"

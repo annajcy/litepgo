@@ -5,13 +5,13 @@
 // Run: build/release/examples/fem/plasticity/hex_hermite_plastic_twist
 
 #include "litepgo/energy/response/affine_response.hpp"
-#include "litepgo/fem/kinematics/basis_dof_transform.hpp"
+#include "litepgo/fem/assembly/basis_dof_transform.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
-#include "litepgo/fem/point_displacement_map.hpp"
+#include "litepgo/fem/embedding/point_displacement_map.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/response/deformation_gradient_response.hpp"
-#include "litepgo/fem/sample_boundary.hpp"
-#include "litepgo/fem/volumetric_fem_energy.hpp"
+#include "litepgo/fem/embedding/sample_boundary.hpp"
+#include "litepgo/fem/assembly/volumetric_fem_energy.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include "litepgo/mesh/io/obj.hpp"
 #include "litepgo/mesh/io/veg.hpp"

@@ -8,7 +8,7 @@
 #include "litepgo/energy/scalar/weighted_sum_energy.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
-#include "litepgo/fem/volumetric_fem_energy.hpp"
+#include "litepgo/fem/assembly/volumetric_fem_energy.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include "litepgo/mesh/extract_surface.hpp"
 #include "litepgo/mesh/io/obj.hpp"

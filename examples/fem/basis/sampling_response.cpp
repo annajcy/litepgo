@@ -2,7 +2,7 @@
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
-#include "litepgo/fem/volumetric_fem_energy.hpp"
+#include "litepgo/fem/assembly/volumetric_fem_energy.hpp"
 #include <iostream>
 #include <memory>
 #include <stdexcept>
