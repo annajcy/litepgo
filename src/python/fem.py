@@ -1,6 +1,6 @@
 """Finite elements, mirroring src/core/fem.
 
-C++ class templates are Template objects: ``T[args]`` returns the bound
+C++ class and function templates are Template objects: ``T[args]`` returns the bound
 instantiation, with the C++ template arguments in order. Basis, quadrature and
 material classes are the type arguments; integers stand for integer arguments.
 Field type arguments of the energies are erased: they accept any Field3D.
@@ -11,6 +11,15 @@ derivatives are with respect to xi, not coefficients. Coordinates have shape (D,
 including (1,) for 1D bases. Weighted Hessians are exact full spatial Hessians.
 All seven named bases are bound; polynomial queries extrapolate outside the domain.
 See guide/fem/interpolated-response for shapes, packing and coefficient-map distinctions.
+
+value_sampling_response[Basis](points, components), gradient_sampling_response[Basis]
+and hessian_sampling_response[Basis] return AffineResponse maps of row-major coefficients.
+Points are fixed finite (Q,D) arrays, including (Q,1) in 1D; Q may be zero.
+Outputs order point first, then value/coordinate-direction/independent-Hessian-slot,
+then component. Spatial Hessian slots follow Basis upper-triangle order without scaling.
+All derivatives sampled are with respect to reference coordinates. The returned
+Responses differentiate coefficients; their own Hessians are zero. No integration
+weights or geometry transforms are applied. See guide/fem/sampling-responses.
 
 All named bases expose coefficient_info(i): point is a reference coordinate,
 and derivative_order is a tuple of per-axis derivative orders. All zeros mean
@@ -91,7 +100,7 @@ from litepgo._core import fem as _native
 
 
 class Template:
-    """A C++ class template whose bound instantiations are looked up by argument tuple."""
+    """A C++ template whose bound classes or factory functions are looked up by argument tuple."""
 
     def __init__(self, name, instances):
         self.__name__ = name
@@ -109,14 +118,14 @@ class Template:
 
     @property
     def instances(self):
-        """A copy of {argument tuple: class} for every bound instantiation."""
+        """A copy of {argument tuple: class or function} for every bound instantiation."""
         return dict(self._instances)
 
     def __instancecheck__(self, obj):
-        return isinstance(obj, tuple(self._instances.values()))
+        return isinstance(obj, tuple(t for t in self._instances.values() if isinstance(t, type)))
 
     def __subclasscheck__(self, cls):
-        return issubclass(cls, tuple(self._instances.values()))
+        return issubclass(cls, tuple(t for t in self._instances.values() if isinstance(t, type)))
 
     def __repr__(self):
         return f"<template litepgo.fem.{self.__name__}>"
@@ -157,6 +166,9 @@ Field2D = _native.Field2D
 Field3D = _native.Field3D
 IdentityField2D = _native.IdentityField2D
 IdentityField3D = _native.IdentityField3D
+value_sampling_response = _templates["value_sampling_response"]
+gradient_sampling_response = _templates["gradient_sampling_response"]
+hessian_sampling_response = _templates["hessian_sampling_response"]
 InterpolatedResponse = _templates["InterpolatedResponse"]
 InterpolatedField2D = _templates["InterpolatedField2D"]
 InterpolatedField3D = _templates["InterpolatedField3D"]
@@ -219,6 +231,9 @@ __all__ = [
     "Field3D",
     "IdentityField2D",
     "IdentityField3D",
+    "value_sampling_response",
+    "gradient_sampling_response",
+    "hessian_sampling_response",
     "InterpolatedResponse",
     "InterpolatedField2D",
     "InterpolatedField3D",

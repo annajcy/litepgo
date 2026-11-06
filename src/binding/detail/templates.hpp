@@ -4,9 +4,9 @@
 
 namespace litepgo::bindings {
 
-// Records cls as the instantiation template_name[key...] in the submodule's
+// Records a class or function as the instantiation template_name[key...] in the submodule's
 // _templates dict ({template_name: {key: cls}}). Python wraps each entry so that
-// Template[args] returns the bound class, mirroring the C++ template arguments.
+// Template[args] returns the bound callable, mirroring the C++ template arguments.
 inline void register_instance(nanobind::module_& m, const char* template_name, const nanobind::tuple& key,
                               nanobind::handle cls) {
     if (!nanobind::hasattr(m, "_templates"))

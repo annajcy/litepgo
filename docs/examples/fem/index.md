@@ -3,6 +3,8 @@
 These paired Python/C++ examples introduce the building blocks of finite elements.
 They use generated reference-element data and write no files.
 
+- [Coefficient sampling responses](sampling-response.md). Fixed points, variable
+  coefficients, and value/gradient/Hessian sampling.
 - [Spatial interpolation response](interpolated-response.md). Fixed coefficients,
   spatial Jacobians and exact weighted Hessians.
 - [Tet P1 basis and field interpolation](tet-p1-basis.md). Evaluate shape functions,

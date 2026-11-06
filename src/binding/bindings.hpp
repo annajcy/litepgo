@@ -71,6 +71,7 @@ void bind_fem_quadrature_2d_gauss_legendre_2d(nanobind::module_& m);
 void bind_fem_quadrature_3d_gauss_legendre_3d(nanobind::module_& m);
 void bind_fem_field_field(nanobind::module_& m);
 void bind_identity_field(nanobind::module_& m);
+void bind_sampling_responses(nanobind::module_& m);
 void bind_interpolated_response(nanobind::module_& m);
 void bind_fem_field_interpolated_field(nanobind::module_& m);
 void bind_deformation_gradient_field(nanobind::module_& m);

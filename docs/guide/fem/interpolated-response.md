@@ -76,7 +76,7 @@ $$
 c\mapsto \bigl(N(\xi)^T\otimes I_m\bigr)c,
 $$
 
-where $c$ flattens $C$ in row-major order. That map can be represented by
+where $c$ flattens $C$ in row-major order. Use [value_sampling_response](sampling-responses.md), which returns an
 `AffineResponse`; it is not the Jacobian of `InterpolatedResponse`.
 Existing Field and FEM consumers have not yet been migrated to the new component.
 

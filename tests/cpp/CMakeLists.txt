@@ -49,6 +49,7 @@ add_executable(litepgo_fem_tests
     fem/basis/3d/hex_q1_basis_gtest.cpp
     fem/basis/3d/hex_hermite_basis_gtest.cpp
     fem/basis/3d/tet_p1_basis_gtest.cpp
+    fem/response/sampling_response_gtest.cpp
     fem/response/interpolated_response_gtest.cpp
     fem/field/interpolated_field_gtest.cpp
     fem/field/interpolated_field_2d_gtest.cpp
@@ -266,3 +267,6 @@ add_test(NAME ResponseHessianExample COMMAND $<TARGET_FILE:response_hessian>)
 
 add_dependencies(litepgo_tests interpolated_response)
 add_test(NAME FemInterpolatedResponseExample COMMAND $<TARGET_FILE:interpolated_response>)
+
+add_dependencies(litepgo_tests sampling_response)
+add_test(NAME FemSamplingResponseExample COMMAND $<TARGET_FILE:sampling_response>)

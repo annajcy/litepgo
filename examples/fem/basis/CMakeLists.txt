@@ -6,3 +6,6 @@ target_link_libraries(hermite_interpolation PRIVATE litepgo::fem litepgo::warnin
 
 add_executable(interpolated_response interpolated_response.cpp)
 target_link_libraries(interpolated_response PRIVATE litepgo::fem litepgo::warnings)
+
+add_executable(sampling_response sampling_response.cpp)
+target_link_libraries(sampling_response PRIVATE litepgo::fem litepgo::warnings)
