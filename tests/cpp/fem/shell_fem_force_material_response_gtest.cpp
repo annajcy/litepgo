@@ -62,7 +62,7 @@ TEST(ShellFemForceMaterialResponse, SharedAndPerFaceParametersMatchEnergyAndFini
         }
         EXPECT_THROW(shared.eval_value(Eigen::Vector2d(1, 0)), std::invalid_argument);
         EXPECT_TRUE(shared.eval_value(theta).isApprox(p.force(theta), 1e-12));
-        EXPECT_FALSE(shared.update_pattern(theta));
+        EXPECT_FALSE(shared.update_patterns(theta));
     }
 }
 TEST(ShellFemForceMaterialResponse, SnapshotsFixedInputsAndRejectsInvalidConstruction) {

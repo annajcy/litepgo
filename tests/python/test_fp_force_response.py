@@ -15,7 +15,7 @@ def test_fp_force_energy_jacobian_and_recovery(batch_size):
     obj = Force(dof.ElementDofMap(topology, 9), mapping, geometry, u, theta=theta, batch_size=batch_size)
     assert isinstance(obj, energy.MeshResponse)
     expected = Energy(mapping, geometry, plastic, theta).eval_gradient(u)
-    value, J = obj.eval(p, need_jacobian=True)
+    value, J = obj.eval_value_and_jacobian(p)
     np.testing.assert_allclose(value, expected, atol=1e-13)
     for c in range(18):
         delta = np.zeros(18)
@@ -64,8 +64,8 @@ def test_fp_force_fits_a_constrained_plastic_scale():
             import scipy.sparse
             super().__init__(scipy.sparse.csc_matrix(np.ones((15, 1))))
 
-        def eval_values(self, x, need):
-            value, J = obj.eval(x[0]*direction, need_jacobian=need)
+        def eval_impl(self, x, need):
+            value, J = (obj.eval_value_and_jacobian(x[0]*direction) if need else (obj.eval_value(x[0]*direction), None))
             if not need:
                 return value-target
             import scipy.sparse

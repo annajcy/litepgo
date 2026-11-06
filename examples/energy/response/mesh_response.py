@@ -56,8 +56,8 @@ class ForceResidual(energy.FixedPatternResponse):
         super().__init__(force.jacobian_pattern)
         self.force, self.observed = force, observed
 
-    def eval_values(self, theta, need_jacobian):
-        value, J = self.force.eval(theta, need_jacobian=need_jacobian)
+    def eval_impl(self, theta, need_jacobian):
+        value, J = (self.force.eval_value_and_jacobian(theta) if need_jacobian else (self.force.eval_value(theta), None))
         residual = value - self.observed
         return (residual, J) if need_jacobian else residual
 
@@ -75,9 +75,9 @@ def run(copies=1, batch_size=256, repeats=0):
         mapping, geometry, plastic, [fem.IdentityField3D(truth)] * topology.num_cells
     )
     expected = energy.eval_gradient(displacement)
-    single_value, J = single.eval(truth, need_jacobian=True)
+    single_value, J = single.eval_value_and_jacobian(truth)
     np.testing.assert_allclose(single_value, expected, atol=1e-13)
-    value, batch_J = batched.eval(truth, need_jacobian=True)
+    value, batch_J = batched.eval_value_and_jacobian(truth)
     np.testing.assert_allclose(value, expected, atol=1e-14)
     np.testing.assert_array_equal(batch_J.indptr, J.indptr)
     np.testing.assert_array_equal(batch_J.indices, J.indices)
@@ -95,11 +95,11 @@ def run(copies=1, batch_size=256, repeats=0):
             times = []
             for obj in (single, batched):
                 for _ in range(3):
-                    obj.eval(truth, need_jacobian=need)
+                    (obj.eval_value_and_jacobian(truth) if need else (obj.eval_value(truth), None))
                 samples = []
                 for _ in range(repeats):
                     start = perf_counter()
-                    obj.eval(truth, need_jacobian=need)
+                    (obj.eval_value_and_jacobian(truth) if need else (obj.eval_value(truth), None))
                     samples.append(perf_counter() - start)
                 times.append(1000 * median(samples))
             print(

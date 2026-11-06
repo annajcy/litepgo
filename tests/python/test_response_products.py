@@ -10,12 +10,12 @@ class Rectangular(energy.FixedPatternResponse):
         self.A = np.array([[1., 2.], [-3., 4.], [5., 0.]])
         super().__init__(sparse.csc_matrix(self.A))
 
-    def eval_values(self, x, need_jacobian):
+    def eval_impl(self, x, need_jacobian):
         return (self.A @ x, self.A) if need_jacobian else self.A @ x
 
 
 def check_products(r, x):
-    r.update_pattern(x)
+    r.update_patterns(x)
     J = r.eval_jacobian(x)
     dx = np.arange(r.num_inputs, dtype=float) + .3
     gy = np.arange(r.num_outputs, dtype=float) - .4
@@ -35,11 +35,11 @@ def check_products(r, x):
 def test_base_fallback_and_override():
     check_products(Rectangular(), np.array([.2, .4]))
     class Direct(Rectangular):
-        def eval_values(self, x, need_jacobian):
+        def eval_impl(self, x, need_jacobian):
             raise AssertionError('Jacobian path used')
-        def eval_jvp_values(self, x, dx):
+        def eval_jvp_impl(self, x, dx):
             return self.A @ dx
-        def eval_vjp_values(self, x, gy):
+        def eval_vjp_impl(self, x, gy):
             return self.A.T @ gy
     r = Direct()
     np.testing.assert_allclose(r.eval_jvp(np.zeros(2), np.ones(2)), [3, 1, 5])
@@ -153,29 +153,29 @@ def test_response_super_products():
     class Conditional(Rectangular):
         direct = False
 
-        def eval_jvp_values(self, x, dx):
+        def eval_jvp_impl(self, x, dx):
             if self.direct:
                 return self.A @ dx
-            return super().eval_jvp_values(x, dx)
+            return super().eval_jvp_impl(x, dx)
 
-        def eval_vjp_values(self, x, gy):
+        def eval_vjp_impl(self, x, gy):
             if self.direct:
                 return self.A.T @ gy
-            return super().eval_vjp_values(x, gy)
+            return super().eval_vjp_impl(x, gy)
 
     r = Conditional()
     for direct in [False, True, False]:
         r.direct = direct
         check_products(r, np.array([.2, .4]))
     with pytest.raises(ValueError):
-        r.eval_jvp_values(np.zeros(2), np.ones(3))
+        r.eval_jvp_impl(np.zeros(2), np.ones(3))
 
     class Dynamic(Piecewise):
-        def eval_jvp_values(self, x, dx):
-            return super().eval_jvp_values(x, dx)
+        def eval_jvp_impl(self, x, dx):
+            return super().eval_jvp_impl(x, dx)
 
-        def eval_vjp_values(self, x, gy):
-            return super().eval_vjp_values(x, gy)
+        def eval_vjp_impl(self, x, gy):
+            return super().eval_vjp_impl(x, gy)
 
     r = Dynamic()
     for x in [np.array([.3, .4]), np.array([-.3, .4])]:
@@ -246,13 +246,13 @@ def test_super_fallback_preserves_reentry_guard():
     class Reentrant(Rectangular):
         reenter = True
 
-        def eval_jvp_values(self, x, dx):
-            return super().eval_jvp_values(x, dx)
+        def eval_jvp_impl(self, x, dx):
+            return super().eval_jvp_impl(x, dx)
 
-        def eval_values(self, x, need):
+        def eval_impl(self, x, need):
             if self.reenter:
                 self.eval_jvp(x, np.ones(2))
-            return super().eval_values(x, need)
+            return super().eval_impl(x, need)
 
     r = Reentrant()
     with pytest.raises(RuntimeError):
@@ -271,13 +271,13 @@ def test_direct_products_accept_infeasible_none():
         def __init__(self):
             super().__init__(eye(1, format="csc"))
 
-        def eval_values(self, x, need_jacobian):
+        def eval_impl(self, x, need_jacobian):
             return None
 
-        def eval_jvp_values(self, x, dx):
+        def eval_jvp_impl(self, x, dx):
             return None
 
-        def eval_vjp_values(self, x, gy):
+        def eval_vjp_impl(self, x, gy):
             return None
 
     model = Infeasible()

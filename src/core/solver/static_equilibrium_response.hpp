@@ -25,9 +25,9 @@ class StaticEquilibriumResponse final : public energy::FixedPatternResponse {
 
   private:
     friend struct binding::StaticEquilibriumGC; // Python GC visits and clears the owned callbacks.
-    Vec eval_values(const ConstVecRef& p, SpMat* J) const override;
-    Vec eval_jvp_values(const ConstVecRef& p, const ConstVecRef& v) const override;
-    Vec eval_vjp_values(const ConstVecRef& p, const ConstVecRef& w) const override;
+    Vec eval_impl(const ConstVecRef& p, SpMat* J) const override;
+    Vec eval_jvp_impl(const ConstVecRef& p, const ConstVecRef& v) override;
+    Vec eval_vjp_impl(const ConstVecRef& p, const ConstVecRef& w) override;
     Vec evaluate(const ConstVecRef& p, SpMat* J, const Vec* direction, bool transpose) const;
     dof::DofReduction fixed_;
     Vec initial_;

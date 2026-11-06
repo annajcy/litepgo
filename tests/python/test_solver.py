@@ -16,7 +16,7 @@ class TestResponse(FixedPatternResponse):
         super().__init__(pattern)
         self.evaluator = evaluator
 
-    def eval_values(self, x, need_jacobian):
+    def eval_impl(self, x, need_jacobian):
         return self.evaluator(x, need_jacobian)
 
 
@@ -159,7 +159,7 @@ def test_response_pattern_and_object_protocol():
                              lambda x, need: (x*x, np.diag(2*x)) if need else x*x)
     assert isinstance(r, Response)
     assert r.num_inputs == r.num_outputs == 2 and r.has_fixed_pattern
-    assert not r.update_pattern(np.zeros(2))
+    assert not r.update_patterns(np.zeros(2))
     np.testing.assert_array_equal(r.eval_value(np.array([2., 3.])), [4., 9.])
     J = r.eval_jacobian(np.zeros(2))
     assert J.nnz == 2  # Numerical zeros do not remove structural slots.
@@ -174,7 +174,7 @@ def test_response_pattern_and_object_protocol():
 
 def test_fixed_response_requires_override():
     base = FixedPatternResponse(np.ones((1, 1)))
-    with pytest.raises(RuntimeError, match="eval_values"):
+    with pytest.raises(RuntimeError, match="eval_impl"):
         base.eval_value(np.ones(1))
     with pytest.raises(TypeError):
         FixedPatternResponse(np.ones((1, 1)), lambda x, need: x)

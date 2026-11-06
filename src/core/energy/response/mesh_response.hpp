@@ -22,13 +22,13 @@ class MeshResponse : public FixedPatternResponse {
     virtual BatchMatrix eval_vjp_batch(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& gy) const;
 
   private:
-    Vec eval_jvp_values(const ConstVecRef& x, const ConstVecRef& dx) const override;
-    Vec eval_vjp_values(const ConstVecRef& x, const ConstVecRef& gy) const override;
+    Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& dx) override;
+    Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& gy) override;
     void check_batch_product(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& d,
                              bool transpose) const;
     Vec product(const ConstVecRef& x, const ConstVecRef& direction, bool transpose) const;
     MeshResponse(dof::ResponseAssembler assembler, int batch_size);
-    Vec eval_values(const ConstVecRef& x, SpMat* J) const override;
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) const override;
     dof::ResponseAssembler assembler_;
     std::vector<std::vector<int>> batches_;
     struct Storage {

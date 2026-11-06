@@ -18,7 +18,7 @@ def main():
         def __init__(self):
             super().__init__(np.ones((t.size, 2)))
 
-        def eval_values(self, parameters, need_jacobian):
+        def eval_impl(self, parameters, need_jacobian):
             amplitude, rate = parameters
             decay = np.exp(-rate * t)
             r = amplitude * decay - observations

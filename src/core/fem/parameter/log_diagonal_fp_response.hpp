@@ -23,7 +23,7 @@ class LogDiagonalFpResponse final : public energy::FixedPatternResponse {
             throw std::domain_error("LogDiagonalFpResponse: unrepresentable stretches");
         return y;
     }
-    Vec eval_values(const ConstVecRef& x, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
         const Vec s = stretches(x);
         Vec y = Vec::Zero(9);
         y[8] = 1.;
@@ -34,14 +34,14 @@ class LogDiagonalFpResponse final : public energy::FixedPatternResponse {
         }
         return y;
     }
-    Vec eval_jvp_values(const ConstVecRef& x, const ConstVecRef& v) const override {
+    Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& v) override {
         const Vec s = stretches(x);
         Vec y = Vec::Zero(9);
         for (int c = 0; c < num_inputs(); ++c)
             y[4 * c] = s[c] * v[c];
         return y;
     }
-    Vec eval_vjp_values(const ConstVecRef& x, const ConstVecRef& w) const override {
+    Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& w) override {
         Vec y = stretches(x);
         for (int c = 0; c < num_inputs(); ++c)
             y[c] *= w[4 * c];

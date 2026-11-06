@@ -74,8 +74,8 @@ def main():
     for kind in ("material", "fp"):
         equilibrium, p = make_equilibrium(kind)
         native, _ = make_equilibrium(kind, use_torch=False)
-        u, J = equilibrium.eval(p, need_jacobian=True)
-        expected_u, expected_J = native.eval(p, need_jacobian=True)
+        u, J = equilibrium.eval_value_and_jacobian(p)
+        expected_u, expected_J = native.eval_value_and_jacobian(p)
         v = np.linspace(0.1, 0.3, len(p))
         w = np.linspace(-0.2, 0.4, len(u))
         # These calls solve directional/adjoint equations and use the force products.

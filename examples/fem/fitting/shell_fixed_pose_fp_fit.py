@@ -19,8 +19,8 @@ class Residual(energy.FixedPatternResponse):
         super().__init__(force.jacobian_pattern)
         self.force, self.target, self.scale = force, target, scale
 
-    def eval_values(self, p, need_jacobian):
-        value, J = self.force.eval(p, need_jacobian=need_jacobian)
+    def eval_impl(self, p, need_jacobian):
+        value, J = (self.force.eval_value_and_jacobian(p) if need_jacobian else (self.force.eval_value(p), None))
         residual = (value - self.target) / self.scale
         return (residual, J / self.scale) if need_jacobian else residual
 

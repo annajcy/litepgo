@@ -13,11 +13,11 @@ class TriangleSample(energy.FixedPatternResponse):
         # An empty 3x3 pattern explicitly enables the zero Hessian of a linear map.
         super().__init__(np.ones((1, 3)), hessian_pattern=np.zeros((3, 3)))
 
-    def eval_values(self, c, need_jacobian):
+    def eval_impl(self, c, need_jacobian):
         value = np.array([self.N @ c])
         return (value, self.N[None, :]) if need_jacobian else value
 
-    def eval_hessian_values(self, c, weights):
+    def eval_hessian_impl(self, c, weights):
         return np.zeros((3, 3))
 
 
@@ -26,7 +26,7 @@ def main():
     c = np.array([-0.2, 0.1, 0.4])
     sample = TriangleSample(xi)
     response = energy.ComposedResponse(energy.ExpResponse(1), sample)
-    response.update_pattern(c)
+    response.update_patterns(c)
     theta = response.eval_value(c)[0]
     J = response.eval_jacobian(c).toarray()
     H = response.eval_hessian(c, weights=np.ones(1)).toarray()

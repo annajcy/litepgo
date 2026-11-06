@@ -44,15 +44,15 @@ TEST(ResponseComposition, ProductsNeverRequestExplicitLocalJacobians) {
         Direct() : FixedPatternResponse(Eigen::Matrix2d::Identity().sparseView()) {}
 
       private:
-        Vec eval_values(const ConstVecRef& x, SpMat* J) const override {
+        Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
             if (J)
                 throw std::logic_error("explicit Jacobian requested");
             return x.array().square();
         }
-        Vec eval_jvp_values(const ConstVecRef& x, const ConstVecRef& v) const override {
+        Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& v) override {
             return 2 * x.cwiseProduct(v);
         }
-        Vec eval_vjp_values(const ConstVecRef& x, const ConstVecRef& w) const override {
+        Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& w) override {
             return 2 * x.cwiseProduct(w);
         }
     };

@@ -29,8 +29,8 @@ class Residual final : public energy::FixedPatternResponse {
           scale_(scale) {}
 
   private:
-    Vec eval_values(const ConstVecRef& p, SpMat* J) const override {
-        const Vec value = force_->eval(p, J);
+    Vec eval_impl(const ConstVecRef& p, SpMat* J) const override {
+        const Vec value = (J ? force_->eval_value_and_jacobian_into(p, *J) : force_->eval_value(p));
         if (J)
             *J /= scale_;
         return (value - target_) / scale_;

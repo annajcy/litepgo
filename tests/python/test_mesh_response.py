@@ -43,7 +43,7 @@ def test_matrix_gather_and_zero_values_preserve_pattern():
         J[:, 3] = 2*x[:, 3]
         return (y, J) if need else y
     r = BatchResponseFixture(dof.VertexDofMap(t, 2), dof.ElementDofMap(t, 1), local)
-    value, J = r.eval(np.arange(1., 11.), need_jacobian=True)
+    value, J = r.eval_value_and_jacobian(np.arange(1., 11.))
     np.testing.assert_array_equal(value, [16., 36.])
     assert J[0, 3] == 8 and J[1, 5] == 12 and J.nnz == 16
     J = r.eval_jacobian(np.zeros(10))

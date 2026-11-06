@@ -16,12 +16,12 @@ class TriangleSample final : public energy::FixedPatternResponse {
           N_(fem::TriangleP1Basis::eval_N(xi)) {}
 
   private:
-    Vec eval_values(const ConstVecRef& c, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& c, SpMat* J) const override {
         if (J)
             J->coeffs() = N_;
         return Vec::Constant(1, N_.dot(c));
     }
-    void eval_hessian_values(const ConstVecRef&, const ConstVecRef&, SpMat&) const override {}
+    void eval_hessian_impl(const ConstVecRef&, const ConstVecRef&, SpMat&) const override {}
     Eigen::Vector3d N_;
 };
 
@@ -30,7 +30,7 @@ int main() {
     const Eigen::Vector3d c(-0.2, 0.1, 0.4);
     const auto sample = std::make_shared<TriangleSample>(xi);
     energy::ComposedResponse response(std::make_shared<energy::ExpResponse>(1), sample);
-    response.update_pattern(c);
+    response.update_patterns(c);
     const double theta = response.eval_value(c)[0];
     const Eigen::MatrixXd J = response.eval_jacobian(c);
     const Eigen::MatrixXd H = response.eval_hessian(c, Vec::Ones(1));

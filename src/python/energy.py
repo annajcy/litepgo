@@ -33,32 +33,33 @@ and defaults to 1. Dynamic subclasses must also override pattern_at(x).
 Evaluation arguments own their data. Call update_pattern(x) before requesting
 a dynamic Hessian; Newton manages this automatically.
 
-Vector responses and analytic sparse Jacobians.
+Vector responses and analytic sparse derivatives.
 
-Response.eval_hessian(x, weights) returns the exact Hessian of weights @ R(x),
-with weights held fixed, as a full symmetric sparse (num_inputs, num_inputs) matrix.
-Check has_hessian first; unsupported calls raise RuntimeError. ExpResponse and
-ComposedResponse with two second-order children support it. To opt in, pass
-hessian_pattern to FixedPatternResponse, or initial_hessian_pattern to
-DynamicPatternResponse, then implement eval_hessian_values(x, weights).
-An empty square pattern declares zero second derivatives; None means unsupported.
-The Python hook returns a dense/sparse matrix, or None for infeasibility.
-Dynamic subclasses may override hessian_pattern_at(x); the default keeps the
-current Hessian pattern. Patterns are independent of weights. update_pattern(x)
-returns true when either derivative pattern changes; has_fixed_pattern covers
-both supported patterns. See guide/energy/response-hessians for composition.
+Ordinary eval_value(x), eval_jacobian(x), eval_value_and_jacobian(x),
+eval_jvp(x, dx), eval_vjp(x, weights), and eval_hessian(x, weights) evaluate at
+the supplied input, preparing required patterns automatically. Joint evaluation
+returns (value, Jacobian). Direct products need no pattern preparation; their
+defaults prepare and multiply the explicit Jacobian.
 
+Response.eval_hessian returns the exact Hessian of weights @ R(x), holding
+weights fixed, as a full symmetric (num_inputs, num_inputs) sparse matrix.
+Check has_hessian first; unsupported calls raise RuntimeError. ExpResponse and compositions with two second-order children support it.
 
-Subclass FixedPatternResponse(pattern) and override eval_values(x, need_jacobian).
-Return (value, Jacobian) when requested, otherwise value; None marks an infeasible
-point. Jacobians may be dense or SciPy sparse, but nonzero entries outside the
-declared structural pattern are rejected. Public eval methods perform validation.
+Subclass FixedPatternResponse(pattern, hessian_pattern=None) or
+DynamicPatternResponse(initial_pattern, initial_hessian_pattern=None).
+Implement eval_impl(x, need_jacobian), returning value or (value, Jacobian).
+Return None for infeasibility. Optional eval_hessian_impl(x, weights) returns a
+matrix. Omitting the Hessian pattern means unsupported; an empty square pattern
+means zero curvature. Dynamic subclasses implement jacobian_pattern_at(x), and
+optionally hessian_pattern_at(x), whose default keeps its current structure.
+Patterns describe structural supersets, independent of numerical output weights.
+Arguments own their data; matrices can be dense or SciPy sparse. Public calls
+validate inputs/results and reject concurrent or reentrant calls.
 
-For changing structure, subclass DynamicPatternResponse(initial_pattern) and also
-implement pattern_at(x). Its stored values are ignored; rows/columns must remain
-unchanged. Call update_pattern(x) before requesting derivatives. Value-only calls
-need no pattern update. Gauss-Newton updates the pattern automatically. Pattern
-changes do not imply differentiability at switching points.
+update_patterns(x) explicitly prepares both supported derivative patterns and
+reports whether either changed. Pattern accessors return copies; has_fixed_pattern
+covers both structures. Native *_into calls use this protocol for buffer reuse;
+Python exposes only owning evaluation. See guide/energy/responses for migration.
 
 MeshResponse(input_map, output_map, batch_size=256) groups equal-sized
 local inputs/outputs. eval_batch(ids, inputs, need_jacobian) receives (B, ni) inputs
@@ -73,11 +74,11 @@ eval_feasible_step_batch(ids, x, dx). MeshResponse may override
 eval_jvp_batch(ids, x, dx) and eval_vjp_batch(ids, x, gy) to return batch products.
 Product hooks may return None for an infeasible state, just like value hooks.
 Their defaults multiply local explicit Jacobians; shared/repeated indices sum.
-All Response instances expose eval_jvp(x, dx) and eval_vjp(x, gy). Custom
+All Response instances expose eval_jvp(x, dx) and eval_vjp(x, weights). Custom
 FixedPatternResponse/DynamicPatternResponse subclasses may override
- eval_jvp_values(x, dx) and eval_vjp_values(x, gy).
-Update dynamic patterns before products as before eval_jacobian. Direct products
-do not remove the stored Jacobian pattern. No automatic linearization cache is kept.
+ eval_jvp_impl(x, dx) and eval_vjp_impl(x, weights).
+Ordinary products prepare patterns only when the implementation needs them. Direct
+products do not remove the stored Jacobian pattern. No automatic linearization cache is kept.
 """
 
 from litepgo._core import energy as _native

@@ -40,9 +40,9 @@ class ElementwiseResponse final : public FixedPatternResponse {
     ElementwiseResponse(dof::ResponseAssembler assembler, std::shared_ptr<Response> transform);
     Response& transform() const;
     Vec gather(int e, const ConstVecRef& x) const;
-    Vec eval_values(const ConstVecRef& x, SpMat* J) const override;
-    Vec eval_jvp_values(const ConstVecRef& x, const ConstVecRef& v) const override;
-    Vec eval_vjp_values(const ConstVecRef& x, const ConstVecRef& w) const override;
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) const override;
+    Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& v) override;
+    Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& w) override;
     dof::ResponseAssembler assembler_;
     std::array<std::shared_ptr<Response>, 1> children_;
 };

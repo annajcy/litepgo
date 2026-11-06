@@ -13,7 +13,7 @@ class Square(energy.FixedPatternResponse):
         super().__init__(sparse.eye(2, format="csc"))
         self.derivatives = 0
 
-    def eval_values(self, x, need_jacobian):
+    def eval_impl(self, x, need_jacobian):
         if need_jacobian:
             self.derivatives += 1
             return x * x, sparse.diags(2 * x, format="csc")
@@ -86,15 +86,15 @@ def test_direct_products_skip_explicit_jacobian():
             super().__init__()
             self.products = []
 
-        def eval_values(self, x, need_jacobian):
+        def eval_impl(self, x, need_jacobian):
             assert not need_jacobian, "explicit Jacobian requested"
             return x * x
 
-        def eval_jvp_values(self, x, dx):
+        def eval_jvp_impl(self, x, dx):
             self.products.append("jvp")
             return 2 * x * dx
 
-        def eval_vjp_values(self, x, gy):
+        def eval_vjp_impl(self, x, gy):
             self.products.append("vjp")
             return 2 * x * gy
 
@@ -131,16 +131,16 @@ def test_dynamic_products_restore_saved_point_and_input_copy():
     b = torch.tensor([-0.3, 0.4], dtype=torch.float64, requires_grad=True)
     saved_a = a.detach().clone()
     ya, yb = bridge.response(model, a), bridge.response(model, b)
-    model.update_pattern(b.detach().numpy())
+    model.update_patterns(b.detach().numpy())
     with torch.no_grad():
         a.add_(10)  # Forward owns an independent input copy.
     ga, gb = torch.autograd.grad(ya.sum() + yb.sum(), (a, b))
     for point, actual in [(saved_a, ga), (b.detach(), gb)]:
-        model.update_pattern(point.numpy())
+        model.update_patterns(point.numpy())
         expected = model.eval_jacobian(point.numpy()).T @ np.ones(2)
         np.testing.assert_allclose(actual.numpy(), expected)
         tangent = torch.tensor([0.5, -0.2], dtype=torch.float64)
-        model.update_pattern(
+        model.update_patterns(
             -point.numpy()
         )  # Deliberately leave the opposite active pattern.
         _, product = forward_product(model, point, tangent)
@@ -179,10 +179,10 @@ def test_equilibrium_forward_ad_and_product_errors():
     assert len(calls) == 2
 
     class Failure(Square):
-        def eval_vjp_values(self, x, gy):
+        def eval_vjp_impl(self, x, gy):
             raise ValueError("product failure")
 
-        def eval_jvp_values(self, x, dx):
+        def eval_jvp_impl(self, x, dx):
             raise ValueError("product failure")
 
     with pytest.raises(ValueError, match="product failure"):

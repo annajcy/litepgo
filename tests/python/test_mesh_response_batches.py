@@ -38,7 +38,7 @@ def test_maps_and_batch_sizes(input_kind, output_kind, batch_size):
     del t, i, o
     gc.collect()
     global_x = np.arange(obj.num_inputs, dtype=float)
-    value, J = obj.eval(global_x, need_jacobian=True)
+    value, J = obj.eval_value_and_jacobian(global_x)
     assert sorted(seen) == [0, 1, 2]
     np.testing.assert_array_equal(value, expected @ global_x)
     np.testing.assert_array_equal(J.toarray(), expected)
@@ -104,7 +104,7 @@ def test_grouping_preserves_original_element_sum_order(batch_size):
         return (values, J) if need else values
 
     obj = BatchResponseFixture(inputs, outputs, batch, batch_size)
-    value, J = obj.eval(np.ones(2), need_jacobian=True)
+    value, J = obj.eval_value_and_jacobian(np.ones(2))
     # Grouping evaluates elements 0,2 before 1; assembly must still sum 0,1,2.
     np.testing.assert_array_equal(value, [1.])
     np.testing.assert_array_equal(J.toarray(), [[1., 0.]])

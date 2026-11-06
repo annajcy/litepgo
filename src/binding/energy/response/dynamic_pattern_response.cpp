@@ -25,8 +25,9 @@ class PyDynamicResponse : public PyResponse<DynamicPatternResponse> {
         return nb::cast<linalg::binding::SparseArgument>(nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x))))
             .matrix;
     }
-    SpMat pattern_at(const ConstVecRef& x) const override {
-        nb::detail::ticket ticket(nb_trampoline, "pattern_at", nb::detail::str_hash("pattern_at"), true);
+    SpMat jacobian_pattern_at(const ConstVecRef& x) const override {
+        nb::detail::ticket ticket(nb_trampoline, "jacobian_pattern_at", nb::detail::str_hash("jacobian_pattern_at"),
+                                  true);
         return nb::cast<linalg::binding::SparseArgument>(nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x))))
             .matrix;
     }
@@ -38,24 +39,24 @@ void bind_dynamic_pattern_response(nb::module_& m) {
     nb::class_<DynamicPatternResponse, Response, PyDynamicResponse>(m, "DynamicPatternResponse")
         .def(
             "hessian_pattern_at",
-            [](const DynamicPatternResponse& r, const ConstVecRef& x) {
+            [](DynamicPatternResponse& r, const ConstVecRef& x) {
                 return dynamic_cast<const PyDynamicResponse&>(r).default_hessian_pattern(x);
             },
             "x"_a)
         .def(
-            "eval_jvp_values",
-            [](const DynamicPatternResponse& r, const ConstVecRef& x, const ConstVecRef& d) {
-                return dynamic_cast<const PyResponse<DynamicPatternResponse>&>(r).default_jvp(x, d);
+            "eval_jvp_impl",
+            [](DynamicPatternResponse& r, const ConstVecRef& x, const ConstVecRef& d) {
+                return dynamic_cast<PyResponse<DynamicPatternResponse>&>(r).default_jvp(x, d);
             },
             "x"_a, "dx"_a)
         .def(
-            "eval_vjp_values",
-            [](const DynamicPatternResponse& r, const ConstVecRef& x, const ConstVecRef& d) {
-                return dynamic_cast<const PyResponse<DynamicPatternResponse>&>(r).default_vjp(x, d);
+            "eval_vjp_impl",
+            [](DynamicPatternResponse& r, const ConstVecRef& x, const ConstVecRef& d) {
+                return dynamic_cast<PyResponse<DynamicPatternResponse>&>(r).default_vjp(x, d);
             },
-            "x"_a, "gy"_a)
+            "x"_a, "weights"_a)
         .def(nb::init<const SparseArgument&, const std::optional<SparseArgument>&>(), "initial_pattern"_a,
              "initial_hessian_pattern"_a = nb::none(),
-             "Subclass and override pattern_at(x) and eval_values(x, need_jacobian). Dimensions remain fixed.");
+             "Subclass and override jacobian_pattern_at(x) and eval_impl(x, need_jacobian). Dimensions remain fixed.");
 }
 } // namespace litepgo::energy::binding

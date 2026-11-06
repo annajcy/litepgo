@@ -36,14 +36,14 @@ TEST(MeshResponse, SharedParametersAndOutputsAccumulate) {
     EXPECT_EQ(r.num_inputs(), 2);
     EXPECT_EQ(r.num_outputs(), 5);
     EXPECT_TRUE(r.has_fixed_pattern());
-    EXPECT_FALSE(r.update_pattern(x));
+    EXPECT_FALSE(r.update_patterns(x));
     EXPECT_TRUE(r.eval_value(x).isApprox(expected * x));
     EXPECT_EQ(derivatives, 0);
     SpMat J = r.jacobian_pattern();
-    EXPECT_TRUE(r.eval(x, &J).isApprox(expected * x));
+    EXPECT_TRUE(r.eval_value_and_jacobian_into(x, J).isApprox(expected * x));
     EXPECT_TRUE(Eigen::MatrixXd(J).isApprox(expected));
     EXPECT_EQ(derivatives, 2);
-    EXPECT_TRUE(r.eval(-x, &J).isApprox(-expected * x));
+    EXPECT_TRUE(r.eval_value_and_jacobian_into(-x, J).isApprox(-expected * x));
     EXPECT_TRUE(Eigen::MatrixXd(J).isApprox(expected));
     EXPECT_EQ(J.nonZeros(), 10);
 }
@@ -74,10 +74,10 @@ TEST(MeshResponse, MatrixGatherPreservesRowMajorSlotsAndZeros) {
                               });
     const Vec x = Vec::LinSpaced(10, 1, 10);
     SpMat J = r.jacobian_pattern();
-    EXPECT_EQ(r.eval(x, &J)[0], 16);
+    EXPECT_EQ(r.eval_value_and_jacobian_into(x, J)[0], 16);
     EXPECT_EQ(J.coeff(0, 3), 8);
     EXPECT_EQ(J.coeff(1, 5), 12);
-    r.eval(Vec::Zero(10), &J);
+    r.eval_value_and_jacobian_into(Vec::Zero(10), J);
     EXPECT_EQ(J.nonZeros(), 16);
     EXPECT_TRUE(J.coeffs().isZero());
 }
@@ -159,7 +159,7 @@ TEST(MeshResponse, SharedAssemblyAndPartialBatch) {
             size);
         const Vec x = Eigen::Vector2d(2, 3);
         SpMat J = batch.jacobian_pattern();
-        EXPECT_TRUE(batch.eval(x, &J).isApprox(regular.eval_value(x)));
+        EXPECT_TRUE(batch.eval_value_and_jacobian_into(x, J).isApprox(regular.eval_value(x)));
         EXPECT_TRUE(Eigen::MatrixXd(J).isApprox(Eigen::MatrixXd(regular.eval_jacobian(x))));
         EXPECT_EQ(calls.load(), (3 + size - 1) / size);
         EXPECT_TRUE(batch.eval_value(-x).isApprox(-regular.eval_value(x)));

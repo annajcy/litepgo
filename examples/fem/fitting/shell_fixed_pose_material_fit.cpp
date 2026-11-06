@@ -25,11 +25,11 @@ class MaterialResidual final : public energy::FixedPatternResponse {
         : FixedPatternResponse(force->jacobian_pattern()), force_(force), target_(target), scale_(scale) {}
 
   private:
-    Vec eval_values(const ConstVecRef& theta, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& theta, SpMat* J) const override {
         // Tell Gauss-Newton to reject infeasible trials without changing parameterization.
         if (!theta.allFinite() || theta[1] <= 0 || theta.sum() <= 0)
             throw std::domain_error("Require mu > 0 and lambda_ps + mu > 0");
-        const Vec value = force_->eval(theta, J);
+        const Vec value = (J ? force_->eval_value_and_jacobian_into(theta, *J) : force_->eval_value(theta));
         if (J)
             *J /= scale_;
         return (value - target_) / scale_;

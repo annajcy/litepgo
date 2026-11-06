@@ -21,20 +21,20 @@ class ExpResponse final : public FixedPatternResponse {
             throw std::domain_error("ExpResponse: unrepresentable exponential");
         return y;
     }
-    Vec eval_values(const ConstVecRef& x, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
         Vec y = values(x);
         if (J)
             for (int i = 0; i < num_inputs(); ++i)
                 J->valuePtr()[i] = y[i];
         return y;
     }
-    void eval_hessian_values(const ConstVecRef& x, const ConstVecRef& weights, SpMat& H) const override {
+    void eval_hessian_impl(const ConstVecRef& x, const ConstVecRef& weights, SpMat& H) const override {
         H.coeffs() = values(x).cwiseProduct(weights);
     }
-    Vec eval_jvp_values(const ConstVecRef& x, const ConstVecRef& v) const override {
+    Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& v) override {
         return values(x).cwiseProduct(v);
     }
-    Vec eval_vjp_values(const ConstVecRef& x, const ConstVecRef& w) const override {
+    Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& w) override {
         return values(x).cwiseProduct(w);
     }
 };

@@ -24,7 +24,7 @@ def test_direct_sensitivity_callbacks_and_fixed_values():
         lambda u: FormulaForce(2, u, make_energy, partial),
     )
     p = np.array([2.0, 3.0])
-    u, J = response.eval(p, need_jacobian=True)
+    u, J = response.eval_value_and_jacobian(p)
     np.testing.assert_allclose(u, [0.4, 3.0])
     np.testing.assert_allclose(J.toarray(), [[0, 0], [0, 1]])
     for c in range(2):
@@ -63,7 +63,7 @@ def test_bound_callbacks_are_kept_alive_and_cycles_are_collected():
     del problem
     gc.collect()
     assert owner() is not None  # A live response must keep its callback owner alive.
-    u, J = response.eval(np.array([2.0, 3.0]), need_jacobian=True)
+    u, J = response.eval_value_and_jacobian(np.array([2.0, 3.0]))
     np.testing.assert_allclose(u, [2.0, 3.0])
     np.testing.assert_allclose(J.toarray(), np.eye(2))
     del response
@@ -214,15 +214,15 @@ def test_response_factory_direct_products_and_invalid_results():
             super().__init__(np.ones((3, 2)))
             self.u = u.copy()
 
-        def eval_values(self, p, need_jacobian):
+        def eval_impl(self, p, need_jacobian):
             if need_jacobian:
                 raise AssertionError("explicit B requested")
             return K @ self.u - A @ p
 
-        def eval_jvp_values(self, p, v):
+        def eval_jvp_impl(self, p, v):
             return -A @ v
 
-        def eval_vjp_values(self, p, w):
+        def eval_vjp_impl(self, p, w):
             return -A.T @ w
 
     def make_response(u):
@@ -298,10 +298,10 @@ def test_factory_response_dynamic_pattern_is_refreshed():
             super().__init__(sparse.eye(2, format="csc"))
             self.u = u.copy()
 
-        def pattern_at(self, p):
+        def jacobian_pattern_at(self, p):
             return np.array([[1.0, 0.0], [float(p[0] > 0), 1.0]])
 
-        def eval_values(self, p, need_jacobian):
+        def eval_impl(self, p, need_jacobian):
             value = self.u - np.array([p[0], p[1] + max(p[0], 0.0) ** 2])
             J = np.array([[-1.0, 0.0], [-2 * max(p[0], 0.0), -1.0]])
             return (value, J) if need_jacobian else value

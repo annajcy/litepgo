@@ -92,7 +92,7 @@ def reaction(problem, theta, axis, strain, need_jacobian):
         problem.make_energy,
         problem.make_response,
     )
-    displacement, J = equilibrium.eval(theta, need_jacobian=need_jacobian)
+    displacement, J = (equilibrium.eval_value_and_jacobian(theta) if need_jacobian else (equilibrium.eval_value(theta), None))
     problem.solves += 1
     elastic = problem.make_energy(theta)
     force = elastic.eval_gradient(displacement)[loaded].sum()
@@ -123,7 +123,7 @@ class MaterialResidual(energy.FixedPatternResponse):
         super().__init__(np.ones((2, 2)))
         self.measurement, self.observed, self.scales = measurement, observed, scales
 
-    def eval_values(self, theta, need_jacobian):
+    def eval_impl(self, theta, need_jacobian):
         values = self.measurement(theta, need_jacobian)
         if values is None:
             return None

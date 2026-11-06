@@ -113,7 +113,8 @@ Observation measure(const Problem& problem, const Factories& factories, const Ve
     solver::StaticEquilibriumResponse equilibrium(3, problem.fixed, load * problem.prescribed, options,
                                                   factories.make_energy, factories.make_response);
     SpMat state_jacobian = equilibrium.jacobian_pattern();
-    const Vec displacement = equilibrium.eval(p, need_jacobian ? &state_jacobian : nullptr);
+    const Vec displacement =
+        (need_jacobian ? equilibrium.eval_value_and_jacobian_into(p, state_jacobian) : equilibrium.eval_value(p));
 
     // 2. Compute force and its total derivative along the equilibrium branch.
     const auto elastic = factories.make_energy(p);
@@ -152,7 +153,7 @@ class Residual final : public energy::FixedPatternResponse {
           measurement_(std::move(measurement)), target_(std::move(target)), scales_(std::move(scales)) {}
 
   private:
-    Vec eval_values(const ConstVecRef& p, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& p, SpMat* J) const override {
         const auto observation = measurement_(p, J != nullptr);
         if (J)
             for (int c = 0; c < num_inputs(); ++c)

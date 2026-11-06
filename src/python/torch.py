@@ -65,13 +65,11 @@ class _Response(torch.autograd.Function):
     @staticmethod
     @once_differentiable
     def backward(ctx, upstream):
-        ctx.model.update_pattern(ctx.values)
         gradient = ctx.model.eval_vjp(ctx.values, _input(upstream))
         return torch.from_numpy(np.array(gradient, copy=True)), None
 
     @staticmethod
     def jvp(ctx, tangent, _model):
-        ctx.model.update_pattern(ctx.values)
         product = ctx.model.eval_jvp(ctx.values, _input(tangent))
         return torch.from_numpy(np.array(product, copy=True))
 

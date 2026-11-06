@@ -61,8 +61,8 @@ def responses(problem, kind, shared, batch_size=1, u=None):
 @pytest.mark.parametrize("batch_size", [1, 2, 8])
 def test_native_value_jacobian_and_direct_products(problem, kind, shared, batch_size):
     model, native, p, _, u = responses(problem, kind, shared, batch_size)
-    value, J = model.eval(p, need_jacobian=True)
-    expected, K = native.eval(p, need_jacobian=True)
+    value, J = model.eval_value_and_jacobian(p)
+    expected, K = native.eval_value_and_jacobian(p)
     np.testing.assert_allclose(value, expected, rtol=1e-12, atol=1e-13)
     (_, mapping, geometry, plastic, theta, _, E), _ = problem
     width = 2 if kind == "material" else 9
@@ -167,8 +167,8 @@ def test_energy_consistency_equilibrium_and_adjoint(problem, kind):
         equilibrium(native_energy, native_response),
         equilibrium(direct_energy, direct_response),
     )
-    u, J = obj.eval(p, need_jacobian=True)
-    expected_u, expected_J = native.eval(p, need_jacobian=True)
+    u, J = obj.eval_value_and_jacobian(p)
+    expected_u, expected_J = native.eval_value_and_jacobian(p)
     np.testing.assert_allclose(u, expected_u, atol=1e-11)
     np.testing.assert_allclose(J.toarray(), expected_J.toarray(), atol=1e-10, rtol=1e-9)
     np.testing.assert_array_equal(u[fixed.fixed_dofs], initial[fixed.fixed_dofs])

@@ -37,13 +37,13 @@ def test_shared_and_element_parameters_match_energy(batch_size):
     assert isinstance(shared, fem.VolumetricFemForceMaterialResponse)
     assert isinstance(shared, energy.MeshResponse)
     assert shared.has_fixed_pattern and shared.num_inputs == 2 and shared.num_outputs == 15
-    force, J = shared.eval(theta, need_jacobian=True)
-    per_force, E = element.eval(independent, need_jacobian=True)
+    force, J = shared.eval_value_and_jacobian(theta)
+    per_force, E = element.eval_value_and_jacobian(independent)
     np.testing.assert_allclose(force, observed(data, theta), rtol=1e-12, atol=1e-13)
     np.testing.assert_allclose(per_force, observed(data, independent), rtol=1e-12, atol=1e-13)
     np.testing.assert_allclose(J.toarray(), E[:, :2].toarray() + E[:, 2:].toarray(), rtol=1e-12, atol=1e-13)
     np.testing.assert_allclose(E @ independent, per_force, rtol=1e-12, atol=1e-13)
-    assert not shared.update_pattern(theta)
+    assert not shared.update_patterns(theta)
     with pytest.raises(ValueError):
         shared.eval_value(np.array([2., 0.]))
     np.testing.assert_allclose(shared.eval_value(theta), force)
@@ -66,8 +66,8 @@ def test_parameter_recovery_and_batch_consistency():
     class Residual(energy.FixedPatternResponse):
         def __init__(self):
             super().__init__(r2.jacobian_pattern)
-        def eval_values(self, x, need):
-            value, J = r2.eval(x, need_jacobian=need)
+        def eval_impl(self, x, need):
+            value, J = (r2.eval_value_and_jacobian(x) if need else (r2.eval_value(x), None))
             return (value-target, J) if need else value-target
     result = solver.gauss_newton_solve(Residual(), np.array([.7, 1.2]), solver.GaussNewtonOptions(gradient_tolerance=1e-10))
     assert result.status == solver.GaussNewtonStatus.Converged

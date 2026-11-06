@@ -29,8 +29,8 @@ class ForceResidual final : public energy::FixedPatternResponse {
         : FixedPatternResponse(force.jacobian_pattern()), force_(force), observed_(std::move(observed)) {}
 
   private:
-    Vec eval_values(const ConstVecRef& theta, SpMat* J) const override {
-        return force_.eval(theta, J) - observed_;
+    Vec eval_impl(const ConstVecRef& theta, SpMat* J) const override {
+        return (J ? force_.eval_value_and_jacobian_into(theta, *J) : force_.eval_value(theta)) - observed_;
     }
     energy::Response& force_;
     Vec observed_;
@@ -106,11 +106,11 @@ int main(int argc, char** argv) {
                  {static_cast<energy::Response*>(&single), static_cast<energy::Response*>(&batched)}) {
                 SpMat jacobian = force->jacobian_pattern();
                 for (int i = 0; i < 3; ++i)
-                    force->eval(truth, need ? &jacobian : nullptr);
+                    (need ? force->eval_value_and_jacobian_into(truth, jacobian) : force->eval_value(truth));
                 std::vector<double> samples;
                 for (int i = 0; i < repeats; ++i) {
                     const auto start = std::chrono::steady_clock::now();
-                    force->eval(truth, need ? &jacobian : nullptr);
+                    (need ? force->eval_value_and_jacobian_into(truth, jacobian) : force->eval_value(truth));
                     samples.push_back(
                         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
                 }

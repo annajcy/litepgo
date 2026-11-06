@@ -36,8 +36,8 @@ def test_shared_and_element_fp_jacobians_and_original_area(batch_size):
     per = np.concatenate([(1+.02*e)*packed for e in range(4)])
     assert isinstance(shared, energy.MeshResponse) and isinstance(shared, fem.ShellFemForceFpResponse)
     assert shared.num_inputs == 9 and shared.num_outputs == 18 and shared.has_fixed_pattern
-    value, J = shared.eval(packed, need_jacobian=True)
-    per_value, E = element.eval(per, need_jacobian=True)
+    value, J = shared.eval_value_and_jacobian(packed)
+    per_value, E = element.eval_value_and_jacobian(per)
     np.testing.assert_allclose(value, explicit_force(data, packed, theta), rtol=1e-11, atol=1e-12)
     np.testing.assert_allclose(per_value, explicit_force(data, per, theta), rtol=1e-11, atol=1e-12)
     for response, point, derivative in [(shared, packed, J), (element, per, E)]:
@@ -52,7 +52,7 @@ def test_shared_and_element_fp_jacobians_and_original_area(batch_size):
     identity = np.eye(3).ravel(order="F")
     original = fem.ShellFemEnergy[fem.KoiterStVK](mapping, rest, thickness, theta)
     np.testing.assert_allclose(shared.eval_value(identity), original.eval_gradient(u), atol=1e-12)
-    assert not shared.update_pattern(packed)
+    assert not shared.update_patterns(packed)
     with pytest.raises(ValueError):
         shared.eval_value(np.zeros(9))
     np.testing.assert_array_equal(shared.eval_jacobian(packed).indices, J.indices)
@@ -131,7 +131,7 @@ def test_invalid_inputs_and_empty_mesh():
         Local(rest[0], mapping.gather(0, u), thickness[0], fem.IdentityField2D(np.ones(8)), theta[0])
     empty = mesh.TriangleTopology(0, np.empty((0, 3), dtype=np.int32))
     zero = Force(dof.ConstantDofMap(empty, 9), dof.StencilDofMap(0, [], 3), [], np.empty(0), [], [])
-    value, J = zero.eval(np.eye(3).ravel(order="F"), need_jacobian=True)
+    value, J = zero.eval_value_and_jacobian(np.eye(3).ravel(order="F"))
     assert value.size == 0 and J.shape == (0, 9)
 
 

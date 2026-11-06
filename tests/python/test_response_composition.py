@@ -11,7 +11,7 @@ def topology():
 
 
 def check_products(response, x):
-    response.update_pattern(x)
+    response.update_patterns(x)
     J = response.eval_jacobian(x).toarray()
     v = np.linspace(0.2, 0.7, len(x))
     w = np.linspace(-0.3, 0.8, response.num_outputs)
@@ -65,15 +65,15 @@ def test_direct_products_do_not_request_child_jacobians():
         def __init__(self):
             super().__init__(np.eye(2))
 
-        def eval_values(self, x, need_jacobian):
+        def eval_impl(self, x, need_jacobian):
             if need_jacobian:
                 raise AssertionError("explicit Jacobian requested")
             return x * x
 
-        def eval_jvp_values(self, x, v):
+        def eval_jvp_impl(self, x, v):
             return 2 * x * v
 
-        def eval_vjp_values(self, x, w):
+        def eval_vjp_impl(self, x, w):
             return 2 * x * w
 
     local = energy.ComposedResponse(Direct(), Direct())
@@ -106,10 +106,10 @@ def test_dynamic_children_and_external_pattern_updates():
         def __init__(self):
             super().__init__(np.eye(2))
 
-        def pattern_at(self, x):
+        def jacobian_pattern_at(self, x):
             return np.array([[1.0, 0.0], [float(x[0] > 0), 1.0]])
 
-        def eval_values(self, x, need_jacobian):
+        def eval_impl(self, x, need_jacobian):
             y = np.array([x[0], x[1] + max(x[0], 0.0) ** 2])
             J = np.array([[1.0, 0.0], [2 * max(x[0], 0.0), 1.0]])
             return (y, J) if need_jacobian else y
@@ -118,10 +118,9 @@ def test_dynamic_children_and_external_pattern_updates():
     composed = energy.ComposedResponse(child, energy.ExpResponse(2))
     x = np.array([0.3, -0.4])
     assert not composed.has_fixed_pattern
-    with pytest.raises(RuntimeError, match="update_pattern"):
-        composed.eval_jacobian(x)
+    assert composed.eval_jacobian(x).shape == (2, 2)
     check_products(composed, x)
-    child.update_pattern(-np.ones(2))
+    child.update_patterns(-np.ones(2))
     check_products(composed, x)
     element = energy.ElementwiseResponse(dof.ElementDofMap(topology(), 2), child)
     check_products(element, np.array([0.2, 0.3, -0.4, 0.5]))
@@ -136,7 +135,7 @@ def test_child_lifetime_and_cycles(kind):
         def __init__(self):
             super().__init__(np.eye(2))
 
-        def eval_values(self, x, need_jacobian):
+        def eval_impl(self, x, need_jacobian):
             return (x, np.eye(2)) if need_jacobian else x
 
     child = Child()
@@ -224,10 +223,10 @@ def test_composition_reuses_dynamic_child_at_different_inputs():
         def __init__(self):
             super().__init__(np.eye(2))
 
-        def pattern_at(self, x):
+        def jacobian_pattern_at(self, x):
             return np.array([[1.0, 0.0], [float(x[0] > 0), 1.0]])
 
-        def eval_values(self, x, need_jacobian):
+        def eval_impl(self, x, need_jacobian):
             y = np.array([-x[0], x[1] + max(x[0], 0.0) ** 2])
             J = np.array([[-1.0, 0.0], [2 * max(x[0], 0.0), 1.0]])
             return (y, J) if need_jacobian else y
@@ -236,7 +235,7 @@ def test_composition_reuses_dynamic_child_at_different_inputs():
     obj = energy.ComposedResponse(child, child)
     for x in [np.array([0.3, 0.4]), np.array([-0.3, 0.4])]:
         # Flip composed with itself is (x0, x1+x0²), on either side of zero.
-        obj.update_pattern(x)
+        obj.update_patterns(x)
         np.testing.assert_allclose(
             obj.eval_jacobian(x).toarray(), [[1.0, 0.0], [2 * x[0], 1.0]]
         )

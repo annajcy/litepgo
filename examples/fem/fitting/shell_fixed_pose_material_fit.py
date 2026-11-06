@@ -19,11 +19,11 @@ class MaterialResidual(energy.FixedPatternResponse):
         super().__init__(force.jacobian_pattern)
         self.force, self.target, self.scale = force, target, scale
 
-    def eval_values(self, theta, need_jacobian):
+    def eval_impl(self, theta, need_jacobian):
         # None rejects infeasible trials without changing parameterization.
         if not np.isfinite(theta).all() or theta[1] <= 0 or theta.sum() <= 0:
             return None
-        value, J = self.force.eval(theta, need_jacobian=need_jacobian)
+        value, J = (self.force.eval_value_and_jacobian(theta) if need_jacobian else (self.force.eval_value(theta), None))
         residual = (value - self.target) / self.scale
         return (residual, J / self.scale) if need_jacobian else residual
 

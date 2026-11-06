@@ -13,7 +13,7 @@ class LinearResidual(energy.FixedPatternResponse):
         self.J = np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
         super().__init__(self.J)
 
-    def eval_values(self, x, need_jacobian):
+    def eval_impl(self, x, need_jacobian):
         r = self.J @ x - [1.0, 2.0, 3.0]
         return (r, self.J) if need_jacobian else r
 
@@ -22,10 +22,10 @@ class NonlinearResidual(energy.DynamicPatternResponse):
     def __init__(self):
         super().__init__(np.eye(2))
 
-    def pattern_at(self, x):
+    def jacobian_pattern_at(self, x):
         return np.array([[1.0, 0.0], [float(x[0] > 0), 1.0]])
 
-    def eval_values(self, x, need_jacobian):
+    def eval_impl(self, x, need_jacobian):
         s = max(0.0, x[0])
         r = np.array([x[0] - 1, x[1] + s * s - 2])
         return (r, np.array([[1.0, 0.0], [2 * s, 1.0]])) if need_jacobian else r
@@ -33,11 +33,10 @@ class NonlinearResidual(energy.DynamicPatternResponse):
 
 def main():
     fixed, dynamic = LinearResidual(), NonlinearResidual()
-    r, J = fixed.eval(np.array([1.0, 2.0]), need_jacobian=True)
+    r, J = fixed.eval_value_and_jacobian(np.array([1.0, 2.0]))
     active = np.ones(2)
-    dynamic.update_pattern(active)
     dynamic.eval_jacobian(active)
-    dynamic.update_pattern(-active)
+    dynamic.eval_jacobian(-active)
     result = solver.gauss_newton_solve(
         dynamic, -active, solver.GaussNewtonOptions(gradient_tolerance=1e-9)
     )

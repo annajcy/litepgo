@@ -39,13 +39,13 @@ def test_shared_and_per_face_parameters_match_energy(batch_size):
     assert isinstance(shared, energy.MeshResponse)
     assert isinstance(shared, fem.ShellFemForceMaterialResponse)
     assert shared.num_inputs == 2 and shared.num_outputs == 18 and shared.has_fixed_pattern
-    value, J = shared.eval(theta, need_jacobian=True)
-    per_value, E = element.eval(per, need_jacobian=True)
+    value, J = shared.eval_value_and_jacobian(theta)
+    per_value, E = element.eval_value_and_jacobian(per)
     np.testing.assert_allclose(value, observed(data, theta), atol=1e-13, rtol=1e-12)
     np.testing.assert_allclose(per_value, observed(data, per), atol=1e-13, rtol=1e-12)
     np.testing.assert_allclose(J.toarray(), sum(E[:, 2*e:2*e+2].toarray() for e in range(4)), atol=1e-13)
-    assert shared.eval(theta)[1] is None
-    assert not shared.update_pattern(theta)
+    np.testing.assert_allclose(shared.eval_value(theta), value)
+    assert not shared.update_patterns(theta)
     with pytest.raises(ValueError):
         shared.eval_value(np.array([1., 0.]))
     np.testing.assert_array_equal(shared.eval_jacobian(theta).indices, J.indices)
@@ -110,8 +110,8 @@ def test_material_mixed_derivative_and_parameter_recovery():
         def __init__(self):
             super().__init__(response.jacobian_pattern)
 
-        def eval_values(self, x, need):
-            value, jacobian = response.eval(x, need_jacobian=need)
+        def eval_impl(self, x, need):
+            value, jacobian = (response.eval_value_and_jacobian(x) if need else (response.eval_value(x), None))
             return (value-target, jacobian) if need else value-target
 
     result = solver.gauss_newton_solve(Residual(), np.array([.7, 1.2]),
@@ -134,5 +134,5 @@ def test_invalid_fixed_inputs_and_empty_mesh():
         Force(parameters, mapping, rest, u, thickness, 0)
     empty = mesh.TriangleTopology(0, np.empty((0, 3), dtype=np.int32))
     zero = Force(dof.ConstantDofMap(empty, 2), dof.StencilDofMap(0, [], 3), [], np.empty(0), [])
-    value, J = zero.eval(np.array([2., 3.]), need_jacobian=True)
+    value, J = zero.eval_value_and_jacobian(np.array([2., 3.]))
     assert value.size == 0 and J.shape == (0, 2)

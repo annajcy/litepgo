@@ -20,7 +20,7 @@ class LinearResidual final : public energy::FixedPatternResponse {
         J << 1, 0, 0, 1, 1, 1;
         return J.sparseView();
     }
-    Vec eval_values(const ConstVecRef& x, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
         if (J)
             J->coeffs().setOnes();
         return (Vec(3) << x[0] - 1, x[1] - 2, x.sum() - 3).finished();
@@ -33,18 +33,18 @@ class NonlinearResidual final : public energy::DynamicPatternResponse {
     NonlinearResidual() : DynamicPatternResponse(Eigen::Matrix2d::Identity().sparseView()) {}
 
   private:
-    SpMat pattern_at(const ConstVecRef& x) const override {
+    SpMat jacobian_pattern_at(const ConstVecRef& x) const override {
         SpMat p = Eigen::Matrix2d::Identity().sparseView();
         if (x[0] > 0)
             p.insert(1, 0) = 1;
         p.makeCompressed();
         return p;
     }
-    Vec eval_values(const ConstVecRef& x, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
         const double s = std::max(0., x[0]);
         if (J) {
             if (s > 0 && J->nonZeros() != 3)
-                throw std::logic_error("Call update_pattern before Jacobian evaluation");
+                throw std::logic_error("Call update_patterns before Jacobian evaluation");
             for (int c = 0; c < J->outerSize(); ++c)
                 for (SpMat::InnerIterator it(*J, c); it; ++it)
                     it.valueRef() = it.row() == c ? 1. : 2 * s;
@@ -55,13 +55,16 @@ class NonlinearResidual final : public energy::DynamicPatternResponse {
 
 int main() {
     LinearResidual fixed;
-    SpMat J = fixed.jacobian_pattern();
-    const Vec r = fixed.eval(Eigen::Vector2d(1, 2), &J);
+    const auto [r, J] = fixed.eval_value_and_jacobian(Eigen::Vector2d(1, 2));
     NonlinearResidual dynamic;
     const Vec active = Vec::Ones(2);
-    dynamic.update_pattern(active);
     dynamic.eval_jacobian(active);
-    dynamic.update_pattern(-active);
+    dynamic.eval_jacobian(-active);
+    dynamic.update_patterns(active);
+    SpMat buffer = dynamic.jacobian_pattern();
+    dynamic.eval_jacobian_into(2 * active, buffer);
+    if (buffer.coeff(1, 0) != 4)
+        throw std::runtime_error("Response buffer evaluation failed");
     solver::GaussNewtonOptions options;
     options.gradient_tolerance = 1e-9;
     const auto result = solver::gauss_newton_solve(dynamic, -active, options);

@@ -2,66 +2,72 @@
 #include "litepgo/common/types.hpp"
 #include <atomic>
 #include <optional>
+#include <utility>
 
 namespace litepgo::energy {
-// Vector-valued function. Inputs/outputs have fixed dimensions; Jacobians may be rectangular.
-// Before requesting derivatives, update_pattern(x), then copy the required pattern.
-// has_fixed_pattern describes both supported derivative patterns.
-// eval overwrites values only. Value-only calls need no pattern update.
+// Vector-valued function with fixed input/output dimensions and optional weighted Hessians.
+// Ordinary evaluation prepares required sparse patterns automatically. Native *_into calls
+// require update_patterns(x) and matching buffers; they overwrite values without resizing.
 // One call at a time per instance. Infeasible states throw domain_error.
 class Response {
   public:
     virtual ~Response() = default;
     Response(const Response&) = delete;
     Response& operator=(const Response&) = delete;
-    int num_inputs() const {
-        return static_cast<int>(pattern_.cols());
+    int num_inputs() const noexcept {
+        return static_cast<int>(jacobian_pattern_.cols());
     }
-    int num_outputs() const {
-        return static_cast<int>(pattern_.rows());
+    int num_outputs() const noexcept {
+        return static_cast<int>(jacobian_pattern_.rows());
     }
-    bool has_fixed_pattern() const {
-        return fixed_;
-    }
-    const SpMat& jacobian_pattern() const {
-        return pattern_;
+    bool has_fixed_pattern() const noexcept {
+        return fixed_pattern_;
     }
     bool has_hessian() const noexcept {
         return hessian_pattern_.has_value();
     }
-    // Union of all component Hessian patterns, independent of output weights.
-    // Throws when second derivatives are unsupported.
-    const SpMat& hessian_pattern() const;
+
+    Vec eval_value(const ConstVecRef& x);
+    SpMat eval_jacobian(const ConstVecRef& x);
+    std::pair<Vec, SpMat> eval_value_and_jacobian(const ConstVecRef& x);
+    Vec eval_jvp(const ConstVecRef& x, const ConstVecRef& dx);
+    Vec eval_vjp(const ConstVecRef& x, const ConstVecRef& weights);
     // Exact Hessian of weights.dot(R(x)), holding weights fixed. Full symmetric n-by-n matrix.
-    SpMat eval_hessian(const ConstVecRef& x, const ConstVecRef& weights) const;
-    bool update_pattern(const ConstVecRef& x);
-    Vec eval(const ConstVecRef& x, SpMat* jacobian = nullptr) const;
-    Vec eval_value(const ConstVecRef& x) const {
-        return eval(x);
+    SpMat eval_hessian(const ConstVecRef& x, const ConstVecRef& weights);
+
+    // Returns true if either supported derivative pattern changes. Stores no current x or values.
+    bool update_patterns(const ConstVecRef& x);
+    const SpMat& jacobian_pattern() const {
+        return jacobian_pattern_;
     }
-    SpMat eval_jacobian(const ConstVecRef& x) const;
-    // Dense products; defaults evaluate the explicit Jacobian on each call.
-    // Dynamic responses require update_pattern(x), as for eval_jacobian.
-    Vec eval_jvp(const ConstVecRef& x, const ConstVecRef& dx) const;
-    Vec eval_vjp(const ConstVecRef& x, const ConstVecRef& gy) const;
+    // Structural union of component Hessians, independent of weights; throws if unsupported.
+    const SpMat& hessian_pattern() const;
+    void eval_jacobian_into(const ConstVecRef& x, SpMat& jacobian);
+    Vec eval_value_and_jacobian_into(const ConstVecRef& x, SpMat& jacobian);
+    void eval_hessian_into(const ConstVecRef& x, const ConstVecRef& weights, SpMat& hessian);
 
   protected:
-    // An optional n-by-n Hessian pattern enables second derivatives; a fixed empty pattern declares zero curvature.
-    Response(const SpMat& pattern, bool fixed, std::optional<SpMat> hessian_pattern = std::nullopt);
-    virtual Vec eval_jvp_values(const ConstVecRef& x, const ConstVecRef& dx) const;
-    virtual Vec eval_vjp_values(const ConstVecRef& x, const ConstVecRef& gy) const;
-    // Overwrite every stored value without changing H's pattern.
-    virtual void eval_hessian_values(const ConstVecRef& x, const ConstVecRef& weights, SpMat& H) const;
-    // Called only for dynamic responses with Hessian support; nullopt keeps the current pattern.
-    virtual std::optional<SpMat> refresh_hessian_pattern(const ConstVecRef& x);
+    // A fixed empty n-by-n Hessian pattern declares zero curvature; omission means unsupported.
+    Response(const SpMat& jacobian_pattern, bool fixed_pattern, std::optional<SpMat> hessian_pattern = std::nullopt);
+    // nullptr requests only the value. Otherwise overwrite all stored Jacobian values.
+    virtual Vec eval_impl(const ConstVecRef& x, SpMat* jacobian) const = 0;
+    // Defaults prepare and multiply an explicit Jacobian. Direct overrides need no pattern preparation.
+    virtual Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& dx);
+    virtual Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& weights);
+    virtual void eval_hessian_impl(const ConstVecRef& x, const ConstVecRef& weights, SpMat& hessian) const;
+    // Describe required structures without changing this object's stored patterns.
+    virtual SpMat jacobian_pattern_at(const ConstVecRef& x) const;
+    virtual SpMat hessian_pattern_at(const ConstVecRef& x) const;
 
   private:
-    virtual std::optional<SpMat> refresh_pattern(const ConstVecRef& x) = 0;
-    virtual Vec eval_values(const ConstVecRef& x, SpMat* jacobian) const = 0;
+    bool prepare_patterns(const ConstVecRef& x, bool jacobian, bool hessian);
+    Vec evaluate_checked(const ConstVecRef& x, SpMat* jacobian) const;
+    void evaluate_hessian_checked(const ConstVecRef& x, const ConstVecRef& weights, SpMat& hessian) const;
     void check_input(const ConstVecRef& x) const;
-    SpMat pattern_;
+    void check_weights(const ConstVecRef& weights) const;
+    SpMat jacobian_pattern_;
     std::optional<SpMat> hessian_pattern_;
-    bool fixed_;
-    mutable std::atomic<bool> busy_ = false;
+    bool fixed_pattern_;
+    std::atomic<bool> busy_ = false;
 };
 } // namespace litepgo::energy

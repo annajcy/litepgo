@@ -17,7 +17,7 @@ class TestResponse final : public energy::FixedPatternResponse {
     TestResponse(const SpMat& pattern, Evaluator f) : FixedPatternResponse(pattern), evaluator(std::move(f)) {}
 
   private:
-    Vec eval_values(const ConstVecRef& x, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
         return evaluator(x, J);
     }
     Evaluator evaluator;
@@ -148,10 +148,10 @@ TEST(Response, PatternAndInputContracts) {
         return (Vec(2) << 2 * x[0], 0).finished();
     });
     EXPECT_TRUE(r.has_fixed_pattern());
-    EXPECT_FALSE(r.update_pattern(Vec::Ones(1)));
+    EXPECT_FALSE(r.update_patterns(Vec::Ones(1)));
     EXPECT_THROW(r.eval_value(Vec::Zero(2)), std::invalid_argument);
     SpMat wrong(2, 1);
-    EXPECT_THROW(r.eval(Vec::Zero(1), &wrong), std::invalid_argument);
+    EXPECT_THROW(r.eval_value_and_jacobian_into(Vec::Zero(1), wrong), std::invalid_argument);
     EXPECT_EQ(r.eval_jacobian(Vec::Zero(1)).coeff(0, 0), 2);
     TestResponse broken(pattern, [](const ConstVecRef&, SpMat* J) -> Vec {
         if (J)
@@ -167,12 +167,12 @@ TEST(Response, DynamicPatternRefreshesAtAcceptedStates) {
         Changing() : DynamicPatternResponse(SpMat(1, 1)) {}
 
       private:
-        SpMat pattern_at(const ConstVecRef&) const override {
+        SpMat jacobian_pattern_at(const ConstVecRef&) const override {
             SpMat p(1, 1);
             p.insert(0, 0) = 0;
             return p;
         }
-        Vec eval_values(const ConstVecRef& x, SpMat* J) const override {
+        Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
             if (J)
                 J->coeffRef(0, 0) = 1;
             return Vec::Constant(1, x[0] - 2);
@@ -220,7 +220,7 @@ TEST(GaussNewton, PatternChangesDuringSolve) {
         mutable int changes = 0;
 
       private:
-        SpMat pattern_at(const ConstVecRef& x) const override {
+        SpMat jacobian_pattern_at(const ConstVecRef& x) const override {
             SpMat p(2, 2);
             p.insert(0, 0) = 0;
             p.insert(1, 1) = 0;
@@ -230,7 +230,7 @@ TEST(GaussNewton, PatternChangesDuringSolve) {
             ++changes;
             return p;
         }
-        Vec eval_values(const ConstVecRef& x, SpMat* J) const override {
+        Vec eval_impl(const ConstVecRef& x, SpMat* J) const override {
             const double positive = std::max(0., x[0]);
             if (J) {
                 J->coeffRef(0, 0) = 1;

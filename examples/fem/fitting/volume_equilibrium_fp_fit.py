@@ -107,7 +107,7 @@ def measure(problem, make_energy, make_response, p, load=1.0, need_jacobian=Fals
         make_energy,
         make_response,
     )
-    displacement, state_jacobian = equilibrium.eval(p, need_jacobian=need_jacobian)
+    displacement, state_jacobian = (equilibrium.eval_value_and_jacobian(p) if need_jacobian else (equilibrium.eval_value(p), None))
 
     # 2. Compute force and its total derivative along the equilibrium branch.
     elastic = make_energy(p)
@@ -134,7 +134,7 @@ class Residual(energy.FixedPatternResponse):
         super().__init__(np.ones((len(target), 3)))
         self.measurement, self.target, self.scales = measurement, target, scales
 
-    def eval_values(self, p, need_jacobian):
+    def eval_impl(self, p, need_jacobian):
         prediction, jacobian = self.measurement(p, need_jacobian=need_jacobian)
         residual = (prediction - self.target) / self.scales
         return (

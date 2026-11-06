@@ -16,7 +16,7 @@ class ExponentialResidual final : public energy::FixedPatternResponse {
           observations(2.5 * (-0.8 * t.array()).exp()) {}
 
   private:
-    Vec eval_values(const ConstVecRef& parameters, SpMat* jacobian) const override {
+    Vec eval_impl(const ConstVecRef& parameters, SpMat* jacobian) const override {
         const double amplitude = parameters[0], rate = parameters[1];
         const Vec decay = (-rate * t.array()).exp();
         if (jacobian) {
