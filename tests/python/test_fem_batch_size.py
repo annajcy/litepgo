@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from litepgo import dof, fem, mesh
+from litepgo import dof, fem, mesh, tbb_thread_limit
 from test_fem import constant_fields, rest_fields
 
 
@@ -13,8 +13,11 @@ def test_native_energy_batch_size(batch_size):
             constant_fields(np.eye(3), 17), constant_fields(np.array([2., 3.]), 17))
     cls = fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
     x = np.arange(12) * .001
-    np.testing.assert_array_equal(cls(*args, batch_size=batch_size).eval_hessian(x).toarray(),
-                                  cls(*args).eval_hessian(x).toarray())
+    with tbb_thread_limit(1):
+        expected = cls(*args).eval_hessian(x).toarray()
+    with tbb_thread_limit(4):
+        actual = cls(*args, batch_size=batch_size).eval_hessian(x).toarray()
+    np.testing.assert_array_equal(actual, expected)
     with pytest.raises(ValueError, match='batch size'):
         cls(*args, batch_size=0)
 
@@ -24,7 +27,10 @@ def test_native_energy_batch_size(batch_size):
     rest = fem.TriangleMidEdgeRestData(nodes[:3], stencils.opposite[0])
     cls = fem.ShellFemEnergy[fem.KoiterStVK]
     args = (mapping, [rest], [.1], [np.array([2., 3.])])
-    np.testing.assert_array_equal(cls(*args, batch_size=batch_size).eval_hessian(x[:9]).toarray(),
-                                  cls(*args).eval_hessian(x[:9]).toarray())
+    with tbb_thread_limit(1):
+        expected = cls(*args).eval_hessian(x[:9]).toarray()
+    with tbb_thread_limit(4):
+        actual = cls(*args, batch_size=batch_size).eval_hessian(x[:9]).toarray()
+    np.testing.assert_array_equal(actual, expected)
     with pytest.raises(ValueError, match='batch size'):
         cls(*args, batch_size=0)

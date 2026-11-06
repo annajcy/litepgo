@@ -1,5 +1,6 @@
 #pragma once
 #include "litepgo/fem/assembly/detail/batch_views.hpp"
+#include <tbb/parallel_for.h>
 
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/energy/scalar/mesh_energy.hpp"
@@ -64,7 +65,7 @@ template <class Material, Basis3D UBasis, Quadrature3D Q> class VolumetricFemEne
             gradients->resize(count, n);
         if (hessians)
             hessians->resize(count * n, n);
-        for (Eigen::Index b = 0; b < count; ++b) {
+        tbb::parallel_for(Eigen::Index(0), count, [&](Eigen::Index b) {
             const int e = ids[b];
             Eigen::MatrixXd u = inputs.row(b).reshaped<Eigen::RowMajor>(n / BasisDofTransform<UBasis>::dofs_per_vertex,
                                                                         BasisDofTransform<UBasis>::dofs_per_vertex);
@@ -75,7 +76,7 @@ template <class Material, Basis3D UBasis, Quadrature3D Q> class VolumetricFemEne
             const Vec flattened = coefficients.reshaped<Eigen::RowMajor>();
             values[b] = eval_element(index, flattened, g ? &*g : nullptr, H ? &*H : nullptr);
             transforms_[index].pullback_into(g ? &*g : nullptr, H ? &*H : nullptr);
-        }
+        });
         return values;
     }
     Vec eval_feasible_step_batch(std::span<const int> ids, const energy::BatchMatrix& inputs,

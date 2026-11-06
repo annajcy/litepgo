@@ -1,6 +1,7 @@
 #pragma once
 #include "litepgo/fem/assembly/detail/batch_views.hpp"
 #include "litepgo/fem/assembly/detail/shell_plastic_geometry.hpp"
+#include <tbb/parallel_for.h>
 
 #include "litepgo/dof/stencil_dof_map.hpp"
 #include "litepgo/energy/scalar/mesh_energy.hpp"
@@ -57,7 +58,7 @@ template <class Material> class ShellFemEnergy final : public energy::MeshEnergy
             gradients->resize(count, n);
         if (hessians)
             hessians->resize(count * n, n);
-        for (Eigen::Index b = 0; b < count; ++b) {
+        tbb::parallel_for(Eigen::Index(0), count, [&](Eigen::Index b) {
             const int e = ids[b];
             const Eigen::MatrixXd u = inputs.row(b).reshaped<Eigen::RowMajor>(n / 3, 3);
             auto g = detail::batch_vector_view(gradients, b);
@@ -66,7 +67,7 @@ template <class Material> class ShellFemEnergy final : public energy::MeshEnergy
             const auto& rest = rest_data_[index];
             values[b] = detail::eval_shell_element<Material>(rest, u, thickness_[index], theta_[index],
                                                              g ? &*g : nullptr, H ? &*H : nullptr);
-        }
+        });
         return values;
     }
     Vec eval_feasible_step_batch(std::span<const int> ids, const energy::BatchMatrix& inputs,
