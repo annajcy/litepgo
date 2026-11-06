@@ -92,6 +92,9 @@ Problem make_problem() {
     auto force = std::make_shared<fem::ShellFemForceFpResponse<fem::KoiterStVK>>(dof::ConstantDofMap(topology, 9), map,
                                                                                  rest, u, thickness, theta);
 
+    // Fixed pose and original face areas are cached; only the parameter vector varies.
+    if (!force->eval_value(true_Fp.reshaped()).isApprox(target, 1e-11))
+        throw std::runtime_error("Fixed-pose response differs from the energy gradient");
     auto parameterized =
         std::make_shared<energy::ComposedResponse>(force, std::make_shared<fem::LogDiagonalFpResponse>(2));
     return {std::make_shared<Residual>(parameterized, target, scale), truth, initial, scale};

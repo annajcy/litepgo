@@ -70,6 +70,8 @@ def make_problem():
     force = fem.ShellFemForceMaterialResponse[fem.KoiterStVK](
         dof.ConstantDofMap(topology, 2), mapping, rest, displacement, thickness
     )
+    # Fixed pose and original face areas are cached; only the parameter vector varies.
+    np.testing.assert_allclose(force.eval_value(truth), target, rtol=1e-11, atol=1e-12)
     return MaterialResidual(force, target, scale), truth, initial, scale
 
 

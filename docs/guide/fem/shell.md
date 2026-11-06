@@ -175,9 +175,44 @@ as strain/curvature differences:
 $d\bar a^{-1}=-\bar a^{-1}(d\bar a)\bar a^{-1}$.
 It is therefore not generally the negative current-form Hessian. The API
 `KoiterStVK.eval_d2W_dab_dabarbbar` uses the same six-entry order for both form
-blocks. A plastic coefficient field is sampled at the local query coordinate and
-applied uniformly to that face's full stencil; its spatial derivatives are not
-a global natural-geometry interpolation.
+blocks. Each plastic parameter block applies uniformly to a face's full stencil.
+`ConstantDofMap` shares it across faces; `ElementDofMap` supplies one block per face.
+These matrices do not define a globally compatible natural-geometry interpolation.
+
+## Evaluation and cache ownership
+
+The public entry points remain `ShellFemEnergy`, `ShellFemForceMaterialResponse`
+and `ShellFemForceFpResponse`. They share the triangle mid-edge geometric formulas
+and pointwise material law; they differ in which input is active:
+
+| Entry point | Active input | Fixed per-face data | Recomputed during evaluation |
+| --- | --- | --- | --- |
+| Energy | Stencil displacements | Reference stencil, natural forms, original area, thickness, material parameters | Current forms and requested displacement derivatives |
+| Material force Response | Material parameters | Current forms and their displacement Jacobian, natural forms, original area, thickness | Material stress and requested mixed derivative |
+| Plastic force Response | Column-major `vec(Fp)` | Current forms and their displacement Jacobian, original reference stencil and area, thickness, material parameters | Plastic natural forms and requested plastic derivatives |
+
+Each force Response owns one array of face caches. The original area travels with
+its face, rather than in a separate parallel array. Single-face internal functions
+overwrite their output views, including the area exactly once; `MeshResponse`
+then scatters and sums contributions from faces sharing displacement DOFs.
+Both force paths reuse the same checked calculation of
+$f_e=A_0 B_u^T W_{,s}$. Their parameter Jacobians remain separate formulas. In
+particular, at fixed pose,
+
+$$
+\frac{\partial f_e}{\partial\theta}=A_0B_u^TW_{,s\theta}.
+$$
+
+There is no public local-density interface, additional state wrapper or affine
+shell sampling map. Forms are nonlinear in displacement: energy Hessians retain
+the geometric second derivative shown above. Fixed-pose force Responses can cache
+current geometry because displacement is not their active input. Rebuild them
+after changing the pose or any other fixed configuration.
+
+The paired [material fitting](../../examples/fitting/shell-fixed-pose-material-fit.md)
+and [plastic fitting](../../examples/fitting/shell-fixed-pose-fp-fit.md) examples
+check their force predictions against the displacement gradient of `ShellFemEnergy`
+at the generating parameters before fitting.
 
 ## Scope and geometric feasibility
 

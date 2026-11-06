@@ -70,6 +70,8 @@ def make_problem():
         dof.ConstantDofMap(topology, 9), mapping, rest, displacement, thickness, theta
     )
 
+    # Fixed pose and original face areas are cached; only the parameter vector varies.
+    np.testing.assert_allclose(force.eval_value(true_Fp.ravel(order="F")), target, rtol=1e-11, atol=1e-12)
     parameterized_force = energy.ComposedResponse(force, fem.LogDiagonalFpResponse(2))
     return Residual(parameterized_force, target, scale), truth, initial, scale
 

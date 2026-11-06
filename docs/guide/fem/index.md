@@ -34,8 +34,10 @@ exactly once.
 
 Spatial `InterpolatedResponse` and `DeformationGradientResponse` describe fixed
 configuration as a function of reference coordinates. Native FEM samples that
-configuration at construction. Runtime displacement evaluation uses cached
-coefficient maps; it creates no spatial Response or LocalEnergy/LocalResponse.
+configuration at construction. Volumetric displacement evaluation uses cached
+affine coefficient maps. Shell evaluation recomputes nonlinear stencil geometry
+from the current displacement; fixed-pose shell force Responses cache that geometry.
+Neither path creates spatial Responses or a LocalEnergy/LocalResponse layer during assembly.
 
 ## Choose a layer
 

@@ -90,6 +90,9 @@ Problem make_problem() {
         throw std::runtime_error("Calibration requires finite nonzero target forces");
     auto force = std::make_shared<fem::ShellFemForceMaterialResponse<fem::KoiterStVK>>(dof::ConstantDofMap(topology, 2),
                                                                                        map, rest, u, thickness);
+    // Fixed pose and original face areas are cached; only the parameter vector varies.
+    if (!force->eval_value(truth).isApprox(target, 1e-11))
+        throw std::runtime_error("Fixed-pose response differs from the energy gradient");
     return {std::make_shared<MaterialResidual>(force, target, scale), truth, initial, scale};
 }
 } // namespace
