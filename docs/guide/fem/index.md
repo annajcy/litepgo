@@ -14,11 +14,11 @@ interfaces consumed by solvers.
 ```mermaid
 flowchart TB
   accTitle: FEM module evaluation architecture
-  accDescr: Rest geometry and maps feed solid field kinematics or shell stencil kinematics. Material laws produce local densities or force responses; integration and global assembly expose Energy and Response interfaces.
-  inputs["Rest geometry, DOF maps and state"] --> solid["Solid: bases, transforms and cached kinematics"]
+  accDescr: Fixed spatial responses are sampled at construction. Physical displacement DOFs pass through basis transforms and affine deformation-gradient sampling blocks, or shell stencil kinematics, into material formulas and global assembly.
+  inputs["Rest geometry, DOF maps and state"] --> solid["Solid: DOF transform and cached sampling blocks"]
   inputs --> shell["Shell: triangle stencils and forms"]
-  solid --> solidLocal["Volumetric material local terms"]
-  shell --> shellLocal["Shell material local terms"]
+  solid --> solidLocal["Pointwise volumetric material formulas"]
+  shell --> shellLocal["Internal shell energy formula"]
   solidLocal --> volume["Volume quadrature and rest measure"]
   shellLocal --> area["Face density and original area"]
   volume --> assembly["MeshEnergy / MeshResponse assembly"]
@@ -32,16 +32,21 @@ exposes the compiled basis, quadrature, and material combinations. Link
 integration; custom local constructions must apply each measure and pullback
 exactly once.
 
+Spatial `InterpolatedResponse` and `DeformationGradientResponse` describe fixed
+configuration as a function of reference coordinates. Native FEM samples that
+configuration at construction. Runtime displacement evaluation uses cached
+coefficient maps; it creates no spatial Response or LocalEnergy/LocalResponse.
+
 ## Choose a layer
 
 | Layer | Main objects | Read |
 | --- | --- | --- |
 | Shape functions | P1, Q1 and Hermite bases, reference derivatives and coefficient slots | [Basis functions](basis.md) |
-| Coefficient sampling | Value, reference gradient and Hessian sampling factories | [Sampling responses](sampling-responses.md) |
+| Coefficient sampling | Value, reference gradient, Hessian and deformation-gradient sampling factories | [Sampling responses](sampling-responses.md) |
 | Spatial interpolation | `InterpolatedResponse[Basis]`, fixed coefficients and coordinate derivatives | [Spatial Response](interpolated-response.md) |
 | Reference integration rules | Gauss-Legendre tensor products and simplex centroid rules | [Quadrature](quadrature.md) |
-| Interpolation and integration | `Response`, local terms, quadrature, `VolumetricElement3D` | [Spatial responses and coefficient maps](fields.md) |
-| Solid elasticity | `DeformationGradientResponse`, `NeoHookean`, `VolumetricFemEnergy` | [Volumetric elasticity](volume.md) |
+| Interpolation and integration | Sampling maps, material formulas, quadrature, `VolumetricElement3D` | [Spatial responses and coefficient maps](fields.md) |
+| Solid elasticity | `deformation_gradient_sampling_response`, `NeoHookean`, `VolumetricFemEnergy` | [Volumetric elasticity](volume.md) |
 | Shell elasticity | Mid-edge stencils/forms, `KoiterStVK`, `ShellFemEnergy` | [Shells and natural geometry](shell.md) |
 | Physical derivative DOFs | `BasisDofTransform[HexHermiteBasis]` | [Hex Hermite](hermite.md) |
 | Geometry queries and sampling | `ElementLocator`, `PointEmbedding`, displacement maps, `sample_boundary` | [Embedding and boundary sampling](embedding.md) |

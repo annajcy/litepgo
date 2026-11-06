@@ -132,12 +132,18 @@ Use deterministic, read-only, thread-safe material evaluation; batch-coupled
 operations such as training-mode batch normalization are outside this contract.
 Do not detach `F` from autograd when implementing a nonconstant density.
 
-The adapter constructs the local linear map from basis derivatives and the geometry
-Response Jacobian, then caches it. It differentiates the density in the nine `F`
+The adapter caches the local linear map returned by
+`deformation_gradient_sampling_response`, using the supplied geometry Response. It differentiates the density in the nine `F`
 components, pulls the derivatives back to the twelve local displacement DOFs,
 and returns batches to C++. There is no global Torch Hessian. Value-only calls
 skip derivative construction. `Projected` uses the same per-element eigenvalue
 clamp as native `MeshEnergy`, after the displacement pullback and before assembly.
+
+The Torch FEM adapter uses the same deformation-gradient sampling factory as native
+FEM and obtains physical integration weights from `VolumetricElement3D`.
+Only the matrix row ordering is converted: native sampling packs each $F$ by
+column, whereas Torch flattens it by row. Both maps and weights are construction-time
+snapshots; runtime differentiation remains in PyTorch.
 
 The supported domain requires positive reference, plastic, and current deformation
 determinants. The native determinant-step routine limits trial steps before a

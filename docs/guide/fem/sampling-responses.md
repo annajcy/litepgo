@@ -105,3 +105,36 @@ coefficients before sampling computes $A\exp(c)$. The two are generally differen
 
 See the [paired sampling example](../../examples/fem/sampling-response.md).
 The Field hierarchy has been removed. See [migration and contracts](fields.md) for the spatial-query and coefficient-map replacements.
+
+## Deformation gradients in physical coordinates
+
+`deformation_gradient_sampling_response<B>(geometry, points)` in C++, or
+`fem.deformation_gradient_sampling_response[B](geometry, points)` in Python,
+returns an ordinary `AffineResponse`. Python binds TetP1, HexQ1 and HexHermite.
+`geometry` is a fixed spatial Response from reference coordinates to rest positions;
+`points` is a finite `(Q,3)` array of reference coordinates, not physical nodes.
+Empty point arrays are allowed. Geometry must have a finite positive Jacobian
+ determinant at every sampled point.
+
+For three-component displacement coefficients `C`, the input is
+`c = C.ravel()` (C++ row-major flattening), with `3*B::num_basis_functions` entries.
+The output has `9*Q` entries: point first, then column-major `vec(F)`:
+
+$$
+B_q = (D_\xi N(\xi_q)J_{X,q}^{-1})^T\otimes I_3,\qquad
+\operatorname{vec}(F_q)=\operatorname{vec}(I)+B_qc.
+$$
+
+Its coefficient Jacobian stacks the fixed `B_q` matrices; weighted coefficient
+Hessians are zero. Construction snapshots the numerical maps and retains neither
+geometry nor points. Rebuild after changing geometry. No integration weights are
+applied, and no physical-DOF conversion is hidden in this factory: for Hermite,
+first use `BasisDofTransform` to obtain reference coefficients.
+
+This differs from `DeformationGradientResponse(displacement, geometry)`, whose
+input is a spatial coordinate and whose children remain fixed. Native FEM calls this factory at construction, then extracts its constant
+Jacobian into dense per-point `B_q` blocks. Runtime material evaluation uses those
+blocks directly. Spatial interpolation Responses do not enter that active-DOF path.
+
+The [paired sampling example](../../examples/fem/sampling-response.md) includes
+an anisotropically scaled geometry and checks the resulting physical gradient.

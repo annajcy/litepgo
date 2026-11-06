@@ -126,9 +126,11 @@ H_e=A_0\left(B^TW_{,ss}B+\sum_{i=1}^6 W_{,s_i}\nabla^2s_i\right).
 $$
 
 Dropping the second term is not the exact shell Hessian.
-`ShellMaterialLocalEnergy2D[KoiterStVK]` evaluates a density for one reference
-stencil and displacement matrix. `ShellFemEnergy` snapshots per-face data,
-adds geometric feasible-step bounds, and assembles the integrated energies.
+`ShellFemEnergy` snapshots per-face data, evaluates each stencil with the current
+displacements, adds geometric feasible-step bounds, and assembles the integrated
+energies. The local calculation is an internal function, without a spatial-query
+argument or public LocalEnergy layer. For custom calculations, use the public
+triangle mid-edge kinematics and pointwise material functions above.
 
 ## Prescribed plastic natural geometry
 

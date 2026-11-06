@@ -10,7 +10,7 @@ FEM uses the same `Response` interface as the rest of litepgo. A response differ
 | `IdentityField2D/3D(c)` as fixed configuration | `AffineResponse(zeros((m,d)), c)`; coordinate derivatives are zero |
 | Active coefficient derivatives of an interpolated field | The value, gradient and Hessian sampling factories at fixed points |
 | `DeformationGradientField3D(u,X)` queried in space | `DeformationGradientResponse(u,X)`; its Jacobian differentiates `xi`, not `u` coefficients |
-| Its active displacement-coefficient derivative | `DeformationGradientKinematics3D<B,Q>::derivative(q)` in native FEM |
+| Its active displacement-coefficient derivative | `deformation_gradient_sampling_response<B>(geometry, points).eval_jacobian(c)` |
 | `SharedField3D` and concrete field template arguments | Ordinary Response ownership at the API boundary; FEM caches numerical samples |
 | Field-dependent local material wrappers | Pointwise material functions and explicit DOF pullbacks, or a global FEM force response composed with coefficient sampling |
 
@@ -67,7 +67,8 @@ B_q=\bigl(D_\xi N(\xi_q)[D_\xi X(\xi_q)]^{-1}\bigr)^T\otimes I_3,
 \qquad \operatorname{vec}(F_q)=\operatorname{vec}(I)+B_qc.
 \]
 
-`DeformationGradientKinematics3D<B,Q>` stores these matrices directly. No response composition or sparse assembly is performed inside each constitutive evaluation.
+`deformation_gradient_sampling_response<B>(geometry, points)` exposes this coefficient map as an `AffineResponse`. It takes reference coefficients, not physical DOFs.
+Native FEM constructs this sampling Response at quadrature points and extracts its constant Jacobian into dense per-point blocks. It keeps those numerical blocks, not an extra Kinematics object. No response composition or sparse assembly is performed inside each constitutive evaluation.
 
 ## Fixed configuration is sampled once
 
@@ -89,10 +90,34 @@ H_c=\sum_q w_q B_q^T A_qB_q.
 
 Physical DOFs are pulled back through `BasisDofTransform`. The force responses return the **positive energy gradient**, not its negative. Their parameter Jacobians replace \(A_q B_q\) with the material's mixed derivative with respect to `theta` or column-major `vec(Fp)`. `ConstantDofMap` shares a parameter block; `ElementDofMap` supplies one per element. Compose with coefficient sampling when the active parameter block itself is an affine function of other coefficients.
 
-The old Field-dependent local material wrappers are removed. For custom integration, use the material's pointwise `eval_W`, stress and tangent functions, the existing DOF pullback helpers, and `VolumetricElement3D`'s C++ indexed accumulation callback. `LocalEnergy2D/3D` and `LocalResponse2D/3D` remain available for custom densities; they are not spatial-response substitutes. Apply the complete integration weight once.
+The old Field-dependent local material wrappers are removed. For custom integration, use the material's pointwise `eval_W`, stress and tangent functions, the existing DOF pullback helpers, and `VolumetricElement3D`'s C++ indexed accumulation callback. The `LocalEnergy2D/3D`, `LocalResponse2D/3D` and `DeformationGradientKinematics3D` APIs are removed. Custom energies and force responses use the ordinary Energy/Response interfaces, with active DOFs as inputs. Apply the complete integration weight once. Python exposes `element.points()` and `element.weights()` as independent arrays; the latter already includes the reference quadrature weight and geometry determinant.
 
 The affine displacement formula makes the Hessian pullback above exact. A nonlinear map of active DOFs additionally needs its weighted second derivative and a suitable feasible-path rule; it cannot be substituted into this formula unchanged.
 
 `max_feasible_step` returns a conservative bound in `[0,1]` for the entire closed step segment, not the largest feasible step. Volumetric FEM checks constitutive feasibility at quadrature points; it does not certify every spatial point of a curved element. Python `VolumetricElement3D.max_feasible_step(step)` accepts a callback `step(xi)` returning a conservative bound at that quadrature coordinate.
 
 Ownership must remain acyclic. Where a response owns children, Python child-to-owner back-references must be weak references. See the [ownership convention](../energy/evaluation).
+
+## Runtime assembly path
+
+```text
+physical displacement u
+  -> gather element DOFs
+  -> BasisDofTransform: reference coefficients c
+  -> cached affine sampling blocks: vec(F_q) = vec(I) + B_q c
+  -> pointwise material W, P, A
+  -> weighted integration and coefficient derivatives
+  -> physical-DOF pullback and global scatter
+```
+
+`InterpolatedResponse` and spatial `DeformationGradientResponse` can supply fixed
+geometry, plastic deformation or material data at construction. They are not
+created for each runtime displacement or used to differentiate active DOFs.
+The sampling factory is the common construction path for both native FEM and
+custom integration; see the [paired example](../../examples/fem/sampling-response.md).
+
+Shells retain their triangle mid-edge geometric formulas. An internal function
+takes the active stencil displacement explicitly and integrates its constant
+face density. `ShellFemEnergy` owns fixed face data and assembles the result.
+There is no public local-density inheritance layer. Its Hessian retains the
+geometric second derivative; see [shell formulation](shell.md).

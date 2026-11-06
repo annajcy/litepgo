@@ -70,6 +70,5 @@ elastic tangent. Reference/displacement basis transforms also pull force rows
 back to physical DOFs.
 
 The Field-dependent local material wrappers are removed. Use the pointwise material
-functions and existing DOF pullback helpers for custom integration. General
-`LocalResponse2D/3D` densities remain available, with the same weighted accumulation
-and strided-buffer contracts. See [the migration conventions](fields.md).
+functions and existing DOF pullback helpers for custom integration. Custom force maps use ordinary Response, with the active parameter vector as
+input; there is no separate LocalResponse interface. See [the migration conventions](fields.md).

@@ -109,7 +109,8 @@ E(u)=\sum_{e,q}w_q\det J_{X,e}(\xi_q)
  W\!\left(I+u_{e,\xi}J_{X,e}^{-1},F_{p,e},\theta_e\right).
 $$
 
-`VolumetricFemEnergy` caches geometry weights and dense kinematics, evaluates the material,
+`VolumetricFemEnergy` constructs `deformation_gradient_sampling_response` at quadrature
+points, caches its dense Jacobian blocks and geometry weights, evaluates the material,
 and assembles through `MeshEnergy`. For custom integration, use pointwise material functions
 and the indexed accumulation callback of `VolumetricElement3D`; see
 [spatial responses and coefficient maps](fields.md#integration-and-local-material-code) for

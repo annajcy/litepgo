@@ -141,12 +141,14 @@ $$
 \approx\sum_q w_q\det J_X(\xi_q)\,f(X(\xi_q)).
 $$
 
-`VolumetricElement3D[Q](X_field)` performs this geometric weighting and caches
-the resulting points and volume weights. For a surface geometry field
+`VolumetricElement3D[Q](geometry)` performs this geometric weighting and caches
+the resulting points and volume weights. Python `points()` returns the reference
+coordinates and `weights()` returns the complete physical weights as independent
+arrays; C++ `point(q)` exposes `xi` and `w_dV`. For a surface geometry field
 $X(r,s)$, the area weight is
 $w_q\|X_{,r}\times X_{,s}\|$. See
-[integration ownership](fields.md#integration-applies-the-measure-once) for
-how local energies and responses consume the complete weight.
+[integration ownership](fields.md#integration-and-local-material-code) for
+how material values and derivatives consume the complete weight.
 
 The rule and the sampled basis/field must refer to the same reference
 domain. The exactness guarantee applies to the **complete reference-coordinate
