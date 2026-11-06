@@ -124,11 +124,23 @@ template <> class BasisDofTransform<HexHermiteBasis> {
             throw std::invalid_argument("Hermite DOFs: invalid derivative dimensions");
         if (gradient)
             gradient->array() *= scales_.array();
+        const auto scale_hessian = [&](auto& matrix) {
+            matrix.array().colwise() *= scales_.array();
+            matrix.array().rowwise() *= scales_.transpose().array();
+            if (!matrix.allFinite())
+                throw std::domain_error("Hermite DOFs: non-finite physical derivatives");
+        };
         if (hessian) {
-            hessian->array().colwise() *= scales_.array();
-            hessian->array().rowwise() *= scales_.transpose().array();
+            if (hessian->colStride() == 1) {
+                using RowMatrix = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+                Eigen::Map<RowMatrix, 0, Eigen::OuterStride<>> rows(hessian->data(), hessian->rows(), hessian->cols(),
+                                                                    Eigen::OuterStride<>(hessian->rowStride()));
+                scale_hessian(rows);
+            } else {
+                scale_hessian(*hessian);
+            }
         }
-        if ((gradient && !gradient->allFinite()) || (hessian && !hessian->allFinite()))
+        if (gradient && !gradient->allFinite())
             throw std::domain_error("Hermite DOFs: non-finite physical derivatives");
     }
 

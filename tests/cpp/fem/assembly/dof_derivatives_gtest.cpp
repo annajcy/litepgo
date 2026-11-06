@@ -4,6 +4,8 @@
 #include <gtest/gtest.h>
 #include <limits>
 #include <stdexcept>
+#include <utility>
+#include <vector>
 
 namespace litepgo::fem::test {
 
@@ -126,3 +128,31 @@ TEST(DofDerivatives, AppliesWeightAfterPullbackToAvoidIntermediateOverflowAndUnd
 }
 
 } // namespace litepgo::fem::test
+
+TEST(DofDerivatives, HessianAccumulationSupportsPaddedRowsAndArbitraryStrides) {
+    using namespace litepgo;
+    for (int n : {3, 192}) {
+        const Eigen::MatrixXd B = Eigen::MatrixXd::Random(9, n);
+        const Eigen::MatrixXd C = Eigen::MatrixXd::Random(9, 9);
+        const Eigen::MatrixXd product = B.transpose() * C * B;
+        for (const auto& strides : {std::pair{n + 3, 1}, std::pair{1, n + 3}, std::pair{2, 2 * n + 5}}) {
+            const auto [row_stride, col_stride] = strides;
+            Vec storage = Vec::Constant((n - 1) * (row_stride + col_stride) + 3, 7);
+            Eigen::Map<Eigen::MatrixXd, 0, Eigen::Stride<-1, -1>> output(storage.data() + 1, n, n,
+                                                                         Eigen::Stride<-1, -1>(col_stride, row_stride));
+            std::vector<bool> written(storage.size(), false);
+            for (int i = 0; i < n; ++i)
+                for (int j = 0; j < n; ++j)
+                    written[1 + i * row_stride + j * col_stride] = true;
+            for (double weight : {0., .3, -.7}) {
+                output.setConstant(4);
+                for (int repeat = 0; repeat < 2; ++repeat)
+                    fem::add_hessian_wrt_dofs(B, C, weight, output);
+                EXPECT_TRUE(output.isApprox(Eigen::MatrixXd::Constant(n, n, 4) + 2 * weight * product, 1e-12));
+                for (Eigen::Index i = 0; i < storage.size(); ++i)
+                    if (!written[i])
+                        EXPECT_EQ(storage[i], 7);
+            }
+        }
+    }
+}

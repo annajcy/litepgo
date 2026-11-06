@@ -183,6 +183,27 @@ TEST(BasisDofTransform, RejectsDerivativeShapesBeforeModifyingEitherOutput) {
     check_pullback_dimensions(BasisDofTransform<HexQ1Basis>(*X), 24);
     check_pullback_dimensions(BasisDofTransform<HexHermiteBasis>(*X), 192);
 }
+TEST(HexHermiteDofTransform, RowMajorPullbackMatchesDenseAndPreservesPadding) {
+    const auto transform = make_transform(box_nodes({2, 3, 5}));
+    const Eigen::MatrixXd original = Eigen::MatrixXd::Random(192, 192);
+    Eigen::MatrixXd expected = original;
+    transform.pullback(nullptr, &expected);
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> storage =
+        Eigen::MatrixXd::Constant(194, 195, -7);
+    storage.block(1, 1, 192, 192) = original;
+    Eigen::Map<Eigen::MatrixXd, 0, Eigen::Stride<-1, -1>> block(storage.data() + storage.outerStride() + 1, 192, 192,
+                                                                Eigen::Stride<-1, -1>(1, storage.outerStride()));
+    StridedMatRef view(block);
+    transform.pullback_into(nullptr, &view);
+    EXPECT_EQ(block, expected);
+    EXPECT_TRUE(storage.row(0).isConstant(-7));
+    EXPECT_TRUE(storage.row(193).isConstant(-7));
+    EXPECT_TRUE(storage.col(0).isConstant(-7));
+    EXPECT_TRUE(storage.rightCols(2).isConstant(-7));
+    block.setConstant(std::numeric_limits<double>::max());
+    EXPECT_THROW(transform.pullback_into(nullptr, &view), std::domain_error);
+}
+
 } // namespace
 
 } // namespace litepgo::fem::test

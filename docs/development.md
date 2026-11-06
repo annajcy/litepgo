@@ -106,6 +106,97 @@ C++ headers use `.hpp`. To apply the pinned formatter:
 git ls-files '*.hpp' '*.cpp' | xargs uv run --no-sync clang-format -i
 ```
 
+## Performance fix: Hex Hermite EGH (2026-11-07)
+
+A regression investigation against the October 29 FEM/libpgo benchmark found
+that arbitrary-stride output views hid the actual row-contiguous batch layout
+from Eigen. The change to `StridedMatRef` in `a7f7499` preserved correctness but
+made the repeated Hessian contraction $B^T C B$ slower. Here $B$ is the
+deformation-gradient Jacobian with respect to local coefficients, and $C$ is
+the material Hessian. Hex Hermite magnifies this cost: each element has 192
+displacement DOFs and the tested rule has 64 quadrature points.
+
+The fix exposes the existing layout without copying matrices or changing the
+batch protocol:
+
+- `fem/assembly/dof_derivatives.cpp`: use a row-major `Eigen::Map` with unit
+  inner stride when accumulating into row-contiguous Hessian storage.
+- `fem/assembly/basis_dof_transform.hpp`: use the same layout information for
+  Hermite's physical-DOF Hessian scaling and finite-value check.
+- `dof/energy_assembler.cpp`: scan packed local Hessians in physical memory
+  order when validating them. Padded or arbitrary-stride views retain the
+  general path; unused padding must not be read.
+
+All paths retain dimension, finite-value, overflow, and sparse-pattern checks.
+The physical transform, assembly contribution order, and public APIs are unchanged.
+
+### Measurement setup and results
+
+Measurements used an Apple M1 Pro (6 performance and 2 efficiency cores),
+AppleClang 21, Release `-O3 -DNDEBUG`, Eigen 5, the same oneTBB runtime,
+`EIGEN_DONT_PARALLELIZE`, and `VECLIB_MAXIMUM_THREADS=1`.
+The main case has 216 shared-vertex Hex Hermite elements (8232 global DOFs),
+nonuniform axis-aligned boxes, `batch_size=256`, and a 4-by-4-by-4 Gauss rule.
+The material is Neo-Hookean with lambda=2, mu=3, and identity Fp. EGH means
+energy, gradient, and the **exact** Hessian together; construction and solver
+iterations are excluded. Global sparse assembly is included.
+
+The contraction experiment alternated the saved old contraction and optimized
+contraction in the same process, using identical current FEM and assembly code.
+Seven timed samples per case followed warmup; the table gives the final repeat's
+medians. Checks also covered 64 elements, three nonzero displacement states,
+and 1/4/8 threads.
+
+| Threads | Before contraction fix | After contraction fix | Time saved |
+| --- | ---: | ---: | ---: |
+| 1 | 442.43 ms | 338.53 ms | 23.5% |
+| 4 | 118.77 ms | 91.74 ms | 22.8% |
+| 8 | 86.68 ms | 64.63 ms | 25.4% |
+
+A separate follow-up measured the scaling and packed-validation fixes after
+both binaries already included the contraction fix. Three rounds alternated
+process order, with warmup and 11 samples per case. Values below are medians
+of the three per-round medians; these are separate runs from the preceding table.
+
+| Threads | Output storage | Before follow-up | After follow-up |
+| --- | --- | ---: | ---: |
+| 4 | Owned public result | 93.01 ms | 87.63 ms |
+| 4 | Reused outputs and sparse pattern | 90.99 ms | 85.90 ms |
+| 8 | Owned public result | 63.64 ms | 62.27 ms |
+| 8 | Reused outputs and sparse pattern | 61.16 ms | 59.79 ms |
+
+At four threads, scaling and its finite-value check fell from about 14.6 to
+4.4 ms of **summed element CPU time**; this sum is not wall-clock time.
+Assembly wall time fell from about 4.9 to 4.3 ms.
+
+### Historical timing alignment and validation
+
+The historical benchmark reused its gradient, Hessian, and sparse structure.
+The current public API returns owned outputs and additionally validates finite
+inputs and derivative results. A benchmark-only preallocated-output hook aligned
+allocation and sparse-pattern reuse; it is not a new public API and does not
+make the historical and current validation code identical.
+
+The retained historical executable reran at 59.83 ms for 216 elements and eight
+threads, close to the optimized reused-output path's 59.79 ms. Treat this as
+agreement within run variability, not an exact cross-version speedup. Thermal
+and scheduling differences remain; the alternating before/after experiments
+provide stronger evidence for each optimization than comparisons across dates.
+These numbers do not establish performance on other machines, projected
+Hessians, other element families, or complete solvers.
+
+Validation passed 299 C++ tests (162 FEM, 56 DOF, 81 energy) and 67 Python tests.
+Regression coverage includes packed and padded row/column layouts, arbitrary
+strides with non-finite padding, signed and zero weights, overflow, unchanged
+outputs after invalid assembly inputs, and padded Hermite scaling against a
+dense reference. A/B checks found no energy, gradient, or Hessian differences
+in the tested states.
+
+Local investigation sources, raw samples, phase measurements, and environment
+metadata were saved under `build/hermite-egh-investigation/`, including the
+`ab/` and `followup/` directories. These local build artifacts are not committed;
+the method and measured summaries above are the durable regression record.
+
 ## Add or extend a Python binding
 
 Register native classes/functions in `src/binding/<module>/`, then expose
