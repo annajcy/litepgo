@@ -136,7 +136,7 @@ Torch density against the native one on tetrahedra and hexahedra. The
 invariant MLP on native energy/stress samples and then solves equilibrium with the
 frozen network. The [network-weight equilibrium fit](../examples/torch/neural-equilibrium-fit.md)
 shows the additional explicit parameter-to-weight mapping: two `theta` entries
-replace final-layer weights via `functional_call`, and the usual material force
+supply final-layer weights to a stateless batched MLP, and the usual material force
 response supplies their derivatives. Captured module parameters remain fixed.
 
 ## Force responses of a Torch material

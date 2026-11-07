@@ -22,7 +22,7 @@ PYTHONPATH=build/release/python uv run --no-sync python -m pytest -q tests/pytho
 
 The program prints JSON with initial/final loss and initial/fitted/reference weights.
 It writes no files. One local run reduced the normalized loss from `0.5` to
-approximately `5.1e-15`; final digits may differ across platforms. The test requires
+approximately `1.7e-14`; final digits may differ across platforms. The test requires
 at least a million-fold reduction, not exact recovery of the reference weights.
 
 ## Material and parameters
@@ -59,39 +59,38 @@ return {
 }
 ```
 
-`torch.func.functional_call` evaluates the model with those explicit weights.
-It also applies them to the reference corrections computed inside `forward`.
-The replacement is temporary; the captured weights are restored after each call.
-A per-material lock protects these calls because `functional_call` temporarily
-changes module state and Torch can release the GIL. The callback never persistently
-updates captured weights. Setting the module's
-parameters to `requires_grad=False` does not prevent differentiation with respect
-to the replacement tensors supplied by `p`.
+The runtime does not call `functional_call` or replace module parameters. It
+computes the fixed hidden layers with `torch.nn.functional.linear` and Softplus
+on the whole batch. Let $h(z)$ be the 32 hidden features. At construction, it
+computes constant $h_0=h(0)$ and $s=\partial h(0)/\partial z_3$. Each row then uses
 
-Do not replace this with `vector_to_parameters`, `.data` assignment, or
-`load_state_dict` inside the material callback: loading values into a module does
-not preserve the needed derivative path to the explicit input vector. Tests load
-a separate model copy only as an independent forward-value comparison.
+$$
+W_{\mathrm{NN},n}=\det(F_{p,n})\,w_n^T[h(z_n)-h_0-z_{n,3}s].
+$$
+
+The row's explicit active weights are concatenated with its fixed remaining
+final-layer weights. This is algebraically the original reference-corrected
+network, with no shared mutable model state, per-point Python loop, or lock.
+Gradients flow through the explicit row weights and deformation inputs.
+`unpack` remains a named-weight mapping for independent reference checks; it is
+not used by the material hot path.
+
+This implementation supports 1–32 active **final-layer** weights; the fitting
+example uses two. It deliberately specializes the existing Linear/Softplus MLP.
+The hidden layers must remain fixed: optimizing them would invalidate the cached
+reference features/slopes and requires a different implementation.
 
 ## Independent rows, shared global weights
 
-The material receives `theta` with shape `(N, 2)`, one row per material point.
-It evaluates each row with that row's replacement weights and stacks the scalar
-energies. This keeps the required pointwise relation
+The material receives `theta` with shape `(N, K)`. Row `n` multiplies only its
+own hidden features by its own weights, so batch execution preserves
+$\partial W_n/\partial\theta_m=0$ for $n\ne m$. No row is broadcast from
+`theta[0]`.
 
-$$
-W_n=W(F_n,(F_p)_n,\theta_n),\qquad
-\partial W_n/\partial\theta_m=0\quad(n\ne m).
-$$
-
-Even when all rows have the same values, using `theta[0]` for the whole batch would
-break this derivative contract. The example deliberately uses a Python loop for
-clarity. Larger problems need a separately validated vectorized implementation.
-
-`ConstantDofMap(topology, 2)` expresses sharing of the two global weights in the
-force response. The energy factory samples the same constant `p` in every element.
-Native assembly accumulates the independent material-point contributions into the
-global parameter derivative.
+`ConstantDofMap(topology, 2)` expresses global weight sharing in the fitting
+example. Native assembly accumulates independent point contributions into the
+global parameter derivative. The benchmark uses the same material factory with
+2, 8, or 32 active weights.
 
 ## Equilibrium and loss
 
@@ -136,7 +135,7 @@ raises an error; this example does not implement an outer infeasible-trial retry
 
 ## What the tests establish
 
-- Explicit weight replacement matches independently loading a copied network, and
+- Explicit weight evaluation matches independently loading a copied network, and
   material evaluations leave captured parameters unchanged.
 - Material mixed derivatives and assembled fixed-state force derivatives match
   centered finite differences.

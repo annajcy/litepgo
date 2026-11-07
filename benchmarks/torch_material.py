@@ -14,7 +14,6 @@ import subprocess
 import sys
 import tempfile
 import time
-from threading import Lock
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -64,11 +63,10 @@ def worker(case, repeats):
     import numpy as np
     import scipy.sparse as sp
     import torch
-    from torch.func import functional_call
     from litepgo import build_info, dof, energy, fem, mesh, solver, tbb_thread_limit
-    from litepgo.torch import TorchVolumetricMaterial, response
+    from litepgo.torch import response
     sys.path.insert(0, str(ROOT / "examples/fem/fitting"))
-    from neural_neohookean import InvariantMaterial
+    from neural_equilibrium_fit import make_material
     from torch_neohookean import TorchNeoHookean
     from contact_scaling import generate
 
@@ -79,32 +77,11 @@ def worker(case, repeats):
     diagnostic_ms = 0.
     k = case["weights"] if case["model"] == "neural" else 2
     if case["model"] == "neural":
-        with torch.random.fork_rng():
-            torch.manual_seed(42)
-            network = InvariantMaterial().eval().requires_grad_(False)
-        fixed_weights = dict(network.named_parameters())
-    call_lock = Lock()
-    p = (fixed_weights["net.4.weight"][0, :k].numpy().copy()
-         if case["model"] == "neural" else np.array([2., 3.]))
-
-    class Neural(TorchVolumetricMaterial):
-        num_parameters = k
-
-        @staticmethod
-        def W(F, Fp, theta):
-            physical = F.new_tensor([2., 3.]).expand(len(F), 2)
-            # shortcut: match the example's pointwise calls, vectorize only after measuring.
-            values = []
-            # functional_call temporarily replaces shared weights; the GIL is insufficient.
-            with call_lock:
-                for i in range(len(F)):
-                    weights = {**fixed_weights, "net.4.weight": torch.cat(
-                        (theta[i], fixed_weights["net.4.weight"][0, k:]))[None]}
-                    values.append(functional_call(network, weights,
-                        (F[i:i+1], Fp[i:i+1], physical[i:i+1]))[0])
-            return TorchNeoHookean.W(F, Fp, physical) + torch.stack(values)
-
-    material = {"native": fem.NeoHookean, "torch": TorchNeoHookean, "neural": Neural}[case["model"]]
+        material, _, _, reference = make_material(k)
+        p = reference.numpy().copy()
+    else:
+        material = fem.NeoHookean if case["model"] == "native" else TorchNeoHookean
+        p = np.array([2., 3.])
     metadata = dict(case, parameters=k, import_peak_mib=baseline, build=build_info(),
                     torch_version=torch.__version__, numpy_version=np.__version__)
 
@@ -267,6 +244,7 @@ def main():
     metadata["source_sha256"] = {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
                                 for path in (Path(__file__).resolve(), ROOT / "benchmarks/contact_scaling.py",
                                              ROOT / "src/python/torch.py", ROOT / "examples/fem/fitting/neural_neohookean.py",
+                                             ROOT / "examples/fem/fitting/neural_equilibrium_fit.py",
                                              ROOT / "examples/fem/fitting/torch_neohookean.py")}
     if sys.platform == "darwin":
         metadata["cpu"] = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"], text=True).strip()

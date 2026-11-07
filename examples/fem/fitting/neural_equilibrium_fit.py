@@ -5,12 +5,10 @@ Keep neural_neohookean.py and torch_neohookean.py beside this file.
 """
 
 import json
-from threading import Lock
 
 import numpy as np
 import scipy.sparse as sp
 import torch
-from torch.func import functional_call
 
 from litepgo import dof, energy, fem, mesh, solver, tbb_thread_limit
 from litepgo.torch import TorchVolumetricMaterial, response
@@ -18,34 +16,42 @@ from neural_neohookean import InvariantMaterial
 from torch_neohookean import TorchNeoHookean, make_problem
 
 
-def make_material():
+def make_material(num_parameters=2):
+    if not isinstance(num_parameters, int) or not 1 <= num_parameters <= 32:
+        raise ValueError("expected 1 to 32 active final-layer weights")
     with torch.random.fork_rng():
         torch.manual_seed(42)
         model = InvariantMaterial().eval().requires_grad_(False)
     fixed = dict(model.named_parameters())
-    call_lock = Lock()
-    reference = fixed["net.4.weight"][0, :2].detach().clone()
+    reference = fixed["net.4.weight"][0, :num_parameters].detach().clone()
 
     def unpack(p):
-        if p.shape != (2,):
-            raise ValueError("expected two final-layer weights")
+        if p.shape != (num_parameters,):
+            raise ValueError(f"expected {num_parameters} final-layer weights")
         # Concatenation preserves derivatives to p without mutating the module.
-        return {**fixed, "net.4.weight": torch.cat((p, fixed["net.4.weight"][0, 2:]))[None]}
+        return {**fixed, "net.4.weight": torch.cat((p, fixed["net.4.weight"][0, num_parameters:]))[None]}
+
+    def hidden(z):
+        z = torch.nn.functional.softplus(torch.nn.functional.linear(z, fixed["net.0.weight"], fixed["net.0.bias"]))
+        return torch.nn.functional.softplus(torch.nn.functional.linear(z, fixed["net.2.weight"], fixed["net.2.bias"]))
+
+    # Hidden weights are fixed, so their reference features and slopes are constants.
+    with torch.inference_mode(False), torch.enable_grad():
+        origin = torch.zeros(3, dtype=torch.float64)
+        h0 = hidden(origin).detach()
+        slope = torch.autograd.functional.jacobian(hidden, origin)[:, 2].detach()
+    width = num_parameters
 
     class WeightMaterial(TorchVolumetricMaterial):
-        num_parameters = 2
+        num_parameters = width
 
         @staticmethod
         def W(F, Fp, theta):
             physical = F.new_tensor([2.0, 3.0]).expand(len(F), 2)
-            # shortcut: pointwise calls favor clarity, vectorize for larger meshes.
-            # functional_call temporarily replaces shared weights; Torch can release the GIL.
-            with call_lock:
-                neural = torch.stack([
-                    functional_call(model, unpack(p), (f[None], fp[None], physical[n:n + 1]))[0]
-                    for n, (f, fp, p) in enumerate(zip(F, Fp, theta))
-                ])
-            # A fixed elastic baseline stabilizes this untrained network near rest.
+            z = InvariantMaterial.invariants(F @ torch.linalg.inv(Fp))
+            weights = torch.cat((theta, fixed["net.4.weight"][:, width:].expand(len(F), -1)), dim=1)
+            features = hidden(z) - h0 - z[:, 2:3] * slope
+            neural = torch.linalg.det(Fp) * (weights * features).sum(-1)
             return TorchNeoHookean.W(F, Fp, physical) + neural
 
     return WeightMaterial, model, unpack, reference

@@ -28,7 +28,7 @@ def example():
 def test_weight_mapping_and_material_mixed_derivatives(example):
     material, model, unpack, reference = example["make_material"]()
     saved = {name: value.clone() for name, value in model.state_dict().items()}
-    with pytest.raises(ValueError, match="two final-layer weights"):
+    with pytest.raises(ValueError, match="2 final-layer weights"):
         unpack(torch.zeros(3))
     F = np.array([[[1.08, .04, 0], [.01, .96, .03], [0, .02, 1.05]],
                   [[.97, 0, .02], [.03, 1.06, 0], [0, .01, 1.02]]])
@@ -120,3 +120,30 @@ def test_optimization_reduces_displacement_loss(example, problem):
     assert before == pytest.approx(0.5)
     assert torch.isfinite(fitted).all()
     assert after < before * 1e-6
+
+
+@pytest.mark.parametrize("width", [2, 8, 32])
+def test_batched_material_matches_functional_reference(example, width):
+    from litepgo.torch import TorchVolumetricMaterial
+
+    material, model, unpack, reference = example["make_material"](width)
+
+    class Pointwise(TorchVolumetricMaterial):
+        num_parameters = width
+
+        @staticmethod
+        def W(F, Fp, theta):
+            physical = F.new_tensor([2., 3.]).expand(len(F), 2)
+            values = [torch.func.functional_call(model, unpack(theta[i]),
+                      (F[i:i+1], Fp[i:i+1], physical[i:i+1]))[0] for i in range(len(F))]
+            return torch.stack(values) + example["TorchNeoHookean"].W(F, Fp, physical)
+
+    rng = np.random.default_rng(24)
+    F = np.eye(3)[None] + .04 * rng.normal(size=(3, 3, 3))
+    Fp = np.eye(3)[None] + .02 * rng.normal(size=(3, 3, 3))
+    theta = reference.numpy()[None] + .1 * rng.normal(size=(3, width))
+    outputs = ("W", "dW_dF", "d2W_dF2", "d2W_dF_dtheta", "d2W_dF_dFp")
+    expected = Pointwise.eval(F, Fp, theta, outputs=outputs)
+    actual = material.eval(F, Fp, theta, outputs=outputs)
+    for name in outputs:
+        np.testing.assert_allclose(actual[name], expected[name], rtol=1e-9, atol=1e-11)
