@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run: python3 scripts/contact_benchmark.py [build-directory]
+"""Run: python3 benchmarks/contact_benchmark.py [build-directory]
 
 Builds Release with both backends, then runs the exact tet_p1_box_stack setup.
 Outputs full precision CSVs, displacement arrays, traces and summary.json under

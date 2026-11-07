@@ -5,6 +5,7 @@ Keep neural_neohookean.py and torch_neohookean.py beside this file.
 """
 
 import json
+from threading import Lock
 
 import numpy as np
 import scipy.sparse as sp
@@ -22,6 +23,7 @@ def make_material():
         torch.manual_seed(42)
         model = InvariantMaterial().eval().requires_grad_(False)
     fixed = dict(model.named_parameters())
+    call_lock = Lock()
     reference = fixed["net.4.weight"][0, :2].detach().clone()
 
     def unpack(p):
@@ -37,10 +39,12 @@ def make_material():
         def W(F, Fp, theta):
             physical = F.new_tensor([2.0, 3.0]).expand(len(F), 2)
             # shortcut: pointwise calls favor clarity, vectorize for larger meshes.
-            neural = torch.stack([
-                functional_call(model, unpack(p), (f[None], fp[None], physical[n:n + 1]))[0]
-                for n, (f, fp, p) in enumerate(zip(F, Fp, theta))
-            ])
+            # functional_call temporarily replaces shared weights; Torch can release the GIL.
+            with call_lock:
+                neural = torch.stack([
+                    functional_call(model, unpack(p), (f[None], fp[None], physical[n:n + 1]))[0]
+                    for n, (f, fp, p) in enumerate(zip(F, Fp, theta))
+                ])
             # A fixed elastic baseline stabilizes this untrained network near rest.
             return TorchNeoHookean.W(F, Fp, physical) + neural
 

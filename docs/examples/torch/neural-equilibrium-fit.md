@@ -61,7 +61,10 @@ return {
 
 `torch.func.functional_call` evaluates the model with those explicit weights.
 It also applies them to the reference corrections computed inside `forward`.
-The captured module is never updated during a solve or backward call. Setting its
+The replacement is temporary; the captured weights are restored after each call.
+A per-material lock protects these calls because `functional_call` temporarily
+changes module state and Torch can release the GIL. The callback never persistently
+updates captured weights. Setting the module's
 parameters to `requires_grad=False` does not prevent differentiation with respect
 to the replacement tensors supplied by `p`.
 

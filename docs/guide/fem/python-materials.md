@@ -182,9 +182,11 @@ weights are constants for FEM; to differentiate a loss with respect to physical
   `ValueError`. Returning NaN outside the domain is the usual way to reject inputs.
 - Exceptions raised by `eval` propagate unchanged. A missing requested entry raises
   `KeyError`; a wrong shape raises `ValueError`; a non-`dict` result raises `TypeError`.
-- Each call holds the GIL, so calls never overlap. Native work before and after
-  the call runs in parallel without the GIL; larger `batch_size` values mean fewer,
-  larger Python calls.
+- Each callback enters Python with the GIL held, but Torch/NumPy operations can
+  release it, allowing callbacks to overlap. Protect shared mutable state;
+  `functional_call` temporarily replaces module parameters and requires a lock
+  when callbacks share that module. Native work before and after the call runs
+  in parallel without the GIL; larger `batch_size` values mean fewer, larger calls.
 
 ## From C++
 

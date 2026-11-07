@@ -1,6 +1,7 @@
 """Network weights -> constitutive mixed derivatives -> equilibrium loss."""
 
 import copy
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import runpy
 
@@ -56,6 +57,23 @@ def test_weight_mapping_and_material_mixed_derivatives(example):
                                    atol=1e-10, rtol=1e-6)
     for name, value in model.state_dict().items():
         torch.testing.assert_close(value, saved[name], rtol=0, atol=0)
+
+
+def test_shared_network_calls_are_thread_safe(example):
+    material, _, _, reference = example["make_material"]()
+    F = np.array([[[1.08, .04, 0], [.01, .96, .03], [0, .02, 1.05]]])
+    Fp = np.eye(3)[None]
+    parameters = [reference.numpy()[None] + offset for offset in np.linspace(-.2, .2, 12)]
+
+    def evaluate(theta):
+        return material.eval(F, Fp, theta, outputs=("W", "d2W_dF_dtheta"))
+
+    expected = [evaluate(theta) for theta in parameters]
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        actual = list(pool.map(evaluate, parameters))
+    for a, b in zip(actual, expected):
+        for name in b:
+            np.testing.assert_allclose(a[name], b[name], rtol=1e-10, atol=1e-12)
 
 
 @pytest.fixture(scope="module")

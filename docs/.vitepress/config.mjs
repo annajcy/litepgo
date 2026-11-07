@@ -24,6 +24,7 @@ export default defineConfig({
       { text: 'Get started', link: '/guide/build' },
       { text: 'User guide', link: '/guide/architecture' },
       { text: 'Examples', link: '/examples' },
+      { text: 'Benchmarks', link: '/benchmarks/' },
       { text: 'API reference', link: '/reference' },
       { text: 'Development', link: '/development' }
     ],
@@ -167,6 +168,9 @@ export default defineConfig({
         // Generated HTML must bypass VitePress's client router.
         { text: 'C++ reference', link: '/reference/cpp/index.html', target: '_self' },
         { text: 'Python reference', link: '/reference/python/index.html', target: '_self' },
+        { text: 'Benchmarks', link: '/benchmarks/', items: [
+          { text: 'Torch material performance', link: '/benchmarks/torch-material' }
+        ] },
         { text: 'Development', link: '/development' }
       ] }
     ]

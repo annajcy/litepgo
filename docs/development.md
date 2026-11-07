@@ -21,7 +21,8 @@ together. Run commands below from its root.
 | `tests/cpp/`, `tests/python/` | Unit and integration/regression tests |
 | `docs/` | User manual, formulations, example explanations, and site configuration |
 | `assets/` | Bundled test/example geometry and provenance notes |
-| `scripts/` | Development registration, benchmarks, and documentation launchers |
+| `benchmarks/` | Reproducible performance drivers; see [benchmarks](benchmarks/index.md) |
+| `scripts/` | Development registration and documentation launchers |
 
 The source directories do not contain an extra `litepgo/` level. CMake creates
 forwarding headers under `build/<preset>/include/litepgo/`, preserving public

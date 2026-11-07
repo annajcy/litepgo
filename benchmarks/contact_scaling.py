@@ -77,7 +77,7 @@ def main(skip_build=False):
     for index,(name,mesh) in enumerate(meshes):
         for threads in (1,4,8):
             output=OUT/f'{name}_t{threads}'
-            args=[sys.executable,str(ROOT/'scripts/contact_benchmark.py'),'--mesh',str(mesh),
+            args=[sys.executable,str(ROOT/'benchmarks/contact_benchmark.py'),'--mesh',str(mesh),
                   '--threads',str(threads),'--repetitions','3','--output',str(output),
                   '--total-stiffness',str(top)]
             if skip_build or index or threads != 1:
@@ -153,7 +153,7 @@ def report():
     lines += ['', 'Relative L2 uses the native displacement norm. Residuals are maxima across warmup and measured runs against the 1e-8 stopping tolerance. Agreement of shared-state derivatives does not prove the cause of differing final solutions. No tighter-tolerance solves were performed.', '', 'Shared derivatives compare kappa-weighted contact at identical initial, native final, IPCTK final and midpoint states, with both exact and projected Hessians. Table reports the largest error across these eight comparisons. Displacement compares warmup equilibria; all measured repeats are checked separately. These shared-state checks assess formula agreement separately from final-solution and Newton/CCD-path differences.', '',
         'Every run must converge with free residual <=1e-8 and positive active contact distance below dhat. Each case saves runs.csv (energies, convergence, active pairs, distance), iterations.csv (every iteration, feasible/accepted steps, line-search counts, pattern changes, shifts), full-precision displacement CSVs, shared_states.csv and shared_ccd.csv. comparisons.csv also records first measured feasible-step paths and line-search totals. Separate Newton paths are permitted; equal iteration counts are not assumed.', '',
         '## Limits and reproduction','',
-        'Run `python3 scripts/contact_scaling.py --output output/contact_scaling` from the repository; files at that output root are replaced. Historical serial results are preserved at output/contact_scaling_serial. For one case use scripts/contact_benchmark.py --threads N --mesh PATH --repetitions N --output PATH --total-stiffness 41. Original invocation retains one thread, the asset, five measured repetitions and original output directory.', '',
+        'Run `python3 benchmarks/contact_scaling.py --output output/contact_scaling` from the repository; files at that output root are replaced. Historical serial results are preserved at output/contact_scaling_serial. For one case use benchmarks/contact_benchmark.py --threads N --mesh PATH --repetitions N --output PATH --total-stiffness 41. Original invocation retains one thread, the asset, five measured repetitions and original output directory.', '',
         'Timing comparisons with output/contact_scaling_serial are historical versus current, not controlled simultaneous experiments. Background processes are not terminated. Per-case processes_before.txt snapshots record competing load; scheduling and thermal effects may also affect timings. Three measured samples on a shared desktop are limited evidence. No per-phase profiler or tighter-tolerance solves were added.']
     (OUT/'report.md').write_text('\n'.join(lines)+'\n')
 

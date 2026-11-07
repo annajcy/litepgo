@@ -15,6 +15,7 @@ contact supply these objects; they do not require a separate simulation framewor
 3. [Understand the architecture and module boundaries](guide/architecture.md).
 4. [Learn the common data and derivative conventions](guide/concepts.md).
 5. [Choose a runnable example](examples.md).
+6. [Measure performance](benchmarks/index.md).
 
 Every command assumes the repository root unless a page says otherwise. Examples
 use the release preset and bundled or generated geometry. Python arrays use

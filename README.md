@@ -40,6 +40,13 @@ Both programs check the same scalar-energy derivatives. Start with the
 [first complete solve](docs/guide/quickstart.md), or choose a task from the
 [example catalog](docs/examples.md).
 
+## Benchmarks
+
+Performance drivers live in [`benchmarks/`](benchmarks/README.md). See the
+[benchmark guide](docs/benchmarks/index.md) for the Torch material/FEM/implicit-gradient
+suite, native mesh batching, and contact backend scaling. Timings are observations,
+not CI pass/fail thresholds.
+
 ## Read and build the documentation
 
 Read the [online documentation](https://annajcy.github.io/litepgo/), or browse the

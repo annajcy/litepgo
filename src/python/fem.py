@@ -97,7 +97,8 @@ class PyVolumetricMaterial:
 
     Non-finite returned values reject the evaluation like a native domain error
     (a Newton trial step is then shortened); exceptions raised by eval propagate.
-    Each batch is one call made with the GIL held, so calls never overlap.
+    Each batch enters Python with the GIL held. Native Python extensions can release
+    it, so callbacks must protect shared mutable state against overlapping calls.
     """
 
     num_parameters = None
