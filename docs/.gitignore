@@ -4,3 +4,8 @@ node_modules/
 .vitepress/dist/
 public/reference/
 .DS_Store
+
+# Rendered from tutorials/torch/*.ipynb
+tutorials/torch/[0-9][0-9]_*.md
+tutorials/torch/assets/
+public/tutorial-notebooks/

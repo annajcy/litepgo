@@ -1,5 +1,8 @@
 # PyTorch materials and fitting
 
+New to this interface? Start with the [six-lesson notebook tutorial](../../tutorials/torch/index.md).
+The programs below are complete application/reference examples rather than the introductory learning path.
+
 `uv sync --locked` installs PyTorch with the project environment.
 The constitutive, force-response and shell-fit examples implement W in Torch as
 [Python materials](../../guide/fem/python-materials.md) and use native assembly and

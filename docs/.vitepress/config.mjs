@@ -23,6 +23,7 @@ export default defineConfig({
     nav: [
       { text: 'Get started', link: '/guide/build' },
       { text: 'User guide', link: '/guide/architecture' },
+      { text: 'Torch tutorial', link: '/tutorials/torch/' },
       { text: 'Examples', link: '/examples' },
       { text: 'Benchmarks', link: '/benchmarks/' },
       { text: 'API reference', link: '/reference' },
@@ -33,6 +34,14 @@ export default defineConfig({
         { text: 'Overview', link: '/' },
         { text: 'Build and environment', link: '/guide/build' },
         { text: 'First complete solve', link: '/guide/quickstart' }
+      ] },
+      { text: 'Torch tutorial', link: '/tutorials/torch/', collapsed: false, items: [
+        { text: '1. Energy and stress', link: '/tutorials/torch/01_density' },
+        { text: '2. Native FEM assembly', link: '/tutorials/torch/02_fem' },
+        { text: '3. Fixed-pose parameter fitting', link: '/tutorials/torch/03_fixed_pose_fit' },
+        { text: '4. Equilibrium differentiation', link: '/tutorials/torch/04_equilibrium_fit' },
+        { text: '5. A small neural density', link: '/tutorials/torch/05_neural_density' },
+        { text: '6. Fit network weights', link: '/tutorials/torch/06_neural_equilibrium_fit' }
       ] },
       { text: 'User guide', items: [
         { text: 'Architecture', link: '/guide/architecture' },

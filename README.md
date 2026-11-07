@@ -26,6 +26,12 @@ platform-supported sparse backends. Matching `debug-all`, `relwithdebinfo-all`,
 and `asan-all` presets are also available. Native CI runs `debug-all` and
 `release-all` on all three platforms.
 
+## Learn Torch materials
+
+Follow the [six-lesson notebook tutorial](docs/tutorials/torch/index.md), from energy
+and stress to neural material fitting through equilibrium. Sources live in
+[`tutorials/torch/`](tutorials/torch/README.md); the docs build executes and renders them.
+
 ## Run an example
 
 After configuring the release build:

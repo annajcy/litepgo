@@ -4,12 +4,14 @@
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "scripts": {
-    "dev": "corepack pnpm reference && vitepress dev --host 127.0.0.1",
-    "build": "corepack pnpm reference && vitepress build",
+    "dev": "corepack pnpm reference && corepack pnpm tutorials && vitepress dev --host 127.0.0.1",
+    "build": "corepack pnpm reference && corepack pnpm tutorials && vitepress build",
     "preview": "vitepress preview --host 127.0.0.1",
     "reference:cpp": "node -e \"require('node:fs').mkdirSync('public/reference/cpp', { recursive: true })\" && uv run --locked --group docs doxygen Doxyfile",
     "reference:python": "uv run --locked --group docs python ../scripts/python_reference.py",
-    "reference": "corepack pnpm reference:cpp && corepack pnpm reference:python"
+    "reference": "corepack pnpm reference:cpp && corepack pnpm reference:python",
+    "tutorials": "uv run --locked --group docs python ../scripts/torch_tutorials.py",
+    "tutorials:render": "uv run --locked --group docs python ../scripts/torch_tutorials.py --no-execute"
   },
   "devDependencies": {
     "markdown-it-mathjax3": "4.3.2",

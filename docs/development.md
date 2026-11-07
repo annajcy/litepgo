@@ -17,6 +17,7 @@ together. Run commands below from its root.
 | `src/core/` | C++ public modules and their implementations |
 | `src/binding/` | nanobind registrations |
 | `src/python/` | Public Python facades, Python-material bases and Torch adapters |
+| `tutorials/torch/` | Notebook course sources; generated pages live under `docs/tutorials/torch/` |
 | `examples/` | Standalone paired programs and Python-only material and Torch examples |
 | `tests/cpp/`, `tests/python/` | Unit and integration/regression tests |
 | `docs/` | User manual, formulations, example explanations, and site configuration |

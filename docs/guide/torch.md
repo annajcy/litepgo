@@ -1,5 +1,8 @@
 # Torch autograd adapters
 
+For a progressive introduction with executable notebooks, start with the
+[Torch material tutorial](../tutorials/torch/index.md).
+
 `litepgo.torch` is a Python module connecting an `Energy` or `Response`
 to PyTorch autograd. It supplies a derivative bridge around an existing model;
 Torch owns the outer tensor graph and optimizer. In the other direction, it

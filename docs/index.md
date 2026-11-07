@@ -14,8 +14,9 @@ contact supply these objects; they do not require a separate simulation framewor
 2. [Solve a complete constrained problem](guide/quickstart.md).
 3. [Understand the architecture and module boundaries](guide/architecture.md).
 4. [Learn the common data and derivative conventions](guide/concepts.md).
-5. [Choose a runnable example](examples.md).
-6. [Measure performance](benchmarks/index.md).
+5. [Learn Torch materials step by step](tutorials/torch/index.md).
+6. [Choose a runnable example](examples.md).
+7. [Measure performance](benchmarks/index.md).
 
 Every command assumes the repository root unless a page says otherwise. Examples
 use the release preset and bundled or generated geometry. Python arrays use
