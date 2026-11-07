@@ -14,6 +14,10 @@ For a learned constitutive model, start with the
 train network weights on energy/stress samples, then native FEM evaluates the
 frozen model. Its optional directional tangent comparison illustrates both the
 accuracy gains and the remaining componentwise errors.
+To optimize explicit network weights through a native equilibrium solve, use
+[fit network weights through equilibrium](./neural-equilibrium-fit.md). It fits
+two weights of a neural correction on top of a fixed elastic baseline, without
+a pretrained checkpoint.
 
 ## Objective and backward rule for the four fitting drivers
 
@@ -45,6 +49,8 @@ All commands run from the repository root after [configuring the release build](
 ## Examples
 
 - [Learn a neural material](./neural-neohookean.md). Train an invariant energy on native Neo-Hookean samples and evaluate stress, tangent, and FEM equilibrium.
+
+- [Fit network weights through equilibrium](./neural-equilibrium-fit.md). Explicit weight mapping, implicit loss gradients, and finite-difference checks on a two-weight fit.
 
 - [Force responses through equilibrium](./torch-equilibrium-response.md). Torch-material force Jacobians and equilibrium JVP/VJP for physical theta and Fp.
 

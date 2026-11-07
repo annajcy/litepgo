@@ -77,6 +77,7 @@ last digits on every platform.
 | Fitting | [`volume_equilibrium_fp_fit`](examples/fitting/volume-equilibrium-fp-fit.md) | Plastic stretches from shapes and reactions |
 | Fitting | [`shell_equilibrium_fp_fit`](examples/fitting/shell-equilibrium-fp-fit.md) | Shell natural geometry through equilibrium |
 | Torch | [`neural_neohookean`](examples/torch/neural-neohookean.md) | Learn an invariant energy and validate stress, tangent, and equilibrium |
+| Torch | [`neural_equilibrium_fit`](examples/torch/neural-equilibrium-fit.md) | Fit two network weights through equilibrium with checked implicit gradients |
 | Torch | [`torch_neohookean`](examples/torch/torch-neohookean.md) | Torch density, native FEM assembly, and derivative comparison |
 | Torch | [`torch_equilibrium_response`](examples/torch/torch-equilibrium-response.md) | Physical theta/Fp Jacobians and equilibrium JVP/VJP |
 | Torch | [`torch_shell_material_fit`](examples/torch/torch-shell-material-fit.md) | Torch shell density fitted from equilibrium reactions |

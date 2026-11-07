@@ -29,6 +29,8 @@ displacement DOFs.
 
 Network weights are fixed; `VolumetricFemForceMaterialResponse` differentiates
 physical theta, not captured weights.
+The [network-weight fitting example](./neural-equilibrium-fit.md) instead maps
+explicit `theta` entries to network weights with a functional model call.
 See [the response API](../../guide/torch.md#force-responses-of-a-torch-material).
 
 ## Run and inspect

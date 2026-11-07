@@ -134,8 +134,10 @@ The [Neo-Hookean comparison](../examples/torch/torch-neohookean.md) checks the
 Torch density against the native one on tetrahedra and hexahedra. The
 [neural material example](../examples/torch/neural-neohookean.md) trains an
 invariant MLP on native energy/stress samples and then solves equilibrium with the
-frozen network. Training those weights through equilibrium still needs an
-explicit parameter-to-weight mapping and a corresponding `Response`.
+frozen network. The [network-weight equilibrium fit](../examples/torch/neural-equilibrium-fit.md)
+shows the additional explicit parameter-to-weight mapping: two `theta` entries
+replace final-layer weights via `functional_call`, and the usual material force
+response supplies their derivatives. Captured module parameters remain fixed.
 
 ## Force responses of a Torch material
 

@@ -152,6 +152,7 @@ export default defineConfig({
         ] },
         { text: 'PyTorch materials and fitting', link: '/examples/torch/', collapsed: true, items: [
           { text: 'Learn a neural material', link: '/examples/torch/neural-neohookean' },
+          { text: 'Fit network weights through equilibrium', link: '/examples/torch/neural-equilibrium-fit' },
           { text: 'Force responses through equilibrium', link: '/examples/torch/torch-equilibrium-response' },
           { text: 'Constitutive energy in Torch', link: '/examples/torch/torch-neohookean' },
           { text: 'Shell material written in Torch', link: '/examples/torch/torch-shell-material-fit' },

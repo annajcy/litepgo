@@ -9,6 +9,9 @@ Piola stress samples, then freezes the network and uses it as the Material of
 The physical parameters are fixed at lambda = 2 and mu = 3; other `theta` values
 are rejected. Network weights are trained directly with Torch, independently of
 the native equilibrium response parameter interface.
+For training explicit network weights from equilibrium observations, see
+[the two-weight equilibrium fit](./neural-equilibrium-fit.md). That separate
+example adds a fixed analytic baseline and needs no pretrained checkpoint.
 
 This is an end-to-end learning and FEM integration example: learn a density,
 check its derivatives on held-out data, then solve equilibrium with frozen weights.
