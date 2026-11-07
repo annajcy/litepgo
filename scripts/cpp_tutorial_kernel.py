@@ -33,17 +33,15 @@ def main():
     env = spec.setdefault("env", {})
     if sys.platform == "darwin":
         sdk = subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
-        spec["argv"].extend(["-isysroot", sdk])
-        loader_var = "DYLD_INSERT_LIBRARIES"
+        # Load in Clang so system subprocesses do not inherit a dylib preload.
+        spec["argv"].extend(["-isysroot", sdk, "-Xclang", "-load", "-Xclang", library])
     elif sys.platform == "linux":
         # xeus-cpp invokes clang to locate its builtin headers.
         env["PATH"] = f"{prefix / 'bin'}:${{PATH}}"
-        loader_var = "LD_PRELOAD"
+        env["LD_PRELOAD"] = library
     else:
         parser.error("The litepgo C++ kernel requires macOS or Linux.")
 
-    # Make native symbols visible before Clang's JIT runs the first cell.
-    env[loader_var] = library
     kernel = build / "jupyter/kernels/litepgo-cpp20"
     kernel.mkdir(parents=True, exist_ok=True)
     (kernel / "kernel.json").write_text(json.dumps(spec, indent=2) + "\n")
