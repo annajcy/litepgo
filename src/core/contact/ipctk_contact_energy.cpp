@@ -81,7 +81,8 @@ void add_block(SpMat& hessian, const ipc::MatrixMax12d& local, int a, int b, int
         const int* end = rows + hessian.outerIndexPtr()[column + 1];
         const int* first = std::lower_bound(begin, end, 3 * va);
         if (end - first < 3 || first[0] != 3 * va || first[2] != 3 * va + 2) {
-            throw std::logic_error("IPCTKContactEnergy: an active contact pair is outside the prepared Hessian pattern");
+            throw std::logic_error(
+                "IPCTKContactEnergy: an active contact pair is outside the prepared Hessian pattern");
         }
         double* values = hessian.valuePtr() + (first - rows);
         for (int r = 0; r < 3; ++r) {

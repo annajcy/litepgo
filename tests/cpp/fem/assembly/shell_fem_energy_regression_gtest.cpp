@@ -1,8 +1,8 @@
 
 #include "litepgo/dof/stencil_dof_map.hpp"
+#include "litepgo/fem/assembly/shell_fem_energy.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/quadrature/2d/triangle_centroid_quadrature.hpp"
-#include "litepgo/fem/assembly/shell_fem_energy.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 
 #include <stdexcept>

@@ -1,7 +1,7 @@
 #pragma once
 #include "litepgo/dof/vertex_dof_map.hpp"
-#include "litepgo/fem/embedding/element_locator.hpp"
 #include "litepgo/fem/assembly/basis_dof_transform.hpp"
+#include "litepgo/fem/embedding/element_locator.hpp"
 
 namespace litepgo::fem {
 // geometry and the DOF map use the same element order as the embedding.

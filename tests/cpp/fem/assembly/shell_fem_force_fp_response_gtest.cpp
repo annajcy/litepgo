@@ -1,6 +1,6 @@
 #include "litepgo/fem/assembly/detail/shell_element.hpp"
-#include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/assembly/shell_fem_force_fp_response.hpp"
+#include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include <gtest/gtest.h>
 

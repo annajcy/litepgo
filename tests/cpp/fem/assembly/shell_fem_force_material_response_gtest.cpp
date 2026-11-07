@@ -1,7 +1,7 @@
 #include "litepgo/fem/assembly/detail/shell_fp_force.hpp"
-#include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/fem/assembly/shell_fem_energy.hpp"
 #include "litepgo/fem/assembly/shell_fem_force_material_response.hpp"
+#include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include <gtest/gtest.h>
 #include <limits>
