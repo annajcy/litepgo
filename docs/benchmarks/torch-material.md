@@ -5,10 +5,14 @@
 `benchmarks/torch_material.py` separates constitutive evaluation, native FEM
 assembly, and implicit equilibrium gradients. It compares native Neo-Hookean,
 the identical Torch formula, and a fixed Neo-Hookean baseline plus the existing
-3–32–32–1 invariant MLP. The last case is the pointwise functional-call approach
+3–32–32–1 invariant MLP. The archived baseline used the pointwise functional-call approach
 from [network-weight fitting](../examples/torch/neural-equilibrium-fit.md), extended
 to 2, 8, or 32 active weights in the final layer. At their reference values, all
 three active-weight counts describe the **same** neural material.
+
+The current driver reuses the stateless batched material from the fitting example.
+The recorded baseline below is preserved as historical evidence; its lock and
+pointwise-call discussion describes that older implementation, not the current hot path.
 
 ## Run and outputs
 
@@ -120,13 +124,33 @@ The fitting example tests independently check weight replacement and mixed deriv
 An exploratory pilot exposed a real shared-model race: `functional_call`
 temporarily replaces module parameters, and Torch operations may release the GIL.
 Different native batches could therefore overlap those replacements and return
-incorrect parameter VJPs. The example and benchmark now hold a per-material lock
-around functional model evaluation. It protects only the forward material call;
-autograd operates on the resulting graph afterward. This serialization is part of
-the measured implementation, not removed to improve its timing. Invalid exploratory
+incorrect parameter VJPs. The historical implementation added a per-material lock
+around functional model evaluation. It protected only the forward material call;
+autograd operated on the resulting graph afterward. This serialization was part of
+the historical measurements. The current batched implementation below eliminates
+module replacement and the lock entirely. Invalid exploratory
 results are excluded from the recorded baseline.
 
-## Recorded baseline
+## Stateless batched implementation
+
+The current implementation uses explicit tensor weights, batched Linear/Softplus operations, and cached reference features/slopes for the fixed hidden layers. It never replaces module parameters and needs no lock. The benchmark and fitting example share `make_material(K)`, supporting 1–32 active final-layer weights. Hidden weights remain fixed; this is not an implementation for training all network layers.
+
+The updated full scan completed **42 cases and all 152 operation measurements**, with no timeouts or numerical errors. Tests additionally compare energy, stress, Hessian, weight mixed derivatives, and plastic mixed derivatives against the old functional-call formula for distinct parameter rows at K=2/8/32.
+
+[New raw samples](/benchmark-data/torch-material-batched/results.jsonl.txt), [CSV](/benchmark-data/torch-material-batched/timings.csv), [environment/source hashes](/benchmark-data/torch-material-batched/environment.json).
+
+Same machine and settings as the historical baseline; separate runs, not paired randomized experiments. Medians in milliseconds, one thread, batch 256, two active weights:
+
+| Workload | Pointwise | Stateless batch | Observed ratio |
+| --- | ---: | ---: | ---: |
+| FEM Hessian, 1,296 elements | 4001.090 | 44.561 | 89.8x |
+| FEM parameter VJP, 1,296 elements | 2890.023 | 19.716 | 146.6x |
+| Equilibrium forward, 48 elements | 715.241 | 29.458 | 24.3x |
+| Equilibrium backward, 48 elements | 939.663 | 34.676 | 27.1x |
+
+The change combines batching, removal of temporary module replacement, and algebraically moving fixed hidden-layer reference corrections out of repeated evaluation. These measurements do not isolate the contribution of each change. The older profiler and all older measurements below are retained as historical evidence.
+
+## Historical pointwise baseline
 
 The results below are a local baseline, not a cross-machine performance promise.
 Large cases that reach the time budget remain explicit incomplete observations.
@@ -211,7 +235,7 @@ The two timeouts were **cumulative 90-second case budgets**, including setup, va
 
 A timeout does not mean one operator call took 90 seconds. Partial rows remain in the raw results. The reported RSS is a process high-water mark including validation, not an isolated allocation benchmark.
 
-### What to optimize next
+### Original optimization hypothesis
 
 Start with the neural material evaluation and derivative graph. Even without assembly, the 256-point neural Hessian takes about 789 ms. The pointwise implementation builds many separate network/reference-correction subgraphs and traverses them for second derivatives. A targeted instrumented profile of the fitting example is included above; it is diagnostic evidence, not a replacement for the uninstrumented samples.
 
