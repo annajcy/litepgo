@@ -46,10 +46,7 @@ u, du_dp = equilibrium.eval_value_and_jacobian(p)
 
 C++ uses the same argument order. `MakeEnergy` returns `shared_ptr<Energy>` and
 `MakeResponse` returns `shared_ptr<Response>`. Both factories are retained by the
-equilibrium object. Python callbacks and their model objects must not strongly
-reference that equilibrium object; use a weak back-reference instead. The bindings
-do not collect cross-language ownership cycles. See the
-[ownership contract](../concepts.md#python-ownership-must-remain-acyclic). The response
+equilibrium object and exposed to Python's cyclic garbage collector. The response
 factory is called at the solved state only when derivatives on free DOFs are needed.
 Its evaluation prepares any needed dynamic structure at the current parameters.
 

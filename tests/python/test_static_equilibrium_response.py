@@ -74,6 +74,40 @@ def test_bound_callbacks_are_kept_alive_without_an_owner_cycle():
     assert owner() is None
 
 
+def test_global_callback_cycle_is_collected():
+    import gc
+    import weakref
+
+    def make_cycle():
+        stiffness = sparse.eye(1, format="csc")
+        scope = {"energy": energy, "stiffness": stiffness}
+        exec(
+            "def make_energy(p):\n"
+            "    return energy.QuadraticEnergy(stiffness, -p)\n"
+            "def make_response(u):\n"
+            "    return energy.AffineResponse(-stiffness, u)\n",
+            scope,
+        )
+        equilibrium = solver.StaticEquilibriumResponse(
+            1,
+            dof.DofReduction(1, []),
+            np.zeros(1),
+            solver.NewtonOptions(gradient_tolerance=1e-12),
+            scope["make_energy"],
+            scope["make_response"],
+        )
+        scope["equilibrium"] = equilibrium
+        gc.collect()
+        u, jacobian = equilibrium.eval_value_and_jacobian(np.array([2.0]))
+        np.testing.assert_allclose(u, [2.0])
+        np.testing.assert_allclose(jacobian.toarray(), [[1.0]])
+        return [weakref.ref(scope[name]) for name in ("equilibrium", "make_energy", "make_response")]
+
+    refs = make_cycle()
+    gc.collect()
+    assert all(ref() is None for ref in refs)
+
+
 def test_invalid_initial_state_is_rejected():
     import pytest
 

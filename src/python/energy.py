@@ -41,7 +41,7 @@ Ownership must remain acyclic: children must not strongly reference their owner,
 including through closures or model containers. Use weakref.ref(owner) when a
 back-reference is needed; native Energy and Response instances support weak
 references. Bindings keep children alive but do not collect cross-language cycles.
-The same contract applies to equilibrium callbacks and contact/FEM dependencies.
+The same contract applies to contact and FEM dependencies.
 
 Vector responses and analytic sparse derivatives.
 

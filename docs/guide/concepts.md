@@ -106,15 +106,11 @@ data rather than the source Responses. Rebuild them after changing configuration
 
 ### Python ownership must remain acyclic
 
-Bindings keep child objects and callbacks alive for as long as their owner needs
-them. They do **not** implement custom cyclic-GC traversal for references held by
-C++. Do not give a child a strong reference back to its owner, directly or through
-a list, closure, bound method, or another model object. Violating this contract
-can leak the entire ownership cycle even after `gc.collect()`.
-
-This applies to Energy/Response composites, contact broad phases, spatial Response
-dependencies, and equilibrium factories. Native Energy and Response instances
-support `weakref.ref`; use a weak reference when a child needs to reach its owner:
+Energy/Response composites, contact broad phases, and spatial Response
+dependencies retain child objects through C++. A strong reference from a child
+back to its owner can create a cycle that survives `gc.collect()`. Native Energy
+and Response instances support `weakref.ref`. Use a weak reference when a child
+needs to reach its owner:
 
 ```python
 import weakref
@@ -126,13 +122,13 @@ if owner is not None:
     pass
 ```
 
-An equilibrium response retains its factory callbacks. If those are methods of
-a Python `Problem`, the response keeps `Problem` alive. Store only
-`weakref.ref(response)` on that `Problem`, or keep the response outside it;
-`Problem -> response -> bound method -> Problem` is otherwise a strong cycle.
 For other bound types that do not support weak references, omit the back-reference
 or refer weakly to a Python model container. No property named `owner` or
 `energy` is required by the library.
+
+`StaticEquilibriumResponse` exposes its two Python callbacks to the cyclic garbage
+collector. Cycles through those callbacks can be collected when all other
+references in the cycle are visible to Python.
 
 ### Concurrent evaluation
 

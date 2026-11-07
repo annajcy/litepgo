@@ -12,7 +12,7 @@ namespace litepgo::solver {
 // JVP/VJP use one directional/adjoint solve without forming the state Jacobian.
 // Parameter products delegate to the response; the declared Jacobian pattern remains explicit.
 // Derivatives require an isolated equilibrium and use the exact, unshifted Hessian.
-class StaticEquilibriumResponse final : public energy::FixedPatternResponse {
+class StaticEquilibriumResponse : public energy::FixedPatternResponse {
   public:
     using MakeEnergy = std::function<std::shared_ptr<energy::Energy>(const Vec&)>;
     using MakeResponse = std::function<std::shared_ptr<energy::Response>(const Vec&)>;
