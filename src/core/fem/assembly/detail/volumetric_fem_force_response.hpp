@@ -8,7 +8,7 @@
 #include "litepgo/fem/integration/volumetric_element.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_batch.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_inputs.hpp"
-#include "litepgo/fem/response/sampling_response.hpp"
+#include "litepgo/fem/response/deformation_gradient_sampling_response.hpp"
 #include <array>
 #include <concepts>
 #include <memory>

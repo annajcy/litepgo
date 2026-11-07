@@ -42,11 +42,20 @@ def test_six_sources_are_clean_independent_lessons():
         assert "runpy" not in "\n".join(c.source for c in code)
 
 
-def test_execute_export_images_and_source_unchanged(tmp_path, pipeline):
+def test_execute_export_images_and_source_unchanged(tmp_path, monkeypatch, pipeline):
     source = tmp_path / "01_sample.ipynb"
     write_notebook(source, nbformat.v4.new_markdown_cell("# Sample\n\n$$x^2$$"),
                    nbformat.v4.new_code_cell("%matplotlib inline\nimport matplotlib.pyplot as plt\n"
                                             "print('fresh kernel output')\nplt.plot([0, 1], [0, 1]); plt.show()"))
+    asset = tmp_path / "mesh.veg"
+    asset.write_text("test asset")
+    monkeypatch.setitem(pipeline["render"].__globals__, "ASSETS", tmp_path)
+    notebook = nbformat.read(source, as_version=4)
+    notebook.metadata["tutorial_assets"] = [asset.name]
+    checkpoint = tmp_path / "trained_theta.npy"
+    checkpoint.write_bytes(b"test checkpoint")
+    notebook.metadata["tutorial_files"] = [checkpoint.name]
+    nbformat.write(notebook, source)
     original = source.read_bytes()
     cache = tmp_path / "cache/01_sample.ipynb"
     executed = pipeline["execute"](source, cache, 60)
@@ -57,6 +66,10 @@ def test_execute_export_images_and_source_unchanged(tmp_path, pipeline):
     markdown = (pages / "01_sample.md").read_text()
     assert "fresh kernel output" in markdown and "```python" in markdown and "$$x^2$$" in markdown
     assert "withBase('/tutorial-notebooks/torch/01_sample.ipynb')" in markdown
+    assert "withBase('/tutorial-notebooks/torch/mesh.veg')" in markdown
+    assert (downloads / asset.name).read_bytes() == asset.read_bytes()
+    assert "withBase('/tutorial-notebooks/torch/trained_theta.npy')" in markdown
+    assert (downloads / checkpoint.name).read_bytes() == checkpoint.read_bytes()
     assert list((pages / "assets/01_sample").glob("*.png"))
     assert (downloads / source.name).read_bytes() == original
     # Rendering may replace its own assets, but must preserve another lesson's output.
@@ -82,23 +95,30 @@ def test_errors_and_timeouts_fail_and_preserve_diagnostics(tmp_path, pipeline, s
     assert failed.cells[0].source == source_code
 
 
-@pytest.mark.parametrize("changed", ["helper", "source"])
-def test_no_execute_rejects_changed_helper_or_source(tmp_path, monkeypatch, pipeline, changed):
+@pytest.mark.parametrize("changed", ["asset", "checkpoint", "source"])
+def test_no_execute_rejects_changed_lesson_inputs(tmp_path, monkeypatch, pipeline, changed):
     source = tmp_path / "01_cached.ipynb"
-    write_notebook(source, nbformat.v4.new_code_cell("print('ok')"))
-    helper = tmp_path / "common.py"
-    helper.write_text("value = 1\n")
+    notebook = write_notebook(source, nbformat.v4.new_code_cell("print('ok')"))
+    asset = tmp_path / "mesh.veg"
+    asset.write_text("test asset")
+    notebook.metadata["tutorial_assets"] = [asset.name]
+    checkpoint = tmp_path / "trained_theta.npy"
+    checkpoint.write_bytes(b"test checkpoint")
+    notebook.metadata["tutorial_files"] = [checkpoint.name]
+    nbformat.write(notebook, source)
     cache = tmp_path / "cache"
     cache.mkdir()
-    notebook = nbformat.read(source, as_version=4)
+    namespace = pipeline["main"].__globals__
+    monkeypatch.setitem(namespace, "ASSETS", tmp_path)
     notebook.metadata["tutorial_source_sha256"] = pipeline["fingerprint"](source)
     nbformat.write(notebook, cache / source.name)
-    namespace = pipeline["main"].__globals__
     monkeypatch.setitem(namespace, "SOURCE", tmp_path)
     monkeypatch.setitem(namespace, "CACHE", cache)
     monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--no-execute"])
-    if changed == "helper":
-        helper.write_text("value = 2\n")
+    if changed == "asset":
+        asset.write_text("changed asset")
+    elif changed == "checkpoint":
+        checkpoint.write_bytes(b"changed checkpoint")
     else:
         write_notebook(source, nbformat.v4.new_code_cell("print('changed')"))
     with pytest.raises(ValueError, match="stale or failed"):

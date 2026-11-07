@@ -2,8 +2,11 @@
 
 Read the [learning path and setup](../../docs/tutorials/torch/index.md), then open
 `01_density.ipynb` through `06_neural_equilibrium_fit.ipynb` in order. Each notebook
-runs independently using the repository's `.venv` kernel. Keep `common.py` beside
-them and use this directory as the notebook working directory.
+runs independently using the repository's `.venv` kernel. Run from this directory
+or the repository root to load the bunny meshes from `assets/`. If you download a
+notebook from the docs, put its linked files in the notebook's working directory.
+Lesson 5 refreshes the bundled `trained_theta.npy`. Lesson 6 defines the FEM
+material and loads those weights for the equilibrium fit.
 
 From the repository root:
 
@@ -20,7 +23,7 @@ Outputs are cached under `build/torch-tutorials/`; failed executions are saved t
 as well. Source notebooks should be committed with outputs cleared and execution
 counts reset. Do not maintain a second `.py` or Markdown copy of each lesson.
 
-`common.py` contains geometry only. The constitutive formulas, parameter mapping,
-equilibrium factories and optimization steps stay visible in the notebooks.
-The docs build always re-executes all lessons. `--no-execute` is a local export
-shortcut, and refuses missing, failed or source-stale caches.
+The constitutive formulas, geometry setup, parameter mapping, equilibrium factories,
+and optimization steps stay visible in the notebooks. The docs build always
+re-executes all lessons. `--no-execute` rejects missing or failed caches and detects
+changes to the notebook or its declared input files.

@@ -87,6 +87,23 @@ The [Triangle P1 response example](../../examples/fem/response-hessian.md)
 uses this built-in map for sampling and composes it with `ExpResponse`.
 It composes ordinary Responses without changing the Basis API.
 
+### Identity and constant maps
+
+`energy.IdentityResponse(size)` returns its input. Its JVP returns the input
+direction and its VJP returns the output weights. The explicit Jacobian is
+the sparse identity matrix.
+
+`energy.ConstantResponse(num_inputs, value)` owns a copy of `value` and returns
+it for every input of the declared width. Its JVP and VJP return zero vectors
+of the output and input widths, respectively. Its Jacobian is a sparse matrix
+with no stored entries. For example, `energy.ConstantResponse(3, trained_theta)`
+supplies one fixed vector of material parameters at any 3D reference coordinate.
+
+Both types support exact zero weighted Hessians and accept zero dimensions. Their
+direct products require no sparse matrix multiplication. C++ provides the same
+constructors in `litepgo/energy/response/identity_response.hpp` and
+`litepgo/energy/response/constant_response.hpp`.
+
 ## Plastic parameters
 
 `fem.LogDiagonalFpResponse(3)` maps three log stretches to the nine column-major

@@ -8,6 +8,7 @@
 #include "litepgo/fem/basis/3d/hex_hermite_basis.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
+#include "litepgo/fem/response/deformation_gradient_sampling_response.hpp"
 #include <nanobind/eigen/dense.h>
 #include <string>
 

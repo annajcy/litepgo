@@ -5,6 +5,10 @@ A @ x + offset. Dense 2-D arrays and SciPy sparse matrices are accepted. Omitted
 or empty offset means zero. Jacobian = A, JVP = A @ dx, VJP = A.T @ weights;
 weighted Hessians are zero. Rectangular, rank-deficient, and empty maps are valid.
 
+IdentityResponse(size) returns its input. ConstantResponse(num_inputs, value)
+owns a copy of its output vector. Both accept zero dimensions, support exact
+zero Hessians, and evaluate JVPs and VJPs directly.
+
 ComposedResponse(outer, inner) evaluates outer(inner(x)) with chained products.
 ElementwiseResponse(input_map, transform) concatenates per-element transformed
 values and sums shared-DOF VJP contributions. ExpResponse(size) maps log parameters
@@ -50,7 +54,8 @@ defaults prepare and multiply the explicit Jacobian.
 Response.eval_hessian returns the exact Hessian of weights @ R(x), holding
 weights fixed, as a full symmetric (num_inputs, num_inputs) sparse matrix.
 Check has_hessian first; unsupported calls raise RuntimeError. AffineResponse,
-ExpResponse and compositions with two second-order children support it.
+IdentityResponse, ConstantResponse, ExpResponse, and compositions with two
+second-order children support it.
 
 Subclass FixedPatternResponse(pattern, hessian_pattern=None) or
 DynamicPatternResponse(num_inputs, num_outputs).
@@ -109,7 +114,9 @@ MeshResponse = _native.MeshResponse
 __all__ += ["MeshEnergy", "MeshResponse"]
 
 AffineResponse = _native.AffineResponse
+IdentityResponse = _native.IdentityResponse
+ConstantResponse = _native.ConstantResponse
 ComposedResponse = _native.ComposedResponse
 ElementwiseResponse = _native.ElementwiseResponse
 ExpResponse = _native.ExpResponse
-__all__ += ["AffineResponse", "ComposedResponse", "ElementwiseResponse", "ExpResponse"]
+__all__ += ["AffineResponse", "IdentityResponse", "ConstantResponse", "ComposedResponse", "ElementwiseResponse", "ExpResponse"]

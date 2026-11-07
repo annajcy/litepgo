@@ -4,8 +4,8 @@
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/response/deformation_gradient_response.hpp"
+#include "litepgo/fem/response/deformation_gradient_sampling_response.hpp"
 #include "litepgo/fem/response/interpolated_response.hpp"
-#include "litepgo/fem/response/sampling_response.hpp"
 #include <memory>
 
 #include <cmath>

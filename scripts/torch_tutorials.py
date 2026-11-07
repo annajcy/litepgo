@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import sys
 import tempfile
@@ -17,14 +18,29 @@ from nbconvert import MarkdownExporter
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "tutorials/torch"
+ASSETS = ROOT / "assets"
 PAGES = ROOT / "docs/tutorials/torch"
 CACHE = ROOT / "build/torch-tutorials"
 DOWNLOADS = ROOT / "docs/public/tutorial-notebooks/torch"
 
 
+def lesson_files(source, metadata):
+    for name in metadata.get("tutorial_assets", ()):
+        if not re.fullmatch(r"[a-zA-Z0-9_-]+\.veg", name):
+            raise ValueError(f"Expected a VEG asset filename, got {name!r}")
+        yield ASSETS / name
+    for name in metadata.get("tutorial_files", ()):
+        if not re.fullmatch(r"[a-zA-Z0-9_-]+\.npy", name):
+            raise ValueError(f"Expected a NumPy checkpoint filename, got {name!r}")
+        yield source.with_name(name)
+
+
 def fingerprint(source):
-    helper = source.parent / "common.py"
-    return hashlib.sha256(source.read_bytes() + (helper.read_bytes() if helper.exists() else b"")).hexdigest()
+    content = source.read_bytes()
+    digest = hashlib.sha256(content)
+    for asset in lesson_files(source, json.loads(content)["metadata"]):
+        digest.update(asset.read_bytes())
+    return digest.hexdigest()
 
 
 def execute(source, destination, timeout):
@@ -82,15 +98,13 @@ def render(source, notebook, pages=PAGES, downloads=DOWNLOADS):
         target.write_bytes(content)
     downloads.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, downloads / source.name)
-    helper = source.parent / "common.py"
-    if helper.exists():
-        shutil.copyfile(helper, downloads / helper.name)
     # Vue's base-aware links also work when the site is hosted under /litepgo/.
     header = ('<!-- Generated from tutorials/torch; edit the notebook, not this page. -->\n'
               '<script setup>\nimport { withBase } from "vitepress"\n</script>\n\n'
               f'<a :href="withBase(\'/tutorial-notebooks/torch/{source.name}\')" download>Download notebook</a>')
-    if helper.exists():
-        header += ' · <a :href="withBase(\'/tutorial-notebooks/torch/common.py\')" download>Shared geometry helper</a>'
+    for asset in lesson_files(source, notebook.metadata):
+        shutil.copyfile(asset, downloads / asset.name)
+        header += f' · <a :href="withBase(\'/tutorial-notebooks/torch/{asset.name}\')" download>{asset.name}</a>'
     header += '\n\n'
     (pages / f"{source.stem}.md").write_text(header + body, encoding="utf-8")
 

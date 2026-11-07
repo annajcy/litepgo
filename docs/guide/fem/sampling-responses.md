@@ -111,6 +111,7 @@ The Field hierarchy has been removed. See [migration and contracts](fields.md) f
 `deformation_gradient_sampling_response<B>(geometry, points)` in C++, or
 `fem.deformation_gradient_sampling_response[B](geometry, points)` in Python,
 returns an ordinary `AffineResponse`. Python binds TetP1, HexQ1 and HexHermite.
+For C++, include `litepgo/fem/response/deformation_gradient_sampling_response.hpp`.
 `geometry` is a fixed spatial Response from reference coordinates to rest positions;
 `points` is a finite `(Q,3)` array of reference coordinates, not physical nodes.
 Empty point arrays are allowed. Geometry must have a finite positive Jacobian

@@ -108,3 +108,47 @@ def test_invalid_inputs_and_overflow():
         with pytest.raises(ValueError, match="non-finite"):
             evaluate()
     np.testing.assert_array_equal(huge.eval_value(np.zeros(1)), 0)
+
+
+@pytest.mark.parametrize("size", [0, 3])
+def test_identity_response(size):
+    assert "IdentityResponse" in energy.__all__
+    r = energy.IdentityResponse(size=size)
+    x = np.arange(size, dtype=float)
+    value, J = r.eval_value_and_jacobian(x)
+    np.testing.assert_array_equal(value, x)
+    np.testing.assert_array_equal(J.toarray(), np.eye(size))
+    np.testing.assert_array_equal(r.eval_jvp(x, x + 1), x + 1)
+    np.testing.assert_array_equal(r.eval_vjp(x, x - 1), x - 1)
+    H = r.eval_hessian(x, x)
+    assert r.has_hessian and H.shape == (size, size) and H.nnz == 0
+
+
+@pytest.mark.parametrize("num_inputs,num_outputs", [(3, 2), (0, 2), (3, 0)])
+def test_constant_response(num_inputs, num_outputs):
+    assert "ConstantResponse" in energy.__all__
+    value = np.arange(1., num_outputs + 1)
+    r = energy.ConstantResponse(num_inputs=num_inputs, value=value)
+    value[:] = np.nan
+    x = np.ones(num_inputs)
+    result, J = r.eval_value_and_jacobian(x)
+    np.testing.assert_array_equal(result, np.arange(1., num_outputs + 1))
+    assert J.shape == (num_outputs, num_inputs) and J.nnz == 0
+    w = np.ones(num_outputs)
+    np.testing.assert_array_equal(r.eval_jvp(x, x), np.zeros(num_outputs))
+    np.testing.assert_array_equal(r.eval_vjp(x, w), np.zeros(num_inputs))
+    H = r.eval_hessian(x, w)
+    assert r.has_hessian and H.shape == (num_inputs, num_inputs) and H.nnz == 0
+
+
+def test_identity_and_constant_response_validation():
+    with pytest.raises(ValueError):
+        energy.IdentityResponse(-1)
+    with pytest.raises(ValueError):
+        energy.ConstantResponse(-1, np.empty(0))
+    with pytest.raises(ValueError):
+        energy.ConstantResponse(3, np.array([np.nan]))
+    with pytest.raises(ValueError):
+        energy.IdentityResponse(1).eval_jvp(np.zeros(1), np.empty(0))
+    with pytest.raises(ValueError):
+        energy.ConstantResponse(1, np.empty(0)).eval_vjp(np.zeros(1), np.ones(1))

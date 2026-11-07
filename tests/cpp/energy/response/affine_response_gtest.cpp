@@ -1,6 +1,8 @@
 #include "litepgo/energy/response/affine_response.hpp"
 #include "litepgo/energy/response/composed_response.hpp"
+#include "litepgo/energy/response/constant_response.hpp"
 #include "litepgo/energy/response/exp_response.hpp"
+#include "litepgo/energy/response/identity_response.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
 #include <memory>
 
@@ -124,5 +126,31 @@ TEST(AffineResponse, RejectsInvalidConfigurationInputsAndNumericalOverflow) {
     EXPECT_THROW(overflow.eval_jvp(Vec::Zero(1), Vec::Constant(1, 2)), std::domain_error);
     EXPECT_THROW(overflow.eval_vjp(Vec::Zero(1), Vec::Constant(1, 2)), std::domain_error);
     EXPECT_TRUE(overflow.eval_value(Vec::Zero(1)).isZero());
+}
+
+TEST(IdentityResponse, ProductsJacobianAndHessian) {
+    IdentityResponse r(3);
+    const Vec x = Eigen::Vector3d(1, 2, 3), dx = Eigen::Vector3d(-1, 4, 5), w = Eigen::Vector3d(7, 8, -9);
+    EXPECT_TRUE(r.eval_value(x).isApprox(x));
+    EXPECT_TRUE(r.eval_jvp(x, dx).isApprox(dx));
+    EXPECT_TRUE(r.eval_vjp(x, w).isApprox(w));
+    EXPECT_TRUE(Eigen::MatrixXd(r.eval_jacobian(x)).isIdentity());
+    EXPECT_EQ(r.eval_hessian(x, w).nonZeros(), 0);
+}
+
+TEST(ConstantResponse, ProductsJacobianAndHessian) {
+    const Vec x = Eigen::Vector3d(1, 2, 3), value = Eigen::Vector2d(4, -5);
+    ConstantResponse r(3, value);
+    const auto [result, J] = r.eval_value_and_jacobian(x);
+    EXPECT_TRUE(result.isApprox(value));
+    EXPECT_EQ(J.rows(), 2);
+    EXPECT_EQ(J.cols(), 3);
+    EXPECT_EQ(J.nonZeros(), 0);
+    const Vec jvp = r.eval_jvp(x, x), vjp = r.eval_vjp(x, value);
+    EXPECT_EQ(jvp.size(), 2);
+    EXPECT_EQ(vjp.size(), 3);
+    EXPECT_TRUE(jvp.isZero());
+    EXPECT_TRUE(vjp.isZero());
+    EXPECT_EQ(r.eval_hessian(x, value).nonZeros(), 0);
 }
 } // namespace litepgo::energy::test

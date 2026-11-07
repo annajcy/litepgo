@@ -56,7 +56,8 @@ jobs:
             test -f "docs/.vitepress/dist/tutorials/torch/$lesson.html"
             test -f "docs/.vitepress/dist/tutorial-notebooks/torch/$lesson.ipynb"
           done
-          test -f docs/.vitepress/dist/tutorial-notebooks/torch/common.py
+          test -f docs/.vitepress/dist/tutorial-notebooks/torch/bunny-tet.veg
+          test -f docs/.vitepress/dist/tutorial-notebooks/torch/bunny-hex.veg
       - name: Preserve executed notebooks on failure
         if: failure()
         uses: actions/upload-artifact@v4
