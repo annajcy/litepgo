@@ -1,7 +1,7 @@
 # Torch material tutorial
 
-Start with a local material formula and finish by fitting network weights through
-native equilibrium. The six lessons use CPU float64 and run independently
+Start with a local material formula and finish by designing a plastic state through
+native equilibrium. The seven lessons use CPU float64 and run independently
 from a fresh kernel. You need basic Python, arrays, and derivatives; no prior knowledge
 of litepgo's response or equilibrium interfaces is assumed.
 
@@ -15,13 +15,15 @@ of litepgo's response or equilibrium interfaces is assumed.
 | [4. Equilibrium differentiation](./04_equilibrium_fit.md) | Solve for the pose; implicit rather than unrolled derivatives | Total loss gradient and equilibrium residual |
 | [5. Learn a neural density](./05_neural_density.md) | Train an invariant energy network on native Neo-Hookean data and export its weights | Held-out energy, stress, and tangent errors, plus extrapolation |
 | [6. Fit the height of a bunny's ear under load](./06_neural_equilibrium_fit.md) | Optimize the lesson 5 network so the pulled bunny reaches a target height | Adjoint gradient, peak height error, and force balance |
+| [7. Design a hanging bunny's plastic state](./07_plastic_gravity_design.md) | Fit a local plastic stretch so the bunny hangs at a target height under gravity | Height sensitivity, force balance, and different plastic states with the same lowest point |
 
 Lesson 2 assembles tetrahedral and hexahedral bunny meshes with the same Neo-Hookean law.
 Lessons 3 and 4 use the tetrahedral bunny. Lesson 4 clamps the lower part and solves
 on the tetrahedra incident to free vertices. Lesson 5 learns an energy density
 from local samples and exports its weights. Lesson 6 defines the corresponding
 FEM material, pulls on the taller bunny ear, and updates the weights to match
-the desired height under the prescribed load.
+the desired height under the prescribed load. Lesson 7 hangs the bunny from its
+ear tips and adjusts a plastic band beneath the clamps to place its lowest point.
 
 The **notebook is the course source**. The site executes and exports
 `tutorials/torch/*.ipynb`; the Markdown pages and figures here are generated.
@@ -70,7 +72,7 @@ The website displays output from the executed notebooks.
 # One lesson, from a clean kernel:
 uv run --locked --group tutorials python scripts/torch_tutorials.py 01_density
 
-# All six lessons:
+# All seven lessons:
 uv run --locked --group tutorials python scripts/torch_tutorials.py
 
 # Re-export a matching execution cache without running cells again:
@@ -103,8 +105,8 @@ build. Failed executed copies are retained for diagnosis. Expected errors, if ad
 teaching exercises, must be handled explicitly within their cell.
 
 The documentation workflow installs locked dependencies, builds `litepgo_python`,
-tests the execution/export infrastructure, then executes all six notebooks through
-the normal documentation build. It also checks Markdown rendering, six built HTML
+tests the execution/export infrastructure, then executes all seven notebooks through
+the normal documentation build. It also checks Markdown rendering, seven built HTML
 pages, plots through the rendered lessons, and notebook and input downloads. On failure,
 executed notebook copies are uploaded as a CI artifact. The other test workflows do
 not require the tutorial dependency group.
@@ -117,5 +119,5 @@ The lessons use fixed examples and numerical tolerances, not exact printed
 values or performance thresholds. L-BFGS can evaluate rejected line-search trials;
 its plotted closure history need not be monotone. A small observation loss does not
 generally establish unique parameter recovery. Neural stability outside the small
-teaching setup, GPU execution, double backward through native responses, and shell/plastic
+teaching setup, GPU execution, double backward through native responses, and shell
 fitting are beyond this introductory path.

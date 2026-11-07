@@ -10,7 +10,7 @@ const markdown = await createMarkdownRenderer(fileURLToPath(new URL('../', impor
 
 test('all exported lessons preserve code, math, outputs, and plot links', async () => {
   const lessons = (await readdir(directory)).filter(name => /^\d\d_.*\.md$/.test(name))
-  assert.equal(lessons.length, 6)
+  assert.equal(lessons.length, 7)
   for (const name of lessons) {
     const source = await readFile(new URL(name, directory), 'utf8')
     const html = markdown.render(source)

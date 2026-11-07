@@ -1,7 +1,7 @@
 # Torch material notebooks
 
 Read the [learning path and setup](../../docs/tutorials/torch/index.md), then open
-`01_density.ipynb` through `06_neural_equilibrium_fit.ipynb` in order. Each notebook
+`01_density.ipynb` through `07_plastic_gravity_design.ipynb` in order. Each notebook
 runs independently using the repository's `.venv` kernel. Run from this directory
 or the repository root to load the bunny meshes from `assets/`. If you download a
 notebook from the docs, put its linked files in the notebook's working directory.

@@ -41,7 +41,8 @@ export default defineConfig({
         { text: '3. Fixed-pose parameter fitting', link: '/tutorials/torch/03_fixed_pose_fit' },
         { text: '4. Equilibrium differentiation', link: '/tutorials/torch/04_equilibrium_fit' },
         { text: '5. A small neural density', link: '/tutorials/torch/05_neural_density' },
-        { text: '6. Fit network weights', link: '/tutorials/torch/06_neural_equilibrium_fit' }
+        { text: '6. Fit network weights', link: '/tutorials/torch/06_neural_equilibrium_fit' },
+        { text: '7. Design a plastic state', link: '/tutorials/torch/07_plastic_gravity_design' }
       ] },
       { text: 'User guide', items: [
         { text: 'Architecture', link: '/guide/architecture' },

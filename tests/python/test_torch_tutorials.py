@@ -27,9 +27,9 @@ def write_notebook(path, *cells):
     return notebook
 
 
-def test_six_sources_are_clean_independent_lessons():
+def test_seven_sources_are_clean_independent_lessons():
     paths = sorted((ROOT / "tutorials/torch").glob("[0-9][0-9]_*.ipynb"))
-    assert len(paths) == 6
+    assert len(paths) == 7
     for path in paths:
         notebook = nbformat.read(path, as_version=4)
         nbformat.validate(notebook)
