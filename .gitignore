@@ -24,3 +24,5 @@ dist/
 .cache/
 .DS_Store
 .VSCodeCounter/
+# Notebook editor state
+.ipynb_checkpoints/
