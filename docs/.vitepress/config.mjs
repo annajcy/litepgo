@@ -23,6 +23,7 @@ export default defineConfig({
     nav: [
       { text: 'Get started', link: '/guide/build' },
       { text: 'User guide', link: '/guide/architecture' },
+      { text: 'Energy tutorial', link: '/tutorials/energy/' },
       { text: 'Torch tutorial', link: '/tutorials/torch/' },
       { text: 'Examples', link: '/examples' },
       { text: 'Benchmarks', link: '/benchmarks/' },
@@ -34,6 +35,16 @@ export default defineConfig({
         { text: 'Overview', link: '/' },
         { text: 'Build and environment', link: '/guide/build' },
         { text: 'First complete solve', link: '/guide/quickstart' }
+      ] },
+      { text: 'Energy tutorial', link: '/tutorials/energy/', items: [
+        { text: '1. Spring-chain equilibrium', items: [
+          { text: 'Python', link: '/tutorials/energy/01_spring_chain_python' },
+          { text: 'C++20', link: '/tutorials/energy/01_spring_chain_cpp' }
+        ] },
+        { text: '2. Spring differences and gradients', items: [
+          { text: 'Python', link: '/tutorials/energy/02_spring_response_python' },
+          { text: 'C++20', link: '/tutorials/energy/02_spring_response_cpp' }
+        ] }
       ] },
       { text: 'Torch tutorial', link: '/tutorials/torch/', collapsed: false, items: [
         { text: '1. Energy and stress', link: '/tutorials/torch/01_density' },

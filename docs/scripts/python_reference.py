@@ -11,7 +11,8 @@ from pdoc import doc, render
 
 
 def main() -> None:
-    root = Path(__file__).resolve().parents[1]
+    docs = Path(__file__).resolve().parents[1]
+    root = docs.parent
     try:
         import litepgo
         from litepgo import fem
@@ -72,7 +73,7 @@ def main() -> None:
         for name, member in modules["litepgo.fem"].members.items()
     ), "Missing FEM template instances"
 
-    output = root / "docs/public/reference/python"
+    output = docs / "public/reference/python"
     output.mkdir(parents=True, exist_ok=True)
     for path in output.rglob("*.html"):
         path.unlink()

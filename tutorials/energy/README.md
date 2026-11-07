@@ -62,3 +62,6 @@ After setting up both kernels, run the notebooks from the repository root.
 Each invocation starts its own kernel. Executed copies are stored under
 `build/energy-tutorials/`. Keep source notebooks free of outputs and execution
 counts.
+
+To execute the lessons and generate their [documentation pages](../../docs/tutorials/energy/index.md)
+and notebook downloads, run `uv run --locked --group docs python docs/scripts/tutorials.py --course energy`.

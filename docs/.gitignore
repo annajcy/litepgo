@@ -5,7 +5,9 @@ node_modules/
 public/reference/
 .DS_Store
 
-# Rendered from tutorials/torch/*.ipynb
+# Rendered from tutorials/*/*.ipynb
 tutorials/torch/[0-9][0-9]_*.md
 tutorials/torch/assets/
+tutorials/energy/[0-9][0-9]_*.md
+tutorials/energy/assets/
 public/tutorial-notebooks/

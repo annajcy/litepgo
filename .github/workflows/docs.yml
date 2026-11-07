@@ -25,6 +25,9 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
+      - uses: mamba-org/setup-micromamba@v3
+        with:
+          init-shell: none
       - name: Install Ninja
         run: sudo apt-get update && sudo apt-get install -y ninja-build
       - name: Install locked Python, documentation, and tutorial dependencies
@@ -39,9 +42,13 @@ jobs:
           cmake --preset release-all -DLITEPGO_BUILD_TESTS=OFF
           cmake --build build/release-all --target litepgo_python --parallel 2
       - name: Test notebook execution and export infrastructure
-        run: uv run --locked --group docs python -m pytest -q tests/python/test_torch_tutorials.py
-      - name: Execute all Torch lessons and build manual and API references
-        run: uv run scripts/docs.py build
+        run: uv run --locked --group docs python -m pytest -q tests/python/test_torch_tutorials.py tests/python/test_energy_tutorials.py
+      - name: Build the C++20 tutorial kernel
+        env:
+          CMAKE_BUILD_PARALLEL_LEVEL: 2
+        run: uv run scripts/setup_cpp_tutorial.py --no-register
+      - name: Execute the tutorials and build manual and API references
+        run: uv run docs/scripts/site.py build
       - name: Check Markdown rendering and generated API entry points
         run: |
           uv run --locked --group docs --directory docs corepack pnpm exec node --test .vitepress/mermaid.test.mjs
@@ -62,8 +69,10 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: torch-tutorial-failure
-          path: build/torch-tutorials/
+          name: tutorial-failure
+          path: |
+            build/torch-tutorials/
+            build/energy-tutorials/
           if-no-files-found: ignore
       - name: Upload the Pages site
         uses: actions/upload-pages-artifact@v4

@@ -214,10 +214,15 @@ it rebuilds `_core` and refreshes source links through `scripts/litepgo_dev.py`.
 ## Build and maintain this documentation
 
 ```sh
-uv run scripts/docs.py          # dev server
-uv run scripts/docs.py build    # generated references plus static site
-uv run scripts/docs.py preview  # existing static build
+uv run docs/scripts/site.py          # dev server
+uv run docs/scripts/site.py build    # generated references plus static site
+uv run docs/scripts/site.py preview  # existing static build
 ```
+
+For the first documentation build on macOS, Linux, or WSL, install micromamba
+and prepare the build-local C++20 kernel with
+`uv run scripts/setup_cpp_tutorial.py --no-register`. The site executes the
+Energy and Torch notebooks from fresh kernels for each build.
 
 The launcher synchronizes locked site packages. The uv `docs` group supplies
 Node.js/Corepack, Doxygen, and pdoc. Corepack reads the pnpm version from
@@ -225,8 +230,10 @@ Node.js/Corepack, Doxygen, and pdoc. Corepack reads the pnpm version from
 tools and packages. `_core` must already be importable for Python API generation.
 Use `PYTHONPATH=build/<preset>/python` to select the package being documented.
 
-Doxygen reads public headers and excludes bindings/internal detail headers. pdoc
-reads public Python modules and explicitly includes bound FEM template instances.
+`docs/scripts/cpp_reference.py` runs Doxygen on public headers, excluding
+bindings and internal detail headers. `docs/scripts/python_reference.py` uses
+pdoc to read public Python modules and explicitly includes bound FEM template
+instances.
 PyTorch is a locked default Python dependency, and pdoc always includes
 `litepgo.torch` alongside the native API facades.
 Generated `docs/public/reference/` and `.vitepress/dist/` are ignored.
@@ -273,8 +280,8 @@ needed.
 CI sets `DOCS_BASE=/litepgo/` for the project URL. To check the same layout locally:
 
 ```sh
-DOCS_BASE=/litepgo/ uv run scripts/docs.py build
-DOCS_BASE=/litepgo/ uv run scripts/docs.py preview
+DOCS_BASE=/litepgo/ uv run docs/scripts/site.py build
+DOCS_BASE=/litepgo/ uv run docs/scripts/site.py preview
 ```
 
 Open the preview's `/litepgo/` path. The site uses explicit `.html` links so pages

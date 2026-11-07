@@ -2,8 +2,9 @@
 # requires-python = ">=3.12,<3.13"
 # dependencies = ["jupyter-client==8.10.0"]
 # ///
-"""Build litepgo and register its C++20 notebook kernel for the current user."""
+"""Build litepgo and prepare its C++20 notebook kernel."""
 
+import argparse
 import os
 from pathlib import Path
 import shutil
@@ -14,6 +15,10 @@ from jupyter_client.kernelspec import KernelSpecManager
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--no-register", action="store_true", help="Leave the kernel in the build directory")
+    args = parser.parse_args()
+
     if sys.platform not in ("darwin", "linux"):
         raise SystemExit("Use macOS or Linux. On Windows, run the setup inside WSL.")
     for tool in ("micromamba", "cmake", "ninja"):
@@ -53,6 +58,8 @@ def main():
         [sys.executable, "scripts/cpp_tutorial_kernel.py", str(prefix), "--build-dir", str(build)],
         check=True,
     )
+    if args.no_register:
+        return
 
     source = build / "tutorials/cpp/jupyter/kernels/litepgo-cpp20"
     installed = KernelSpecManager().install_kernel_spec(str(source), user=True)

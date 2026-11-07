@@ -70,16 +70,16 @@ The website displays output from the executed notebooks.
 
 ```sh
 # One lesson, from a clean kernel:
-uv run --locked --group tutorials python scripts/torch_tutorials.py 01_density
+uv run --locked --group tutorials python docs/scripts/tutorials.py --course torch 01_density
 
 # All seven lessons:
-uv run --locked --group tutorials python scripts/torch_tutorials.py
+uv run --locked --group tutorials python docs/scripts/tutorials.py --course torch
 
 # Re-export a matching execution cache without running cells again:
-uv run --locked --group tutorials python scripts/torch_tutorials.py --no-execute
+uv run --locked --group tutorials python docs/scripts/tutorials.py --course torch --no-execute
 
 # Complete documentation build (executes all lessons again):
-uv run scripts/docs.py build
+uv run docs/scripts/site.py build
 ```
 
 To select a different registered build explicitly, prefix the renderer command with

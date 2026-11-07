@@ -12,7 +12,7 @@ pytest.importorskip("nbconvert")
 from nbclient.exceptions import CellExecutionError, CellTimeoutError
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts/torch_tutorials.py"
+SCRIPT = ROOT / "docs/scripts/tutorials.py"
 
 
 @pytest.fixture
@@ -62,7 +62,7 @@ def test_execute_export_images_and_source_unchanged(tmp_path, monkeypatch, pipel
     assert executed.metadata["tutorial_source_sha256"] == pipeline["fingerprint"](source)
     assert source.read_bytes() == original
     pages, downloads = tmp_path / "pages", tmp_path / "downloads"
-    pipeline["render"](source, executed, pages, downloads)
+    pipeline["render"](source, executed, pages, downloads, course="torch")
     markdown = (pages / "01_sample.md").read_text()
     assert "fresh kernel output" in markdown and "```python" in markdown and "$$x^2$$" in markdown
     assert "withBase('/tutorial-notebooks/torch/01_sample.ipynb')" in markdown
@@ -76,7 +76,7 @@ def test_execute_export_images_and_source_unchanged(tmp_path, monkeypatch, pipel
     unrelated = pages / "assets/02_other/keep.txt"
     unrelated.parent.mkdir()
     unrelated.write_text("keep")
-    pipeline["render"](source, executed, pages, downloads)
+    pipeline["render"](source, executed, pages, downloads, course="torch")
     assert unrelated.read_text() == "keep"
 
 
@@ -97,24 +97,25 @@ def test_errors_and_timeouts_fail_and_preserve_diagnostics(tmp_path, pipeline, s
 
 @pytest.mark.parametrize("changed", ["asset", "checkpoint", "source"])
 def test_no_execute_rejects_changed_lesson_inputs(tmp_path, monkeypatch, pipeline, changed):
-    source = tmp_path / "01_cached.ipynb"
+    sources = tmp_path / "tutorials/torch"
+    sources.mkdir(parents=True)
+    source = sources / "01_cached.ipynb"
     notebook = write_notebook(source, nbformat.v4.new_code_cell("print('ok')"))
     asset = tmp_path / "mesh.veg"
     asset.write_text("test asset")
     notebook.metadata["tutorial_assets"] = [asset.name]
-    checkpoint = tmp_path / "trained_theta.npy"
+    checkpoint = sources / "trained_theta.npy"
     checkpoint.write_bytes(b"test checkpoint")
     notebook.metadata["tutorial_files"] = [checkpoint.name]
     nbformat.write(notebook, source)
-    cache = tmp_path / "cache"
-    cache.mkdir()
+    cache = tmp_path / "build/torch-tutorials"
+    cache.mkdir(parents=True)
     namespace = pipeline["main"].__globals__
     monkeypatch.setitem(namespace, "ASSETS", tmp_path)
     notebook.metadata["tutorial_source_sha256"] = pipeline["fingerprint"](source)
     nbformat.write(notebook, cache / source.name)
-    monkeypatch.setitem(namespace, "SOURCE", tmp_path)
-    monkeypatch.setitem(namespace, "CACHE", cache)
-    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--no-execute"])
+    monkeypatch.setitem(namespace, "ROOT", tmp_path)
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--course", "torch", "--no-execute"])
     if changed == "asset":
         asset.write_text("changed asset")
     elif changed == "checkpoint":

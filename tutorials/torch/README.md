@@ -14,7 +14,7 @@ From the repository root:
 uv sync --locked --group tutorials
 cmake --preset release
 cmake --build --preset release --target litepgo_python
-uv run --locked --group tutorials python scripts/torch_tutorials.py
+uv run --locked --group tutorials python docs/scripts/tutorials.py --course torch
 ```
 
 This executes each notebook in a new kernel and generates its documentation page,

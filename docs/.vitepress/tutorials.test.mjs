@@ -24,3 +24,28 @@ test('all exported lessons preserve code, math, outputs, and plot links', async 
     assert.match(built, /tutorial-notebooks\/torch\//, name)
   }
 })
+
+test('each Energy lesson publishes both languages and their notebook downloads', async () => {
+  const index = await readFile(new URL('./dist/tutorials/energy/index.html', import.meta.url), 'utf8')
+  for (const [lesson, output] of [
+    ['01_spring_chain', 'Status Converged'],
+    ['02_spring_response', 'Maximum finite difference error']
+  ]) {
+    for (const language of ['python', 'cpp']) {
+      const name = `${lesson}_${language}`
+      const other = `${lesson}_${language === 'cpp' ? 'python' : 'cpp'}`
+      const source = await readFile(new URL(`../tutorials/energy/${name}.md`, import.meta.url), 'utf8')
+      const rendered = markdown.render(source)
+      assert.match(rendered, new RegExp(`language-${language}`), name)
+      assert.match(rendered, /mjx-container/, name)
+      assert.ok(rendered.includes(output), name)
+      assert.ok(index.includes(`./${name}.html`), name)
+      const built = await readFile(new URL(`./dist/tutorials/energy/${name}.html`, import.meta.url), 'utf8')
+      assert.ok(built.includes(`./${other}.html`), name)
+      assert.ok(built.includes(`/tutorial-notebooks/energy/${name}.ipynb`), name)
+      const downloaded = await readFile(new URL(`./dist/tutorial-notebooks/energy/${name}.ipynb`, import.meta.url))
+      const original = await readFile(new URL(`../../tutorials/energy/${name}.ipynb`, import.meta.url))
+      assert.deepEqual(downloaded, original, name)
+    }
+  }
+})
