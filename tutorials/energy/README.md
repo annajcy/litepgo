@@ -1,9 +1,12 @@
 # Energy tutorials
 
-In lesson 01, predict where a six-node spring chain settles and check the
-prediction with litepgo. Choose [Python](01_spring_chain_python.ipynb) or
-[C++20](01_spring_chain_cpp.ipynb). Both notebooks use the same derivation,
-experiment, numerical checks, and Try it.
+- Energy 01 predicts where a six-node spring chain settles and checks the
+  prediction with litepgo. [Python](01_spring_chain_python.ipynb) · [C++20](01_spring_chain_cpp.ipynb)
+- Energy 02 uses JVP and VJP to move between nodes and springs, then recovers
+  the energy gradient. [Python](02_spring_response_python.ipynb) · [C++20](02_spring_response_cpp.ipynb)
+
+Each language version uses the same derivation, experiment, numerical checks,
+and Try it.
 
 ## Set up the C++ kernel
 
@@ -21,7 +24,7 @@ uv run scripts/setup_cpp_tutorial.py
 This installs xeus-cpp in `build/tutorial-xcpp/`, builds the native library in
 `build/cpp-tutorials/`, and registers **C++20 (litepgo)** for your user account.
 Rerun the command after moving the checkout or changing native code. CI runs
-the same setup and executes Energy 01 on macOS and Linux.
+the same setup and executes the C++ lessons on macOS and Linux.
 
 ## Set up the Python kernel
 
@@ -48,10 +51,10 @@ After setting up both kernels, run the notebooks from the repository root.
 ```sh
 (
     set -e
-    for language in python cpp; do
+    for notebook in tutorials/energy/*.ipynb; do
         uv run --no-sync jupyter nbconvert --to notebook --execute \
             --ExecutePreprocessor.timeout=90 --output-dir="$PWD/build/energy-tutorials" \
-            "tutorials/energy/01_spring_chain_${language}.ipynb"
+            "$notebook"
     done
 )
 ```

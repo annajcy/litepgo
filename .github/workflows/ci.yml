@@ -86,8 +86,10 @@ jobs:
         run: brew install ninja
       - name: Install, build, and register the C++20 kernel
         run: uv run scripts/setup_cpp_tutorial.py
-      - name: Execute Energy 01 from the registered kernel
-        run: >-
-          uv run --locked --only-group tutorials jupyter nbconvert
-          --to notebook --execute --ExecutePreprocessor.timeout=120
-          --output-dir=build/energy-tutorials tutorials/energy/01_spring_chain_cpp.ipynb
+      - name: Execute the C++ Energy lessons from the registered kernel
+        shell: bash
+        run: |
+          for notebook in tutorials/energy/*_cpp.ipynb; do
+            uv run --locked --only-group tutorials jupyter nbconvert --to notebook --execute \
+              --ExecutePreprocessor.timeout=120 --output-dir=build/energy-tutorials "$notebook"
+          done

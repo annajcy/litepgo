@@ -1,4 +1,4 @@
-"""Check the two Energy 01 sources before executing them in their own kernels."""
+"""Check each Energy lesson's sources before executing them in their own kernels."""
 
 from pathlib import Path
 
@@ -7,10 +7,11 @@ import pytest
 nbformat = pytest.importorskip("nbformat")
 
 
-def test_spring_chain_notebooks_share_the_lesson():
+@pytest.mark.parametrize("lesson", ["01_spring_chain", "02_spring_response"])
+def test_energy_notebooks_share_the_lesson(lesson):
     folder = Path(__file__).resolve().parents[2] / "tutorials/energy"
-    python = nbformat.read(folder / "01_spring_chain_python.ipynb", as_version=4)
-    cpp = nbformat.read(folder / "01_spring_chain_cpp.ipynb", as_version=4)
+    python = nbformat.read(folder / f"{lesson}_python.ipynb", as_version=4)
+    cpp = nbformat.read(folder / f"{lesson}_cpp.ipynb", as_version=4)
 
     for notebook, kernel in ((python, "python3"), (cpp, "litepgo-cpp20")):
         nbformat.validate(notebook)
