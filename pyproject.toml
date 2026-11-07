@@ -1,7 +1,7 @@
 [project]
 name = "litepgo"
 version = "0.0.1"
-description = "Minimal libpgo"
+description = "A simplified version of libpgo"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = ["numpy>=1.26", "scipy>=1.11", "torch>=2.5"]
