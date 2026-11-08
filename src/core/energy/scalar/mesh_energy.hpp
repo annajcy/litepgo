@@ -1,6 +1,7 @@
 #pragma once
 #include "litepgo/dof/energy_assembler.hpp"
 #include "litepgo/energy/scalar/fixed_pattern_energy.hpp"
+#include <atomic>
 #include <stdexcept>
 #include <utility>
 
@@ -37,12 +38,13 @@ class MeshEnergy : public FixedPatternEnergy {
     double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const override;
     double feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const override;
     dof::EnergyAssembler assembler_;
-    std::vector<std::vector<int>> batches_;
-    struct Storage {
+    struct Batch {
+        std::vector<int> ids;
         BatchMatrix inputs, gradient, hessian, delta;
         Vec values;
     };
-    mutable std::vector<Storage> storage_;
+    mutable std::atomic<bool> busy_ = false;
+    mutable std::vector<Batch> batches_;
     mutable std::vector<double> values_;
     mutable std::vector<dof::EnergyAssembler::ElementView> views_;
 };

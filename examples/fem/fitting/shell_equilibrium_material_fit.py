@@ -10,8 +10,6 @@ from functools import partial
 import numpy as np
 from litepgo import dof, energy, fem, mesh, solver
 
-ElasticEnergy = fem.ShellFemEnergy[fem.KoiterStVK]
-ForceParameterResponse = fem.ShellFemForceMaterialResponse[fem.KoiterStVK]
 
 
 @dataclass
@@ -56,7 +54,11 @@ def make_problem():
     )
 
 
-def make_factories(problem):
+def make_factories(problem, material=fem.KoiterStVK):
+    """Energy and force-parameter response factories; material fills the Material slot."""
+    ElasticEnergy = fem.ShellFemEnergy[material]
+    ForceParameterResponse = fem.ShellFemForceMaterialResponse[material]
+
     def make_energy(theta):
         return ElasticEnergy(
             problem.displacement_map,
@@ -87,7 +89,7 @@ def measure(problem, make_energy, make_response, p, load=1.0, need_jacobian=Fals
         make_energy,
         make_response,
     )
-    displacement, state_jacobian = equilibrium.eval(p, need_jacobian=need_jacobian)
+    displacement, state_jacobian = (equilibrium.eval_value_and_jacobian(p) if need_jacobian else (equilibrium.eval_value(p), None))
 
     # 2. Compute force and its total derivative along the equilibrium branch.
     elastic = make_energy(p)
@@ -121,7 +123,7 @@ class Residual(energy.FixedPatternResponse):
         super().__init__(np.ones((len(target), 2)))
         self.measurement, self.target, self.scales = measurement, target, scales
 
-    def eval_values(self, theta, need_jacobian):
+    def eval_impl(self, theta, need_jacobian):
         if theta[1] <= 0 or theta.sum() <= 0:
             return None
         observation = self.measurement(theta, need_jacobian=need_jacobian)

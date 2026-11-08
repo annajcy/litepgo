@@ -1,5 +1,6 @@
 #include "litepgo/contact/broad_phase/detail/candidates.hpp"
 #include "litepgo/contact/broad_phase/spatial_hash.hpp"
+#include <memory>
 
 #include "litepgo/contact/ipc_contact_energy.hpp"
 #include <cstring>
@@ -236,7 +237,6 @@ TEST(ContactBroadPhase, InjectedBackendNormalizesCandidatesAndOwnsLifetime) {
     const IPCContactOptions options{1.0};
     IPCContactEnergy reference(mesh, options, std::make_shared<SpatialHash>());
     const Vec x = mesh.positions;
-    reference.update_pattern(x);
     const Vec g = reference.eval_gradient(x);
     const SpMat h = reference.eval_hessian(x);
     Vec dx = Vec::Zero(x.size());
@@ -246,7 +246,6 @@ TEST(ContactBroadPhase, InjectedBackendNormalizesCandidatesAndOwnsLifetime) {
     std::shared_ptr<const BroadPhase> hash = std::make_shared<SpatialHash>(0.5);
     for (const auto& backend : {backend_default, noisy, hash}) {
         IPCContactEnergy energy(mesh, options, backend);
-        energy.update_pattern(x);
         EXPECT_EQ(energy.eval_value(x), reference.eval_value(x));
         const Vec actual_g = energy.eval_gradient(x);
         const SpMat actual_h = energy.eval_hessian(x);
@@ -266,7 +265,7 @@ TEST(ContactBroadPhase, InjectedBackendNormalizesCandidatesAndOwnsLifetime) {
     EXPECT_TRUE(weak.expired());
     IPCContactEnergy invalid(mesh, options, std::make_shared<InvalidBroadPhase>());
     EXPECT_THROW(invalid.eval_value(x), std::invalid_argument);
-    EXPECT_THROW(invalid.update_pattern(x), std::invalid_argument);
+    EXPECT_THROW(invalid.eval_hessian(x), std::invalid_argument);
     EXPECT_THROW(invalid.max_feasible_step(x, dx), std::invalid_argument);
     auto solve = [&] {
         IPCContactEnergy energy(mesh, options, backend_default);

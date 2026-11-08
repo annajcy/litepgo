@@ -22,7 +22,7 @@ namespace litepgo::contact {
 // Optional group multipliers act on original VF/EE candidates before merging;
 // zero excludes a candidate from the active set and CCD. Initial whole-surface
 // intersection validation remains unconditional. Configuration is owned by value.
-// Update the dynamic pattern before evaluating a Hessian at a new active set.
+// Hessian evaluation prepares structure for the supplied active set.
 //
 // Requires nonempty, nondegenerate triangles, no duplicate faces, and every
 // vertex used by a face.
@@ -48,12 +48,12 @@ class IPCContactEnergy final : public energy::DynamicPatternEnergy {
     }
     int num_active_pairs(const ConstVecRef& x) const;
     double min_active_distance(const ConstVecRef& x) const;
-    // Full owned snapshot; does not update the Hessian pattern or solver state.
+    // Full owned snapshot; does not change evaluation results or solver state.
     ContactSnapshot contact_snapshot(const ConstVecRef& x) const;
 
   private:
     struct Impl;
-    SpMat pattern_at(const ConstVecRef& x) const override;
+    SpMat hessian_pattern_at(const ConstVecRef& x) const override;
     double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, energy::HessianKind kind) const override;
     double feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const override;
     Vec rest_positions_;

@@ -23,7 +23,10 @@ export default defineConfig({
     nav: [
       { text: 'Get started', link: '/guide/build' },
       { text: 'User guide', link: '/guide/architecture' },
+      { text: 'Energy tutorial', link: '/tutorials/energy/' },
+      { text: 'Torch tutorial', link: '/tutorials/torch/' },
       { text: 'Examples', link: '/examples' },
+      { text: 'Benchmarks', link: '/benchmarks/' },
       { text: 'API reference', link: '/reference' },
       { text: 'Development', link: '/development' }
     ],
@@ -32,6 +35,25 @@ export default defineConfig({
         { text: 'Overview', link: '/' },
         { text: 'Build and environment', link: '/guide/build' },
         { text: 'First complete solve', link: '/guide/quickstart' }
+      ] },
+      { text: 'Energy tutorial', link: '/tutorials/energy/', items: [
+        { text: '1. Spring-chain equilibrium', items: [
+          { text: 'Python', link: '/tutorials/energy/01_spring_chain_python' },
+          { text: 'C++20', link: '/tutorials/energy/01_spring_chain_cpp' }
+        ] },
+        { text: '2. Spring differences and gradients', items: [
+          { text: 'Python', link: '/tutorials/energy/02_spring_response_python' },
+          { text: 'C++20', link: '/tutorials/energy/02_spring_response_cpp' }
+        ] }
+      ] },
+      { text: 'Torch tutorial', link: '/tutorials/torch/', collapsed: false, items: [
+        { text: '1. Energy and stress', link: '/tutorials/torch/01_density' },
+        { text: '2. Native FEM assembly', link: '/tutorials/torch/02_fem' },
+        { text: '3. Fixed-pose parameter fitting', link: '/tutorials/torch/03_fixed_pose_fit' },
+        { text: '4. Equilibrium differentiation', link: '/tutorials/torch/04_equilibrium_fit' },
+        { text: '5. A small neural density', link: '/tutorials/torch/05_neural_density' },
+        { text: '6. Fit network weights', link: '/tutorials/torch/06_neural_equilibrium_fit' },
+        { text: '7. Design a plastic state', link: '/tutorials/torch/07_plastic_gravity_design' }
       ] },
       { text: 'User guide', items: [
         { text: 'Architecture', link: '/guide/architecture' },
@@ -54,15 +76,22 @@ export default defineConfig({
           { text: 'Evaluation and composition', link: '/guide/energy/evaluation' },
           { text: 'Parameter transforms', link: '/guide/energy/parameter-transforms' },
           { text: 'Custom energies and responses', link: '/guide/energy/custom' },
+          { text: 'Response evaluation', link: '/guide/energy/responses' },
+          { text: 'Response Hessians', link: '/guide/energy/response-hessians' },
           { text: 'Batched assembly', link: '/guide/energy/assembly' }
         ] },
         { text: 'Finite elements', link: '/guide/fem/', collapsed: true, items: [
-          { text: 'Fields and quadrature', link: '/guide/fem/fields' },
+          { text: 'Basis functions', link: '/guide/fem/basis' },
+          { text: 'Quadrature', link: '/guide/fem/quadrature' },
+          { text: 'Spatial interpolation response', link: '/guide/fem/interpolated-response' },
+          { text: 'Coefficient sampling responses', link: '/guide/fem/sampling-responses' },
+          { text: 'Spatial responses', link: '/guide/fem/fields' },
           { text: 'Volumetric elasticity', link: '/guide/fem/volume' },
           { text: 'Shells and natural geometry', link: '/guide/fem/shell' },
           { text: 'Hex Hermite DOFs', link: '/guide/fem/hermite' },
           { text: 'Point embedding and boundary sampling', link: '/guide/fem/embedding' },
-          { text: 'Force responses', link: '/guide/fem/force-responses' }
+          { text: 'Force responses', link: '/guide/fem/force-responses' },
+          { text: 'Materials written in Python', link: '/guide/fem/python-materials' }
         ] },
         { text: 'Solvers', link: '/guide/solver/', collapsed: true, items: [
           { text: 'Newton method', link: '/guide/solver/newton' },
@@ -81,6 +110,16 @@ export default defineConfig({
       ] },
       { text: 'Examples', collapsed: true, items: [
         { text: 'Catalog and run instructions', link: '/examples' },
+        { text: 'FEM basics', link: '/examples/fem/', collapsed: true, items: [
+          { text: 'Spatial interpolation response', link: '/examples/fem/interpolated-response' },
+          { text: 'Coefficient sampling responses', link: '/examples/fem/sampling-response' },
+          { text: 'Tet P1 basis and field', link: '/examples/fem/tet-p1-basis' },
+          { text: 'Hermite interpolation', link: '/examples/fem/hermite-interpolation' },
+          { text: 'Quadrature integration', link: '/examples/fem/quadrature-integration' },
+          { text: 'Nonlinear response Hessians', link: '/examples/fem/response-hessian' },
+          { text: 'Volumetric material in NumPy', link: '/examples/fem/numpy-neohookean' },
+          { text: 'Shell material in NumPy', link: '/examples/fem/numpy-koiter-shell' }
+        ] },
         { text: 'Energies and responses', link: '/examples/energy/', collapsed: true, items: [
           { text: 'Custom scalar energies', link: '/examples/energy/custom-energy' },
           { text: 'Mesh energy subclass', link: '/examples/energy/mesh-energy-subclass' },
@@ -135,8 +174,10 @@ export default defineConfig({
         ] },
         { text: 'PyTorch materials and fitting', link: '/examples/torch/', collapsed: true, items: [
           { text: 'Learn a neural material', link: '/examples/torch/neural-neohookean' },
+          { text: 'Fit network weights through equilibrium', link: '/examples/torch/neural-equilibrium-fit' },
           { text: 'Force responses through equilibrium', link: '/examples/torch/torch-equilibrium-response' },
           { text: 'Constitutive energy in Torch', link: '/examples/torch/torch-neohookean' },
+          { text: 'Shell material written in Torch', link: '/examples/torch/torch-shell-material-fit' },
           { text: 'Volume material with L-BFGS', link: '/examples/torch/volume-equilibrium-material-fit-torch' },
           { text: 'Shell material with L-BFGS', link: '/examples/torch/shell-equilibrium-material-fit-torch' },
           { text: 'Volume plastic stretches with L-BFGS', link: '/examples/torch/volume-equilibrium-fp-fit-torch' },
@@ -148,6 +189,9 @@ export default defineConfig({
         // Generated HTML must bypass VitePress's client router.
         { text: 'C++ reference', link: '/reference/cpp/index.html', target: '_self' },
         { text: 'Python reference', link: '/reference/python/index.html', target: '_self' },
+        { text: 'Benchmarks', link: '/benchmarks/', items: [
+          { text: 'Torch material performance', link: '/benchmarks/torch-material' }
+        ] },
         { text: 'Development', link: '/development' }
       ] }
     ]

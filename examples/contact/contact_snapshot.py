@@ -36,7 +36,7 @@ def main():
     x = positions.ravel()
     snapshot = barrier.contact_snapshot(x)
     count = len(snapshot.types)
-    if (count != barrier.num_active_pairs(x) or barrier.hessian_pattern.nnz != 0
+    if (count != barrier.num_active_pairs(x)
             or snapshot.distances.min() != barrier.min_active_distance(x)
             or set(snapshot.types) != {"VV", "VE", "VF", "EE"}
             or not np.any(snapshot.mollifiers == 0)):

@@ -4,6 +4,7 @@ Run from the repository root after building litepgo:
     uv run --no-sync python examples/fem/fitting/volume_equilibrium_material_fit.py
 """
 
+from litepgo.energy import AffineResponse
 from pathlib import Path
 from dataclasses import dataclass
 from functools import partial
@@ -37,7 +38,7 @@ class Problem:
             self.mapping,
             self.geometry,
             self.plastic,
-            [fem.IdentityField3D(theta)] * len(self.geometry),
+            [AffineResponse(np.zeros((2, 3)), theta)] * len(self.geometry),
         )
 
     def make_response(self, u):
@@ -53,7 +54,7 @@ def make_geometry(input_path=None):
     topology = rest.topology
     positions = rest.positions.ravel()
     mapping = dof.VertexDofMap(topology, 3)
-    XField = fem.InterpolatedField3D[fem.TetP1Basis]
+    XField = fem.InterpolatedResponse[fem.TetP1Basis]
     geometry = [XField(mapping.gather(e, positions)) for e in range(topology.num_cells)]
     z = rest.positions[:, 2]
     height = z.max() - z.min()
@@ -70,7 +71,7 @@ def make_geometry(input_path=None):
     return Problem(
         mapping,
         geometry,
-        [fem.IdentityField3D(np.eye(3).ravel())] * len(geometry),
+        [AffineResponse(np.zeros((9, 3)), np.eye(3).ravel())] * len(geometry),
         dof.ConstantDofMap(topology, 2),
         fixed,
         top,
@@ -92,7 +93,7 @@ def reaction(problem, theta, axis, strain, need_jacobian):
         problem.make_energy,
         problem.make_response,
     )
-    displacement, J = equilibrium.eval(theta, need_jacobian=need_jacobian)
+    displacement, J = (equilibrium.eval_value_and_jacobian(theta) if need_jacobian else (equilibrium.eval_value(theta), None))
     problem.solves += 1
     elastic = problem.make_energy(theta)
     force = elastic.eval_gradient(displacement)[loaded].sum()
@@ -123,7 +124,7 @@ class MaterialResidual(energy.FixedPatternResponse):
         super().__init__(np.ones((2, 2)))
         self.measurement, self.observed, self.scales = measurement, observed, scales
 
-    def eval_values(self, theta, need_jacobian):
+    def eval_impl(self, theta, need_jacobian):
         values = self.measurement(theta, need_jacobian)
         if values is None:
             return None

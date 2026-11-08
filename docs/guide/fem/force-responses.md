@@ -23,15 +23,18 @@ $u_0$ fixed. No displacement solve or equilibrium sensitivity appears here.
 | --- | --- | --- |
 | `VolumetricFemForceMaterialResponse[M,B,Q]` | parameter map, displacement map, rest fields, displacement, Fp fields, batch size | Material parameters |
 | `VolumetricFemForceFpResponse[M,B,Q]` | parameter map, displacement map, rest fields, displacement, theta fields, batch size | Nine column-packed Fp entries |
-| `ShellFemForceMaterialResponse[M]` | parameter map, stencil map, rest data, displacement, thickness, batch size | Two plane-stress parameters |
+| `ShellFemForceMaterialResponse[M]` | parameter map, stencil map, rest data, displacement, thickness, batch size | Material parameters (two for `KoiterStVK`) |
 | `ShellFemForceFpResponse[M]` | parameter map, stencil map, rest data, displacement, thickness, theta, batch size | Nine column-packed Fp entries |
+
+`M` may be a native material or a [material written in Python](python-materials.md);
+a Python material then also supplies the mixed second derivative requested by
+the Jacobian (`d2W_dF_dtheta`, `d2W_dF_dFp`, `d2W_dab_dtheta` or `d2W_dab_dabarbbar`).
 
 Use `ConstantDofMap` for a shared block or `ElementDofMap` for independent
 per-element blocks. Fixed geometry/pose arrays and maps must describe the same
 element order. These responses snapshot the prescribed state; rebuild when it
-changes. At the local level, `VolumetricMaterialForceLocalResponse3D`,
-`VolumetricFpForceLocalResponse3D`, `ShellMaterialForceLocalResponse2D`, and
-`ShellFpForceLocalResponse2D` expose the same pointwise force/parameter pullbacks.
+changes. Fixed geometry and material spatial responses are sampled at construction and
+are not retained. Active coefficients are explicit response inputs.
 
 For example, after constructing the fixed geometry as in the
 [solid guide](volume.md):
@@ -40,7 +43,7 @@ For example, after constructing the fixed geometry as in the
 Force = fem.VolumetricFemForceMaterialResponse[
     fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
 force = Force(dof.ConstantDofMap(topology, 2), mapping, geometry, u0, plastic)
-value, B = force.eval(theta, need_jacobian=True)
+value, B = force.eval_value_and_jacobian(theta)
 ```
 
 `value` has displacement-gradient force rows, and `B` has material-parameter
@@ -70,9 +73,6 @@ $\det F_p$ factor and inverse-plastic chain rule; it is not simply a negative
 elastic tangent. Reference/displacement basis transforms also pull force rows
 back to physical DOFs.
 
-Native local responses borrow their field inputs, while Python retains them.
-`LocalResponse2D/3D` expose `num_inputs`, `num_outputs`, values and optional
-Jacobians. `accumulate` adds weighted outputs into initialized native buffers;
-Python returns fresh weighted arrays. Native `accumulate_into` accepts strided
-views used by batch assembly. All buffers must have correct dimensions, remain
-alive, and avoid aliasing inputs.
+The Field-dependent local material wrappers are removed. Use the pointwise material
+functions and existing DOF pullback helpers for custom integration. Custom force maps use ordinary Response, with the active parameter vector as
+input; there is no separate LocalResponse interface. See [the migration conventions](fields.md).

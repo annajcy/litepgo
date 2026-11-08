@@ -1,16 +1,26 @@
-"""Write W in PyTorch and compare TetP1 FEM with native Neo-Hookean.
+"""Write W in PyTorch and compare native FEM assembly with native Neo-Hookean.
 
 Run: uv run --no-sync python examples/fem/fitting/torch_neohookean.py
 """
 
+from pathlib import Path
+
+from litepgo.energy import AffineResponse
 import numpy as np
 import torch
 from litepgo import dof, energy, fem, mesh, solver
-from litepgo.torch import TorchVolumetricFemEnergy
+from litepgo.torch import TorchVolumetricMaterial
+
+REPO = Path(__file__).resolve().parents[3]
 
 
-class NeoHookean(torch.nn.Module):
-    def forward(self, F, Fp, theta):
+class TorchNeoHookean(TorchVolumetricMaterial):
+    """The native NeoHookean density written in Torch; theta = [lambda, mu]."""
+
+    num_parameters = 2
+
+    @staticmethod
+    def W(F, Fp, theta):
         Fe = F @ torch.linalg.inv(Fp)
         log_J = torch.log(torch.linalg.det(Fe))
         lam, mu = theta.unbind(dim=-1)
@@ -25,7 +35,8 @@ class NeoHookean(torch.nn.Module):
         return torch.where((lam >= 0) & (mu > 0), W, torch.full_like(W, float("nan")))
 
 
-def make_problem(batch_size=1):
+def make_problem(batch_size=256):
+    """Two TetP1 elements with per-element Fp and theta fields."""
     nodes = np.array(
         [
             [0.0, 0.0, 0.0],
@@ -39,37 +50,60 @@ def make_problem(batch_size=1):
         5, np.array([[0, 1, 2, 3], [1, 2, 3, 4]], dtype=np.int32)
     )
     mapping = dof.VertexDofMap(topology, 3)
-    XField = fem.InterpolatedField3D[fem.TetP1Basis]
+    XField = fem.InterpolatedResponse[fem.TetP1Basis]
     geometry = [XField(mapping.gather(e, nodes.ravel())) for e in range(2)]
     plastic = [
-        fem.IdentityField3D(p.ravel(order="F"))
+        AffineResponse(np.zeros((9, 3)), p.ravel(order="F"))
         for p in (
             np.array([[1.04, 0.03, 0.0], [0.0, 0.98, 0.02], [0.01, 0.0, 1.02]]),
             np.array([[0.97, 0.0, 0.02], [0.01, 1.03, 0.0], [0.0, 0.02, 1.01]]),
         )
     ]
-    theta = [fem.IdentityField3D(np.array(p)) for p in ([2.0, 3.0], [3.0, 2.0])]
-    native = fem.VolumetricFemEnergy[
-        fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
-    ](mapping, geometry, plastic, theta)
-    autodiff = TorchVolumetricFemEnergy(
-        mapping, geometry, plastic, theta, material=NeoHookean(), batch_size=batch_size
+    theta = [AffineResponse(np.zeros((2, 3)), np.array(p)) for p in ([2.0, 3.0], [3.0, 2.0])]
+    key = (fem.TetP1Basis, fem.TetCentroidQuadrature)
+    native = fem.VolumetricFemEnergy[(fem.NeoHookean, *key)](mapping, geometry, plastic, theta)
+    # Same template and constructor; only the Material slot changes.
+    autodiff = fem.VolumetricFemEnergy[(TorchNeoHookean, *key)](
+        mapping, geometry, plastic, theta, batch_size
     )
     return nodes, mapping, geometry, plastic, theta, native, autodiff
+
+
+def compare(native, autodiff, u, label):
+    for kind in (energy.HessianKind.Exact, energy.HessianKind.Projected):
+        reference = native.eval(u, gradient=True, hessian=kind)
+        actual = autodiff.eval(u, gradient=True, hessian=kind)
+        print(
+            f"{label} {kind.name}: energy_error={abs(actual[0] - reference[0]):.3e}, "
+            f"force_error={np.linalg.norm(actual[1] - reference[1]):.3e}, "
+            f"stiffness_error={np.linalg.norm((actual[2] - reference[2]).toarray()):.3e}"
+        )
+
+
+def hex_box():
+    """The bundled box mesh with HexQ1 displacement and 2x2x2 Gauss points."""
+    rest = mesh.read_veg(REPO / "assets/box-hex.veg")
+    topology = rest.topology
+    mapping = dof.VertexDofMap(topology, 3)
+    XField = fem.InterpolatedResponse[fem.HexQ1Basis]
+    geometry = [XField(mapping.gather(e, rest.positions.ravel())) for e in range(topology.num_cells)]
+    Fp = [AffineResponse(np.zeros((9, 3)), np.eye(3).ravel(order="F"))] * topology.num_cells
+    theta = [AffineResponse(np.zeros((2, 3)), np.array([2.0, 3.0]))] * topology.num_cells
+    key = (fem.HexQ1Basis, fem.GaussLegendre3D[2])
+    native = fem.VolumetricFemEnergy[(fem.NeoHookean, *key)](mapping, geometry, Fp, theta)
+    autodiff = fem.VolumetricFemEnergy[(TorchNeoHookean, *key)](mapping, geometry, Fp, theta)
+    stretch = np.diag([1.06, 0.97, 1.02]) + 0.02 * np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]])
+    u = (rest.positions @ (stretch - np.eye(3)).T).ravel()
+    return native, autodiff, u
 
 
 def main():
     nodes, _, _, _, _, native, autodiff = make_problem()
     F = np.array([[1.08, 0.04, 0.02], [0.01, 0.96, 0.03], [0.0, 0.02, 1.05]])
     u = (nodes @ (F - np.eye(3)).T).ravel()
-    for kind in (energy.HessianKind.Exact, energy.HessianKind.Projected):
-        reference = native.eval(u, gradient=True, hessian=kind)
-        actual = autodiff.eval(u, gradient=True, hessian=kind)
-        print(
-            f"{kind.name}: energy_error={abs(actual[0] - reference[0]):.3e}, "
-            f"force_error={np.linalg.norm(actual[1] - reference[1]):.3e}, "
-            f"stiffness_error={np.linalg.norm((actual[2] - reference[2]).toarray()):.3e}"
-        )
+    compare(native, autodiff, u, "TetP1")
+    hex_native, hex_autodiff, hex_u = hex_box()
+    compare(hex_native, hex_autodiff, hex_u, "HexQ1")
 
     fixed = dof.DofReduction(15, [*range(9), 12, 13, 14])
     initial = np.zeros(15)

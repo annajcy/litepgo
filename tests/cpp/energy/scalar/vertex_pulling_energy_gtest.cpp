@@ -44,8 +44,8 @@ TEST(VertexPullingEnergy, EvaluatesValueGradientAndHessian) {
     EXPECT_TRUE(energy.eval_gradient(x).isApprox(expected_gradient, 1e-15));
     EXPECT_EQ(Eigen::MatrixXd(energy.eval_hessian(x)), expected_hessian);
     EXPECT_EQ(Eigen::MatrixXd(energy.eval_hessian(x, HessianKind::Projected)), expected_hessian);
-    EXPECT_EQ(energy.hessian_pattern().nonZeros(), 6);
-    EXPECT_TRUE(energy.has_fixed_pattern());
+    EXPECT_EQ(energy.eval_hessian(Vec::Zero(energy.num_dofs())).nonZeros(), 6);
+
     expect_derivatives_match(energy, x);
 }
 
@@ -63,7 +63,7 @@ TEST(VertexPullingEnergy, VanishesAtTargets) {
 TEST(VertexPullingEnergy, AllowsNoPulledVertices) {
     const VertexPullingEnergy energy(3, {}, Vec(), 1.0);
     EXPECT_EQ(energy.eval_value(Vec::Ones(3)), 0.0);
-    EXPECT_EQ(energy.hessian_pattern().nonZeros(), 0);
+    EXPECT_EQ(energy.eval_hessian(Vec::Zero(energy.num_dofs())).nonZeros(), 0);
 }
 
 TEST(VertexPullingEnergy, RejectsInvalidInput) {

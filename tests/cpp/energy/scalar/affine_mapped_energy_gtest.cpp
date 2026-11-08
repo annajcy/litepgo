@@ -73,7 +73,6 @@ TEST(AffineMappedEnergy, DefaultsToAZeroOffset) {
     const Vec z = Vec::LinSpaced(4, -0.5, 0.5);
     EXPECT_EQ(mapped.eval_value(z), chain->eval_value(periodic_map() * z));
     EXPECT_EQ(mapped.num_dofs(), 4);
-    EXPECT_TRUE(mapped.has_fixed_pattern());
 }
 
 TEST(AffineMappedEnergy, ForwardsTheFeasibleStep) {
@@ -98,27 +97,46 @@ TEST(AffineMappedEnergy, RejectsInvalidInput) {
 
 TEST(AffineMappedEnergy, RebuildsWhenTheInnerPatternChanges) {
     const auto switching = std::make_shared<SwitchingEnergy>(5);
-    const SpMat T = general_map();
+    const SpMat T = periodic_map();
     const Vec offset = Vec::Zero(5);
     AffineMappedEnergy mapped(switching, T, offset);
-    EXPECT_FALSE(mapped.has_fixed_pattern());
-
-    const Vec z = (Vec(3) << 1.0, -0.5, 0.8).finished();
-    ASSERT_FALSE(SwitchingEnergy::active_pairs(T * z).empty());
-    EXPECT_TRUE(mapped.update_pattern(z));
-    EXPECT_FALSE(mapped.update_pattern(z));
-    expect_mapped(mapped, *switching, T, offset, z, HessianKind::Exact);
+    const Vec active = (Vec(4) << 1.0, 1.0, -2.0, 3.0).finished();
+    const Vec inactive = -Vec::Ones(4);
+    const SpMat first = mapped.eval_hessian(active);
+    const SpMat second = mapped.eval_hessian(inactive);
+    ASSERT_FALSE(linalg::same_pattern(first, second));
+    for (const Vec& z : {active, inactive, active})
+        expect_mapped(mapped, *switching, T, offset, z, HessianKind::Exact);
+    EXPECT_TRUE(linalg::same_pattern(first, mapped.eval_hessian(active)));
 }
 
-TEST(AffineMappedEnergy, DetectsAnInnerEnergyUpdatedElsewhere) {
+TEST(AffineMappedEnergy, SharedInnerEvaluationDoesNotInvalidateResults) {
     const auto switching = std::make_shared<SwitchingEnergy>(5);
-    AffineMappedEnergy mapped(switching, periodic_map());
+    const SpMat T = periodic_map();
+    AffineMappedEnergy mapped(switching, T);
+    AffineMappedEnergy other(switching, T);
     const Vec z = (Vec(4) << 1.0, 1.0, -2.0, 3.0).finished();
+    const Vec inactive = -Vec::Ones(4);
+    const auto saved = mapped.eval(z, true, HessianKind::Exact);
+    const Vec gradient = *saved.gradient;
+    const SpMat hessian = *saved.hessian;
+    const double value = saved.value;
 
-    ASSERT_TRUE(switching->update_pattern(periodic_map() * z));
-    EXPECT_THROW(mapped.eval_hessian(z), std::logic_error);
-    EXPECT_TRUE(mapped.update_pattern(z));
-    EXPECT_NO_THROW(mapped.eval_hessian(z));
+    const SpMat other_hessian = other.eval_hessian(inactive);
+    ASSERT_FALSE(linalg::same_pattern(hessian, other_hessian));
+    const Eigen::MatrixXd expected = T.transpose() * switching->eval_hessian(T * inactive) * T;
+    EXPECT_EQ(Eigen::MatrixXd(other_hessian), expected);
+    const auto changed = mapped.eval(inactive, true, HessianKind::Exact);
+    EXPECT_NE(changed.value, value);
+    EXPECT_EQ(saved.value, value);
+    EXPECT_EQ(*saved.gradient, gradient);
+    EXPECT_TRUE(linalg::same_pattern(*saved.hessian, hessian));
+    EXPECT_EQ(Eigen::MatrixXd(*saved.hessian), Eigen::MatrixXd(hessian));
+    const auto again = mapped.eval(z, true, HessianKind::Exact);
+    EXPECT_EQ(again.value, value);
+    EXPECT_EQ(*again.gradient, gradient);
+    EXPECT_TRUE(linalg::same_pattern(*again.hessian, hessian));
+    EXPECT_EQ(Eigen::MatrixXd(*again.hessian), Eigen::MatrixXd(hessian));
 }
 
 } // namespace litepgo::energy::test

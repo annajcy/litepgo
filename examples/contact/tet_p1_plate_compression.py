@@ -1,5 +1,6 @@
 """Compress two tetrahedral boxes between penalty plates with IPC self-contact."""
 
+from litepgo.energy import AffineResponse
 import argparse
 import sys
 from pathlib import Path
@@ -50,13 +51,13 @@ def main():
     topology = stack.topology
 
     rest_position_map = dof.VertexDofMap(topology, 3)
-    XField = fem.InterpolatedField3D[fem.TetP1Basis]
+    XField = fem.InterpolatedResponse[fem.TetP1Basis]
     rest_position_fields = [
         XField(rest_position_map.gather(e, rest_positions))
         for e in range(topology.num_cells)
     ]
-    Fp_field = fem.IdentityField3D(np.eye(3).ravel(order="F"))
-    theta_field = fem.IdentityField3D(np.array([0.5, 0.75]))
+    Fp_field = AffineResponse(np.zeros((9, 3)), np.eye(3).ravel(order="F"))
+    theta_field = AffineResponse(np.zeros((2, 3)), np.array([0.5, 0.75]))
     elastic = fem.VolumetricFemEnergy[
         fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
     ](
@@ -99,7 +100,7 @@ def main():
         positive_side=False,
     )
     kappa = 1e7
-    potential = energy.WeightedEnergySum(
+    potential = energy.WeightedSumEnergy(
         [
             (elastic, 1.0),
             (energy.AffineMappedEnergy(barrier, W, rest_surface), kappa),

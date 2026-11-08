@@ -35,6 +35,13 @@ last digits on every platform.
 
 | Area | Program | What it teaches |
 | --- | --- | --- |
+| FEM | [`sampling_response`](examples/fem/sampling-response.md) | Coefficient maps to fixed-point values and reference derivatives |
+| FEM | [`interpolated_response`](examples/fem/interpolated-response.md) | Fixed coefficients and exact spatial derivatives |
+| FEM | [`tet_p1_basis`](examples/fem/tet-p1-basis.md) | Shape functions, target sampling at vertices, and scalar Field reconstruction |
+| FEM | [`hermite_interpolation`](examples/fem/hermite-interpolation.md) | Value/derivative samples and Hermite Field reconstruction in 2D/3D |
+| FEM | [`quadrature_integration`](examples/fem/quadrature-integration.md) | Reference integration in 1D/2D/3D and simplex area/volume weights |
+| FEM | [`numpy_neohookean`](examples/fem/numpy-neohookean.md) | A volumetric material written in NumPy, assembled by native Hermite FEM |
+| FEM | [`numpy_koiter_shell`](examples/fem/numpy-koiter-shell.md) | A shell material written in NumPy, with force responses and equilibrium |
 | Energy | [`custom_energy`](examples/energy/custom-energy.md) | Fixed/dynamic scalar derivatives and sparse structure |
 | Energy | [`mesh_energy_subclass`](examples/energy/mesh-energy-subclass.md) | Subclass assembly and spring equilibrium |
 | Energy | [`energy_composition`](examples/energy/energy-composition.md) | Weighted sums and affine derivative pullback |
@@ -70,8 +77,10 @@ last digits on every platform.
 | Fitting | [`volume_equilibrium_fp_fit`](examples/fitting/volume-equilibrium-fp-fit.md) | Plastic stretches from shapes and reactions |
 | Fitting | [`shell_equilibrium_fp_fit`](examples/fitting/shell-equilibrium-fp-fit.md) | Shell natural geometry through equilibrium |
 | Torch | [`neural_neohookean`](examples/torch/neural-neohookean.md) | Learn an invariant energy and validate stress, tangent, and equilibrium |
+| Torch | [`neural_equilibrium_fit`](examples/torch/neural-equilibrium-fit.md) | Fit two network weights through equilibrium with checked implicit gradients |
 | Torch | [`torch_neohookean`](examples/torch/torch-neohookean.md) | Torch density, native FEM assembly, and derivative comparison |
 | Torch | [`torch_equilibrium_response`](examples/torch/torch-equilibrium-response.md) | Physical theta/Fp Jacobians and equilibrium JVP/VJP |
+| Torch | [`torch_shell_material_fit`](examples/torch/torch-shell-material-fit.md) | Torch shell density fitted from equilibrium reactions |
 | Torch | [`volume_equilibrium_material_fit_torch`](examples/torch/volume-equilibrium-material-fit-torch.md) | Volume material recovery with native autograd |
 | Torch | [`shell_equilibrium_material_fit_torch`](examples/torch/shell-equilibrium-material-fit-torch.md) | Shell material recovery with native autograd |
 | Torch | [`volume_equilibrium_fp_fit_torch`](examples/torch/volume-equilibrium-fp-fit-torch.md) | Three-stretch inverse equilibrium with L-BFGS |

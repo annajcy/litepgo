@@ -1,16 +1,17 @@
-#include "../../fem/material/volumetric/test_material_sources.hpp"
 #include "../../testing/batch_fixtures.hpp"
 #include "../../testing/element_formula_energy.hpp"
+#include "../../testing/evaluate_energy.hpp"
 #include "litepgo/dof/constant_dof_map.hpp"
 #include "litepgo/dof/element_dof_map.hpp"
 #include "litepgo/dof/stencil_dof_map.hpp"
 #include "litepgo/dof/vertex_dof_map.hpp"
+#include "litepgo/energy/response/affine_response.hpp"
 #include "litepgo/energy/scalar/mesh_energy.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
-#include "litepgo/fem/field/identity_field.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
+#include <future>
 
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
-#include "litepgo/fem/material/volumetric/volumetric_material_local_energy.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include <Eigen/LU>
@@ -24,30 +25,15 @@
 namespace litepgo::energy::test {
 
 namespace {
-using namespace litepgo::fem::test;
 using litepgo::testing::ElementFormulaEnergy;
 
 mesh::HexTopology two_hexes() {
     return mesh::HexTopology(12, {{1, 3, 9, 4, 7, 6, 0, 10}, {3, 8, 5, 9, 6, 2, 11, 0}});
 }
-fem::InterpolatedField3D<fem::HexQ1Basis> make_X_field() {
-    Eigen::Matrix<double, 8, 3> nodes;
-    for (int i = 0; i < 8; ++i)
-        nodes.row(i) = fem::HexQ1Basis::reference_node(i).transpose();
-    return fem::InterpolatedField3D<fem::HexQ1Basis>(nodes);
-}
-auto passive_fields() {
-    Eigen::Matrix3d F;
-    F << 1.1, 0.04, 0.02, -0.03, 0.95, 0.01, 0.02, 0.03, 1.05;
-    return MaterialSources{fem::IdentityField3D(F.reshaped()),
-                           fem::IdentityField3D(Eigen::Matrix3d::Identity().reshaped()),
-                           fem::IdentityField3D(Eigen::Vector2d(2, 3))};
-}
-
 void check_fd(ElementFormulaEnergy& energy, const Vec& x) {
     Vec gradient;
-    SpMat hessian = energy.hessian_pattern();
-    const double value = energy.eval(x, &gradient, &hessian);
+    SpMat hessian;
+    const double value = litepgo::testing::evaluate_energy(energy, x, &gradient, &hessian);
     EXPECT_DOUBLE_EQ(value, energy.eval_value(x));
     EXPECT_TRUE(gradient.isApprox(energy.eval_gradient(x), 1e-13));
     EXPECT_TRUE(Eigen::MatrixXd(hessian).isApprox(Eigen::MatrixXd(energy.eval_hessian(x)), 1e-13));
@@ -63,62 +49,20 @@ void check_fd(ElementFormulaEnergy& energy, const Vec& x) {
     {
         tbb::global_control threads(tbb::global_control::max_allowed_parallelism, 1);
         Vec g;
-        SpMat h = energy.hessian_pattern();
-        EXPECT_DOUBLE_EQ(energy.eval(x, &g, &h), value);
+        SpMat h;
+        EXPECT_DOUBLE_EQ(litepgo::testing::evaluate_energy(energy, x, &g, &h), value);
         EXPECT_EQ(g, gradient);
         EXPECT_EQ(Eigen::MatrixXd(h), Eigen::MatrixXd(hessian));
     }
     {
         tbb::global_control threads(tbb::global_control::max_allowed_parallelism, 4);
         Vec g;
-        SpMat h = energy.hessian_pattern();
-        EXPECT_DOUBLE_EQ(energy.eval(x, &g, &h), value);
+        SpMat h;
+        EXPECT_DOUBLE_EQ(litepgo::testing::evaluate_energy(energy, x, &g, &h), value);
         EXPECT_EQ(g, gradient);
         EXPECT_EQ(Eigen::MatrixXd(h), Eigen::MatrixXd(hessian));
     }
-    EXPECT_FALSE(energy.update_pattern(x));
-}
-
-template <class Map, class Fields, class Bind>
-void check_material_path(const Map& map, const Vec& data, Fields fields, Bind bind) {
-    ElementFormulaEnergy energy(map, [fields, bind](int, const auto& x_local, Vec* g, Eigen::MatrixXd* h) {
-        const auto X_field = make_X_field();
-        const auto sources = fields(x_local);
-        const auto local_energy = bind(sources);
-        if (g)
-            g->setZero(local_energy.num_dofs());
-        if (h)
-            h->setZero(local_energy.num_dofs(), local_energy.num_dofs());
-        using Q = fem::GaussLegendre3D<2>;
-        double result = 0;
-        for (int q = 0; q < Q::num_points; ++q) {
-            const Eigen::Vector3d xi = Q::points().row(q).transpose();
-            const double weight = Q::weights()[q] * X_field.eval_dvalue_dxi(xi).determinant();
-            result += local_energy.accumulate(xi, weight, g, h);
-        }
-        return result;
-    });
-    // This test only evaluates nearby feasible states; it does not use the default step for a solver.
-    check_fd(energy, data);
-}
-
-TEST(MeshEnergy, HexNodeDisplacement) {
-    const auto topology = two_hexes();
-    const dof::VertexDofMap map(topology, 3);
-    Vec data = Vec::Zero(36);
-    for (int i = 0; i < data.size(); ++i)
-        data[i] = 0.01 * std::sin(i + 0.3);
-    check_material_path(
-        map, data,
-        [](const auto& x_local) {
-            EXPECT_EQ(x_local.rows(), 8);
-            EXPECT_EQ(x_local.cols(), 3);
-            auto fields = passive_fields();
-            return MaterialSources{
-                OwnedDeformationField(fem::InterpolatedField3D<fem::HexQ1Basis>(x_local), make_X_field()), fields.Fp,
-                fields.theta};
-        },
-        [](const auto& fields) { return bind_energy<fem::VolumetricMaterialLocalEnergyF3D<fem::NeoHookean>>(fields); });
+    EXPECT_NO_THROW(energy.eval_hessian(x));
 }
 
 TEST(MeshEnergy, OwnsPlanUsesCurrentXAndSupportsTriangleAndTet) {
@@ -289,7 +233,7 @@ TEST(MeshEnergy, EmptyMeshProducesZeroOutputs) {
     EXPECT_DOUBLE_EQ(energy.max_feasible_step(Vec::Zero(6), Vec::Ones(6)), 1);
 }
 
-TEST(MeshEnergy, RejectsWrongSparsePatternBeforeCallbacksOrOutputWrites) {
+TEST(MeshEnergy, RejectsWrongInputBeforeCallbacks) {
     int calls = 0;
     const dof::ElementDofMap map(mesh::TriangleTopology(3, {{0, 1, 2}}), 2);
     ElementFormulaEnergy energy(map, [&calls](int, const auto&, Vec*, Eigen::MatrixXd*) {
@@ -301,7 +245,7 @@ TEST(MeshEnergy, RejectsWrongSparsePatternBeforeCallbacksOrOutputWrites) {
     hessian.insert(0, 0) = 9;
     hessian.makeCompressed();
     const SpMat before = hessian;
-    EXPECT_THROW(energy.eval(Vec::Zero(2), &gradient, &hessian), std::invalid_argument);
+    EXPECT_THROW(litepgo::testing::evaluate_energy(energy, Vec::Zero(3), &gradient, &hessian), std::invalid_argument);
     EXPECT_EQ(calls, 0);
     EXPECT_EQ(gradient, Vec::Constant(1, 7));
     EXPECT_EQ(Eigen::MatrixXd(hessian), Eigen::MatrixXd(before));
@@ -401,8 +345,10 @@ TEST(MeshEnergy, ParallelAssemblyMatchesSerialWithSharedRepeatedAndUnusedDofs) {
                 SCOPED_TRACE(::testing::Message()
                              << "state=" << state << " threads=" << threads << " request=" << request);
                 Vec g;
-                SpMat h = energy.hessian_pattern();
-                EXPECT_EQ(energy.eval(x, request & 1 ? &g : nullptr, request & 2 ? &h : nullptr), expected_value);
+                SpMat h;
+                EXPECT_EQ(litepgo::testing::evaluate_energy(energy, x, request & 1 ? &g : nullptr,
+                                                            request & 2 ? &h : nullptr),
+                          expected_value);
                 if (request & 1)
                     EXPECT_EQ(g, expected_g);
                 if (request & 2)
@@ -423,14 +369,18 @@ TEST(MeshEnergy, ReusedBuffersRejectIncompleteWritesAndRecoverAfterExceptions) {
                                     return (e + 1) * x_local.squaredNorm();
                                 });
     Vec x = Eigen::Vector2d(0.2, 0.4), g;
-    SpMat h = energy.hessian_pattern();
+    SpMat h;
     for (int request : {1, 2, 3}) {
-        EXPECT_DOUBLE_EQ(energy.eval(x, request & 1 ? &g : nullptr, request & 2 ? &h : nullptr), 3 * x.squaredNorm());
+        EXPECT_DOUBLE_EQ(
+            litepgo::testing::evaluate_energy(energy, x, request & 1 ? &g : nullptr, request & 2 ? &h : nullptr),
+            3 * x.squaredNorm());
         write = false;
-        EXPECT_THROW(energy.eval(x, request & 1 ? &g : nullptr, request & 2 ? &h : nullptr), std::logic_error);
+        EXPECT_THROW(
+            litepgo::testing::evaluate_energy(energy, x, request & 1 ? &g : nullptr, request & 2 ? &h : nullptr),
+            std::logic_error);
         write = true;
         x.array() += 0.1;
-        EXPECT_DOUBLE_EQ(energy.eval(x, &g, &h), 3 * x.squaredNorm());
+        EXPECT_DOUBLE_EQ(litepgo::testing::evaluate_energy(energy, x, &g, &h), 3 * x.squaredNorm());
         EXPECT_EQ(g, 6 * x);
         EXPECT_EQ(Eigen::MatrixXd(h), 6 * Eigen::Matrix2d::Identity());
     }
@@ -582,4 +532,32 @@ TEST(MeshEnergy, EmptyLocalDofsStillHaveOneValuePerElement) {
     EXPECT_TRUE(E.eval_gradient(x).isZero());
     EXPECT_EQ(E.eval_hessian(x).nonZeros(), 0);
     EXPECT_EQ(E.eval_hessian(x, energy::HessianKind::Projected).nonZeros(), 0);
+}
+
+TEST(MeshEnergy, SharedWorkspaceRejectsOverlappingStepAndRecovers) {
+    using namespace litepgo;
+    std::promise<void> entered, release;
+    auto entered_future = entered.get_future();
+    auto release_future = release.get_future().share();
+    const dof::ElementDofMap map(mesh::TriangleTopology(3, {{0, 1, 2}}), 2);
+    bool wait = true;
+    litepgo::testing::ElementFormulaEnergy energy(map, [&](int, const auto&, Vec* g, Eigen::MatrixXd* H) {
+        if (wait) {
+            entered.set_value();
+            release_future.wait();
+        }
+        if (g)
+            g->setZero();
+        if (H)
+            H->setZero();
+        return 0.;
+    });
+    const Vec x = Vec::Zero(2);
+    auto evaluation = std::async(std::launch::async, [&] { return energy.eval_value(x); });
+    entered_future.wait();
+    EXPECT_THROW(energy.max_feasible_step(x, x), std::logic_error);
+    release.set_value();
+    EXPECT_EQ(evaluation.get(), 0);
+    wait = false;
+    EXPECT_EQ(energy.eval_value(x), 0);
 }

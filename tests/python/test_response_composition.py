@@ -1,3 +1,4 @@
+from litepgo.energy import AffineResponse
 import gc
 import weakref
 
@@ -11,7 +12,6 @@ def topology():
 
 
 def check_products(response, x):
-    response.update_pattern(x)
     J = response.eval_jacobian(x).toarray()
     v = np.linspace(0.2, 0.7, len(x))
     w = np.linspace(-0.3, 0.8, response.num_outputs)
@@ -65,15 +65,15 @@ def test_direct_products_do_not_request_child_jacobians():
         def __init__(self):
             super().__init__(np.eye(2))
 
-        def eval_values(self, x, need_jacobian):
+        def eval_impl(self, x, need_jacobian):
             if need_jacobian:
                 raise AssertionError("explicit Jacobian requested")
             return x * x
 
-        def eval_jvp_values(self, x, v):
+        def eval_jvp_impl(self, x, v):
             return 2 * x * v
 
-        def eval_vjp_values(self, x, w):
+        def eval_vjp_impl(self, x, w):
             return 2 * x * w
 
     local = energy.ComposedResponse(Direct(), Direct())
@@ -104,12 +104,12 @@ def test_direct_products_do_not_request_child_jacobians():
 def test_dynamic_children_and_external_pattern_updates():
     class Dynamic(energy.DynamicPatternResponse):
         def __init__(self):
-            super().__init__(np.eye(2))
+            super().__init__(2, 2)
 
-        def pattern_at(self, x):
+        def jacobian_pattern_at(self, x):
             return np.array([[1.0, 0.0], [float(x[0] > 0), 1.0]])
 
-        def eval_values(self, x, need_jacobian):
+        def eval_impl(self, x, need_jacobian):
             y = np.array([x[0], x[1] + max(x[0], 0.0) ** 2])
             J = np.array([[1.0, 0.0], [2 * max(x[0], 0.0), 1.0]])
             return (y, J) if need_jacobian else y
@@ -117,26 +117,22 @@ def test_dynamic_children_and_external_pattern_updates():
     child = Dynamic()
     composed = energy.ComposedResponse(child, energy.ExpResponse(2))
     x = np.array([0.3, -0.4])
-    assert not composed.has_fixed_pattern
-    with pytest.raises(RuntimeError, match="update_pattern"):
-        composed.eval_jacobian(x)
+    assert composed.eval_jacobian(x).shape == (2, 2)
     check_products(composed, x)
-    child.update_pattern(-np.ones(2))
     check_products(composed, x)
     element = energy.ElementwiseResponse(dof.ElementDofMap(topology(), 2), child)
     check_products(element, np.array([0.2, 0.3, -0.4, 0.5]))
-    assert element.has_fixed_pattern
     with pytest.raises(ValueError):
         energy.ComposedResponse(energy.ExpResponse(3), energy.ExpResponse(2))
 
 
 @pytest.mark.parametrize("kind", ["composed", "elementwise"])
-def test_child_lifetime_and_cycles(kind):
+def test_child_lifetime_with_weak_back_reference(kind):
     class Child(energy.FixedPatternResponse):
         def __init__(self):
             super().__init__(np.eye(2))
 
-        def eval_values(self, x, need_jacobian):
+        def eval_impl(self, x, need_jacobian):
             return (x, np.eye(2)) if need_jacobian else x
 
     child = Child()
@@ -144,7 +140,9 @@ def test_child_lifetime_and_cycles(kind):
         owner = energy.ComposedResponse(child, energy.ExpResponse(2))
     else:
         owner = energy.ElementwiseResponse(dof.ConstantDofMap(topology(), 2), child)
-    child.owner = owner
+    child.owner = weakref.ref(owner)
+    assert child.owner() is owner
+    owner_ref = weakref.ref(owner)
     ref = weakref.ref(child)
     del child
     gc.collect()
@@ -153,6 +151,7 @@ def test_child_lifetime_and_cycles(kind):
     del owner
     gc.collect()
     assert ref() is None
+    assert owner_ref() is None
 
 
 def test_empty_mesh():
@@ -177,7 +176,7 @@ def test_fem_parameterizations_match_energy_and_equilibrium(plastic, shared):
     local = fem.LogDiagonalFpResponse() if plastic else energy.ExpResponse(2)
     transform = energy.ElementwiseResponse(parameter_map, local)
     physical_map = dof.ElementDofMap(topo, physical_width)
-    theta = [fem.IdentityField3D(np.array([2.0, 3.0])) for _ in range(2)]
+    theta = [AffineResponse(np.zeros((np.asarray(np.array([2.0, 3.0])).size, 3)), np.array([2.0, 3.0])) for _ in range(2)]
     force_type = (
         fem.VolumetricFemForceFpResponse
         if plastic
@@ -186,7 +185,7 @@ def test_fem_parameterizations_match_energy_and_equilibrium(plastic, shared):
 
     def make_energy(p):
         fields = [
-            fem.IdentityField3D(row)
+            AffineResponse(np.zeros((np.asarray(row).size, 3)), row)
             for row in transform.eval_value(p).reshape(2, physical_width)
         ]
         return Energy(
@@ -222,12 +221,12 @@ def test_fem_parameterizations_match_energy_and_equilibrium(plastic, shared):
 def test_composition_reuses_dynamic_child_at_different_inputs():
     class Flip(energy.DynamicPatternResponse):
         def __init__(self):
-            super().__init__(np.eye(2))
+            super().__init__(2, 2)
 
-        def pattern_at(self, x):
+        def jacobian_pattern_at(self, x):
             return np.array([[1.0, 0.0], [float(x[0] > 0), 1.0]])
 
-        def eval_values(self, x, need_jacobian):
+        def eval_impl(self, x, need_jacobian):
             y = np.array([-x[0], x[1] + max(x[0], 0.0) ** 2])
             J = np.array([[-1.0, 0.0], [2 * max(x[0], 0.0), 1.0]])
             return (y, J) if need_jacobian else y
@@ -236,7 +235,6 @@ def test_composition_reuses_dynamic_child_at_different_inputs():
     obj = energy.ComposedResponse(child, child)
     for x in [np.array([0.3, 0.4]), np.array([-0.3, 0.4])]:
         # Flip composed with itself is (x0, x1+x0²), on either side of zero.
-        obj.update_pattern(x)
         np.testing.assert_allclose(
             obj.eval_jacobian(x).toarray(), [[1.0, 0.0], [2 * x[0], 1.0]]
         )

@@ -10,9 +10,9 @@ F_p(p)=\operatorname{diag}(e^{p_0},e^{p_1},1),\qquad
 s_{\rm true}=(1.06,0.95),\quad p_{\rm initial}=0.
 $$
 
-Targets are independently assembled from local shell energy gradients at the
-transformed natural stencils, keeping current positions and **original** area
-weights unchanged. The residual is normalized by the target force norm.
+Targets come from `ShellFemEnergy` with fixed per-face plastic matrices,
+keeping current positions and **original** area weights unchanged. The example
+checks the fixed-pose force Response against that energy gradient before fitting. The residual is normalized by the target force norm.
 
 **API walkthrough.** `ShellFemForceFpResponse[KoiterStVK]` exposes nine plastic
 columns through a width-9 constant parameter map. Compose it with

@@ -8,6 +8,8 @@ StaticEquilibriumResponse(num_parameters, fixed, initial, options, make_energy, 
 returns equilibrium displacement and its direct parameter Jacobian. make_energy(p)
 returns the total Energy; make_response(u) returns a parameter-to-gradient Response
 at fixed u. Callers guarantee that both describe the same total potential.
+The response keeps both callbacks alive and exposes them to Python's cyclic
+garbage collector.
 Fixed DOFs and values must be parameter-independent.
 Each call starts from initial; sensitivities use the exact unshifted Hessian.
 eval_jvp and eval_vjp use directional and adjoint solves without forming the

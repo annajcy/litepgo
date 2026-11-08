@@ -19,19 +19,29 @@ const std::array<Eigen::Vector3d, 6> samples{{Eigen::Vector3d(0, 0, 0), Eigen::V
                                               Eigen::Vector3d(0.5, 0.5, 0.5), Eigen::Vector3d(0, 0.3, 0.7),
                                               Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(1.2, -0.1, 0.8)}};
 
+double polynomial(const Eigen::Vector3d& p) {
+    const auto [x, y, z] = std::array{p.x(), p.y(), p.z()};
+    return 2 + 3 * x - 4 * y + 5 * z + 6 * x * y - 7 * x * z + 8 * y * z + 9 * x * y * z;
+}
+
+Eigen::Vector3d polynomial_gradient(const Eigen::Vector3d& p) {
+    const auto [x, y, z] = std::array{p.x(), p.y(), p.z()};
+    return {3 + 6 * y - 7 * z + 9 * y * z, -4 + 6 * x + 8 * z + 9 * x * z, 5 - 7 * x + 8 * y + 9 * x * y};
+}
+
 } // namespace
 
 TEST(HexQ1Basis, InterpolatesReferenceNodesInLibpgoOrder) {
     const auto corners = reference_corners();
     for (int a = 0; a < 8; ++a) {
-        EXPECT_EQ(HexQ1Basis::reference_node(a), corners.col(a));
+        EXPECT_EQ(HexQ1Basis::coefficient_info(a).point, corners.col(a));
         const auto N = HexQ1Basis::eval_N(corners.col(a));
         for (int b = 0; b < 8; ++b) {
             EXPECT_DOUBLE_EQ(N[b], a == b ? 1.0 : 0.0);
         }
     }
-    EXPECT_THROW(HexQ1Basis::reference_node(-1), std::out_of_range);
-    EXPECT_THROW(HexQ1Basis::reference_node(8), std::out_of_range);
+    EXPECT_THROW(HexQ1Basis::coefficient_info(-1), std::out_of_range);
+    EXPECT_THROW(HexQ1Basis::coefficient_info(8), std::out_of_range);
 }
 
 TEST(HexQ1Basis, MatchesVerifiedLibpgoWeightsAndGradients) {
@@ -102,6 +112,24 @@ TEST(HexQ1Basis, GradientsMatchFiniteDifferences) {
             for (int e = 0; e < 3; ++e)
                 EXPECT_TRUE((second_fd.col(e) - d2N_dxi2.col(columns[d][e])).isZero(3e-10));
         }
+    }
+}
+
+TEST(HexQ1Basis, ReproducesTrilinearPolynomialsAndGradients) {
+    const auto nodes = reference_corners();
+    Eigen::Matrix<double, 8, 1> coefficients;
+    for (int a = 0; a < HexQ1Basis::num_basis_functions; ++a) {
+        coefficients[a] = polynomial(nodes.col(a));
+    }
+    for (const auto& p : samples) {
+        const auto N = HexQ1Basis::eval_N(p);
+        const auto dN_dxi = HexQ1Basis::eval_dN_dxi(p);
+        const auto d2N_dxi2 = HexQ1Basis::eval_d2N_dxi2(p);
+        EXPECT_NEAR(coefficients.dot(N), polynomial(p), 2e-14);
+        EXPECT_TRUE((dN_dxi.transpose() * coefficients).isApprox(polynomial_gradient(p), 1e-14));
+        Eigen::Matrix<double, 6, 1> expected;
+        expected << 0, 6 + 9 * p.z(), -7 + 9 * p.y(), 0, 8 + 9 * p.x(), 0;
+        EXPECT_TRUE((d2N_dxi2.transpose() * coefficients).isApprox(expected, 1e-14));
     }
 }
 

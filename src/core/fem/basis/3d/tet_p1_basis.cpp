@@ -18,13 +18,13 @@ Eigen::Matrix<double, 4, 6> TetP1Basis::eval_d2N_dxi2(const Eigen::Vector3d&) {
     return Eigen::Matrix<double, 4, 6>::Zero();
 }
 
-Eigen::Vector3d TetP1Basis::reference_node(int basis_index) {
+CoefficientInfo<3> TetP1Basis::coefficient_info(int basis_index) {
     if (basis_index < 0 || basis_index >= num_basis_functions)
-        throw std::out_of_range("TetP1Basis::reference_node: basis index is out of range");
+        throw std::out_of_range("TetP1Basis::coefficient_info: basis index is out of range");
     Eigen::Vector3d result = Eigen::Vector3d::Zero();
     if (basis_index > 0)
         result[basis_index - 1] = 1;
-    return result;
+    return {result, {}};
 }
 
 } // namespace litepgo::fem

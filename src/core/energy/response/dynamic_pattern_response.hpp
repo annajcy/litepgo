@@ -1,20 +1,32 @@
 #pragma once
-#include "litepgo/energy/response/response.hpp"
-
+#include "litepgo/energy/response/detail/sparse_response.hpp"
 namespace litepgo::energy {
-// Fixed input/output dimensions, state-dependent Jacobian structure.
-// pattern_at describes all potentially active entries at x; stored values are ignored.
-// update_pattern validates and installs it only when the structure differs.
-// Value-only evaluation is independent of the current pattern. Derivative evaluation
-// must reject nonzero entries outside it; unused slots must be overwritten with zero.
-class DynamicPatternResponse : public Response {
+class DynamicPatternResponse : public detail::SparseResponse {
+  public:
+    int num_inputs() const noexcept final {
+        return num_inputs_;
+    }
+    int num_outputs() const noexcept final {
+        return num_outputs_;
+    }
+
   protected:
-    explicit DynamicPatternResponse(const SpMat& initial_pattern) : Response(initial_pattern, false) {}
+    virtual SpMat jacobian_pattern_at(const ConstVecRef& x) const = 0;
+    virtual SpMat hessian_pattern_at(const ConstVecRef&) const {
+        throw std::logic_error("Response does not implement Hessian pattern");
+    }
+    DynamicPatternResponse(int num_inputs, int num_outputs) : num_inputs_(num_inputs), num_outputs_(num_outputs) {
+        if (num_inputs < 0 || num_outputs < 0)
+            throw std::invalid_argument("Response: negative dimensions");
+    }
 
   private:
-    std::optional<SpMat> refresh_pattern(const ConstVecRef& x) final {
-        return pattern_at(x);
+    SpMat make_jacobian_pattern(const ConstVecRef& x) const final {
+        return checked_pattern(jacobian_pattern_at(x), num_outputs(), num_inputs());
     }
-    virtual SpMat pattern_at(const ConstVecRef& x) const = 0;
+    SpMat make_hessian_pattern(const ConstVecRef& x) const final {
+        return checked_pattern(hessian_pattern_at(x), num_inputs(), num_inputs(), true);
+    }
+    int num_inputs_, num_outputs_;
 };
 } // namespace litepgo::energy

@@ -16,14 +16,14 @@ from litepgo import dof, energy, fem, mesh, solver
 
 class MaterialResidual(energy.FixedPatternResponse):
     def __init__(self, force, target, scale):
-        super().__init__(force.jacobian_pattern)
+        super().__init__(np.ones((force.num_outputs, force.num_inputs)))
         self.force, self.target, self.scale = force, target, scale
 
-    def eval_values(self, theta, need_jacobian):
+    def eval_impl(self, theta, need_jacobian):
         # None rejects infeasible trials without changing parameterization.
         if not np.isfinite(theta).all() or theta[1] <= 0 or theta.sum() <= 0:
             return None
-        value, J = self.force.eval(theta, need_jacobian=need_jacobian)
+        value, J = (self.force.eval_value_and_jacobian(theta) if need_jacobian else (self.force.eval_value(theta), None))
         residual = (value - self.target) / self.scale
         return (residual, J / self.scale) if need_jacobian else residual
 
@@ -70,6 +70,8 @@ def make_problem():
     force = fem.ShellFemForceMaterialResponse[fem.KoiterStVK](
         dof.ConstantDofMap(topology, 2), mapping, rest, displacement, thickness
     )
+    # Fixed pose and original face areas are cached; only the parameter vector varies.
+    np.testing.assert_allclose(force.eval_value(truth), target, rtol=1e-11, atol=1e-12)
     return MaterialResidual(force, target, scale), truth, initial, scale
 
 

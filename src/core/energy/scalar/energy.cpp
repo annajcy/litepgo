@@ -1,75 +1,38 @@
 #include "litepgo/energy/scalar/energy.hpp"
-
-#include "litepgo/common/busy_scope.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
-
 #include <cmath>
 #include <stdexcept>
 #include <string>
-
+#include <utility>
 namespace litepgo::energy {
-
-namespace {
-
-SpMat checked_pattern(int num_dofs, const SpMat& pattern) {
-    if (pattern.rows() != num_dofs || pattern.cols() != num_dofs) {
-        throw std::invalid_argument("Energy pattern must be num_dofs x num_dofs");
-    }
-    SpMat checked = linalg::pattern_of(pattern);
-    if (!linalg::is_canonical(checked)) {
-        throw std::invalid_argument("Energy pattern must have sorted row indices and no duplicate entries");
-    }
-    return checked;
-}
-
-} // namespace
-
-Energy::Energy(int num_dofs, const SpMat& pattern, bool fixed_pattern)
-    : num_dofs_(num_dofs), fixed_pattern_(fixed_pattern) {
-    if (num_dofs_ < 0) {
+Energy::Energy(int num_dofs) : num_dofs_(num_dofs) {
+    if (num_dofs < 0)
         throw std::invalid_argument("Energy requires a non-negative DOF count");
-    }
-    pattern_ = checked_pattern(num_dofs_, pattern);
 }
-
-bool Energy::update_pattern(const ConstVecRef& x) {
-    ::litepgo::detail::BusyScope scope(busy_, "Energy");
-    check_size(x, "update_pattern");
-    if (fixed_pattern_) {
-        return false;
-    }
-    std::optional<SpMat> pattern = refresh_pattern(x);
-    if (!pattern) {
-        return false;
-    }
-    pattern_ = checked_pattern(num_dofs_, *pattern);
-    return true;
-}
-
-double Energy::eval(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const {
-    ::litepgo::detail::BusyScope scope(busy_, "Energy");
+EnergyEvaluation Energy::eval(const ConstVecRef& x, bool gradient, std::optional<HessianKind> hessian) const {
     check_size(x, "eval");
-    if (hessian != nullptr && !linalg::same_pattern(*hessian, pattern_)) {
-        throw std::invalid_argument("Energy::eval: the hessian does not have this energy's current sparsity "
-                                    "pattern; copy hessian_pattern() again after update_pattern()");
+    if (hessian && *hessian != HessianKind::Exact && *hessian != HessianKind::Projected)
+        throw std::invalid_argument("Energy: invalid Hessian kind");
+    auto result = eval_impl(x, gradient, hessian);
+    if (!std::isfinite(result.value))
+        throw std::logic_error("Energy: values must be finite");
+    if (result.gradient.has_value() != gradient || result.hessian.has_value() != hessian.has_value())
+        throw std::logic_error("Energy: requested outputs missing or unexpected outputs returned");
+    if (result.gradient && (result.gradient->size() != num_dofs_ || !result.gradient->allFinite()))
+        throw std::logic_error("Energy: invalid gradient");
+    if (result.hessian) {
+        const auto& H = *result.hessian;
+        if (H.rows() != num_dofs_ || H.cols() != num_dofs_ || !H.coeffs().allFinite())
+            throw std::logic_error("Energy: invalid Hessian");
+#ifndef NDEBUG
+        if (!linalg::is_canonical(H) || !linalg::same_pattern(H, SpMat(H.transpose())) ||
+            (H.rows() && !H.isApprox(SpMat(H.transpose()), 1e-12)))
+            throw std::logic_error("Energy: invalid Hessian structure or symmetry");
+#endif
     }
-    if (gradient != nullptr) {
-        gradient->resize(num_dofs_);
-    }
-    const double value = eval_values(x, gradient, hessian, kind);
-    if (!std::isfinite(value)) {
-        throw std::logic_error("Energy::eval: the energy returned " + std::to_string(value) +
-                               "; values must be finite, with std::domain_error thrown at infeasible states");
-    }
-    if (gradient && (gradient->size() != num_dofs_ || !gradient->allFinite()))
-        throw std::logic_error("Energy::eval: invalid gradient");
-    if (hessian && (!linalg::same_pattern(*hessian, pattern_) || !hessian->coeffs().allFinite()))
-        throw std::logic_error("Energy::eval: invalid Hessian");
-    return value;
+    return result;
 }
-
 double Energy::max_feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const {
-    ::litepgo::detail::BusyScope scope(busy_, "Energy");
     check_size(x, "max_feasible_step");
     if (dx.size() != num_dofs_ || !dx.allFinite()) {
         throw std::invalid_argument("Energy::max_feasible_step: dx must have num_dofs finite entries");
@@ -83,19 +46,13 @@ double Energy::max_feasible_step(const ConstVecRef& x, const ConstVecRef& dx) co
 }
 
 double Energy::eval_value(const ConstVecRef& x) const {
-    return eval(x, nullptr, nullptr);
+    return eval(x).value;
 }
-
 Vec Energy::eval_gradient(const ConstVecRef& x) const {
-    Vec gradient;
-    eval(x, &gradient, nullptr);
-    return gradient;
+    return std::move(*eval(x, true).gradient);
 }
-
 SpMat Energy::eval_hessian(const ConstVecRef& x, HessianKind kind) const {
-    SpMat hessian = pattern_;
-    eval(x, nullptr, &hessian, kind);
-    return hessian;
+    return std::move(*eval(x, false, kind).hessian);
 }
 
 double Energy::feasible_step(const ConstVecRef&, const ConstVecRef&) const {

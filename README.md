@@ -26,6 +26,12 @@ platform-supported sparse backends. Matching `debug-all`, `relwithdebinfo-all`,
 and `asan-all` presets are also available. Native CI runs `debug-all` and
 `release-all` on all three platforms.
 
+## Learn Torch materials
+
+Follow the [six-lesson notebook tutorial](docs/tutorials/torch/index.md), from energy
+and stress to neural material fitting through equilibrium. Sources live in
+[`tutorials/torch/`](tutorials/torch/README.md); the docs build executes and renders them.
+
 ## Run an example
 
 After configuring the release build:
@@ -40,6 +46,13 @@ Both programs check the same scalar-energy derivatives. Start with the
 [first complete solve](docs/guide/quickstart.md), or choose a task from the
 [example catalog](docs/examples.md).
 
+## Benchmarks
+
+Performance drivers live in [`benchmarks/`](benchmarks/README.md). See the
+[benchmark guide](docs/benchmarks/index.md) for the Torch material/FEM/implicit-gradient
+suite, native mesh batching, and contact backend scaling. Timings are observations,
+not CI pass/fail thresholds.
+
 ## Read and build the documentation
 
 Read the [online documentation](https://annajcy.github.io/litepgo/), or browse the
@@ -48,18 +61,20 @@ Read the [online documentation](https://annajcy.github.io/litepgo/), or browse t
 The manual explains data conventions, mathematical models, and API composition; each example
 page includes its formulation, run commands, expected results, and complete source.
 
-Build and register the Python extension before generating API documentation:
+Build the Python extension and prepare the C++20 notebook kernel before building
+the site. The notebook setup requires micromamba.
 
 ```sh
 uv sync --locked
 cmake --preset release-all -DLITEPGO_BUILD_TESTS=OFF
 cmake --build build/release-all --target litepgo_python
-uv run scripts/docs.py          # generate both API references and serve the site
+uv run scripts/setup_cpp_tutorial.py --no-register
+uv run docs/scripts/site.py          # generate both API references and serve the site
 ```
 
 ```sh
-uv run scripts/docs.py build    # write docs/.vitepress/dist/
-uv run scripts/docs.py preview  # serve the existing build
+uv run docs/scripts/site.py build    # write docs/.vitepress/dist/
+uv run docs/scripts/site.py preview  # serve the existing build
 ```
 
 The launcher installs locked documentation dependencies automatically. The `docs`

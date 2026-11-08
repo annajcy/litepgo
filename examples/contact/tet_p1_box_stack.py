@@ -4,6 +4,7 @@ Run from the repository root after building litepgo:
     uv run --no-sync python examples/contact/tet_p1_box_stack.py
 """
 
+from litepgo.energy import AffineResponse
 import argparse
 import sys
 from pathlib import Path
@@ -54,13 +55,13 @@ def main():
     topology = stack.topology
 
     rest_position_map = dof.VertexDofMap(topology, 3)
-    XField = fem.InterpolatedField3D[fem.TetP1Basis]
+    XField = fem.InterpolatedResponse[fem.TetP1Basis]
     rest_position_fields = [
         XField(rest_position_map.gather(e, rest_positions))
         for e in range(topology.num_cells)
     ]
-    Fp_field = fem.IdentityField3D(np.eye(3).ravel(order="F"))
-    theta_field = fem.IdentityField3D(np.array([2.0, 3.0]))
+    Fp_field = AffineResponse(np.zeros((9, 3)), np.eye(3).ravel(order="F"))
+    theta_field = AffineResponse(np.zeros((2, 3)), np.array([2.0, 3.0]))
     elastic = fem.VolumetricFemEnergy[
         fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
     ](
@@ -98,7 +99,7 @@ def main():
     )
     kappa = 1e3
 
-    potential = energy.WeightedEnergySum(
+    potential = energy.WeightedSumEnergy(
         [(elastic, 1.0), (pulling, 1.0), (contact_energy, kappa)]
     )
     fixed = dof.DofReduction(num_dofs, clamped)

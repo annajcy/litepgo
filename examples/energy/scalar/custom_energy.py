@@ -10,7 +10,7 @@ from litepgo import energy
 
 class Quadratic(energy.FixedPatternEnergy):
     def __init__(self):
-        super().__init__(2, np.eye(2))
+        super().__init__(np.eye(2))
 
     def eval_values(self, x, want_gradient, hessian_kind):
         r = x - [1.0, 2.0]
@@ -23,9 +23,9 @@ class Quadratic(energy.FixedPatternEnergy):
 
 class Coupled(energy.DynamicPatternEnergy):
     def __init__(self):
-        super().__init__(2, np.eye(2))
+        super().__init__(2)
 
-    def pattern_at(self, x):
+    def hessian_pattern_at(self, x):
         return np.ones((2, 2)) if x.sum() > 0 else np.eye(2)
 
     def eval_values(self, x, want_gradient, hessian_kind):
@@ -42,11 +42,9 @@ def main():
     fixed, dynamic = Quadratic(), Coupled()
     x = np.ones(2)
     value, g, H = fixed.eval(x, gradient=True, hessian=energy.HessianKind.Exact)
-    active_value = dynamic.eval_value(x)  # Value-only requests need no pattern update.
-    dynamic.update_pattern(x)
+    active_value = dynamic.eval_value(x)  # Request only the value.
     _, g, H = dynamic.eval(x, gradient=True, hessian=energy.HessianKind.Exact)
     active_nnz = H.nnz
-    dynamic.update_pattern(-x)
     H = dynamic.eval_hessian(-x)
     print(
         f"fixed value={value:g}, active value={active_value:g}, Hessian nnz=2->{active_nnz}->{H.nnz}"

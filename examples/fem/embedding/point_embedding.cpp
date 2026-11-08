@@ -1,9 +1,11 @@
+#include "litepgo/fem/response/interpolated_response.hpp"
+#include <memory>
 // Locate independent points and interpolate physical DOFs for P1, Q1 and Hermite.
 // Build: cmake --build build/release --target point_embedding
 // Run: build/release/examples/fem/embedding/point_embedding
 
 #include "litepgo/dof/surface_kinematics.hpp"
-#include "litepgo/fem/point_displacement_map.hpp"
+#include "litepgo/fem/embedding/point_displacement_map.hpp"
 #include <iostream>
 #include <stdexcept>
 using namespace litepgo;
@@ -13,29 +15,29 @@ template <class B, class G> void run(const char* name) {
     Eigen::MatrixXd X(nodes, 3);
     typename mesh::MeshTopology<nodes>::Cell cell;
     for (int i = 0; i < nodes; ++i) {
-        X.row(i) = G::reference_node(i).cwiseProduct(Eigen::Vector3d(2, 3, 4)).transpose();
+        X.row(i) = G::coefficient_info(i).point.cwiseProduct(Eigen::Vector3d(2, 3, 4)).transpose();
         cell[i] = i;
     }
-    std::vector<fem::InterpolatedField3D<G>> fields{fem::InterpolatedField3D<G>(X)};
+    std::vector<std::shared_ptr<litepgo::energy::Response>> fields{std::make_shared<fem::InterpolatedResponse<G>>(X)};
     Eigen::MatrixXd coordinates(2, 3);
     coordinates << .1, .2, .3, .2, .1, .2;
     Eigen::MatrixXd points(2, 3);
     for (int i = 0; i < 2; ++i)
-        points.row(i) = fields[0].eval_value(coordinates.row(i).transpose()).transpose();
+        points.row(i) = fields[0]->eval_value(coordinates.row(i).transpose()).transpose();
     auto embedding = fem::ElementLocator<G>(fields).locate(points);
     fem::PointEmbedding known{Eigen::VectorXi::Zero(2), coordinates};
     dof::VertexDofMap map(mesh::MeshTopology<nodes>(nodes, {cell}), width);
     const auto W = fem::build_point_displacement_map<B>(embedding, map, fields);
     const auto exact = fem::build_point_displacement_map<B>(known, map, fields);
     const Vec u = Vec::LinSpaced(map.num_dofs(), -.2, .3);
-    fem::BasisDofTransform<B> transform(fields[0]);
-    fem::InterpolatedField3D<B> field(transform.to_coefficients(map.gather(0, u)));
+    fem::BasisDofTransform<B> transform(*fields[0]);
+    auto field = std::make_shared<fem::InterpolatedResponse<B>>(transform.to_coefficients(map.gather(0, u)));
     dof::SurfaceKinematics kinematics(points.reshaped<Eigen::RowMajor>(), W);
     const Vec displacement = kinematics.displacements(u);
     double error = 0;
     for (int i = 0; i < 2; ++i)
-        error =
-            std::max(error, (displacement.segment<3>(3 * i) - field.eval_value(coordinates.row(i).transpose())).norm());
+        error = std::max(error,
+                         (displacement.segment<3>(3 * i) - field->eval_value(coordinates.row(i).transpose())).norm());
     if (error > 1e-10 || !(Vec(W * u)).isApprox(exact * u, 1e-10))
         throw std::runtime_error("Embedding interpolation mismatch");
     std::cout << name << ": points=2, verified=1\n";

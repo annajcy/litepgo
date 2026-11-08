@@ -13,13 +13,6 @@ class QuadraticEnergy final : public FixedPatternEnergy {
     explicit QuadraticEnergy(SpMat A, Vec b = Vec());
 
   private:
-    struct Setup {
-        SpMat A;
-        Vec b;
-    };
-    static Setup checked_setup(SpMat A, Vec b);
-    explicit QuadraticEnergy(Setup setup);
-
     double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const override;
 
     SpMat A_;

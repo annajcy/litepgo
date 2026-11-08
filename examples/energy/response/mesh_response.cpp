@@ -1,14 +1,17 @@
+#include "litepgo/energy/response/affine_response.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
+#include <memory>
 // Fit shared Neo-Hookean parameters from forces at a prescribed deformation, using batches.
 // Build: cmake --build build/release --target mesh_response
 // Run: build/release/examples/energy/response/mesh_response
 
-#include "litepgo/energy/response/mesh_response.hpp"
 #include "litepgo/dof/constant_dof_map.hpp"
 #include "litepgo/dof/vertex_dof_map.hpp"
+#include "litepgo/energy/response/mesh_response.hpp"
+#include "litepgo/fem/assembly/volumetric_fem_energy.hpp"
+#include "litepgo/fem/assembly/volumetric_fem_force_material_response.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
-#include "litepgo/fem/volumetric_fem_energy.hpp"
-#include "litepgo/fem/volumetric_fem_force_material_response.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
 #include <Eigen/LU>
 #include <algorithm>
@@ -18,19 +21,26 @@
 #include <tbb/global_control.h>
 
 using namespace litepgo;
-using XField = fem::InterpolatedField3D<fem::TetP1Basis>;
-using FpField = fem::IdentityField3D;
-using Force = fem::VolumetricFemForceMaterialResponse<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature,
-                                                      XField, FpField>;
+
+using Force = fem::VolumetricFemForceMaterialResponse<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
 
 class ForceResidual final : public energy::FixedPatternResponse {
   public:
     ForceResidual(energy::Response& force, Vec observed)
-        : FixedPatternResponse(force.jacobian_pattern()), force_(force), observed_(std::move(observed)) {}
+        : FixedPatternResponse(Eigen::MatrixXd::Ones(force.num_outputs(), force.num_inputs()).sparseView()),
+          force_(force), observed_(std::move(observed)) {}
 
   private:
-    Vec eval_values(const ConstVecRef& theta, SpMat* J) const override {
-        return force_.eval(theta, J) - observed_;
+    Vec eval_impl(const ConstVecRef& theta, SpMat* J) override {
+        return (J ? ([&] {
+                   auto [value, derivative] = force_.eval_value_and_jacobian(theta);
+                   for (int c = 0; c < J->outerSize(); ++c)
+                       for (SpMat::InnerIterator it(*J, c); it; ++it)
+                           it.valueRef() = derivative.coeff(it.row(), c);
+                   return value;
+               }())
+                  : force_.eval_value(theta)) -
+               observed_;
     }
     energy::Response& force_;
     Vec observed_;
@@ -69,17 +79,21 @@ int main(int argc, char** argv) {
     const Vec positions = nodes.reshaped<Eigen::RowMajor>();
     const Eigen::MatrixXd u = nodes * (F - Eigen::Matrix3d::Identity()).transpose();
     const Vec displacement = u.reshaped<Eigen::RowMajor>();
-    std::vector<XField> geometry;
+    std::vector<std::shared_ptr<litepgo::energy::Response>> geometry;
     for (int e = 0; e < topology.num_cells(); ++e)
-        geometry.emplace_back(outputs.gather(e, positions));
+        geometry.push_back(std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(outputs.gather(e, positions)));
     const Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
-    const std::vector<FpField> plastic(topology.num_cells(), FpField(I.reshaped()));
+    const std::vector<std::shared_ptr<litepgo::energy::Response>> plastic(
+        topology.num_cells(),
+        std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((I.reshaped()).size(), 3), I.reshaped()));
     Force single(inputs, outputs, geometry, displacement, plastic, 1);
     Force batched(inputs, outputs, geometry, displacement, plastic, batch_size);
     const Vec truth = Eigen::Vector2d(2, 3); // lambda, mu
-    using Energy = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature, XField,
-                                            FpField, FpField>;
-    const Energy energy(outputs, geometry, plastic, std::vector<FpField>(topology.num_cells(), FpField(truth)));
+    using Energy = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
+    const Energy energy(outputs, geometry, plastic,
+                        std::vector<std::shared_ptr<litepgo::energy::Response>>(
+                            topology.num_cells(), std::make_shared<litepgo::energy::AffineResponse>(
+                                                      litepgo::SpMat((truth).size(), 3), truth)));
     const Vec observed = energy.eval_gradient(displacement);
     const Eigen::MatrixXd J = single.eval_jacobian(truth);
     if (!single.eval_value(truth).isApprox(observed) || !batched.eval_value(truth).isApprox(observed) ||
@@ -104,13 +118,23 @@ int main(int argc, char** argv) {
             std::vector<double> times;
             for (energy::Response* force :
                  {static_cast<energy::Response*>(&single), static_cast<energy::Response*>(&batched)}) {
-                SpMat jacobian = force->jacobian_pattern();
+                SpMat jacobian = Eigen::MatrixXd::Ones(force->num_outputs(), force->num_inputs()).sparseView();
                 for (int i = 0; i < 3; ++i)
-                    force->eval(truth, need ? &jacobian : nullptr);
+                    (need ? ([&] {
+                        auto result = force->eval_value_and_jacobian(truth);
+                        jacobian = std::move(result.second);
+                        return std::move(result.first);
+                    }())
+                          : force->eval_value(truth));
                 std::vector<double> samples;
                 for (int i = 0; i < repeats; ++i) {
                     const auto start = std::chrono::steady_clock::now();
-                    force->eval(truth, need ? &jacobian : nullptr);
+                    (need ? ([&] {
+                        auto result = force->eval_value_and_jacobian(truth);
+                        jacobian = std::move(result.second);
+                        return std::move(result.first);
+                    }())
+                          : force->eval_value(truth));
                     samples.push_back(
                         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
                 }

@@ -1,6 +1,7 @@
 #pragma once
 
-#include <Eigen/Core>
+#include "litepgo/fem/basis/basis.hpp"
+#include <stdexcept>
 
 namespace litepgo::fem {
 
@@ -9,6 +10,12 @@ namespace litepgo::fem {
 class CubicHermiteBasis {
   public:
     static constexpr int num_basis_functions = 4;
+
+    static CoefficientInfo<1> coefficient_info(int i) {
+        if (i < 0 || i >= num_basis_functions)
+            throw std::out_of_range("CubicHermiteBasis::coefficient_info: index out of range");
+        return {static_cast<double>(i / 2), {i % 2}};
+    }
 
     // Evaluates the polynomials without clamping the parameter to the interval.
     static Eigen::Vector4d eval_N(double t) {

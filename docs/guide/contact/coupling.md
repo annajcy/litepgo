@@ -21,7 +21,7 @@ barrier = contact.IPCContactEnergy(
     surface, contact.IPCContactOptions(dhat=0.01), contact.SpatialHash())
 mapped_contact = energy.AffineMappedEnergy(
     barrier, kinematics.displacement_map, kinematics.rest_positions.ravel())
-potential = energy.WeightedEnergySum([
+potential = energy.WeightedSumEnergy([
     (elastic, 1.0), (pulling, 1.0), (mapped_contact, 1e3)])
 ```
 
@@ -57,4 +57,4 @@ penalty permits penetration and has no collision step bound.
 
 The [plate compression example](../../examples/contact/tet-p1-plate-compression.md)
 combines elasticity, IPC self-contact, and both plate penalties in a
-`WeightedEnergySum`.
+`WeightedSumEnergy`.

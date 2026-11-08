@@ -37,7 +37,7 @@ Use `extract_surface_with_vertices` and `build_vertex_displacement_map` to retai
 exact volume IDs. `SurfaceKinematics` holds $X_s,W$.
 `IPCContactEnergy(surface, options, SpatialHash())` has unit stiffness;
 `AffineMappedEnergy` converts it to volume displacement coordinates, and
-`WeightedEnergySum` applies the $10^3$ weight. `DofReduction` fixes the bottom.
+`WeightedSumEnergy` applies the $10^3$ weight. `DofReduction` fixes the bottom.
 Newton manages contact's changing Hessian pattern and feasible-step bounds.
 
 **Expected result.** A converged solve with a small free-gradient residual,

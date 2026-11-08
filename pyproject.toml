@@ -1,7 +1,7 @@
 [project]
 name = "litepgo"
 version = "0.0.1"
-description = "Minimal libpgo"
+description = "A simplified version of libpgo"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = ["numpy>=1.26", "scipy>=1.11", "torch>=2.5"]
@@ -10,9 +10,17 @@ dependencies = ["numpy>=1.26", "scipy>=1.11", "torch>=2.5"]
 dev = ["pytest>=8", "clang-format==20.1.8"]
 plot = ["matplotlib>=3.8"]
 docs = [
+    {include-group = "tutorials"},
     "mlc-doxygen-bin==1.18.0",
     "nodejs-wheel==24.19.0",
     "pdoc>=15,<16",
+]
+tutorials = [
+    "ipykernel>=7.4.0",
+    "matplotlib>=3.11.2",
+    "nbclient>=0.11.0",
+    "nbconvert>=7.17.2",
+    "nbformat>=5.11.1",
 ]
 
 [tool.uv]

@@ -1,12 +1,13 @@
+#include <memory>
 // Fit two shared in-plane log plastic stretches from equilibrium displacement and reaction.
 // Geometry, material theta=(2,3), and boundary displacements are fixed.
 // Run: build/release/examples/fem/fitting/shell_equilibrium_fp_fit
 #include "litepgo/energy/response/composed_response.hpp"
 #include "litepgo/energy/response/elementwise_response.hpp"
+#include "litepgo/fem/assembly/shell_fem_energy.hpp"
+#include "litepgo/fem/assembly/shell_fem_force_fp_response.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
-#include "litepgo/fem/parameter/log_diagonal_fp_response.hpp"
-#include "litepgo/fem/shell_fem_energy.hpp"
-#include "litepgo/fem/shell_fem_force_fp_response.hpp"
+#include "litepgo/fem/response/log_diagonal_fp_response.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
 #include "litepgo/solver/static_equilibrium_response.hpp"
@@ -109,8 +110,13 @@ Observation measure(const Problem& problem, const Factories& factories, const Ve
     options.max_iterations = 100;
     solver::StaticEquilibriumResponse equilibrium(2, problem.fixed, load * problem.prescribed, options,
                                                   factories.make_energy, factories.make_response);
-    SpMat state_jacobian = equilibrium.jacobian_pattern();
-    const Vec displacement = equilibrium.eval(p, need_jacobian ? &state_jacobian : nullptr);
+    SpMat state_jacobian = SpMat();
+    const Vec displacement = (need_jacobian ? ([&] {
+        auto result = equilibrium.eval_value_and_jacobian(p);
+        state_jacobian = std::move(result.second);
+        return std::move(result.first);
+    }())
+                                            : equilibrium.eval_value(p));
 
     // 2. Compute force and its total derivative along the equilibrium branch.
     const auto elastic = factories.make_energy(p);
@@ -149,7 +155,7 @@ class Residual final : public energy::FixedPatternResponse {
           measurement_(std::move(measurement)), target_(std::move(target)), scales_(std::move(scales)) {}
 
   private:
-    Vec eval_values(const ConstVecRef& p, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& p, SpMat* J) override {
         const auto observation = measurement_(p, J != nullptr);
         if (J)
             for (int c = 0; c < num_inputs(); ++c)

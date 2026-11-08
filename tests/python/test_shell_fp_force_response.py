@@ -1,3 +1,4 @@
+from litepgo.energy import AffineResponse
 import gc
 
 import numpy as np
@@ -6,7 +7,6 @@ import pytest
 from litepgo import dof, energy, fem, mesh
 from test_shell_material_force_response import problem
 
-Local = fem.ShellFpForceLocalResponse2D[fem.KoiterStVK]
 Force = fem.ShellFemForceFpResponse[fem.KoiterStVK]
 P = np.array([[1.12, .07, -.02], [.03, .94, .06], [.01, -.03, 1.08]])
 
@@ -19,9 +19,13 @@ def explicit_force(data, plastic, theta):
         Y = reference.X_local @ p.reshape(3, 3, order="F").T
         natural = fem.TriangleMidEdgeRestData(Y, reference.opposite)
         # Keep x = X+u, and integrate with ORIGINAL area, not the transformed area.
-        natural_u = reference.X_local + mapping.gather(e, u) - Y
-        local = fem.ShellMaterialLocalEnergy2D[fem.KoiterStVK](natural, natural_u, thickness[e], theta[e])
-        result[np.array(mapping.dof_indices(e))] += .5*reference.sqrt_det_a_bar*local.eval_gradient(np.zeros(2))
+        current, J, _ = fem.eval_triangle_mid_edge_kinematics(
+            reference.X_local + mapping.gather(e, u), reference.opposite, gradient=True
+        )
+        inputs = (current.a, current.b, natural.a_bar, natural.b_bar, thickness[e], theta[e])
+        result[np.array(mapping.dof_indices(e))] += (
+            .5 * reference.sqrt_det_a_bar * J.T @ fem.KoiterStVK.eval_dW_dab(*inputs)
+        )
     return result
 
 
@@ -35,9 +39,8 @@ def test_shared_and_element_fp_jacobians_and_original_area(batch_size):
     packed = P.ravel(order="F")
     per = np.concatenate([(1+.02*e)*packed for e in range(4)])
     assert isinstance(shared, energy.MeshResponse) and isinstance(shared, fem.ShellFemForceFpResponse)
-    assert shared.num_inputs == 9 and shared.num_outputs == 18 and shared.has_fixed_pattern
-    value, J = shared.eval(packed, need_jacobian=True)
-    per_value, E = element.eval(per, need_jacobian=True)
+    value, J = shared.eval_value_and_jacobian(packed)
+    per_value, E = element.eval_value_and_jacobian(per)
     np.testing.assert_allclose(value, explicit_force(data, packed, theta), rtol=1e-11, atol=1e-12)
     np.testing.assert_allclose(per_value, explicit_force(data, per, theta), rtol=1e-11, atol=1e-12)
     for response, point, derivative in [(shared, packed, J), (element, per, E)]:
@@ -52,7 +55,6 @@ def test_shared_and_element_fp_jacobians_and_original_area(batch_size):
     identity = np.eye(3).ravel(order="F")
     original = fem.ShellFemEnergy[fem.KoiterStVK](mapping, rest, thickness, theta)
     np.testing.assert_allclose(shared.eval_value(identity), original.eval_gradient(u), atol=1e-12)
-    assert not shared.update_pattern(packed)
     with pytest.raises(ValueError):
         shared.eval_value(np.zeros(9))
     np.testing.assert_array_equal(shared.eval_jacobian(packed).indices, J.indices)
@@ -64,31 +66,6 @@ def test_shared_and_element_fp_jacobians_and_original_area(batch_size):
     np.testing.assert_allclose(shared.eval_value(packed), value, atol=1e-12)
 
 
-def test_local_field_chain_rule_and_lifetime():
-    _, mapping, rest, u, thickness = problem()
-    xi = np.array([.2, .3])
-    coefficients = np.array([(1+.02*i)*P.ravel(order="F") for i in range(3)])
-    Field = fem.InterpolatedField2D[fem.TriangleP1Basis]
-    field = Field(coefficients)
-    theta = np.array([2., 3.])
-    local_u = mapping.gather(0, u)
-    local = Local(rest[0], local_u, thickness[0], field, theta)
-    assert isinstance(local, fem.LocalResponse2D) and local.num_inputs == 27
-    value, J = local.eval_value(xi), local.eval_jacobian(xi)
-    for j in range(27):
-        plus, minus = coefficients.copy(), coefficients.copy()
-        plus.flat[j] += 1e-6
-        minus.flat[j] -= 1e-6
-        fp = Local(rest[0], local_u, thickness[0], Field(plus), theta).eval_value(xi)
-        fm = Local(rest[0], local_u, thickness[0], Field(minus), theta).eval_value(xi)
-        np.testing.assert_allclose(J[:, j], (fp-fm)/2e-6, atol=2e-7, rtol=1e-6)
-    weighted, weighted_J = local.accumulate(xi, .4, jacobian=True)
-    np.testing.assert_allclose(weighted, .4*value, atol=1e-12)
-    np.testing.assert_allclose(weighted_J, .4*J, atol=1e-12)
-    del field, rest, local_u, mapping
-    theta[:] = 100
-    gc.collect()
-    np.testing.assert_allclose(local.eval_value(xi), value, atol=1e-12)
 
 
 def test_natural_form_mixed_derivative_binding():
@@ -127,11 +104,9 @@ def test_invalid_inputs_and_empty_mesh():
     for packed in [np.zeros(9), np.full(9, np.nan), np.diag([-1., 1., 1.]).ravel(), np.ones(8)]:
         with pytest.raises(ValueError):
             response.eval_value(packed)
-    with pytest.raises(ValueError):
-        Local(rest[0], mapping.gather(0, u), thickness[0], fem.IdentityField2D(np.ones(8)), theta[0])
     empty = mesh.TriangleTopology(0, np.empty((0, 3), dtype=np.int32))
     zero = Force(dof.ConstantDofMap(empty, 9), dof.StencilDofMap(0, [], 3), [], np.empty(0), [], [])
-    value, J = zero.eval(np.eye(3).ravel(order="F"), need_jacobian=True)
+    value, J = zero.eval_value_and_jacobian(np.eye(3).ravel(order="F"))
     assert value.size == 0 and J.shape == (0, 9)
 
 

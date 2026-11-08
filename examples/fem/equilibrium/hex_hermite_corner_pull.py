@@ -4,6 +4,7 @@ Run from the repository root after building litepgo:
     uv run --no-sync python examples/fem/equilibrium/hex_hermite_corner_pull.py
 """
 
+from litepgo.energy import AffineResponse
 import argparse
 import sys
 from pathlib import Path
@@ -40,13 +41,13 @@ def main():
         raise RuntimeError("Example requires a nonempty mesh")
     rest_position_map = dof.VertexDofMap(topology, 3)
     displacement_map = dof.VertexDofMap(topology, 24)
-    XField = fem.InterpolatedField3D[fem.HexQ1Basis]
+    XField = fem.InterpolatedResponse[fem.HexQ1Basis]
     rest_position_fields = [
         XField(rest_position_map.gather(e, rest_positions))
         for e in range(topology.num_cells)
     ]
-    Fp_field = fem.IdentityField3D(np.eye(3).ravel(order="F"))
-    theta_field = fem.IdentityField3D(np.array([2.0, 3.0]))
+    Fp_field = AffineResponse(np.zeros((9, 3)), np.eye(3).ravel(order="F"))
+    theta_field = AffineResponse(np.zeros((2, 3)), np.array([2.0, 3.0]))
     elastic = fem.VolumetricFemEnergy[
         fem.NeoHookean, fem.HexHermiteBasis, fem.GaussLegendre3D[4]
     ](
@@ -80,7 +81,7 @@ def main():
 
     # Static equilibrium minimizes Pi(u) = E_elastic(u) + E_pulling(u); the springs
     # remove all rigid motions, so no DOF is fixed.
-    potential = energy.WeightedEnergySum([(elastic, 1.0), (pulling, 1.0)])
+    potential = energy.WeightedSumEnergy([(elastic, 1.0), (pulling, 1.0)])
     unconstrained = dof.DofReduction(elastic.num_dofs, [])
     initial = np.zeros(elastic.num_dofs)
     options = solver.NewtonOptions()

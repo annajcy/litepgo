@@ -342,8 +342,8 @@ struct IPCContactEnergy::Impl {
 IPCContactEnergy::IPCContactEnergy(const mesh::TriangleMesh& surface, IPCContactOptions options,
                                    std::shared_ptr<const BroadPhase> broad_phase,
                                    std::optional<ContactPairWeights> pair_weights)
-    : DynamicPatternEnergy(checked_size(surface), SpMat(surface.positions.size(), surface.positions.size())),
-      rest_positions_(surface.positions), options_(checked_options(options)),
+    : DynamicPatternEnergy(checked_size(surface)), rest_positions_(surface.positions),
+      options_(checked_options(options)),
       impl_(std::make_unique<const Impl>(surface, options_, std::move(broad_phase), std::move(pair_weights))) {}
 IPCContactEnergy::~IPCContactEnergy() = default;
 int IPCContactEnergy::num_active_pairs(const ConstVecRef& x) const {
@@ -381,7 +381,7 @@ ContactSnapshot IPCContactEnergy::contact_snapshot(const ConstVecRef& x) const {
     }
     return result;
 }
-SpMat IPCContactEnergy::pattern_at(const ConstVecRef& x) const {
+SpMat IPCContactEnergy::hessian_pattern_at(const ConstVecRef& x) const {
     std::vector<Triplet> entries;
     for (const auto& p : impl_->active(x))
         for (int a = 0; a < p.count(); ++a)
@@ -426,7 +426,7 @@ double IPCContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat*
         value += local_value;
     if (gradient || hessian) {
         if (hessian && hessian->nonZeros() == 0 && !pairs.empty())
-            throw std::logic_error("IPCContactEnergy: active pair outside Hessian pattern; call update_pattern(x)");
+            throw std::logic_error("IPCContactEnergy: active pair outside Hessian pattern");
         struct Contribution {
             std::size_t pair;
             int vertex;
@@ -466,7 +466,7 @@ double IPCContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat*
                                 const int* first = std::lower_bound(begin, end, row);
                                 if (end - first < 3 || first[0] != row || first[1] != row + 1 || first[2] != row + 2)
                                     throw std::logic_error("IPCContactEnergy: active pair outside Hessian pattern; "
-                                                           "call update_pattern(x)");
+                                                           "invalid prepared structure");
                                 for (int r = 0; r < 3; ++r)
                                     hessian->valuePtr()[first - hessian->innerIndexPtr() + r] +=
                                         hessians[index](3 * a + r, 3 * b + c);

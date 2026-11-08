@@ -4,7 +4,7 @@ import scipy.sparse as sp
 
 from litepgo.energy import FixedPatternResponse
 from litepgo.dof import DofReduction
-from litepgo.energy import AffineMappedEnergy, HessianKind, QuadraticEnergy, WeightedEnergySum
+from litepgo.energy import AffineMappedEnergy, HessianKind, QuadraticEnergy, WeightedSumEnergy
 from litepgo.linalg.sparse_solver import AutoIndefiniteSparseSolver, EigenLDLT
 from litepgo.solver import NewtonOptions, NewtonStatus, newton_solve
 
@@ -16,7 +16,7 @@ class TestResponse(FixedPatternResponse):
         super().__init__(pattern)
         self.evaluator = evaluator
 
-    def eval_values(self, x, need_jacobian):
+    def eval_impl(self, x, need_jacobian):
         return self.evaluator(x, need_jacobian)
 
 
@@ -51,7 +51,7 @@ def test_fixed_dofs_keep_their_initial_values():
 def test_solves_through_composites():
     first, second = QuadraticEnergy(spd(4), np.ones(4)), QuadraticEnergy(sp.identity(4, format="csc"))
     T = sp.csc_matrix(np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 0.0], [0.0, -1.0]]))
-    energy = AffineMappedEnergy(WeightedEnergySum([(first, 1.0), (second, 0.5)]), T)
+    energy = AffineMappedEnergy(WeightedSumEnergy([(first, 1.0), (second, 0.5)]), T)
     result = newton_solve(energy, free(2), np.zeros(2), NewtonOptions(gradient_tolerance=1e-12), EigenLDLT())
     H = T.T @ (spd(4) + 0.5 * sp.identity(4)) @ T
     np.testing.assert_allclose(result.x, np.linalg.solve(H.toarray(), -(T.T @ np.ones(4))), atol=1e-12)
@@ -158,8 +158,6 @@ def test_response_pattern_and_object_protocol():
     r = TestResponse(sp.eye(2, format="csc"),
                              lambda x, need: (x*x, np.diag(2*x)) if need else x*x)
     assert isinstance(r, Response)
-    assert r.num_inputs == r.num_outputs == 2 and r.has_fixed_pattern
-    assert not r.update_pattern(np.zeros(2))
     np.testing.assert_array_equal(r.eval_value(np.array([2., 3.])), [4., 9.])
     J = r.eval_jacobian(np.zeros(2))
     assert J.nnz == 2  # Numerical zeros do not remove structural slots.
@@ -174,7 +172,7 @@ def test_response_pattern_and_object_protocol():
 
 def test_fixed_response_requires_override():
     base = FixedPatternResponse(np.ones((1, 1)))
-    with pytest.raises(RuntimeError, match="eval_values"):
+    with pytest.raises(RuntimeError, match="eval_impl"):
         base.eval_value(np.ones(1))
     with pytest.raises(TypeError):
         FixedPatternResponse(np.ones((1, 1)), lambda x, need: x)

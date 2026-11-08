@@ -11,7 +11,7 @@ equilibrium. The lateral DOFs on the outer faces are fixed to suppress rigid
 motion. Their z coordinates remain free, so the plates load the stack through
 their penalty forces.
 
-The solver minimizes a `WeightedEnergySum` of the Neo-Hookean elastic energy,
+The solver minimizes a `WeightedSumEnergy` of the Neo-Hookean elastic energy,
 native IPC self-contact, and two `PlanePenaltyEnergy` terms. The Lamé
 parameters are $(\lambda,\mu)=(0.5,0.75)$. The three surface
 terms share the affine map from volume displacements to current boundary

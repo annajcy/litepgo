@@ -10,7 +10,7 @@ class FormulaForce final : public energy::FixedPatternResponse {
           factory_(std::move(factory)), partial_(std::move(partial)) {}
 
   private:
-    Vec eval_values(const ConstVecRef& p, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& p, SpMat* J) override {
         const Vec value = factory_(p)->eval_gradient(u_);
         if (J) {
             const SpMat source = partial_(p, u_);

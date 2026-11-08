@@ -4,6 +4,7 @@ Run from the repository root after building litepgo:
     uv run --no-sync python examples/energy/response/mesh_response.py
 """
 
+from litepgo.energy import AffineResponse
 import argparse
 from statistics import median
 from time import perf_counter
@@ -29,12 +30,12 @@ def problem(copies=1):
     topology = mesh.TetTopology(5 * copies, cells)
     nodes = np.tile(X, (copies, 1))
     mapping = dof.VertexDofMap(topology, 3)
-    Field = fem.InterpolatedField3D[fem.TetP1Basis]
+    Field = fem.InterpolatedResponse[fem.TetP1Basis]
     geometry = [
         Field(mapping.gather(e, nodes.ravel())) for e in range(topology.num_cells)
     ]
     displacement = (nodes @ (F - np.eye(3)).T).ravel()
-    plastic = [fem.IdentityField3D(np.eye(3).ravel())] * topology.num_cells
+    plastic = [AffineResponse(np.zeros((9, 3)), np.eye(3).ravel())] * topology.num_cells
     return topology, mapping, geometry, displacement, plastic
 
 
@@ -53,11 +54,11 @@ def make_responses(topology, mapping, geometry, displacement, plastic, batch_siz
 
 class ForceResidual(energy.FixedPatternResponse):
     def __init__(self, force, observed):
-        super().__init__(force.jacobian_pattern)
+        super().__init__(np.ones((force.num_outputs, force.num_inputs)))
         self.force, self.observed = force, observed
 
-    def eval_values(self, theta, need_jacobian):
-        value, J = self.force.eval(theta, need_jacobian=need_jacobian)
+    def eval_impl(self, theta, need_jacobian):
+        value, J = (self.force.eval_value_and_jacobian(theta) if need_jacobian else (self.force.eval_value(theta), None))
         residual = value - self.observed
         return (residual, J) if need_jacobian else residual
 
@@ -72,12 +73,12 @@ def run(copies=1, batch_size=256, repeats=0):
         fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
     ]
     energy = Energy(
-        mapping, geometry, plastic, [fem.IdentityField3D(truth)] * topology.num_cells
+        mapping, geometry, plastic, [AffineResponse(np.zeros((2, 3)), truth)] * topology.num_cells
     )
     expected = energy.eval_gradient(displacement)
-    single_value, J = single.eval(truth, need_jacobian=True)
+    single_value, J = single.eval_value_and_jacobian(truth)
     np.testing.assert_allclose(single_value, expected, atol=1e-13)
-    value, batch_J = batched.eval(truth, need_jacobian=True)
+    value, batch_J = batched.eval_value_and_jacobian(truth)
     np.testing.assert_allclose(value, expected, atol=1e-14)
     np.testing.assert_array_equal(batch_J.indptr, J.indptr)
     np.testing.assert_array_equal(batch_J.indices, J.indices)
@@ -95,11 +96,11 @@ def run(copies=1, batch_size=256, repeats=0):
             times = []
             for obj in (single, batched):
                 for _ in range(3):
-                    obj.eval(truth, need_jacobian=need)
+                    (obj.eval_value_and_jacobian(truth) if need else (obj.eval_value(truth), None))
                 samples = []
                 for _ in range(repeats):
                     start = perf_counter()
-                    obj.eval(truth, need_jacobian=need)
+                    (obj.eval_value_and_jacobian(truth) if need else (obj.eval_value(truth), None))
                     samples.append(perf_counter() - start)
                 times.append(1000 * median(samples))
             print(

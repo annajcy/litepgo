@@ -1,6 +1,5 @@
 #include "litepgo/fem/quadrature/1d/gauss_legendre_1d.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
-#include "litepgo/fem/quadrature/3d/tensor_product_quadrature_3d.hpp"
 #include "litepgo/fem/quadrature/quadrature.hpp"
 
 namespace litepgo::fem::test {
@@ -65,13 +64,9 @@ struct TwoDimensionalRule : OnePointRule {
     static const Eigen::Matrix<double, 1, 2>& points();
 };
 
-template <class Q>
-concept CanFormTensorProduct = requires { typename litepgo::fem::TensorProductQuadrature3D<Q>; };
-
 static_assert(litepgo::fem::Quadrature1D<OnePointRule>);
 static_assert(litepgo::fem::Quadrature1D<litepgo::fem::GaussLegendre1D<2>>);
 static_assert(litepgo::fem::Quadrature3D<litepgo::fem::GaussLegendre3D<2>>);
-static_assert(litepgo::fem::Quadrature3D<litepgo::fem::TensorProductQuadrature3D<OnePointRule>>);
 static_assert(litepgo::fem::Quadrature<TwoDimensionalRule, 2>);
 static_assert(!litepgo::fem::Quadrature1D<MissingCount>);
 static_assert(!litepgo::fem::Quadrature1D<MissingPoints>);
@@ -91,11 +86,6 @@ static_assert(!litepgo::fem::Quadrature1D<litepgo::fem::GaussLegendre3D<2>>);
 static_assert(!litepgo::fem::Quadrature3D<litepgo::fem::GaussLegendre1D<2>>);
 static_assert(!litepgo::fem::Quadrature<OnePointRule, 0>);
 static_assert(!litepgo::fem::Quadrature<OnePointRule, -1>);
-static_assert(CanFormTensorProduct<OnePointRule>);
-static_assert(CanFormTensorProduct<litepgo::fem::GaussLegendre1D<2>>);
-static_assert(!CanFormTensorProduct<WrongScalar>);
-static_assert(!CanFormTensorProduct<MissingWeights>);
-static_assert(!CanFormTensorProduct<litepgo::fem::GaussLegendre3D<2>>);
 
 } // namespace
 

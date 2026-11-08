@@ -60,3 +60,36 @@ jobs:
       - name: Verify the Windows PARDISO backend is enabled
         if: runner.os == 'Windows'
         run: uv run --no-sync python -c "from litepgo.linalg.sparse_solver import AutoSparseSolver, PardisoLLT; assert AutoSparseSolver is PardisoLLT"
+
+  cpp-tutorial:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - uses: mamba-org/setup-micromamba@v3
+        with:
+          init-shell: none
+      - name: Install Ninja (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+      - name: Install, build, and register the C++20 kernel
+        run: uv run scripts/setup_cpp_tutorial.py
+      - name: Execute the C++ Energy lessons from the registered kernel
+        shell: bash
+        run: |
+          for notebook in tutorials/energy/*_cpp.ipynb; do
+            uv run --locked --only-group tutorials jupyter nbconvert --to notebook --execute \
+              --ExecutePreprocessor.timeout=120 --output-dir=build/energy-tutorials "$notebook"
+          done

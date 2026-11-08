@@ -1,17 +1,18 @@
+#include <memory>
 // Fit two shared positive in-plane Fp stretches at a prescribed shell pose.
 // Build: cmake --build build/release --target shell_fixed_pose_fp_fit
 // Run: build/release/examples/fem/fitting/shell_fixed_pose_fp_fit
 
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
+#include "litepgo/fem/assembly/shell_fem_energy.hpp"
+#include "litepgo/fem/assembly/shell_fem_force_fp_response.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
-#include "litepgo/fem/material/shell/shell_material_local_energy.hpp"
-#include "litepgo/fem/shell_fem_force_fp_response.hpp"
 #include "litepgo/mesh/io/obj.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
 
 #include "litepgo/energy/response/composed_response.hpp"
-#include "litepgo/fem/parameter/log_diagonal_fp_response.hpp"
+#include "litepgo/fem/response/log_diagonal_fp_response.hpp"
 #include <cmath>
 #include <iomanip>
 #include <iostream>
@@ -24,12 +25,22 @@ using namespace litepgo;
 class Residual final : public energy::FixedPatternResponse {
   public:
     Residual(std::shared_ptr<energy::Response> force, Vec target, double scale)
-        : FixedPatternResponse(force->jacobian_pattern()), force_(std::move(force)), target_(std::move(target)),
-          scale_(scale) {}
+        : FixedPatternResponse(Eigen::MatrixXd::Ones(force->num_outputs(), force->num_inputs()).sparseView()),
+          force_(std::move(force)), target_(std::move(target)), scale_(scale) {}
 
   private:
-    Vec eval_values(const ConstVecRef& p, SpMat* J) const override {
-        const Vec value = force_->eval(p, J);
+    Vec eval_impl(const ConstVecRef& p, SpMat* J) override {
+        Vec value;
+        if (J) {
+            auto evaluated = force_->eval_value_and_jacobian(p);
+            value = std::move(evaluated.first);
+            const SpMat& derivative = evaluated.second;
+            for (int c = 0; c < J->outerSize(); ++c)
+                for (SpMat::InnerIterator it(*J, c); it; ++it)
+                    it.valueRef() = derivative.coeff(it.row(), c);
+        } else {
+            value = force_->eval_value(p);
+        }
         if (J)
             *J /= scale_;
         return (value - target_) / scale_;
@@ -71,24 +82,19 @@ Problem make_problem() {
     const Eigen::Vector2d truth(1.06, .95), initial = Eigen::Vector2d::Ones();
     const Eigen::Matrix3d true_Fp = Eigen::Vector3d(truth[0], truth[1], 1).asDiagonal();
     const std::vector<Vec> theta(map.num_elements(), Eigen::Vector2d(2, 3));
-    // Independent energy gradients: retain x=X+u and ORIGINAL integration areas.
-    Vec target = Vec::Zero(map.num_dofs());
-    for (int e = 0; e < map.num_elements(); ++e) {
-        const Eigen::MatrixXd Y = rest[e].X_local * true_Fp.transpose();
-        const fem::TriangleMidEdgeRestData natural(Y, rest[e].opposite);
-        const Eigen::MatrixXd natural_u = rest[e].X_local + map.gather(e, u) - Y;
-        const fem::ShellMaterialLocalEnergy2D<fem::KoiterStVK> local(natural, natural_u, thickness[e], theta[e]);
-        const Vec value = .5 * rest[e].sqrt_det_a_bar * local.eval_gradient(Eigen::Vector2d::Zero());
-        const auto indices = map.dof_indices(e);
-        for (Eigen::Index i = 0; i < value.size(); ++i)
-            target[indices[i]] += value[i];
-    }
+    // The energy fixes Fp, while the force response below makes it the active input.
+    fem::ShellFemEnergy<fem::KoiterStVK> target_energy(map, rest, thickness, theta,
+                                                       std::vector<Eigen::Matrix3d>(map.num_elements(), true_Fp));
+    const Vec target = target_energy.eval_gradient(u);
     const double scale = target.norm();
     if (!(scale > 0) || !std::isfinite(scale))
         throw std::runtime_error("Calibration requires finite nonzero target forces");
     auto force = std::make_shared<fem::ShellFemForceFpResponse<fem::KoiterStVK>>(dof::ConstantDofMap(topology, 9), map,
                                                                                  rest, u, thickness, theta);
 
+    // Fixed pose and original face areas are cached; only the parameter vector varies.
+    if (!force->eval_value(true_Fp.reshaped()).isApprox(target, 1e-11))
+        throw std::runtime_error("Fixed-pose response differs from the energy gradient");
     auto parameterized =
         std::make_shared<energy::ComposedResponse>(force, std::make_shared<fem::LogDiagonalFpResponse>(2));
     return {std::make_shared<Residual>(parameterized, target, scale), truth, initial, scale};

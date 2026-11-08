@@ -23,7 +23,6 @@ def test_shared_scatter_and_solver():
     r = BatchResponseFixture(dof.ConstantDofMap(t, 2), dof.VertexDofMap(t, 1), local)
     del t, local
     gc.collect()
-    assert r.num_inputs == 2 and r.num_outputs == 5 and r.has_fixed_pattern
     np.testing.assert_allclose(r.eval_value(np.zeros(2)), expected @ [-2., -3.])
     assert not saved[-1][2]
     np.testing.assert_array_equal(r.eval_jacobian(np.zeros(2)).toarray(), expected)
@@ -43,7 +42,7 @@ def test_matrix_gather_and_zero_values_preserve_pattern():
         J[:, 3] = 2*x[:, 3]
         return (y, J) if need else y
     r = BatchResponseFixture(dof.VertexDofMap(t, 2), dof.ElementDofMap(t, 1), local)
-    value, J = r.eval(np.arange(1., 11.), need_jacobian=True)
+    value, J = r.eval_value_and_jacobian(np.arange(1., 11.))
     np.testing.assert_array_equal(value, [16., 36.])
     assert J[0, 3] == 8 and J[1, 5] == 12 and J.nnz == 16
     J = r.eval_jacobian(np.zeros(10))

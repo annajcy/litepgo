@@ -6,7 +6,6 @@ import pytest
 from litepgo import dof, energy, fem, mesh, solver
 
 Force = fem.ShellFemForceMaterialResponse[fem.KoiterStVK]
-Local = fem.ShellMaterialForceLocalResponse2D[fem.KoiterStVK]
 Energy = fem.ShellFemEnergy[fem.KoiterStVK]
 
 
@@ -38,14 +37,12 @@ def test_shared_and_per_face_parameters_match_energy(batch_size):
     per = np.array([2., 3., 4., 5., -.5, 2., 8., 9.])
     assert isinstance(shared, energy.MeshResponse)
     assert isinstance(shared, fem.ShellFemForceMaterialResponse)
-    assert shared.num_inputs == 2 and shared.num_outputs == 18 and shared.has_fixed_pattern
-    value, J = shared.eval(theta, need_jacobian=True)
-    per_value, E = element.eval(per, need_jacobian=True)
+    value, J = shared.eval_value_and_jacobian(theta)
+    per_value, E = element.eval_value_and_jacobian(per)
     np.testing.assert_allclose(value, observed(data, theta), atol=1e-13, rtol=1e-12)
     np.testing.assert_allclose(per_value, observed(data, per), atol=1e-13, rtol=1e-12)
     np.testing.assert_allclose(J.toarray(), sum(E[:, 2*e:2*e+2].toarray() for e in range(4)), atol=1e-13)
-    assert shared.eval(theta)[1] is None
-    assert not shared.update_pattern(theta)
+    np.testing.assert_allclose(shared.eval_value(theta), value)
     with pytest.raises(ValueError):
         shared.eval_value(np.array([1., 0.]))
     np.testing.assert_array_equal(shared.eval_jacobian(theta).indices, J.indices)
@@ -57,33 +54,6 @@ def test_shared_and_per_face_parameters_match_energy(batch_size):
     np.testing.assert_allclose(shared.eval_value(theta), value, atol=1e-13)
 
 
-def test_local_field_coefficients_weight_and_lifetime():
-    _, mapping, rest, u, thickness = problem()
-    xi = np.array([.2, .3])
-    coefficients = np.array([[2., 3.], [4., 5.], [1., 2.]])
-    Field = fem.InterpolatedField2D[fem.TriangleP1Basis]
-    field = Field(coefficients)
-    local_u = mapping.gather(0, u)
-    local = Local(rest[0], local_u, thickness[0], field)
-    assert isinstance(local, fem.LocalResponse2D)
-    assert local.num_inputs == 6 and local.num_outputs == 18
-    theta = field.eval_value(xi)
-    expected = fem.ShellMaterialLocalEnergy2D[fem.KoiterStVK](rest[0], local_u, thickness[0], theta).eval_gradient(xi)
-    J = local.eval_jacobian(xi)
-    np.testing.assert_allclose(local.eval_value(xi), expected, atol=1e-13)
-    for j in range(6):
-        plus, minus = coefficients.copy(), coefficients.copy()
-        plus.flat[j] += 1e-6
-        minus.flat[j] -= 1e-6
-        fp = Local(rest[0], local_u, thickness[0], Field(plus)).eval_value(xi)
-        fm = Local(rest[0], local_u, thickness[0], Field(minus)).eval_value(xi)
-        np.testing.assert_allclose(J[:, j], (fp-fm)/2e-6, atol=1e-8)
-    value, weighted_J = local.accumulate(xi, .4, jacobian=True)
-    np.testing.assert_allclose(value, .4*expected, atol=1e-13)
-    np.testing.assert_allclose(weighted_J, .4*J, atol=1e-13)
-    del field, rest, mapping, local_u
-    gc.collect()
-    np.testing.assert_allclose(local.eval_value(xi), expected, atol=1e-13)
 
 
 def test_material_mixed_derivative_and_parameter_recovery():
@@ -108,10 +78,10 @@ def test_material_mixed_derivative_and_parameter_recovery():
 
     class Residual(energy.FixedPatternResponse):
         def __init__(self):
-            super().__init__(response.jacobian_pattern)
+            super().__init__(np.ones((response.num_outputs, response.num_inputs)))
 
-        def eval_values(self, x, need):
-            value, jacobian = response.eval(x, need_jacobian=need)
+        def eval_impl(self, x, need):
+            value, jacobian = (response.eval_value_and_jacobian(x) if need else (response.eval_value(x), None))
             return (value-target, jacobian) if need else value-target
 
     result = solver.gauss_newton_solve(Residual(), np.array([.7, 1.2]),
@@ -134,5 +104,5 @@ def test_invalid_fixed_inputs_and_empty_mesh():
         Force(parameters, mapping, rest, u, thickness, 0)
     empty = mesh.TriangleTopology(0, np.empty((0, 3), dtype=np.int32))
     zero = Force(dof.ConstantDofMap(empty, 2), dof.StencilDofMap(0, [], 3), [], np.empty(0), [])
-    value, J = zero.eval(np.array([2., 3.]), need_jacobian=True)
+    value, J = zero.eval_value_and_jacobian(np.array([2., 3.]))
     assert value.size == 0 and J.shape == (0, 2)

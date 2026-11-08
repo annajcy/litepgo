@@ -3,9 +3,9 @@
 // Run: build/release/examples/fem/equilibrium/shell_saddle_pull
 
 #include "litepgo/energy/scalar/vertex_pulling_energy.hpp"
-#include "litepgo/energy/scalar/weighted_energy_sum.hpp"
+#include "litepgo/energy/scalar/weighted_sum_energy.hpp"
+#include "litepgo/fem/assembly/shell_fem_energy.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
-#include "litepgo/fem/shell_fem_energy.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include "litepgo/mesh/io/obj.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
 
     // Static equilibrium minimizes Pi(u) = E_elastic(u) + E_pulling(u); the springs
     // remove all rigid motions, so no DOF is fixed.
-    energy::WeightedEnergySum potential({{elastic, 1}, {pulling, 1}});
+    energy::WeightedSumEnergy potential({{elastic, 1}, {pulling, 1}});
     const dof::DofReduction unconstrained(elastic->num_dofs(), {});
     const Vec initial = Vec::Zero(elastic->num_dofs());
     solver::NewtonOptions options;

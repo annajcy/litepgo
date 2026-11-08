@@ -1,6 +1,7 @@
 #include "litepgo/solver/newton.hpp"
 
 #include "litepgo/dof/reduced_matrix.hpp"
+#include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -32,17 +33,6 @@ void check_arguments(const energy::Energy& energy, const dof::DofReduction& fixe
 // Termination: the free gradient's max-norm is within the tolerance.
 bool is_converged(const NewtonStep& step, const NewtonOptions& options) {
     return step.gradient_norm <= options.gradient_tolerance;
-}
-
-// Evaluates value, gradient, and Hessian at x in one assembly, and the free gradient.
-double eval_state(const energy::Energy& energy, const dof::DofReduction& fixed, const Vec& x, energy::HessianKind kind,
-                  Vec& gradient, SpMat& hessian, Vec& gradient_free) {
-    const double value = energy.eval(x, &gradient, &hessian, kind);
-    if (!gradient.allFinite()) {
-        throw std::logic_error("newton_solve: the energy returned a non-finite gradient");
-    }
-    gradient_free = fixed.reduce(gradient);
-    return value;
 }
 
 // The linear system of a solve: the free block of the Hessian with its whole
@@ -158,12 +148,14 @@ NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed
         NewtonStep step;
         step.iteration = iteration;
 
-        step.pattern_changed = energy.update_pattern(x);
-        if (iteration == 0 || step.pattern_changed) {
-            hessian = energy.hessian_pattern();
+        auto evaluation = energy.eval(x, true, options.hessian);
+        step.pattern_changed = iteration == 0 || !linalg::same_pattern(hessian, *evaluation.hessian);
+        gradient = std::move(*evaluation.gradient);
+        hessian = std::move(*evaluation.hessian);
+        if (step.pattern_changed)
             system.rebuild(hessian);
-        }
-        step.energy = eval_state(energy, fixed, x, options.hessian, gradient, hessian, gradient_free);
+        step.energy = evaluation.value;
+        gradient_free = fixed.reduce(gradient);
         step.gradient_norm = gradient_free.cwiseAbs().maxCoeff();
 
         if (is_converged(step, options)) {

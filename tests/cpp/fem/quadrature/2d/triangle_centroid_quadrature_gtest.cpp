@@ -1,7 +1,8 @@
 #include "litepgo/fem/basis/2d/triangle_p1_basis.hpp"
-#include "litepgo/fem/field/interpolated_field.hpp"
 #include "litepgo/fem/quadrature/2d/triangle_centroid_quadrature.hpp"
 #include "litepgo/fem/quadrature/quadrature.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
+#include <memory>
 
 #include <Eigen/Geometry>
 #include <gtest/gtest.h>
@@ -34,16 +35,16 @@ TEST(TriangleCentroidQuadrature, IntegratesAffineFieldsOnEmbeddedTrianglesUsingR
         SCOPED_TRACE(reverse_winding);
         if (reverse_winding)
             coordinates.row(1).swap(coordinates.row(2));
-        const InterpolatedField2D<TriangleP1Basis> X_field(coordinates);
+        auto X_field = std::make_shared<InterpolatedResponse<TriangleP1Basis>>(coordinates);
         const Eigen::Vector3d nodal_values = (coordinates * slope).array() + 0.4;
-        const InterpolatedField2D<TriangleP1Basis> scalar_field(nodal_values);
+        auto scalar_field = std::make_shared<InterpolatedResponse<TriangleP1Basis>>(nodal_values);
         double area = 0, integral = 0;
         for (int q = 0; q < TriangleCentroidQuadrature::num_points; ++q) {
             const Eigen::Vector2d xi = TriangleCentroidQuadrature::points().row(q).transpose();
-            const Eigen::Matrix<double, 3, 2> J = X_field.eval_dvalue_dxi(xi);
+            const Eigen::Matrix<double, 3, 2> J = X_field->eval_jacobian(xi);
             const double weight = TriangleCentroidQuadrature::weights()[q] * J.col(0).cross(J.col(1)).norm();
             area += weight;
-            integral += weight * scalar_field.eval_value(xi)[0];
+            integral += weight * scalar_field->eval_value(xi)[0];
         }
         EXPECT_NEAR(area, 5, 1e-14);
         EXPECT_NEAR(integral, 5 * nodal_values.mean(), 1e-14);

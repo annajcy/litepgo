@@ -1,9 +1,10 @@
 # Hex Hermite physical DOFs
 
 Hex Hermite uses a cubic tensor-product displacement basis with 64 scalar basis
-functions per component. To share meaningful derivative DOFs between differently
-sized boxes, litepgo stores derivatives with respect to physical rest coordinates.
-Rest geometry and displacement interpolation are separate.
+functions per component; see the [basis formulation](basis.md#hex-hermite) for
+the polynomials and reference coefficient order. To share meaningful derivative
+DOFs between differently sized boxes, litepgo stores derivatives with respect to
+physical rest coordinates. Rest geometry and displacement interpolation are separate.
 
 ## Physical DOFs and reference coefficients
 
@@ -17,7 +18,7 @@ flowchart TB
   physical["Shared physical slots at vertices"] --> gather["Gather element 8 by 24 data"]
   gather --> scale["Cell-size transform T"]
   scale --> coefficients["Reference coefficients: 64 by 3"]
-  coefficients --> evaluation["Field and local model evaluation"]
+  coefficients --> evaluation["Response and local model evaluation"]
   evaluation --> derivatives["Coefficient gradient and Hessian"]
   derivatives --> pullback["Transpose pullback to physical DOFs"]
 ```
@@ -53,7 +54,7 @@ For manual field evaluation:
 ```python
 transform = fem.BasisDofTransform[fem.HexHermiteBasis](X_field)
 coefficients = transform.to_coefficients(displacement_map.gather(e, u))
-u_field = fem.InterpolatedField3D[fem.HexHermiteBasis](coefficients)
+u_field = fem.InterpolatedResponse[fem.HexHermiteBasis](coefficients)
 ```
 
 Here `X_field` is the element's fixed coordinate field, `e` the element index,

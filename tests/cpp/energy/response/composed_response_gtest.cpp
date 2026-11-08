@@ -2,8 +2,9 @@
 #include "litepgo/energy/response/composed_response.hpp"
 #include "litepgo/energy/response/elementwise_response.hpp"
 #include "litepgo/energy/response/exp_response.hpp"
-#include "litepgo/fem/parameter/log_diagonal_fp_response.hpp"
+#include "litepgo/fem/response/log_diagonal_fp_response.hpp"
 #include <gtest/gtest.h>
+#include <memory>
 
 namespace litepgo::energy::test {
 TEST(ResponseComposition, SharedAndRepeatedDofsAccumulate) {
@@ -44,15 +45,15 @@ TEST(ResponseComposition, ProductsNeverRequestExplicitLocalJacobians) {
         Direct() : FixedPatternResponse(Eigen::Matrix2d::Identity().sparseView()) {}
 
       private:
-        Vec eval_values(const ConstVecRef& x, SpMat* J) const override {
+        Vec eval_impl(const ConstVecRef& x, SpMat* J) override {
             if (J)
                 throw std::logic_error("explicit Jacobian requested");
             return x.array().square();
         }
-        Vec eval_jvp_values(const ConstVecRef& x, const ConstVecRef& v) const override {
+        Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& v) override {
             return 2 * x.cwiseProduct(v);
         }
-        Vec eval_vjp_values(const ConstVecRef& x, const ConstVecRef& w) const override {
+        Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& w) override {
             return 2 * x.cwiseProduct(w);
         }
     };

@@ -1,3 +1,4 @@
+#include "../../testing/evaluate_energy.hpp"
 #include "litepgo/energy/scalar/dynamic_pattern_energy.hpp"
 
 #include "../../testing/test_energies.hpp"
@@ -17,38 +18,15 @@ Vec two_pairs_active() {
 
 } // namespace
 
-TEST(DynamicPatternEnergy, ReportsAChangeOnlyWhenThePatternChanges) {
-    SwitchingEnergy energy(4);
-    EXPECT_FALSE(energy.has_fixed_pattern());
-    EXPECT_EQ(energy.hessian_pattern().nonZeros(), 4);
-
-    EXPECT_TRUE(energy.update_pattern(two_pairs_active()));
-    EXPECT_EQ(energy.hessian_pattern().nonZeros(), 8);
-    EXPECT_FALSE(energy.update_pattern(two_pairs_active()));
-    EXPECT_FALSE(energy.update_pattern(2.0 * two_pairs_active())); // same active set
-
-    EXPECT_TRUE(energy.update_pattern(-Vec::Ones(4)));
-    EXPECT_EQ(energy.hessian_pattern().nonZeros(), 4);
-}
-
-TEST(DynamicPatternEnergy, HessianNeedsAnUpdatedPattern) {
+TEST(DynamicPatternEnergy, EvaluatesCurrentStructureAndOwnsResults) {
     SwitchingEnergy energy(4);
     const Vec x = two_pairs_active();
-    EXPECT_THROW(energy.eval_hessian(x), std::logic_error);
-    EXPECT_NO_THROW(energy.eval_value(x)); // values and gradients never need the pattern
-    EXPECT_NO_THROW(energy.eval_gradient(x));
-
-    ASSERT_TRUE(energy.update_pattern(x));
-    const SpMat hessian = energy.eval_hessian(x);
-    EXPECT_EQ(hessian.coeff(0, 1), 1.0);
-    EXPECT_EQ(hessian.coeff(2, 3), 1.0);
+    const SpMat active = energy.eval_hessian(x);
+    const SpMat inactive = energy.eval_hessian(-Vec::Ones(4));
+    EXPECT_EQ(active.nonZeros(), 8);
+    EXPECT_EQ(inactive.nonZeros(), 4);
+    EXPECT_EQ(active.coeff(0, 1), 1);
+    EXPECT_EQ(active.coeff(2, 3), 1);
+    EXPECT_EQ(Eigen::MatrixXd(active), Eigen::MatrixXd(energy.eval_hessian(x)));
 }
-
-TEST(DynamicPatternEnergy, OldBuffersAreRejectedAfterAChange) {
-    SwitchingEnergy energy(4);
-    SpMat buffer = energy.hessian_pattern();
-    ASSERT_TRUE(energy.update_pattern(two_pairs_active()));
-    EXPECT_THROW(energy.eval(two_pairs_active(), nullptr, &buffer), std::invalid_argument);
-}
-
 } // namespace litepgo::energy::test

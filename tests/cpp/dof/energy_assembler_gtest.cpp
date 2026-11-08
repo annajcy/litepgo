@@ -7,6 +7,7 @@
 #include <limits>
 #include <span>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace litepgo::dof::test {
@@ -275,4 +276,31 @@ TEST(EnergyAssemblerViews, InvalidInputsLeaveBothOutputsUntouchedAndRetrySucceed
     Hlocal.setIdentity();
     assembler.assemble(views, &g, &H);
     EXPECT_TRUE(Eigen::MatrixXd(H).isIdentity());
+}
+
+TEST(EnergyAssemblerViews, PackedAndPaddedMatricesValidateWithoutReadingPadding) {
+    using namespace litepgo;
+    const dof::EnergyAssembler assembler(3, {{0, 1, 2}});
+    const Vec local_g = Vec::Ones(3);
+    for (const auto& strides : {std::pair{3, 1}, std::pair{1, 3}, std::pair{5, 1}, std::pair{1, 5}, std::pair{2, 7}}) {
+        const auto [row_stride, col_stride] = strides;
+        Vec storage = Vec::Constant(2 * (row_stride + col_stride) + 3, std::numeric_limits<double>::quiet_NaN());
+        Eigen::Map<Eigen::MatrixXd, 0, Eigen::Stride<-1, -1>> local_H(storage.data() + 1, 3, 3,
+                                                                      Eigen::Stride<-1, -1>(col_stride, row_stride));
+        local_H.setIdentity();
+        const std::vector<dof::EnergyAssembler::ElementView> views{{local_g, local_H}};
+        Vec g;
+        SpMat H = assembler.hessian_pattern();
+        assembler.assemble(views, &g, &H);
+        EXPECT_TRUE(g.isOnes());
+        EXPECT_TRUE(Eigen::MatrixXd(H).isIdentity());
+        g.setConstant(7);
+        H.coeffs().setConstant(9);
+        local_H(2, 1) = std::numeric_limits<double>::infinity();
+        EXPECT_THROW(assembler.assemble(views, &g, &H), std::invalid_argument);
+        EXPECT_TRUE(g.isConstant(7));
+        EXPECT_TRUE(H.coeffs().isConstant(9));
+        local_H.setIdentity();
+        EXPECT_NO_THROW(assembler.assemble(views, &g, &H));
+    }
 }

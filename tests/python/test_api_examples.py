@@ -22,6 +22,12 @@ def test_thread_limit_example():
 @pytest.mark.parametrize(
     "folder,name",
     [
+        ("fem/basis", "tet_p1_basis"),
+        ("fem/basis", "interpolated_response"),
+        ("fem/basis", "sampling_response"),
+        ("fem/basis", "hermite_interpolation"),
+        ("fem/quadrature", "quadrature_integration"),
+        ("fem/response", "response_hessian"),
         ("energy/scalar", "custom_energy"),
         ("energy/scalar", "mesh_energy_subclass"),
         ("energy/response", "custom_response"),
@@ -79,7 +85,6 @@ def test_energy_example_independent_analytic_values(api_modules, x, value, g, H)
     x = np.array(x)
     assert obj.eval_value(x) == value
     np.testing.assert_array_equal(obj.eval_gradient(x), g)
-    obj.update_pattern(x)
     for kind in (energy.HessianKind.Exact, energy.HessianKind.Projected):
         for want_g in (False, True):
             actual, gradient, hessian = obj.eval(x, gradient=want_g, hessian=kind)
@@ -111,8 +116,7 @@ def test_response_example_independent_analytic_values(api_modules, x, value, J):
     obj = api_modules[1].NonlinearResidual()
     x = np.array(x)
     np.testing.assert_array_equal(obj.eval_value(x), value)
-    obj.update_pattern(x)
-    actual, jacobian = obj.eval(x, need_jacobian=True)
+    actual, jacobian = obj.eval_value_and_jacobian(x)
     np.testing.assert_array_equal(actual, value)
     np.testing.assert_array_equal(jacobian.toarray(), J)
     fixed = api_modules[1].LinearResidual()
@@ -127,22 +131,19 @@ def test_response_example_independent_analytic_values(api_modules, x, value, J):
 def test_example_pattern_errors_and_zeroing(api_modules):
     import numpy as np
 
-    for obj, method in [
-        (api_modules[0].Coupled(), "eval_hessian"),
-        (api_modules[1].NonlinearResidual(), "eval_jacobian"),
-    ]:
-        evaluate = getattr(obj, method)
-        with pytest.raises(RuntimeError, match="outside pattern"):
-            evaluate(np.ones(2))
-        assert obj.update_pattern(np.ones(2))
-        # Keep the larger pattern, but evaluate at inactive and boundary states.
-        for x in (-np.ones(2), np.zeros(2)):
-            matrix = evaluate(x)
-            np.testing.assert_array_equal(matrix.toarray(), np.eye(2))
-        assert obj.update_pattern(-np.ones(2))
-        assert not obj.update_pattern(-np.ones(2))
-        with pytest.raises(RuntimeError, match="outside pattern"):
-            evaluate(np.ones(2))
+    obj = api_modules[0].Coupled()
+    assert obj.eval_hessian(np.ones(2)).nnz == 4
+
+    for x in (-np.ones(2), np.zeros(2)):
+        np.testing.assert_array_equal(obj.eval_hessian(x).toarray(), np.eye(2))
+
+
+    assert obj.eval_hessian(np.ones(2)).nnz == 4
+
+    response = api_modules[1].NonlinearResidual()
+    for x in (np.ones(2), -np.ones(2), np.zeros(2), np.ones(2)):
+        expected = np.array([[1., 0.], [2 * max(0., x[0]), 1.]])
+        np.testing.assert_array_equal(response.eval_jacobian(x).toarray(), expected)
 
 
 def test_custom_response_example_fit(api_modules):

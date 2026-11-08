@@ -37,7 +37,7 @@ def test_build_info_reports_ipc_toolkit():
 def test_barrier_mirrors_cpp():
     surface = two_triangles(0.5)
     barrier = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=1.0), contact.SpatialHash())
-    assert isinstance(barrier, energy.Energy) and not barrier.has_fixed_pattern
+    assert isinstance(barrier, energy.Energy)
     assert barrier.num_vertices == 6 and barrier.num_dofs == 18
     np.testing.assert_array_equal(barrier.rest_positions, surface.positions)
     assert barrier.options.dhat == 1.0 and barrier.options.min_distance == 0.0
@@ -49,9 +49,8 @@ def test_barrier_mirrors_cpp():
     assert barrier.eval_value(x) > 0
     np.testing.assert_allclose(barrier.eval_gradient(x), central_gradient(barrier.eval_value, x), atol=1e-6)
 
-    assert barrier.update_pattern(x)
     assert barrier.eval_hessian(x).nnz == 144
-    assert np.linalg.eigvalsh(barrier.eval_projected_hessian(x).toarray()).min() > -1e-10
+    assert np.linalg.eigvalsh(barrier.eval_hessian(x, kind=energy.HessianKind.Projected).toarray()).min() > -1e-10
 
 
 def test_barrier_rejects_infeasible_states():
@@ -145,8 +144,6 @@ def test_independent_native_matches_toolkit_original_sum(use_area_weighting):
         dhat=3, min_distance=0.1, use_area_weighting=use_area_weighting))
     x = surface.positions.ravel().copy()
     x[12:15] += [0.3, -0.2, 0.1]
-    for backend in (native, toolkit):
-        backend.update_pattern(x)
     assert native.eval_value(x) == pytest.approx(toolkit.eval_value(x), rel=1e-12)
     np.testing.assert_allclose(native.eval_gradient(x), toolkit.eval_gradient(x), rtol=1e-10, atol=1e-10)
     np.testing.assert_allclose(native.eval_hessian(x).toarray(), toolkit.eval_hessian(x).toarray(), rtol=1e-9, atol=1e-9)
@@ -181,7 +178,6 @@ def test_native_broad_phase_injection_and_lifetime(backend_factory):
     dx = np.zeros_like(x)
     dx[11] = -2
     for barrier in energies:
-        barrier.update_pattern(x)
         assert barrier.eval_value(x) == energies[0].eval_value(x)
         np.testing.assert_array_equal(barrier.eval_gradient(x), energies[0].eval_gradient(x))
         np.testing.assert_array_equal(barrier.eval_hessian(x).toarray(), energies[0].eval_hessian(x).toarray())
@@ -213,8 +209,6 @@ def test_analytic_features_and_mollifier_match_toolkit(positions, use_area_weigh
     toolkit = contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(
         dhat=0.7, min_distance=0.05, use_area_weighting=use_area_weighting))
     x = surface.positions.ravel()
-    for barrier in (native, toolkit):
-        barrier.update_pattern(x)
     assert native.eval_value(x) == pytest.approx(toolkit.eval_value(x), rel=1e-11, abs=1e-12)
     np.testing.assert_allclose(native.eval_gradient(x), toolkit.eval_gradient(x), rtol=1e-8, atol=1e-9)
     np.testing.assert_allclose(native.eval_hessian(x).toarray(), toolkit.eval_hessian(x).toarray(), rtol=1e-7, atol=1e-8)
@@ -224,3 +218,26 @@ def test_analytic_features_and_mollifier_match_toolkit(positions, use_area_weigh
 def test_spatial_hash_rejects_invalid_cell_size(cell_size):
     with pytest.raises(ValueError):
         contact.SpatialHash(cell_size)
+
+
+
+def test_broad_phase_lifetime_with_weak_energy_back_reference():
+    import gc
+    import weakref
+
+    class BroadPhase(contact.SpatialHash):
+        pass
+
+    broad = BroadPhase()
+    barrier = contact.IPCContactEnergy(
+        two_triangles(0.5), contact.IPCContactOptions(dhat=1.0), broad)
+    broad.energy = weakref.ref(barrier)
+    assert broad.energy() is barrier
+    broad_ref, energy_ref = weakref.ref(broad), weakref.ref(barrier)
+    del broad
+    gc.collect()
+    assert broad_ref() is not None
+    assert barrier.eval_value(barrier.rest_positions.ravel()) > 0
+    del barrier
+    gc.collect()
+    assert broad_ref() is None and energy_ref() is None

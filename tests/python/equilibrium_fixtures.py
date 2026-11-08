@@ -10,6 +10,6 @@ class FormulaForce(energy.FixedPatternResponse):
         self.u = u.copy()
         self.make_energy, self.partial = make_energy, partial
 
-    def eval_values(self, p, need_jacobian):
+    def eval_impl(self, p, need_jacobian):
         g = self.make_energy(p).eval_gradient(self.u)
         return (g, self.partial(p, self.u)) if need_jacobian else g

@@ -17,8 +17,9 @@ class PyDynamicEnergy : public PyEnergy<DynamicPatternEnergy> {
     using PyEnergy<DynamicPatternEnergy>::PyEnergy;
 
   private:
-    SpMat pattern_at(const ConstVecRef& x) const override {
-        nb::detail::ticket ticket(this->nb_trampoline, "pattern_at", nb::detail::str_hash("pattern_at"), true);
+    SpMat hessian_pattern_at(const ConstVecRef& x) const override {
+        nb::detail::ticket ticket(this->nb_trampoline, "hessian_pattern_at", nb::detail::str_hash("hessian_pattern_at"),
+                                  true);
         return nb::cast<linalg::binding::SparseArgument>(this->nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x))))
             .matrix;
     }
@@ -27,7 +28,7 @@ class PyDynamicEnergy : public PyEnergy<DynamicPatternEnergy> {
 
 void bind_dynamic_pattern_energy(nb::module_& m) {
     nb::class_<DynamicPatternEnergy, Energy, PyDynamicEnergy>(m, "DynamicPatternEnergy")
-        .def(nb::init<int, const linalg::binding::SparseArgument&>(), "num_dofs"_a, "initial_pattern"_a)
+        .def(nb::init<int>(), "num_dofs"_a)
         .def(
             "feasible_step", [](const DynamicPatternEnergy&, const ConstVecRef&, const ConstVecRef&) { return 1.0; },
             "x"_a, "dx"_a);

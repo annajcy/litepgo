@@ -81,8 +81,8 @@ void add_block(SpMat& hessian, const ipc::MatrixMax12d& local, int a, int b, int
         const int* end = rows + hessian.outerIndexPtr()[column + 1];
         const int* first = std::lower_bound(begin, end, 3 * va);
         if (end - first < 3 || first[0] != 3 * va || first[2] != 3 * va + 2) {
-            throw std::logic_error("IPCTKContactEnergy: an active contact pair is outside the current Hessian "
-                                   "pattern; call update_pattern(x) before assembling a Hessian at x");
+            throw std::logic_error(
+                "IPCTKContactEnergy: an active contact pair is outside the prepared Hessian pattern");
         }
         double* values = hessian.valuePtr() + (first - rows);
         for (int r = 0; r < 3; ++r) {
@@ -209,9 +209,8 @@ struct IPCTKContactEnergy::Impl {
 
 IPCTKContactEnergy::IPCTKContactEnergy(const mesh::TriangleMesh& surface, IPCTKContactOptions options,
                                        std::optional<ContactPairWeights> pair_weights)
-    : DynamicPatternEnergy(checked_num_dofs(surface),
-                           SpMat(3 * surface.topology.num_vertices(), 3 * surface.topology.num_vertices())),
-      rest_positions_(surface.positions), options_(checked_options(options)) {
+    : DynamicPatternEnergy(checked_num_dofs(surface)), rest_positions_(surface.positions),
+      options_(checked_options(options)) {
     impl_ = std::make_unique<const Impl>(surface, options_, std::move(pair_weights));
 }
 
@@ -261,7 +260,7 @@ ContactSnapshot IPCTKContactEnergy::contact_snapshot(const ConstVecRef& x) const
     return result;
 }
 
-SpMat IPCTKContactEnergy::pattern_at(const ConstVecRef& x) const {
+SpMat IPCTKContactEnergy::hessian_pattern_at(const ConstVecRef& x) const {
     if (!x.allFinite()) {
         throw std::invalid_argument("IPCTKContactEnergy requires finite positions");
     }

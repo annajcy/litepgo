@@ -38,7 +38,9 @@ is under `src/core/energy/`; Python uses `litepgo.energy`.
 | --- | --- |
 | Evaluate derivatives and compose scalar objectives | [Evaluation and composition](evaluation.md) |
 | Implement fixed/dynamic-pattern scalar or vector terms | [Custom energies and responses](custom.md) |
-| Parameterize Fp/theta and compose vector derivatives | [Parameter transforms](parameter-transforms.md) |
+| Evaluate vector maps and Jacobian products | [Response evaluation](responses.md) |
+| Evaluate and compose exact weighted second derivatives | [Response Hessians](response-hessians.md) |
+| Affine maps, Fp/theta parameterization, and vector composition | [Parameter transforms](parameter-transforms.md) |
 | Gather, batch and assemble local contributions | [Batched assembly](assembly.md) |
 
 All paths share the sparse-pattern and feasibility contracts below and in
@@ -46,9 +48,11 @@ All paths share the sparse-pattern and feasibility contracts below and in
 
 ## Errors and feasibility
 
-Malformed inputs/outputs and wrong patterns are contract errors. Infeasible or
-unrepresentable numerical evaluations raise domain errors (`ValueError` in the
-corresponding Python paths). Newton evaluation exceptions propagate. Gauss–Newton
+Malformed inputs/outputs and wrong patterns are contract errors. Implementations report infeasible or
+unrepresentable numerical evaluations with domain errors (`ValueError` in the
+corresponding Python paths). Non-finite values returned by a numerical hook are
+contract violations, diagnosed by the base as logic errors; Python conversion
+may reject malformed outputs earlier. Newton evaluation exceptions propagate. Gauss–Newton
 can reject domain-infeasible trial residuals; arbitrary Python exceptions still
 propagate. A sparsity change is not a claim that the mathematical function is
 smooth across an active-set transition.

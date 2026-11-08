@@ -35,6 +35,7 @@ struct NewtonStep {
     int iteration = 0;
     double energy = 0.0;
     double gradient_norm = 0.0; // max-norm over the free DOFs
+    // True on the first evaluation and whenever the returned full Hessian structure changes.
     bool pattern_changed = false;
     int diagonal_shifts = 0;
     double feasible_step = 0.0; // max_feasible_step's bound on the step

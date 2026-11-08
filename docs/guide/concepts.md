@@ -27,7 +27,7 @@ flowchart TB
 
 1. **Mesh:** rest positions and element connectivity.
 2. **DOF map:** ordered global scalar indices used by each element or stencil.
-3. **Field/element:** interpolation, coordinate conversion, and integration.
+3. **Response/element:** interpolation, coordinate conversion, and integration.
 4. **Energy or response:** a scalar objective or vector-valued measurement.
 5. **Solver:** an optimization algorithm using the assembled derivatives.
 
@@ -86,11 +86,10 @@ Always state which quantity a vector represents before reshaping it.
 ## Sparse structure is part of the contract
 
 A sparse **pattern** records every entry that may be nonzero, including entries
-whose present value is zero. Before a standalone Hessian or Jacobian request,
-call `update_pattern(z)`. When it returns true, native callers replace their
-output buffer with a copy of the current pattern. Python allocates that buffer
-for you. Values and gradients use the current input without requiring a pattern
-refresh. Solvers manage pattern updates themselves.
+whose present value is zero. Ordinary Energy and Response evaluation prepares
+required structure automatically and returns independent results. Solvers compare
+returned matrix structures to reuse symbolic factorization; callers do not manage
+current patterns or output buffers.
 
 Exact derivatives and solver approximations have distinct meanings.
 `HessianKind.Exact` is the energy's exact second derivative.
@@ -100,12 +99,44 @@ equilibrium sensitivities.
 
 ## Ownership and concurrency
 
-Meshes and basic fields own snapshots. Some composed C++ fields/local material
-objects borrow other fields; those inputs must outlive them. Python bindings keep
-borrowed field inputs alive. An energy may own arrays of fields while a field
-inside that array still borrows an external input: keep that dependency alive too.
+Meshes and interpolated Responses own snapshots. Composed Responses own their
+children, whose configuration must remain fixed. FEM energies and force responses
+sample their fixed spatial configuration at construction and retain numerical
+data rather than the source Responses. Rebuild them after changing configuration.
 
-One energy/response object is evaluated one call at a time. Batched callbacks can
+### Python ownership must remain acyclic
+
+Energy/Response composites, contact broad phases, and spatial Response
+dependencies retain child objects through C++. A strong reference from a child
+back to its owner can create a cycle that survives `gc.collect()`. Native Energy
+and Response instances support `weakref.ref`. Use a weak reference when a child
+needs to reach its owner:
+
+```python
+import weakref
+
+child.owner = weakref.ref(composite)
+owner = child.owner()  # None after the owner has been released.
+if owner is not None:
+    # Use owner only for the duration of this operation.
+    pass
+```
+
+For other bound types that do not support weak references, omit the back-reference
+or refer weakly to a Python model container. No property named `owner` or
+`energy` is required by the library.
+
+`StaticEquilibriumResponse` exposes its two Python callbacks to the cyclic garbage
+collector. Cycles through those callbacks can be collected when all other
+references in the cycle are visible to Python.
+
+### Concurrent evaluation
+
+Energy and Response implementations with shared workspaces (such as MeshEnergy,
+MeshResponse, and cached energy composites) reject overlapping evaluation. The
+mathematical Energy and Response bases have no global concurrency guard; custom
+implementations own their thread-safety contract.
+Batched callbacks can
 run concurrently through TBB, so captured data must support concurrent reads and
 must not depend on callback order. Python callbacks acquire the GIL; numerical
 operations that release it can still perform parallel work. Rebuild model objects

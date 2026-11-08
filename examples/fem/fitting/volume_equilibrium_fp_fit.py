@@ -4,6 +4,7 @@ Geometry, material theta=(2,3), and boundary displacements are fixed.
 Run: uv run --no-sync python examples/fem/fitting/volume_equilibrium_fp_fit.py
 """
 
+from litepgo.energy import AffineResponse
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
@@ -37,12 +38,12 @@ def make_problem(input_path=None):
     volume = mesh.read_veg(input_path)
     topology, nodes = volume.topology, volume.positions
     displacement_map = dof.VertexDofMap(topology, 3)
-    XField = fem.InterpolatedField3D[fem.TetP1Basis]
+    XField = fem.InterpolatedResponse[fem.TetP1Basis]
     geometry = [
         XField(displacement_map.gather(e, nodes.ravel()))
         for e in range(displacement_map.num_elements)
     ]
-    theta = [fem.IdentityField3D(np.array([2.0, 3.0])) for _ in geometry]
+    theta = [AffineResponse(np.zeros((2, 3)), np.array([2.0, 3.0])) for _ in geometry]
 
     # Clamp the bottom; prescribe shear and extension on the top.
     z = nodes[:, 2]
@@ -79,7 +80,7 @@ def make_factories(problem):
 
     def make_energy(p):
         packed = plastic.eval_value(p).reshape(-1, 9)
-        fields = [fem.IdentityField3D(row) for row in packed]
+        fields = [AffineResponse(np.zeros((9, 3)), row) for row in packed]
         return ElasticEnergy(
             problem.displacement_map, problem.geometry, fields, problem.theta
         )
@@ -107,7 +108,7 @@ def measure(problem, make_energy, make_response, p, load=1.0, need_jacobian=Fals
         make_energy,
         make_response,
     )
-    displacement, state_jacobian = equilibrium.eval(p, need_jacobian=need_jacobian)
+    displacement, state_jacobian = (equilibrium.eval_value_and_jacobian(p) if need_jacobian else (equilibrium.eval_value(p), None))
 
     # 2. Compute force and its total derivative along the equilibrium branch.
     elastic = make_energy(p)
@@ -134,7 +135,7 @@ class Residual(energy.FixedPatternResponse):
         super().__init__(np.ones((len(target), 3)))
         self.measurement, self.target, self.scales = measurement, target, scales
 
-    def eval_values(self, p, need_jacobian):
+    def eval_impl(self, p, need_jacobian):
         prediction, jacobian = self.measurement(p, need_jacobian=need_jacobian)
         residual = (prediction - self.target) / self.scales
         return (

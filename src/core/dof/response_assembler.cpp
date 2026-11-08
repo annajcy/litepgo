@@ -51,7 +51,7 @@ void ResponseAssembler::assemble(std::span<const ElementView> elements, Vec& val
         throw std::invalid_argument("ResponseAssembler: expected one result per element");
     if (J && !linalg::same_pattern(*J, pattern_))
         throw std::invalid_argument("ResponseAssembler: mismatched Jacobian pattern");
-    for (std::size_t e = 0; e < elements.size(); ++e) {
+    tbb::parallel_for(std::size_t(0), elements.size(), [&](std::size_t e) {
         const auto local_value = elements[e].value();
         const auto local_jacobian = elements[e].jacobian();
         if (local_value.size() != static_cast<Eigen::Index>(rows_[e].size()) || !local_value.allFinite() ||
@@ -59,7 +59,7 @@ void ResponseAssembler::assemble(std::span<const ElementView> elements, Vec& val
              (local_jacobian.rows() != local_value.size() ||
               local_jacobian.cols() != static_cast<Eigen::Index>(columns_[e].size()) || !local_jacobian.allFinite())))
             throw std::invalid_argument("ResponseAssembler: invalid local value or Jacobian");
-    }
+    });
     value.resize(pattern_.rows());
     if (J)
         J->coeffs().setZero();

@@ -30,8 +30,10 @@ instantiations already compiled into `_core`.
 `litepgo.torch` is a Python integration layer. It evaluates a native model and
 uses a saved energy gradient or calls the response VJP in backward; response
 forward-mode AD calls its JVP. It does not trace the C++ solver's
-iterations into a Torch graph. C++ users link individual CMake targets; Python
-users import the corresponding facade modules.
+iterations into a Torch graph. In the other direction, native FEM can call a
+[material written in Python](fem/python-materials.md) (NumPy or Torch) once per
+assembly batch; only the constitutive formula runs in Python. C++ users link
+individual CMake targets; Python users import the corresponding facade modules.
 
 ## Native module dependencies
 
@@ -87,7 +89,7 @@ API contracts and examples.
 | [Solver](solver/index.md) | Newton, Gauss–Newton and equilibrium response | Forward and inverse applications |
 | [Contact](contact/index.md) | Surface barrier energy, collision broad phase and feasible steps | A composed total potential |
 | [Spatial](spatial.md) | Generic AABB indexing and overlap queries | Contact broad phase and FEM point location |
-| [Torch](torch.md) | First-order autograd bridge | Python optimizers |
+| [Torch](torch.md) | First-order autograd bridge and Torch materials | Python optimizers, FEM |
 
 Native module sources live under `src/core/<module>/`; public Python facades
 live under `src/python/`. Common types and `build_info()` are exported in the
@@ -95,15 +97,15 @@ root `litepgo` namespace, rather than through a `litepgo.common` Python module.
 
 ## What a model owns
 
-A mesh owns geometry; a DOF map owns the indexing convention. Fields provide
-interpolation, while local material objects evaluate densities and derivatives.
+A mesh owns geometry; a DOF map owns the indexing convention. Spatial Responses provide interpolation; coefficient sampling maps take explicit
+coefficient inputs. Material functions evaluate densities and derivatives.
 Integration adds the geometric measure, and assembly scatters local results into
 global vectors and sparse matrices. An optimizer then advances a caller-supplied
 unknown vector.
 
 Model geometry, prescribed plastic state, and callback configuration stay fixed
-during the corresponding evaluation. Composed native fields may borrow other
-fields; Python retains those dependencies. See [ownership and concurrency](concepts.md#ownership-and-concurrency)
+during the corresponding evaluation. FEM snapshots geometry and prescribed material samples at construction. Composed
+Responses own their children, which must remain fixed. See [ownership and concurrency](concepts.md#ownership-and-concurrency)
 before building custom model objects.
 
 For a complete path through these layers, start with the [chain solve](quickstart.md),

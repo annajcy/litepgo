@@ -1,11 +1,12 @@
+#include <memory>
 // Recover shared KoiterStVK parameters from forces at a prescribed shell pose.
 // Build: cmake --build build/release --target shell_fixed_pose_material_fit
 // Run: build/release/examples/fem/fitting/shell_fixed_pose_material_fit
 
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
+#include "litepgo/fem/assembly/shell_fem_energy.hpp"
+#include "litepgo/fem/assembly/shell_fem_force_material_response.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
-#include "litepgo/fem/shell_fem_energy.hpp"
-#include "litepgo/fem/shell_fem_force_material_response.hpp"
 #include "litepgo/mesh/io/obj.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include "litepgo/solver/gauss_newton.hpp"
@@ -22,14 +23,25 @@ using namespace litepgo;
 class MaterialResidual final : public energy::FixedPatternResponse {
   public:
     MaterialResidual(std::shared_ptr<energy::Response> force, const Vec& target, double scale)
-        : FixedPatternResponse(force->jacobian_pattern()), force_(force), target_(target), scale_(scale) {}
+        : FixedPatternResponse(Eigen::MatrixXd::Ones(force->num_outputs(), force->num_inputs()).sparseView()),
+          force_(force), target_(target), scale_(scale) {}
 
   private:
-    Vec eval_values(const ConstVecRef& theta, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& theta, SpMat* J) override {
         // Tell Gauss-Newton to reject infeasible trials without changing parameterization.
         if (!theta.allFinite() || theta[1] <= 0 || theta.sum() <= 0)
             throw std::domain_error("Require mu > 0 and lambda_ps + mu > 0");
-        const Vec value = force_->eval(theta, J);
+        Vec value;
+        if (J) {
+            auto evaluated = force_->eval_value_and_jacobian(theta);
+            value = std::move(evaluated.first);
+            const SpMat& derivative = evaluated.second;
+            for (int c = 0; c < J->outerSize(); ++c)
+                for (SpMat::InnerIterator it(*J, c); it; ++it)
+                    it.valueRef() = derivative.coeff(it.row(), c);
+        } else {
+            value = force_->eval_value(theta);
+        }
         if (J)
             *J /= scale_;
         return (value - target_) / scale_;
@@ -78,6 +90,9 @@ Problem make_problem() {
         throw std::runtime_error("Calibration requires finite nonzero target forces");
     auto force = std::make_shared<fem::ShellFemForceMaterialResponse<fem::KoiterStVK>>(dof::ConstantDofMap(topology, 2),
                                                                                        map, rest, u, thickness);
+    // Fixed pose and original face areas are cached; only the parameter vector varies.
+    if (!force->eval_value(truth).isApprox(target, 1e-11))
+        throw std::runtime_error("Fixed-pose response differs from the energy gradient");
     return {std::make_shared<MaterialResidual>(force, target, scale), truth, initial, scale};
 }
 } // namespace

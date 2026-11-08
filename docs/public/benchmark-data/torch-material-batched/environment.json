@@ -1,0 +1,37 @@
+{
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "machine": "arm64",
+  "cpu_count": 8,
+  "started_utc": "2026-11-07T05:30:30.140053+00:00",
+  "python": "3.12.13 (main, Apr  7 2026, 21:09:58) [Clang 22.1.1 ]",
+  "executable": "/Users/jinceyang/Desktop/litepgo/.venv/bin/python",
+  "profile": "full",
+  "repeats": 5,
+  "timeout": 90.0,
+  "command": [
+    "benchmarks/torch_material.py",
+    "--profile",
+    "full",
+    "--timeout",
+    "90",
+    "--output",
+    "output/torch_material_batched"
+  ],
+  "thread_environment": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "git_head": "b99b4254f001de5d1bd09d85d2aa48bc09f0a66e",
+  "git_status": "M  README.md\nA  benchmarks/README.md\nR  scripts/contact_benchmark.py -> benchmarks/contact_benchmark.py\nR  scripts/contact_scaling.py -> benchmarks/contact_scaling.py\nR  scripts/mesh_batch_benchmark.py -> benchmarks/mesh_batch_benchmark.py\nAM benchmarks/torch_material.py\nM  docs/.vitepress/config.mjs\nA  docs/benchmarks/index.md\nAM docs/benchmarks/torch-material.md\nM  docs/development.md\nMM docs/examples/torch/neural-equilibrium-fit.md\nM  docs/guide/fem/python-materials.md\n M docs/guide/torch.md\nM  docs/index.md\nA  docs/public/benchmark-data/torch-material-baseline/environment.json\nA  docs/public/benchmark-data/torch-material-baseline/neural_profile.txt\nA  docs/public/benchmark-data/torch-material-baseline/results.jsonl.txt\nA  docs/public/benchmark-data/torch-material-baseline/timings.csv\nMM examples/fem/fitting/neural_equilibrium_fit.py\nM  src/python/fem.py\nMM tests/python/test_neural_equilibrium_fit_example.py\nA  tests/python/test_torch_material_benchmark.py\n",
+  "source_sha256": {
+    "benchmarks/torch_material.py": "44c0c9fd90c84eff8b84f35096e7072de7e6537febf1a7b539205e773b5d578b",
+    "benchmarks/contact_scaling.py": "c4fe19cf71ea4c7f3ebbc8a7aa9fef546d8a8d3d44912978afb74a8a9aeafbca",
+    "src/python/torch.py": "f42f8f75ada51ae66cea27b77d5c3c37e4140f1b6cd707004c768e0048057a9a",
+    "examples/fem/fitting/neural_neohookean.py": "fe11e7691ee84bc2e59ea90cce01a0eda2ec40d434dbbb6883c4f3aa2918544b",
+    "examples/fem/fitting/neural_equilibrium_fit.py": "3ad57afd76c248b973d72b85d2a1ba606246c98759627b1d509c087d4bf06df7",
+    "examples/fem/fitting/torch_neohookean.py": "435f199a4db7e445163507e050dfd462bd8098d461bf6e17a37d591daec3b7d9"
+  },
+  "cpu": "Apple M1 Pro"
+}

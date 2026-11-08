@@ -29,14 +29,14 @@ StaticEquilibriumResponse::StaticEquilibriumResponse(int num_parameters, dof::Do
         options_.max_line_search_steps < 1 || !(options_.line_search_shrink > 0 && options_.line_search_shrink < 1))
         throw std::invalid_argument("StaticEquilibriumResponse: invalid initial state, options or callbacks");
 }
-Vec StaticEquilibriumResponse::eval_values(const ConstVecRef& p, SpMat* J) const {
+Vec StaticEquilibriumResponse::eval_impl(const ConstVecRef& p, SpMat* J) {
     return evaluate(p, J, nullptr, false);
 }
-Vec StaticEquilibriumResponse::eval_jvp_values(const ConstVecRef& p, const ConstVecRef& v) const {
+Vec StaticEquilibriumResponse::eval_jvp_impl(const ConstVecRef& p, const ConstVecRef& v) {
     const Vec direction = v;
     return evaluate(p, nullptr, &direction, false);
 }
-Vec StaticEquilibriumResponse::eval_vjp_values(const ConstVecRef& p, const ConstVecRef& w) const {
+Vec StaticEquilibriumResponse::eval_vjp_impl(const ConstVecRef& p, const ConstVecRef& w) {
     const Vec direction = w;
     return evaluate(p, nullptr, &direction, true);
 }
@@ -55,8 +55,6 @@ Vec StaticEquilibriumResponse::evaluate(const ConstVecRef& p, SpMat* J, const Ve
         auto force = make_response_(result.x);
         if (!force || force->num_inputs() != num_inputs() || force->num_outputs() != num_outputs())
             throw std::invalid_argument("StaticEquilibriumResponse: incompatible force response");
-        force->update_pattern(parameters);
-        potential->update_pattern(result.x);
         const SpMat K = fixed_.reduce(potential->eval_hessian(result.x, energy::HessianKind::Exact));
         if (!linear_solver.compute(K))
             throw std::domain_error("StaticEquilibriumResponse: singular equilibrium stiffness");

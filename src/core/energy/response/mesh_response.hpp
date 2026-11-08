@@ -1,6 +1,7 @@
 #pragma once
 #include "litepgo/dof/response_assembler.hpp"
 #include "litepgo/energy/response/fixed_pattern_response.hpp"
+#include <atomic>
 #include <utility>
 
 namespace litepgo::energy {
@@ -22,19 +23,22 @@ class MeshResponse : public FixedPatternResponse {
     virtual BatchMatrix eval_vjp_batch(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& gy) const;
 
   private:
-    Vec eval_jvp_values(const ConstVecRef& x, const ConstVecRef& dx) const override;
-    Vec eval_vjp_values(const ConstVecRef& x, const ConstVecRef& gy) const override;
+    Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& dx) override;
+    Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& gy) override;
     void check_batch_product(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& d,
                              bool transpose) const;
+    BatchMatrix eval_batch_jacobian(std::span<const int> ids, const BatchMatrix& x) const;
+    void gather(const std::vector<int>& ids, const ConstVecRef& x, BatchMatrix& result, bool output) const;
     Vec product(const ConstVecRef& x, const ConstVecRef& direction, bool transpose) const;
     MeshResponse(dof::ResponseAssembler assembler, int batch_size);
-    Vec eval_values(const ConstVecRef& x, SpMat* J) const override;
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) override;
     dof::ResponseAssembler assembler_;
-    std::vector<std::vector<int>> batches_;
-    struct Storage {
-        BatchMatrix inputs, values, jacobian;
+    struct Batch {
+        std::vector<int> ids;
+        BatchMatrix inputs, values, jacobian, direction;
     };
-    mutable std::vector<Storage> storage_;
+    mutable std::atomic<bool> busy_ = false;
+    mutable std::vector<Batch> batches_;
     mutable std::vector<dof::ResponseAssembler::ElementView> views_;
 };
 } // namespace litepgo::energy

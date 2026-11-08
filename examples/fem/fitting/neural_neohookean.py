@@ -4,6 +4,7 @@ Run: uv run --no-sync python examples/fem/fitting/neural_neohookean.py
 Writes a checkpoint and independent evaluation report under output/neural_neohookean.
 """
 
+from litepgo.energy import AffineResponse
 import argparse
 import copy
 import json
@@ -13,7 +14,7 @@ import time
 import numpy as np
 import torch
 from litepgo import dof, fem, mesh, solver, tbb_thread_limit
-from litepgo.torch import TorchVolumetricFemEnergy
+from litepgo.torch import TorchVolumetricMaterial
 
 
 class InvariantMaterial(torch.nn.Module):
@@ -260,6 +261,20 @@ def errors(model, F, Fp=None):
     return report
 
 
+def fem_material(model):
+    """A Python material class for native FEM; the trained model stays fixed."""
+
+    class LearnedNeoHookean(TorchVolumetricMaterial):
+        num_parameters = 2
+        module = model
+
+        @classmethod
+        def W(cls, F, Fp, theta):
+            return cls.module(F, Fp, theta)
+
+    return LearnedNeoHookean
+
+
 def equilibrium_errors(model):
     nodes = np.array(
         [
@@ -274,20 +289,23 @@ def equilibrium_errors(model):
         5, np.array([[0, 1, 2, 3], [1, 2, 3, 4]], dtype=np.int32)
     )
     mapping = dof.VertexDofMap(topology, 3)
-    Field = fem.InterpolatedField3D[fem.TetP1Basis]
+    Field = fem.InterpolatedResponse[fem.TetP1Basis]
     geometry = [Field(mapping.gather(e, nodes.ravel())) for e in range(2)]
-    theta = [fem.IdentityField3D(np.array([2.0, 3.0]))] * 2
+    theta = [AffineResponse(np.zeros((2, 3)), np.array([2.0, 3.0]))] * 2
     fixed = dof.DofReduction(15, [*range(9), 12, 13, 14])
     Native = fem.VolumetricFemEnergy[
         fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
+    ]
+    Learned = fem.VolumetricFemEnergy[
+        fem_material(model), fem.TetP1Basis, fem.TetCentroidQuadrature
     ]
     reports = []
     for plastic in (
         np.eye(3),
         np.array([[1.04, 0.03, 0.0], [0.0, 0.98, 0.02], [0.01, 0.0, 1.02]]),
     ):
-        Fp = [fem.IdentityField3D(plastic.ravel(order="F"))] * 2
-        learned = TorchVolumetricFemEnergy(mapping, geometry, Fp, theta, material=model)
+        Fp = [AffineResponse(np.zeros((9, 3)), plastic.ravel(order="F"))] * 2
+        learned = Learned(mapping, geometry, Fp, theta)
         native = Native(mapping, geometry, Fp, theta)
         for load in ([0.04, -0.02, 0.06], [-0.03, 0.02, -0.04], [0.1, 0.04, 0.08]):
             u = np.zeros(15)
@@ -310,7 +328,7 @@ def equilibrium_errors(model):
             for e, X in enumerate(geometry):
                 field = Field(mapping.gather(e, a.x))
                 F = (
-                    fem.DeformationGradientField3D(field, X)
+                    fem.DeformationGradientResponse(field, X)
                     .eval_value(np.full(3, 0.25))
                     .reshape(3, 3, order="F")
                 )

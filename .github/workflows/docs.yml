@@ -25,9 +25,12 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
+      - uses: mamba-org/setup-micromamba@v3
+        with:
+          init-shell: none
       - name: Install Ninja
         run: sudo apt-get update && sudo apt-get install -y ninja-build
-      - name: Install locked Python and documentation dependencies
+      - name: Install locked Python, documentation, and tutorial dependencies
         run: uv sync --locked --group docs
       - name: Cache native dependency downloads
         uses: actions/cache@v4
@@ -38,8 +41,14 @@ jobs:
         run: |
           cmake --preset release-all -DLITEPGO_BUILD_TESTS=OFF
           cmake --build build/release-all --target litepgo_python --parallel 2
-      - name: Build the manual and C++/Python API references
-        run: uv run scripts/docs.py build
+      - name: Test notebook execution and export infrastructure
+        run: uv run --locked --group docs python -m pytest -q tests/python/test_torch_tutorials.py tests/python/test_energy_tutorials.py
+      - name: Build the C++20 tutorial kernel
+        env:
+          CMAKE_BUILD_PARALLEL_LEVEL: 2
+        run: uv run scripts/setup_cpp_tutorial.py --no-register
+      - name: Execute the tutorials and build manual and API references
+        run: uv run docs/scripts/site.py build
       - name: Check Markdown rendering and generated API entry points
         run: |
           uv run --locked --group docs --directory docs corepack pnpm exec node --test .vitepress/mermaid.test.mjs
@@ -48,6 +57,23 @@ jobs:
           test -f docs/.vitepress/dist/reference/python/index.html
           test -f docs/.vitepress/dist/reference/python/litepgo.html
           test -f docs/.vitepress/dist/reference/python/litepgo/torch.html
+          uv run --locked --group docs --directory docs corepack pnpm exec node --test .vitepress/tutorials.test.mjs
+          for notebook in tutorials/torch/[0-9][0-9]_*.ipynb; do
+            lesson=$(basename "$notebook" .ipynb)
+            test -f "docs/.vitepress/dist/tutorials/torch/$lesson.html"
+            test -f "docs/.vitepress/dist/tutorial-notebooks/torch/$lesson.ipynb"
+          done
+          test -f docs/.vitepress/dist/tutorial-notebooks/torch/bunny-tet.veg
+          test -f docs/.vitepress/dist/tutorial-notebooks/torch/bunny-hex.veg
+      - name: Preserve executed notebooks on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tutorial-failure
+          path: |
+            build/torch-tutorials/
+            build/energy-tutorials/
+          if-no-files-found: ignore
       - name: Upload the Pages site
         uses: actions/upload-pages-artifact@v4
         with:

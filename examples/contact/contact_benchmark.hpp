@@ -75,7 +75,7 @@ inline int run_contact_benchmark(const litepgo::mesh::TriangleMesh& surface,
                 barrier = toolkit = std::make_shared<contact::IPCTKContactEnergy>(surface, toolkit_options);
             auto mapped = std::make_shared<energy::AffineMappedEnergy>(barrier, kinematics.displacement_map(),
                                                                        kinematics.rest_positions());
-            energy::WeightedEnergySum potential({{elastic, 1}, {pulling, 1}, {mapped, kappa}});
+            energy::WeightedSumEnergy potential({{elastic, 1}, {pulling, 1}, {mapped, kappa}});
             linalg::AutoSparseSolver solver;
             std::vector<solver::NewtonStep> steps;
             steps.reserve(options.max_iterations + 1);
@@ -131,13 +131,15 @@ inline int run_contact_benchmark(const litepgo::mesh::TriangleMesh& surface,
         const Vec positions = kinematics.positions(states[i]);
         ccd << names[i] << ',' << native.max_feasible_step(positions, direction) << ','
             << toolkit.max_feasible_step(positions, direction) << '\n';
-        native.update_pattern(positions);
-        toolkit.update_pattern(positions);
         for (const auto kind : {energy::HessianKind::Exact, energy::HessianKind::Projected}) {
             Vec gn, gt;
-            SpMat hn = native.hessian_pattern(), ht = toolkit.hessian_pattern();
-            const double en = kappa * native.eval(positions, &gn, &hn, kind);
-            const double et = kappa * toolkit.eval(positions, &gt, &ht, kind);
+            auto n = native.eval(positions, true, kind);
+            auto t = toolkit.eval(positions, true, kind);
+            gn = std::move(*n.gradient);
+            gt = std::move(*t.gradient);
+            SpMat hn = std::move(*n.hessian), ht = std::move(*t.hessian);
+            const double en = kappa * n.value;
+            const double et = kappa * t.value;
             gn *= kappa;
             gt *= kappa;
             hn *= kappa;

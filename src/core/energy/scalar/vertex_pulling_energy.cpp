@@ -9,66 +9,51 @@ namespace litepgo::energy {
 
 namespace {
 
-// The diagonal pattern on the pulled DOFs.
-SpMat diagonal_pattern(int num_dofs, const std::vector<int>& dofs) {
+// Validate indices before using them to construct the fixed sparse pattern.
+SpMat diagonal_pattern(int num_dofs, const std::vector<std::array<int, 3>>& position_dofs) {
+    if (num_dofs < 0)
+        throw std::invalid_argument("VertexPullingEnergy requires a non-negative DOF count");
+    std::vector<int> sorted;
+    sorted.reserve(3 * position_dofs.size());
+    for (const auto& vertex : position_dofs)
+        sorted.insert(sorted.end(), vertex.begin(), vertex.end());
+    std::sort(sorted.begin(), sorted.end());
+    if (!sorted.empty() && (sorted.front() < 0 || sorted.back() >= num_dofs))
+        throw std::invalid_argument("VertexPullingEnergy position DOFs must be in [0, num_dofs)");
+    if (std::adjacent_find(sorted.begin(), sorted.end()) != sorted.end())
+        throw std::invalid_argument("VertexPullingEnergy position DOFs must be distinct");
     std::vector<Triplet> entries;
-    entries.reserve(dofs.size());
-    for (const int dof : dofs) {
+    entries.reserve(sorted.size());
+    for (int dof : sorted)
         entries.emplace_back(dof, dof, 1.0);
-    }
     SpMat pattern(num_dofs, num_dofs);
     pattern.setFromTriplets(entries.begin(), entries.end());
     return pattern;
 }
-
 } // namespace
-
-VertexPullingEnergy::Setup VertexPullingEnergy::checked_setup(int num_dofs,
-                                                              const std::vector<std::array<int, 3>>& position_dofs,
-                                                              Vec targets, double stiffness) {
-    if (num_dofs < 0) {
-        throw std::invalid_argument("VertexPullingEnergy requires a non-negative DOF count");
-    }
-    if (!std::isfinite(stiffness) || stiffness <= 0.0) {
-        throw std::invalid_argument("VertexPullingEnergy requires a finite positive stiffness");
-    }
-    if (targets.size() != 3 * static_cast<Eigen::Index>(position_dofs.size()) || !targets.allFinite()) {
-        throw std::invalid_argument("VertexPullingEnergy requires three finite target entries per pulled vertex");
-    }
-    std::vector<int> dofs;
-    dofs.reserve(3 * position_dofs.size());
-    for (const auto& vertex : position_dofs) {
-        dofs.insert(dofs.end(), vertex.begin(), vertex.end());
-    }
-    std::vector<int> sorted = dofs;
-    std::sort(sorted.begin(), sorted.end());
-    if (!sorted.empty() && (sorted.front() < 0 || sorted.back() >= num_dofs)) {
-        throw std::invalid_argument("VertexPullingEnergy position DOFs must be in [0, num_dofs)");
-    }
-    if (std::adjacent_find(sorted.begin(), sorted.end()) != sorted.end()) {
-        throw std::invalid_argument("VertexPullingEnergy position DOFs must be distinct");
-    }
-    return {num_dofs, std::move(dofs), std::move(targets), stiffness};
-}
 
 VertexPullingEnergy::VertexPullingEnergy(int num_dofs, std::vector<std::array<int, 3>> position_dofs, Vec targets,
                                          double stiffness)
-    : VertexPullingEnergy(checked_setup(num_dofs, position_dofs, std::move(targets), stiffness)) {}
-
-VertexPullingEnergy::VertexPullingEnergy(Setup setup)
-    : FixedPatternEnergy(setup.num_dofs, diagonal_pattern(setup.num_dofs, setup.dofs)), dofs_(std::move(setup.dofs)),
-      targets_(std::move(setup.targets)), stiffness_(setup.stiffness) {}
+    : FixedPatternEnergy(diagonal_pattern(num_dofs, position_dofs)), position_dofs_(std::move(position_dofs)),
+      targets_(std::move(targets)), stiffness_(stiffness) {
+    if (!std::isfinite(stiffness_) || stiffness_ <= 0.0)
+        throw std::invalid_argument("VertexPullingEnergy requires a finite positive stiffness");
+    if (targets_.size() != 3 * static_cast<Eigen::Index>(position_dofs_.size()) || !targets_.allFinite())
+        throw std::invalid_argument("VertexPullingEnergy requires three finite target entries per pulled vertex");
+}
 
 double VertexPullingEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const {
     if (gradient != nullptr) {
         gradient->setZero();
     }
     double squared_distance = 0.0;
-    for (std::size_t i = 0; i < dofs_.size(); ++i) {
-        const double gap = x[dofs_[i]] - targets_[static_cast<Eigen::Index>(i)];
-        squared_distance += gap * gap;
-        if (gradient != nullptr) {
-            (*gradient)[dofs_[i]] = stiffness_ * gap;
+    for (std::size_t i = 0; i < position_dofs_.size(); ++i) {
+        for (int axis = 0; axis < 3; ++axis) {
+            const int dof = position_dofs_[i][axis];
+            const double gap = x[dof] - targets_[static_cast<Eigen::Index>(3 * i + axis)];
+            squared_distance += gap * gap;
+            if (gradient != nullptr)
+                (*gradient)[dof] = stiffness_ * gap;
         }
     }
     if (hessian != nullptr) {

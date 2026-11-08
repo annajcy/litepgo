@@ -12,7 +12,7 @@ using namespace nb::literals;
 namespace litepgo::energy::binding {
 void bind_fixed_pattern_energy(nb::module_& m) {
     nb::class_<FixedPatternEnergy, Energy, PyEnergy<FixedPatternEnergy>>(m, "FixedPatternEnergy")
-        .def(nb::init<int, const linalg::binding::SparseArgument&>(), "num_dofs"_a, "pattern"_a)
+        .def(nb::init<const linalg::binding::SparseArgument&>(), "pattern"_a)
         .def(
             "feasible_step", [](const FixedPatternEnergy&, const ConstVecRef&, const ConstVecRef&) { return 1.0; },
             "x"_a, "dx"_a);

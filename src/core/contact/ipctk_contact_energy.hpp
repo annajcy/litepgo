@@ -16,7 +16,7 @@ namespace litepgo::contact {
 // IPC's clamped log barrier for self-contact on a triangle surface
 // [Li et al. 2020], evaluated by IPC Toolkit. x holds the surface vertices'
 // positions in vertex-major xyz order. The stiffness is 1: scale the energy by its
-// weight in a WeightedEnergySum.
+// weight in a WeightedSumEnergy.
 // use_area_weighting enables fixed reference-area collision weights.
 // Optional group multipliers act before closest-feature merging. Zero excludes
 // candidates from the active set and CCD, while initial whole-surface intersection
@@ -26,7 +26,7 @@ namespace litepgo::contact {
 // edge-vertex and vertex-vertex pair closer than min_distance + dhat;
 // primitives sharing a vertex never pair. The Hessian pattern holds a dense 3x3
 // block for every two vertices of an active pair, so it changes with the active
-// set; an active pair outside the current pattern is a std::logic_error.
+// set. Each Hessian call prepares that structure automatically.
 //
 // A state is feasible when the surface does not intersect itself, every pair is
 // with a positive group multiplier is farther apart than min_distance.
@@ -58,17 +58,17 @@ class IPCTKContactEnergy final : public energy::DynamicPatternEnergy {
         return options_;
     }
 
-    // Diagnostics at x, independent of the current pattern: the number of active
+    // Diagnostics at x, independent of other evaluations: the number of active
     // pairs, and the smallest distance among them (+infinity when there are none).
     int num_active_pairs(const ConstVecRef& x) const;
     double min_active_distance(const ConstVecRef& x) const;
-    // Full owned snapshot; does not update the Hessian pattern or solver state.
+    // Full owned snapshot; does not change evaluation results or solver state.
     ContactSnapshot contact_snapshot(const ConstVecRef& x) const;
 
   private:
     struct Impl;
 
-    SpMat pattern_at(const ConstVecRef& x) const override;
+    SpMat hessian_pattern_at(const ConstVecRef& x) const override;
     double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, energy::HessianKind kind) const override;
     double feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const override;
 

@@ -1,4 +1,5 @@
 #include "litepgo/energy/scalar/mesh_energy.hpp"
+#include "litepgo/common/busy_scope.hpp"
 #include <Eigen/Eigenvalues>
 #include <algorithm>
 #include <cmath>
@@ -27,8 +28,7 @@ void project_hessian(Eigen::Ref<BatchMatrix> hessian) {
 } // namespace
 
 MeshEnergy::MeshEnergy(dof::EnergyAssembler assembler, int batch_size)
-    : FixedPatternEnergy(static_cast<int>(assembler.hessian_pattern().rows()), assembler.hessian_pattern()),
-      assembler_(std::move(assembler)) {
+    : FixedPatternEnergy(assembler.hessian_pattern()), assembler_(std::move(assembler)) {
     if (batch_size <= 0)
         throw std::invalid_argument("MeshEnergy: invalid batch size");
     std::map<int, std::vector<int>> groups;
@@ -36,23 +36,20 @@ MeshEnergy::MeshEnergy(dof::EnergyAssembler assembler, int batch_size)
         groups[static_cast<int>(assembler_.dof_indices(e).size())].push_back(e);
     for (const auto& [size, ids] : groups)
         for (std::size_t begin = 0; begin < ids.size(); begin += batch_size)
-            batches_.emplace_back(ids.begin() + begin, ids.begin() + std::min(ids.size(), begin + batch_size));
-    storage_.resize(batches_.size());
+            batches_.push_back({.ids = {ids.begin() + begin, ids.begin() + std::min(ids.size(), begin + batch_size)}});
     values_.resize(assembler_.num_elements());
     views_.resize(assembler_.num_elements());
 }
 void MeshEnergy::gather(const std::vector<int>& ids, const ConstVecRef& x, BatchMatrix& result) const {
     result.resize(ids.size(), assembler_.dof_indices(ids.front()).size());
-    for (std::size_t b = 0; b < ids.size(); ++b) {
-        const auto indices = assembler_.dof_indices(ids[b]);
-        for (std::size_t c = 0; c < indices.size(); ++c)
-            result(b, c) = x[indices[c]];
-    }
+    for (std::size_t b = 0; b < ids.size(); ++b)
+        result.row(b) = x(assembler_.dof_indices(ids[b])).transpose();
 }
 double MeshEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const {
+    ::litepgo::detail::BusyScope scope(busy_, "MeshEnergy");
     tbb::parallel_for(std::size_t(0), batches_.size(), [&](std::size_t k) {
-        const auto& ids = batches_[k];
-        auto& data = storage_[k];
+        auto& data = batches_[k];
+        const auto& ids = data.ids;
         gather(ids, x, data.inputs);
         const auto& inputs = data.inputs;
         const Eigen::Index count = inputs.rows(), n = inputs.cols();
@@ -89,12 +86,13 @@ double MeshEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessi
     return value;
 }
 double MeshEnergy::feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const {
+    ::litepgo::detail::BusyScope scope(busy_, "MeshEnergy");
     return tbb::parallel_reduce(
         tbb::blocked_range<std::size_t>(0, batches_.size()), 1.,
         [&](const auto& range, double bound) {
             for (auto k = range.begin(); k < range.end(); ++k) {
-                const auto& ids = batches_[k];
-                auto& data = storage_[k];
+                auto& data = batches_[k];
+                const auto& ids = data.ids;
                 gather(ids, x, data.inputs);
                 gather(ids, dx, data.delta);
                 const Vec steps = eval_feasible_step_batch(ids, data.inputs, data.delta);

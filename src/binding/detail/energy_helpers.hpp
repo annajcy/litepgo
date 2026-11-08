@@ -3,6 +3,7 @@
 #include "litepgo/energy/scalar/energy.hpp"
 #include <nanobind/eigen/dense.h>
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/trampoline.h>
 #include <stdexcept>
 namespace nb = nanobind;
@@ -27,17 +28,20 @@ inline void copy_derivative_values(const SpMat& source, SpMat& output, const cha
     }
 }
 
-// Both bases share scalar evaluation and feasibility; only the dynamic base calls pattern_at.
+// Both bases share scalar evaluation and feasibility; only the dynamic base requests hessian_pattern_at.
 template <class Base> class PyEnergy : public Base {
   public:
     NB_TRAMPOLINE(Base);
-    PyEnergy(int n, const linalg::binding::SparseArgument& pattern) : Base(n, pattern.matrix) {}
+    explicit PyEnergy(const linalg::binding::SparseArgument& pattern) : Base(pattern.matrix) {}
+    explicit PyEnergy(int n) : Base(n) {}
 
   private:
     double eval_values(const ConstVecRef& x, Vec* g, SpMat* H, HessianKind kind) const override {
-        nb::detail::ticket ticket(this->nb_trampoline, "eval_values", nb::detail::str_hash("eval_values"), true);
-        nb::object out = this->nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x)), g != nullptr,
-                                                                     H ? nb::cast(kind) : nb::none());
+        nb::gil_scoped_acquire gil;
+        if (!nb::hasattr(this->nb_trampoline.base(), "eval_values"))
+            throw std::logic_error("Energy: missing eval_values");
+        nb::object out = this->nb_trampoline.base().attr("eval_values")(nb::cast(Vec(x)), g != nullptr,
+                                                                        H ? nb::cast(kind) : nb::none());
         if (out.is_none())
             throw std::domain_error("Energy is infeasible");
         if (!nb::isinstance<nb::tuple>(out) || nb::len(out) != 3)
@@ -50,8 +54,7 @@ template <class Base> class PyEnergy : public Base {
         }
         if (H) {
             const SpMat source = nb::cast<linalg::binding::SparseArgument>(values[2]).matrix;
-            copy_derivative_values(source, *H, "Energy: invalid Hessian",
-                                   "Energy: Hessian outside pattern; call update_pattern");
+            copy_derivative_values(source, *H, "Energy: invalid Hessian", "Energy: Hessian outside pattern");
         }
         return nb::cast<double>(values[0]);
     }
@@ -66,39 +69,52 @@ template <class Base> class PyEnergy : public Base {
 template <class Base> class PyResponse : public Base {
   public:
     NB_TRAMPOLINE(Base);
-    explicit PyResponse(const linalg::binding::SparseArgument& pattern) : Base(pattern.matrix) {}
-    Vec default_jvp(const ConstVecRef& x, const ConstVecRef& dx) const {
-        return Base::eval_jvp_values(x, dx);
+    explicit PyResponse(const linalg::binding::SparseArgument& pattern,
+                        const std::optional<linalg::binding::SparseArgument>& hessian_pattern = std::nullopt)
+        : Base(pattern.matrix, hessian_pattern ? std::optional<SpMat>(hessian_pattern->matrix) : std::nullopt) {}
+    PyResponse(int num_inputs, int num_outputs) : Base(num_inputs, num_outputs) {}
+    Vec default_jvp(const ConstVecRef& x, const ConstVecRef& dx) {
+        return Base::eval_jvp_impl(x, dx);
     }
-    Vec default_vjp(const ConstVecRef& x, const ConstVecRef& gy) const {
-        return Base::eval_vjp_values(x, gy);
+    Vec default_vjp(const ConstVecRef& x, const ConstVecRef& gy) {
+        return Base::eval_vjp_impl(x, gy);
     }
 
   private:
-    Vec eval_jvp_values(const ConstVecRef& x, const ConstVecRef& dx) const override {
-        nb::detail::ticket ticket(this->nb_trampoline, "eval_jvp_values", nb::detail::str_hash("eval_jvp_values"),
-                                  false);
-        if (!ticket.key.is_valid())
-            return Base::eval_jvp_values(x, dx);
-        nb::object result = this->nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x)), nb::cast(Vec(dx)));
+    void eval_hessian_impl(const ConstVecRef& x, const ConstVecRef& weights, SpMat& H) override {
+        nb::gil_scoped_acquire gil;
+        nb::handle self = this->nb_trampoline.base();
+        if (!nb::hasattr(self, "eval_hessian_impl"))
+            throw std::logic_error("Response: missing eval_hessian_impl");
+        nb::object result = self.attr("eval_hessian_impl")(nb::cast(Vec(x)), nb::cast(Vec(weights)));
+        if (result.is_none())
+            throw std::domain_error("Response is infeasible");
+        const SpMat source = nb::cast<linalg::binding::SparseArgument>(result).matrix;
+        copy_derivative_values(source, H, "Response: invalid Hessian", "Response: Hessian outside pattern");
+    }
+    Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& dx) override {
+        nb::gil_scoped_acquire gil;
+        // The bound base method selects the fallback; Python overrides may reenter normally.
+        nb::object result = this->nb_trampoline.base().attr("eval_jvp_impl")(nb::cast(Vec(x)), nb::cast(Vec(dx)));
         if (result.is_none())
             throw std::domain_error("Response is infeasible");
         return nb::cast<Vec>(result);
     }
-    Vec eval_vjp_values(const ConstVecRef& x, const ConstVecRef& gy) const override {
-        nb::detail::ticket ticket(this->nb_trampoline, "eval_vjp_values", nb::detail::str_hash("eval_vjp_values"),
-                                  false);
-        if (!ticket.key.is_valid())
-            return Base::eval_vjp_values(x, gy);
-        nb::object result = this->nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x)), nb::cast(Vec(gy)));
+    Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& gy) override {
+        nb::gil_scoped_acquire gil;
+        // The bound base method selects the fallback; Python overrides may reenter normally.
+        nb::object result = this->nb_trampoline.base().attr("eval_vjp_impl")(nb::cast(Vec(x)), nb::cast(Vec(gy)));
         if (result.is_none())
             throw std::domain_error("Response is infeasible");
         return nb::cast<Vec>(result);
     }
-    Vec eval_values(const ConstVecRef& x, SpMat* J) const override {
+    Vec eval_impl(const ConstVecRef& x, SpMat* J) override {
         using linalg::binding::SparseArgument;
-        nb::detail::ticket ticket(this->nb_trampoline, "eval_values", nb::detail::str_hash("eval_values"), true);
-        nb::object value = this->nb_trampoline.base().attr(ticket.key)(nb::cast(Vec(x)), J != nullptr);
+        nb::gil_scoped_acquire gil;
+        nb::handle self = this->nb_trampoline.base();
+        if (!nb::hasattr(self, "eval_impl"))
+            throw std::logic_error("Response: missing eval_impl");
+        nb::object value = self.attr("eval_impl")(nb::cast(Vec(x)), J != nullptr);
         if (value.is_none())
             throw std::domain_error("Response is infeasible");
         if (!J)

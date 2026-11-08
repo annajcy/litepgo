@@ -14,7 +14,10 @@ contact supply these objects; they do not require a separate simulation framewor
 2. [Solve a complete constrained problem](guide/quickstart.md).
 3. [Understand the architecture and module boundaries](guide/architecture.md).
 4. [Learn the common data and derivative conventions](guide/concepts.md).
-5. [Choose a runnable example](examples.md).
+5. [Learn energy and response with a spring chain](tutorials/energy/index.md).
+6. [Learn Torch materials step by step](tutorials/torch/index.md).
+7. [Choose a runnable example](examples.md).
+8. [Measure performance](benchmarks/index.md).
 
 Every command assumes the repository root unless a page says otherwise. Examples
 use the release preset and bundled or generated geometry. Python arrays use
@@ -31,6 +34,8 @@ use the release preset and bundled or generated geometry. Python arrays use
 | Factor sparse systems and select a backend | [Linear algebra](guide/linalg/index.md) |
 | Define energies, responses, and batched assembly | [Energy and response contracts](guide/energy/index.md) |
 | Understand the finite-element layers | [FEM module](guide/fem/index.md) |
+| Choose shape functions and prepare coefficient slots | [Basis functions](guide/fem/basis.md) |
+| Choose integration points and reference weights | [Quadrature](guide/fem/quadrature.md) |
 | Construct interpolated fields and derivatives | [Fields and quadrature](guide/fem/fields.md) |
 | Model 3D elasticity and prescribed plasticity | [Volumetric FEM](guide/fem/volume.md) |
 | Model membrane strain and bending | [Shell FEM](guide/fem/shell.md) |

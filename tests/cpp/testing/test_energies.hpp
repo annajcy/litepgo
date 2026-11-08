@@ -51,7 +51,7 @@ inline void zero_values(SpMat& matrix) {
 // so it differs from the exact one wherever |x_i| < 1 / sqrt(3).
 class DoubleWellChain final : public energy::FixedPatternEnergy {
   public:
-    explicit DoubleWellChain(int n) : energy::FixedPatternEnergy(n, chain_pattern(n, all_pair_starts(n))) {}
+    explicit DoubleWellChain(int n) : energy::FixedPatternEnergy(chain_pattern(n, all_pair_starts(n))) {}
 
   private:
     double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, energy::HessianKind kind) const override {
@@ -97,7 +97,7 @@ class DoubleWellChain final : public energy::FixedPatternEnergy {
 // Its feasible step keeps 10% of the remaining distance to the boundary.
 class HalfSpaceBarrier final : public energy::FixedPatternEnergy {
   public:
-    HalfSpaceBarrier(int n, int k) : energy::FixedPatternEnergy(n, single_entry_pattern(n, k)), k_(k) {}
+    HalfSpaceBarrier(int n, int k) : energy::FixedPatternEnergy(single_entry_pattern(n, k)), k_(k) {}
 
   private:
     static SpMat single_entry_pattern(int n, int k) {
@@ -142,7 +142,7 @@ class HalfSpaceBarrier final : public energy::FixedPatternEnergy {
 // holds the diagonal and the active pairs, like contact holding active contacts.
 class SwitchingEnergy final : public energy::DynamicPatternEnergy {
   public:
-    explicit SwitchingEnergy(int n) : energy::DynamicPatternEnergy(n, chain_pattern(n, {})) {}
+    explicit SwitchingEnergy(int n) : energy::DynamicPatternEnergy(n) {}
 
     static std::vector<int> active_pairs(const ConstVecRef& x) {
         std::vector<int> active;
@@ -155,7 +155,7 @@ class SwitchingEnergy final : public energy::DynamicPatternEnergy {
     }
 
   private:
-    SpMat pattern_at(const ConstVecRef& x) const override {
+    SpMat hessian_pattern_at(const ConstVecRef& x) const override {
         return chain_pattern(num_dofs(), active_pairs(x));
     }
 
@@ -163,9 +163,8 @@ class SwitchingEnergy final : public energy::DynamicPatternEnergy {
         const std::vector<int> active = active_pairs(x);
         if (hessian != nullptr) {
             for (const int i : active) {
-                if (!stores(hessian_pattern(), i + 1, i)) {
-                    throw std::logic_error("SwitchingEnergy: an active pair is outside the pattern; call "
-                                           "update_pattern() at this state");
+                if (!stores(*hessian, i + 1, i)) {
+                    throw std::logic_error("SwitchingEnergy: an active pair is outside the prepared Hessian structure");
                 }
             }
             zero_values(*hessian);

@@ -1,169 +1,123 @@
-# Fields, bases, and quadrature
+# Spatial responses and coefficient maps
 
-A field maps reference-element coordinates $\xi\in\mathbb R^D$ to an
-$m$-component value. Parameter dimension $D$, component count $m$, and
-coefficient count are independent. `Field2D` and `Field3D` describe $D$, not
-the dimension of the value: a surface coordinate field can have three components
-and a two-dimensional parameter domain.
+FEM uses the same `Response` interface as the rest of litepgo. A response differentiates its explicit input. There is no separate `Field` hierarchy and no implicit active coefficient block.
 
-## Architecture of a local evaluation
+## Migrating existing code
 
-Bases supply shape functions. A field combines those functions with coefficients;
-kinematics interprets field values, and a local material term supplies a density
-or response. An element integrator adds quadrature and the rest-geometry measure.
-This is the local path beneath the [FEM module wrappers](index.md).
-
-```mermaid
-flowchart TB
-  accTitle: Fields, local material terms and integration
-  accDescr: Basis functions and coefficients define fields at reference coordinates. Kinematics converts their values and derivatives into material inputs, local terms return density derivatives, and quadrature weights integrate them over rest geometry.
-  basis["Basis functions and coefficients"] --> field["Field value and coefficient derivatives"]
-  xi["Reference query coordinate"] --> field
-  field --> kinematics["Kinematics and material inputs"]
-  kinematics --> local["LocalEnergy / LocalResponse"]
-  local --> integral["Element integration"]
-  measure["Quadrature and rest-geometry measure"] --> integral
-  integral --> result["Integrated local value and derivatives"]
-```
-
-## Interpolate a field
-
-For basis functions $N_a$ and coefficient rows $C_a$,
-
-$$
-y(\xi)=\sum_{a=0}^{n_b-1}N_a(\xi)C_a=C^TN(\xi),\qquad
-\frac{\partial y}{\partial\xi}=C^T\frac{\partial N}{\partial\xi}.
-$$
-
-`InterpolatedField2D[B]` / `InterpolatedField3D[B]` store an owning snapshot of
-`C`. `IdentityField2D(c)` / `IdentityField3D(c)` return a spatially constant
-vector; their coefficient derivative is identity, so constant-in-space parameters
-can still be optimized.
-
-```python
-import numpy as np
-from litepgo import fem
-
-B = fem.TetP1Basis
-X = np.array([B.reference_node(i) for i in range(4)])
-field = fem.InterpolatedField3D[B](X)
-xi = np.array([0.1, 0.2, 0.3])
-np.testing.assert_allclose(field.eval_value(xi), xi)
-np.testing.assert_allclose(field.eval_dvalue_dxi(xi), np.eye(3))
-assert field.eval_dvalue_dcoeffs(xi).shape == (3, 12)
-```
-
-In C++, template syntax is `InterpolatedField3D<TetP1Basis>`. Python uses
-`fem.Template` objects: indexing with the C++ template arguments returns a bound
-class. `.instances` lists supported argument tuples. Unsupported combinations
-raise `TypeError`; Python cannot instantiate arbitrary C++ templates at runtime.
-
-## Basis and derivative layouts
-
-| Basis | Reference domain | Scalar basis functions |
-| --- | --- | --- |
-| `TriangleP1Basis` | $\xi,\eta\ge0,\ \xi+\eta\le1$ | 3 |
-| `TetP1Basis` | $\xi_i\ge0,\ \sum_i\xi_i\le1$ | 4 |
-| `HexQ1Basis` | $[0,1]^3$ | 8 |
-| `QuadHermiteBasis` | $[0,1]^2$ | 16 |
-| `HexHermiteBasis` | $[0,1]^3$ | 64 |
-
-The 1D native building blocks are `LinearLagrangeBasis` and `CubicHermiteBasis`.
-Tensor products form the higher-dimensional bases. A basis provides `eval_N`,
-`eval_dN_dxi`, `eval_d2N_dxi2`, and reference-node information.
-
-For $n_b$ basis functions, $m$ components, and
-$s=D(D+1)/2$ packed second derivatives:
-
-| Field method | Shape |
+| Previous API | Replacement |
 | --- | --- |
-| `eval_value(xi)` | `(m,)` |
-| `eval_dvalue_dxi(xi)` | `(m, D)` |
-| `eval_dvalue_dcoeffs(xi)` | `(m, n_b*m)` |
-| `eval_dgrad_xi_dcoeffs(xi)` | `(m*D, n_b*m)` |
-| `eval_d2value_dxi2(xi)` | `(m, s)` |
-| `eval_dhess_xi_dcoeffs(xi)` | `(m*s, n_b*m)` |
+| `InterpolatedField2D/3D[B](C)` | `InterpolatedResponse[B](C)`; derivatives now explicitly differentiate `xi` |
+| `IdentityField2D/3D(c)` as fixed configuration | `AffineResponse(zeros((m,d)), c)`; coordinate derivatives are zero |
+| Active coefficient derivatives of an interpolated field | The value, gradient and Hessian sampling factories at fixed points |
+| `DeformationGradientField3D(u,X)` queried in space | `DeformationGradientResponse(u,X)`; its Jacobian differentiates `xi`, not `u` coefficients |
+| Its active displacement-coefficient derivative | `deformation_gradient_sampling_response<B>(geometry, points).eval_jacobian(c)` |
+| `SharedField3D` and concrete field template arguments | Ordinary Response ownership at the API boundary; FEM caches numerical samples |
+| Field-dependent local material wrappers | Pointwise material functions and explicit DOF pullbacks, or a global FEM force response composed with coefficient sampling |
 
-Coefficient columns use row-major `C.ravel()`. Matrix outputs are vectorized by
-column when differentiated. Second spatial derivative columns are `(11,12,22)`
-in 2D and `(11,12,13,22,23,33)` in 3D, with mixed entries stored once. P1 simplex
-bases have zero second derivatives. Q1 tensor-product bases can have nonzero
-mixed derivatives despite zero pure second derivatives.
+The removed interfaces have no compatibility aliases. In particular, do not mechanically
+replace a coefficient derivative with `eval_jacobian(xi)`: those have different independent variables.
 
-Generic custom fields are affine in their active coefficients and must implement
-the requested derivative capabilities. The base interface's optional spatial
-operations throw if unsupported. Python exposes bound fields for selection and
-composition, not Python subclasses for per-quadrature-point execution.
+## Fixed coefficients, variable coordinates
 
-## Two-dimensional parameter fields
+For scalar basis functions \(N_a\), fixed coefficients \(C\in\mathbb R^{n_b\times m}\) define
 
-`QuadHermiteBasis` has corners `(0,0), (1,0), (1,1), (0,1)`. At each corner its
-four vector coefficient slots are $[y,y_{,\xi},y_{,\eta},y_{,\xi\eta}]$, so
-basis row `4*vertex + slot` identifies one of 16 scalar functions. A three-component
-field stores `(16,3)` coefficients. A width-12 vertex gather on a quad can be
-row-reshaped into this layout.
+\[
+r(\xi)=C^T N(\xi),\qquad
+J_r(\xi)=C^T D_\xi N(\xi).
+\]
 
-For a rectangular physical parameter chart with spans $(h_s,h_t)$, physical
-slots scale to reference slots by $(1,h_s,h_t,h_sh_t)$. Sharing reference
-coefficients without this conversion is generally wrong for unequal cells.
-Compatible chart transitions require their own derivative transforms. This
-lower-level field support does not turn the triangle mid-edge shell model into
-a higher-order quad shell.
+`InterpolatedResponse<B>(C)` in C++, or `fem.InterpolatedResponse[B](C)` in Python, owns a copy of `C`. Its input is a reference coordinate vector of length \(d\), including length one for 1D bases. Its output has length \(m\); its Jacobian has shape \((m,d)\). The weighted Hessian is the full symmetric matrix \(\sum_c w_c D_\xi^2 r_c\), with weights fixed during differentiation.
 
-`TriangleP1Basis` instead uses
-$N=(1-\xi-\eta,\xi,\eta)$ on the reference triangle. Its nodal field stores
-three rows, has constant first derivatives, and zero second derivatives. Shell
-curvature reconstruction additionally uses neighboring vertices; it is not
-provided by this P1 basis alone.
+Rest positions are coefficients too: a geometry response uses \(m=3\) and \(C=X\), the element's rest-position coefficients. Geometry and displacement may use different bases. Coordinates outside the reference domain extrapolate; queries do not clamp.
 
-## Geometry and deformation are separate fields
+A constant spatial response uses `AffineResponse(A, value)` with a zero \(m\times d\) matrix `A`. Its coordinate Jacobian is zero. To differentiate a material parameter directly, pass that parameter as the explicit input of the appropriate force response instead.
 
-Let $X(\xi)$ be rest coordinates and $u(\xi)$ displacement. For a solid,
+## Fixed coordinates, variable coefficients
 
-$$
-J_X=X_{,\xi},\qquad
-F=I+u_{,\xi}J_X^{-1},\qquad
-\frac{\partial F_{id}}{\partial u_{ab}}
-=\delta_{ib}\frac{\partial N_a}{\partial X_d}.
-$$
+With fixed points \(\xi_q\), the three [sampling factories](./sampling-responses) return `AffineResponse` objects:
 
-`DeformationGradientField3D(u_field, X_field)` implements this composition and
-returns nine column-packed components of $F$. Geometry and displacement can
-use different bases, but must refer to the same element and reference domain.
-The coordinate Jacobian must be finite, invertible, and positively oriented.
-The field holds rest geometry fixed when differentiating displacement coefficients;
-coordinate optimization and spatial derivatives of $F$ are not part of this API.
+\[
+S_0 c = \{C^T N(\xi_q)\}_q,\quad
+S_1 c = \{C^T D_\xi N(\xi_q)\}_q,\quad
+S_2 c = \{C^T D_\xi^2 N(\xi_q)\}_q.
+\]
 
-C++ composed fields and local material objects borrow named inputs: keep them
-alive, and avoid temporaries. Python retains those dependencies. Basic identity
-and interpolated fields themselves own snapshots.
+Here \(c=\operatorname{vec}_{\rm row}(C)\). Outputs order point, spatial derivative slot, then component. Hessian samples store upper-triangle slots once, without mixed-entry scaling. The returned responses differentiate `c`, so their Jacobians are the constant sampling matrices and their own Hessians are zero. No quadrature weights or physical-coordinate transformation is included.
 
-## Integration applies the measure once
+## Deformation and physical coordinates
 
-For a solid local density $W$,
+For fixed displacement and geometry responses \(u(\xi),X(\xi)\),
 
-$$
-E_e\approx\sum_q w_q\det J_X(\xi_q)\,W(\xi_q).
-$$
+\[
+F(\xi)=I+D_\xi u(\xi)\,[D_\xi X(\xi)]^{-1}.
+\]
 
-`VolumetricElement3D[Q](X_field)` snapshots each quadrature point and physical
-reference-volume weight. Rebuild it when rest geometry changes. `LocalEnergy3D`
-supplies density and coefficient derivatives; `LocalResponse3D` supplies a vector
-and optional Jacobian. Neither local object silently adds the geometric measure.
+`DeformationGradientResponse(displacement, geometry)` maps \(\xi\in\mathbb R^3\) to column-major `vec(F)`, with nine outputs. It owns its child responses, which must remain fixed, map three inputs to three outputs, and support Hessians. It requires a finite positive geometry determinant at the query point. Its exact spatial Jacobian uses
 
-| Rule | Domain | Weight sum |
-| --- | --- | --- |
-| `TetCentroidQuadrature` | Unit reference tetrahedron | $1/6$ |
-| `TriangleCentroidQuadrature` | Unit reference triangle | $1/2$ |
-| `GaussLegendre2D[k]` | $[0,1]^2$, $k^2$ points | 1 |
-| `GaussLegendre3D[k]` | $[0,1]^3$, $k^3$ points | 1 |
+\[
+\partial_k F=(\partial_k D_\xi u-(F-I)\partial_k D_\xi X)[D_\xi X]^{-1}.
+\]
 
-For a surface field $X(\xi,\eta)$, use
-$w_q\|X_{,\xi}\times X_{,\eta}\|$. The triangle rule's $1/2$ already
-accounts for reference area; do not multiply by another $1/2$.
+It does **not** provide Hessians: these would require third spatial derivatives. This map is useful for a prescribed plastic deformation. It does not differentiate displacement coefficients.
 
-Python local-energy calls return `(value, gradient_or_None, hessian_or_None)`.
-Element calls integrate those quantities. Native `accumulate` adds into initialized,
-correctly sized buffers; `eval` resizes/overwrites owning outputs. Strided native
-`accumulate_into` / `eval_into` permit direct writes into batch output blocks.
-These views must stay alive and must not alias the input fields.
+For active displacement coefficients, native FEM precomputes the dense matrix
+
+\[
+B_q=\bigl(D_\xi N(\xi_q)[D_\xi X(\xi_q)]^{-1}\bigr)^T\otimes I_3,
+\qquad \operatorname{vec}(F_q)=\operatorname{vec}(I)+B_qc.
+\]
+
+`deformation_gradient_sampling_response<B>(geometry, points)` exposes this coefficient map as an `AffineResponse`. It takes reference coefficients, not physical DOFs.
+Native FEM constructs this sampling Response at quadrature points and extracts its constant Jacobian into dense per-point blocks. It keeps those numerical blocks, not an extra Kinematics object. No response composition or sparse assembly is performed inside each constitutive evaluation.
+
+## Fixed configuration is sampled once
+
+`VolumetricFemEnergy<Material,Basis,Quadrature>` accepts a displacement map and three lists of spatial responses: geometry, plastic matrices, and material parameters, in element order. Their input dimension is three and output dimensions are respectively three, nine and `Material::num_parameters`. C++ lists use `std::vector<std::shared_ptr<energy::Response>>`; Python accepts lists of response objects.
+
+Construction caches integration weights, physical DOF transforms, `B_q`, and the material values at quadrature points. It retains no configuration responses. Force-response constructors likewise snapshot their fixed displacement and fixed material input. Rebuild the FEM object after changing configuration. Construction may call Python response hooks; numerical assembly subsequently uses the cached native data.
+
+`VolumetricElement3D<Q>` and `BasisDofTransform<B>` accept a spatial geometry response and cache their required data. Nodal displacement coefficients are unchanged. Hex Hermite transforms physical DOFs using positive axis-aligned affine box lengths; this restriction has not been relaxed. `ElementLocator<B>` and `sample_boundary<B>` retain their P1/Q1 geometry restrictions: arbitrary spatial responses do not supply conservative geometric bounds. The locator snapshots its supported interpolated geometry.
+
+## Integration and local material code
+
+For \(w_q=\widehat w_q\det D_\xi X(\xi_q)\), native volumetric assembly computes
+
+\[
+E(c)=\sum_q w_q W(F_q,F_{p,q},\theta_q),\quad
+\nabla_c E=\sum_q w_q B_q^T\operatorname{vec}(P_q),\quad
+H_c=\sum_q w_q B_q^T A_qB_q.
+\]
+
+Physical DOFs are pulled back through `BasisDofTransform`. The force responses return the **positive energy gradient**, not its negative. Their parameter Jacobians replace \(A_q B_q\) with the material's mixed derivative with respect to `theta` or column-major `vec(Fp)`. `ConstantDofMap` shares a parameter block; `ElementDofMap` supplies one per element. Compose with coefficient sampling when the active parameter block itself is an affine function of other coefficients.
+
+The old Field-dependent local material wrappers are removed. For custom integration, use the material's pointwise `eval_W`, stress and tangent functions, the existing DOF pullback helpers, and `VolumetricElement3D`'s C++ indexed accumulation callback. The `LocalEnergy2D/3D`, `LocalResponse2D/3D` and `DeformationGradientKinematics3D` APIs are removed. Custom energies and force responses use the ordinary Energy/Response interfaces, with active DOFs as inputs. Apply the complete integration weight once. Python exposes `element.points()` and `element.weights()` as independent arrays; the latter already includes the reference quadrature weight and geometry determinant.
+
+The affine displacement formula makes the Hessian pullback above exact. A nonlinear map of active DOFs additionally needs its weighted second derivative and a suitable feasible-path rule; it cannot be substituted into this formula unchanged.
+
+`max_feasible_step` returns a conservative bound in `[0,1]` for the entire closed step segment, not the largest feasible step. Volumetric FEM checks constitutive feasibility at quadrature points; it does not certify every spatial point of a curved element. Python `VolumetricElement3D.max_feasible_step(step)` accepts a callback `step(xi)` returning a conservative bound at that quadrature coordinate.
+
+Ownership must remain acyclic. Where a response owns children, Python child-to-owner back-references must be weak references. See the [ownership convention](../energy/evaluation).
+
+## Runtime assembly path
+
+```text
+physical displacement u
+  -> gather element DOFs
+  -> BasisDofTransform: reference coefficients c
+  -> cached affine sampling blocks: vec(F_q) = vec(I) + B_q c
+  -> pointwise material W, P, A
+  -> weighted integration and coefficient derivatives
+  -> physical-DOF pullback and global scatter
+```
+
+`InterpolatedResponse` and spatial `DeformationGradientResponse` can supply fixed
+geometry, plastic deformation or material data at construction. They are not
+created for each runtime displacement or used to differentiate active DOFs.
+The sampling factory is the common construction path for both native FEM and
+custom integration; see the [paired example](../../examples/fem/sampling-response.md).
+
+Shells retain their triangle mid-edge geometric formulas. An internal function
+takes the active stencil displacement explicitly and integrates its constant
+face density. `ShellFemEnergy` owns fixed face data and assembles the result.
+There is no public local-density inheritance layer. Its Hessian retains the
+geometric second derivative; see [shell formulation](shell.md).

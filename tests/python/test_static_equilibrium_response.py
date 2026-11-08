@@ -24,7 +24,7 @@ def test_direct_sensitivity_callbacks_and_fixed_values():
         lambda u: FormulaForce(2, u, make_energy, partial),
     )
     p = np.array([2.0, 3.0])
-    u, J = response.eval(p, need_jacobian=True)
+    u, J = response.eval_value_and_jacobian(p)
     np.testing.assert_allclose(u, [0.4, 3.0])
     np.testing.assert_allclose(J.toarray(), [[0, 0], [0, 1]])
     for c in range(2):
@@ -36,13 +36,13 @@ def test_direct_sensitivity_callbacks_and_fixed_values():
     assert len(calls) == 1
 
 
-def test_bound_callbacks_are_kept_alive_and_cycles_are_collected():
+def test_bound_callbacks_are_kept_alive_without_an_owner_cycle():
     import gc
     import weakref
 
     class Problem:
-        def __init__(self):
-            self.response = solver.StaticEquilibriumResponse(
+        def make_equilibrium(self):
+            response = solver.StaticEquilibriumResponse(
                 2,
                 dof.DofReduction(2, []),
                 np.zeros(2),
@@ -50,6 +50,8 @@ def test_bound_callbacks_are_kept_alive_and_cycles_are_collected():
                 self.make_energy,
                 lambda u: FormulaForce(2, u, self.make_energy, self.partial),
             )
+            self.response = weakref.ref(response)
+            return response
 
         def make_energy(self, p):
             return energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p)
@@ -59,11 +61,12 @@ def test_bound_callbacks_are_kept_alive_and_cycles_are_collected():
 
     problem = Problem()
     owner = weakref.ref(problem)
-    response = problem.response
+    response = problem.make_equilibrium()
+    assert problem.response() is response
     del problem
     gc.collect()
     assert owner() is not None  # A live response must keep its callback owner alive.
-    u, J = response.eval(np.array([2.0, 3.0]), need_jacobian=True)
+    u, J = response.eval_value_and_jacobian(np.array([2.0, 3.0]))
     np.testing.assert_allclose(u, [2.0, 3.0])
     np.testing.assert_allclose(J.toarray(), np.eye(2))
     del response
@@ -71,15 +74,43 @@ def test_bound_callbacks_are_kept_alive_and_cycles_are_collected():
     assert owner() is None
 
 
-def test_gc_handles_uninitialized_and_failed_construction():
+def test_global_callback_cycle_is_collected():
     import gc
+    import weakref
+
+    def make_cycle():
+        stiffness = sparse.eye(1, format="csc")
+        scope = {"energy": energy, "stiffness": stiffness}
+        exec(
+            "def make_energy(p):\n"
+            "    return energy.QuadraticEnergy(stiffness, -p)\n"
+            "def make_response(u):\n"
+            "    return energy.AffineResponse(-stiffness, u)\n",
+            scope,
+        )
+        equilibrium = solver.StaticEquilibriumResponse(
+            1,
+            dof.DofReduction(1, []),
+            np.zeros(1),
+            solver.NewtonOptions(gradient_tolerance=1e-12),
+            scope["make_energy"],
+            scope["make_response"],
+        )
+        scope["equilibrium"] = equilibrium
+        gc.collect()
+        u, jacobian = equilibrium.eval_value_and_jacobian(np.array([2.0]))
+        np.testing.assert_allclose(u, [2.0])
+        np.testing.assert_allclose(jacobian.toarray(), [[1.0]])
+        return [weakref.ref(scope[name]) for name in ("equilibrium", "make_energy", "make_response")]
+
+    refs = make_cycle()
+    gc.collect()
+    assert all(ref() is None for ref in refs)
+
+
+def test_invalid_initial_state_is_rejected():
     import pytest
 
-    instance = solver.StaticEquilibriumResponse.__new__(
-        solver.StaticEquilibriumResponse
-    )
-    gc.collect()
-    del instance
     with pytest.raises(ValueError):
         solver.StaticEquilibriumResponse(
             2,
@@ -89,7 +120,6 @@ def test_gc_handles_uninitialized_and_failed_construction():
             lambda p: None,
             lambda u: FormulaForce(2, u, lambda p: None, lambda p, u: None),
         )
-    gc.collect()
 
 
 def test_fast_products_rectangular_fixed_dofs_and_recovery():
@@ -214,15 +244,15 @@ def test_response_factory_direct_products_and_invalid_results():
             super().__init__(np.ones((3, 2)))
             self.u = u.copy()
 
-        def eval_values(self, p, need_jacobian):
+        def eval_impl(self, p, need_jacobian):
             if need_jacobian:
                 raise AssertionError("explicit B requested")
             return K @ self.u - A @ p
 
-        def eval_jvp_values(self, p, v):
+        def eval_jvp_impl(self, p, v):
             return -A @ v
 
-        def eval_vjp_values(self, p, w):
+        def eval_vjp_impl(self, p, w):
             return -A.T @ w
 
     def make_response(u):
@@ -295,13 +325,13 @@ def test_response_factory_direct_products_and_invalid_results():
 def test_factory_response_dynamic_pattern_is_refreshed():
     class Force(energy.DynamicPatternResponse):
         def __init__(self, u):
-            super().__init__(sparse.eye(2, format="csc"))
+            super().__init__(2, 2)
             self.u = u.copy()
 
-        def pattern_at(self, p):
+        def jacobian_pattern_at(self, p):
             return np.array([[1.0, 0.0], [float(p[0] > 0), 1.0]])
 
-        def eval_values(self, p, need_jacobian):
+        def eval_impl(self, p, need_jacobian):
             value = self.u - np.array([p[0], p[1] + max(p[0], 0.0) ** 2])
             J = np.array([[-1.0, 0.0], [-2 * max(p[0], 0.0), -1.0]])
             return (value, J) if need_jacobian else value

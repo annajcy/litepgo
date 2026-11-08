@@ -1,19 +1,16 @@
 #pragma once
-
-#include "litepgo/energy/scalar/energy.hpp"
-
+#include "litepgo/energy/scalar/detail/sparse_energy.hpp"
 namespace litepgo::energy {
-
-// Base for energies whose Hessian pattern is given at construction and never
-// changes, such as quadratic and FEM energies.
-class FixedPatternEnergy : public Energy {
+class FixedPatternEnergy : public detail::SparseEnergy {
   protected:
-    FixedPatternEnergy(int num_dofs, const SpMat& pattern) : Energy(num_dofs, pattern, true) {}
+    explicit FixedPatternEnergy(const SpMat& pattern)
+        : SparseEnergy(static_cast<int>(pattern.rows())),
+          hessian_pattern_(checked_hessian_pattern(pattern, num_dofs())) {}
 
   private:
-    std::optional<SpMat> refresh_pattern(const ConstVecRef&) final {
-        return std::nullopt;
+    SpMat make_hessian_pattern(const ConstVecRef&) const final {
+        return hessian_pattern_;
     }
+    SpMat hessian_pattern_;
 };
-
 } // namespace litepgo::energy

@@ -14,11 +14,11 @@ interfaces consumed by solvers.
 ```mermaid
 flowchart TB
   accTitle: FEM module evaluation architecture
-  accDescr: Rest geometry and maps feed solid field kinematics or shell stencil kinematics. Material laws produce local densities or force responses; integration and global assembly expose Energy and Response interfaces.
-  inputs["Rest geometry, DOF maps and state"] --> solid["Solid: bases, transforms and fields"]
+  accDescr: Fixed spatial responses are sampled at construction. Physical displacement DOFs pass through basis transforms and affine deformation-gradient sampling blocks, or shell stencil kinematics, into material formulas (native pointwise or one batch call, such as a Python material) and global assembly.
+  inputs["Rest geometry, DOF maps and state"] --> solid["Solid: DOF transform and cached sampling blocks"]
   inputs --> shell["Shell: triangle stencils and forms"]
-  solid --> solidLocal["Volumetric material local terms"]
-  shell --> shellLocal["Shell material local terms"]
+  solid --> solidLocal["Volumetric material: pointwise C++ or one batch call"]
+  shell --> shellLocal["Shell material: pointwise C++ or one batch call"]
   solidLocal --> volume["Volume quadrature and rest measure"]
   shellLocal --> area["Face density and original area"]
   volume --> assembly["MeshEnergy / MeshResponse assembly"]
@@ -32,13 +32,54 @@ exposes the compiled basis, quadrature, and material combinations. Link
 integration; custom local constructions must apply each measure and pullback
 exactly once.
 
+Spatial `InterpolatedResponse` and `DeformationGradientResponse` describe fixed
+configuration as a function of reference coordinates. Native FEM samples that
+configuration at construction. Volumetric displacement evaluation uses cached
+affine coefficient maps. Shell evaluation recomputes nonlinear stencil geometry
+from the current displacement; fixed-pose shell force Responses cache that geometry.
+Neither path creates spatial Responses or a LocalEnergy/LocalResponse layer during assembly.
+
+## Source layout
+
+C++ headers use `litepgo/fem/<directory>/<file>.hpp`. The source directories
+separate mathematical components from assembly and geometry queries:
+
+| Directory | Responsibility |
+| --- | --- |
+| `basis/` | Reference shape functions and coefficient conventions |
+| `quadrature/` | Reference points and integration weights |
+| `material/` | Pointwise shell and volumetric constitutive laws; batch-material interfaces |
+| `response/` | Spatial interpolation, coefficient sampling and parameter maps |
+| `kinematics/` | Geometric quantities and feasible-step formulas |
+| `integration/` | Physical quadrature data and integration helpers |
+| `assembly/` | Physical DOF transforms, derivative pullbacks, FEM energies and force Responses |
+| `assembly/detail/` | Internal face caches, batch views and shared assembly implementations |
+| `embedding/` | Element location, point displacement maps and boundary sampling |
+
+Bindings under `src/binding/fem/` and C++ tests under `tests/cpp/fem/` follow
+these responsibilities. Python keeps the flat `litepgo.fem` API; directory names
+do not create new Python submodules. Class names and C++ namespaces are unchanged.
+
+Existing C++ callers must update include paths: assembled energies and force
+Responses are under `assembly/`, `basis_dof_transform.hpp` and
+`dof_derivatives.hpp` are also under `assembly/`, `volumetric_element.hpp` is under
+`integration/`, and geometry-query headers are under `embedding/`.
+`log_diagonal_fp_response.hpp` now belongs to `response/`.
+The old include paths have no compatibility forwarding headers. Headers under
+`assembly/detail/` are implementation details, not additional public API layers.
+
 ## Choose a layer
 
 | Layer | Main objects | Read |
 | --- | --- | --- |
-| Interpolation and integration | Bases, `Field2D/3D`, local terms, quadrature, `VolumetricElement3D` | [Fields and quadrature](fields.md) |
-| Solid elasticity | `DeformationGradientField3D`, `NeoHookean`, `VolumetricFemEnergy` | [Volumetric elasticity](volume.md) |
+| Shape functions | P1, Q1 and Hermite bases, reference derivatives and coefficient slots | [Basis functions](basis.md) |
+| Coefficient sampling | Value, reference gradient, Hessian and deformation-gradient sampling factories | [Sampling responses](sampling-responses.md) |
+| Spatial interpolation | `InterpolatedResponse[Basis]`, fixed coefficients and coordinate derivatives | [Spatial Response](interpolated-response.md) |
+| Reference integration rules | Gauss-Legendre tensor products and simplex centroid rules | [Quadrature](quadrature.md) |
+| Interpolation and integration | Sampling maps, material formulas, quadrature, `VolumetricElement3D` | [Spatial responses and coefficient maps](fields.md) |
+| Solid elasticity | `deformation_gradient_sampling_response`, `NeoHookean`, `VolumetricFemEnergy` | [Volumetric elasticity](volume.md) |
 | Shell elasticity | Mid-edge stencils/forms, `KoiterStVK`, `ShellFemEnergy` | [Shells and natural geometry](shell.md) |
+| Materials in Python | `PyVolumetricMaterial`, `PyShellMaterial`, Torch subclasses | [Materials written in Python](python-materials.md) |
 | Physical derivative DOFs | `BasisDofTransform[HexHermiteBasis]` | [Hex Hermite](hermite.md) |
 | Geometry queries and sampling | `ElementLocator`, `PointEmbedding`, displacement maps, `sample_boundary` | [Embedding and boundary sampling](embedding.md) |
 | Fixed-pose parameter derivatives | Volumetric/shell material-force and plastic-force responses | [Force responses](force-responses.md) |

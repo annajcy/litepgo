@@ -1,34 +1,42 @@
 #include "../testing/equilibrium_force.hpp"
+#include "litepgo/energy/response/affine_response.hpp"
 #include "litepgo/energy/scalar/quadratic_energy.hpp"
+#include "litepgo/fem/assembly/volumetric_fem_energy.hpp"
+#include "litepgo/fem/assembly/volumetric_fem_force_material_response.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
-#include "litepgo/fem/volumetric_fem_energy.hpp"
-#include "litepgo/fem/volumetric_fem_force_material_response.hpp"
+#include "litepgo/fem/response/interpolated_response.hpp"
 #include "litepgo/solver/static_equilibrium_response.hpp"
 #include <gtest/gtest.h>
+#include <memory>
 
 namespace litepgo::solver::test {
 TEST(StaticEquilibriumResponse, FemDisplacementAndReactionMatchResolveFiniteDifferences) {
     using namespace fem;
     const mesh::TetTopology topology(4, {{0, 1, 2, 3}});
     const dof::VertexDofMap map(topology, 3);
-    using XField = InterpolatedField3D<TetP1Basis>;
-    using Field = IdentityField3D;
+
     Eigen::Matrix<double, 4, 3> X;
     X << 0, 0, 0, 1.2, 0, 0, 0, .8, 0, 0, 0, 1.5;
-    const std::vector<XField> geometry{XField(X)};
+    const std::vector<std::shared_ptr<litepgo::energy::Response>> geometry{
+        std::make_shared<InterpolatedResponse<TetP1Basis>>(X)};
     Eigen::Matrix3d Fp = Eigen::Matrix3d::Identity();
     Fp(0, 1) = .08;
     Fp(2, 2) = 1.1;
-    const std::vector<Field> plastic{Field(Vec(Fp.reshaped()))};
-    using Elastic = VolumetricFemEnergy<NeoHookean, TetP1Basis, TetCentroidQuadrature, XField, Field, Field>;
-    using Force = VolumetricFemForceMaterialResponse<NeoHookean, TetP1Basis, TetCentroidQuadrature, XField, Field>;
+    const std::vector<std::shared_ptr<litepgo::energy::Response>> plastic{
+        std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((Vec(Fp.reshaped())).size(), 3),
+                                                          Vec(Fp.reshaped()))};
+    using Elastic = VolumetricFemEnergy<NeoHookean, TetP1Basis, TetCentroidQuadrature>;
+    using Force = VolumetricFemForceMaterialResponse<NeoHookean, TetP1Basis, TetCentroidQuadrature>;
     const dof::DofReduction fixed(12, {0, 1, 2, 3, 4, 5, 6, 7, 8});
     Vec initial = Vec::Zero(12);
     initial[3] = .15;
     initial[7] = -.04;
     const auto make_energy = [&](const Vec& p) -> std::shared_ptr<energy::Energy> {
-        return std::make_shared<Elastic>(map, geometry, plastic, std::vector<Field>{Field(p)});
+        return std::make_shared<Elastic>(
+            map, geometry, plastic,
+            std::vector<std::shared_ptr<litepgo::energy::Response>>{
+                std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((p).size(), 3), p)});
     };
     int partial_calls = 0;
     const auto partial = [&](const Vec& p, const Vec& u) -> SpMat {
@@ -41,8 +49,7 @@ TEST(StaticEquilibriumResponse, FemDisplacementAndReactionMatchResolveFiniteDiff
     StaticEquilibriumResponse response(2, fixed, initial, options, make_energy,
                                        testing::force_factory(2, make_energy, partial));
     const Vec p = Eigen::Vector2d(2, 3);
-    SpMat J = response.jacobian_pattern();
-    const Vec u = response.eval(p, &J);
+    auto [u, J] = response.eval_value_and_jacobian(p);
     ASSERT_EQ(partial_calls, 1);
     EXPECT_GT(J.norm(), 1e-4);
     const Vec v = Eigen::Vector2d(.4, -.7);
@@ -162,8 +169,7 @@ TEST(StaticEquilibriumResponse, InterleavedFixedDofsMatchResolveFiniteDifference
             },
             [&](const Vec&, const Vec&) -> SpMat { return (-A).sparseView(); }));
     const Vec p = Eigen::Vector2d(.6, -1.1);
-    SpMat J = response.jacobian_pattern();
-    const Vec u = response.eval(p, &J);
+    auto [u, J] = response.eval_value_and_jacobian(p);
     EXPECT_EQ(u[1], initial[1]);
     EXPECT_EQ(Eigen::MatrixXd(J).row(1).norm(), 0);
     EXPECT_LT(fixed.reduce(Vec(K * u - A * p)).norm(), 1e-12);
@@ -189,13 +195,13 @@ TEST(StaticEquilibriumResponse, ResponseProductsAvoidExplicitParameterJacobian) 
         Eigen::Matrix<double, 2, 3> A = (Eigen::Matrix<double, 2, 3>() << 1, 2, -1, 3, -2, .5).finished();
 
       private:
-        Vec eval_values(const ConstVecRef&, SpMat*) const override {
+        Vec eval_impl(const ConstVecRef&, SpMat*) override {
             throw std::logic_error("explicit B requested");
         }
-        Vec eval_jvp_values(const ConstVecRef&, const ConstVecRef& v) const override {
+        Vec eval_jvp_impl(const ConstVecRef&, const ConstVecRef& v) override {
             return -A * v;
         }
-        Vec eval_vjp_values(const ConstVecRef&, const ConstVecRef& w) const override {
+        Vec eval_vjp_impl(const ConstVecRef&, const ConstVecRef& w) override {
             return -A.transpose() * w;
         }
     };

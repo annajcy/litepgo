@@ -4,6 +4,10 @@ The native contact energy evaluates barrier terms on packed surface positions.
 This page defines the density and feature handling; [collision safety](collision-safety.md)
 states surface validity and step constraints.
 
+The energy retains its broad phase. A Python broad-phase subclass must not store
+a strong reference back to the energy; use `weakref.ref(energy)` if needed. See
+the [ownership contract](../concepts.md#python-ownership-must-remain-acyclic).
+
 ## Barrier formulation
 
 For candidate distance $d$, minimum separation $d_{\min}$, and activation
@@ -49,7 +53,7 @@ Area weighting does not change the activation distance, minimum separation or CC
 It alone does not implement the full convergent IPC formulation or add friction.
 
 The raw barrier formula above is unchanged by area weighting. Set its coefficient
-directly through `WeightedEnergySum`; no normalization conversion is applied.
+directly through `WeightedSumEnergy`; no normalization conversion is applied.
 Calibrate the coefficient for the barrier definition, area weighting and length
 unit being used.
 

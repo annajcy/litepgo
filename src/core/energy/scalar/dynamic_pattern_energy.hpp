@@ -1,21 +1,14 @@
 #pragma once
-
-#include "litepgo/energy/scalar/energy.hpp"
-
+#include "litepgo/energy/scalar/detail/sparse_energy.hpp"
 namespace litepgo::energy {
-
-// Base for energies whose Hessian pattern depends on the state, such as contact,
-// whose pattern follows the active pairs. A subclass states the pattern it needs
-// at x; update_pattern() installs it only when it differs from the current one.
-// The subclass's evaluation must reject (std::logic_error) an active entry at x
-// that falls outside the current pattern.
-class DynamicPatternEnergy : public Energy {
+class DynamicPatternEnergy : public detail::SparseEnergy {
   protected:
-    DynamicPatternEnergy(int num_dofs, const SpMat& initial_pattern) : Energy(num_dofs, initial_pattern, false) {}
+    explicit DynamicPatternEnergy(int num_dofs) : SparseEnergy(num_dofs) {}
+    virtual SpMat hessian_pattern_at(const ConstVecRef& x) const = 0;
 
   private:
-    std::optional<SpMat> refresh_pattern(const ConstVecRef& x) final;
-    virtual SpMat pattern_at(const ConstVecRef& x) const = 0;
+    SpMat make_hessian_pattern(const ConstVecRef& x) const final {
+        return checked_hessian_pattern(hessian_pattern_at(x), num_dofs());
+    }
 };
-
 } // namespace litepgo::energy

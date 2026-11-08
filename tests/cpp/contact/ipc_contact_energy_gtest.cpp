@@ -1,3 +1,4 @@
+#include "../testing/evaluate_energy.hpp"
 #include "litepgo/contact/broad_phase/spatial_hash.hpp"
 #include "litepgo/contact/detail/distance.hpp"
 #include "litepgo/contact/detail/distance_derivatives.hpp"
@@ -69,10 +70,10 @@ TEST(IPCContactEnergy, VanishesBeyondDhat) {
     const mesh::TriangleMesh surface = two_triangles(1.5);
     IPCContactEnergy energy(surface, options(1.0), std::make_shared<SpatialHash>());
     EXPECT_EQ(energy.num_dofs(), 18);
-    EXPECT_FALSE(energy.has_fixed_pattern());
+
     EXPECT_EQ(energy.num_active_pairs(surface.positions), 0);
     EXPECT_EQ(energy.min_active_distance(surface.positions), std::numeric_limits<double>::infinity());
-    EXPECT_FALSE(energy.update_pattern(surface.positions)); // stays empty
+    EXPECT_NO_THROW(energy.eval_hessian(surface.positions));
     EXPECT_EQ(energy.eval_value(surface.positions), 0.0);
     EXPECT_EQ(energy.eval_gradient(surface.positions), Vec::Zero(18));
     EXPECT_EQ(energy.eval_hessian(surface.positions).nonZeros(), 0);
@@ -91,7 +92,7 @@ TEST(IPCContactEnergy, ReportsTheActivePairAndItsDistance) {
     EXPECT_DOUBLE_EQ(snapshot.distances[0], 0.5);
     EXPECT_GT(snapshot.weights[0], 0);
     EXPECT_DOUBLE_EQ(snapshot.mollifiers[0], 1);
-    EXPECT_EQ(energy.hessian_pattern().nonZeros(), 0);
+    EXPECT_EQ(energy.eval_hessian(surface.positions).nonZeros(), 144);
 
     // Pushes vertex 3 away from A and A's vertices the other way.
     const Vec gradient = energy.eval_gradient(surface.positions);
@@ -108,16 +109,16 @@ TEST(IPCContactEnergy, PatternFollowsTheActiveSet) {
     IPCContactEnergy energy(surface, options(1.0), std::make_shared<SpatialHash>());
     const Vec near = translate_b(surface.positions, Eigen::Vector3d(0, 0, -1));
 
-    // The empty pattern cannot hold the active pair.
-    EXPECT_THROW(energy.eval_hessian(near), std::logic_error);
+    // The first Hessian request prepares the active structure.
+    EXPECT_NO_THROW(energy.eval_hessian(near));
     EXPECT_NO_THROW(energy.eval_gradient(near));
 
-    ASSERT_TRUE(energy.update_pattern(near));
+    EXPECT_NO_THROW(energy.eval_hessian(near));
     // Vertex 3 and face A's vertices 0, 1, 2: a dense 12 x 12 block.
-    EXPECT_EQ(energy.hessian_pattern().nonZeros(), 144);
-    EXPECT_FALSE(energy.update_pattern(translate_b(near, Eigen::Vector3d(0, 0, 0.1)))); // same pair
-    EXPECT_TRUE(energy.update_pattern(surface.positions));
-    EXPECT_EQ(energy.hessian_pattern().nonZeros(), 0);
+    EXPECT_EQ(energy.eval_hessian(near).nonZeros(), 144);
+    EXPECT_NO_THROW(energy.eval_hessian(translate_b(near, Eigen::Vector3d(0, 0, 0.1))));
+    EXPECT_NO_THROW(energy.eval_hessian(surface.positions));
+    EXPECT_EQ(energy.eval_hessian(surface.positions).nonZeros(), 0);
 }
 
 TEST(IPCContactEnergy, DerivativesMatchFiniteDifferences) {
@@ -129,7 +130,6 @@ TEST(IPCContactEnergy, DerivativesMatchFiniteDifferences) {
         Vec x = surface.positions;
         x.segment<3>(12) += Eigen::Vector3d(0.3, -0.2, 0.1);
         ASSERT_GE(energy.num_active_pairs(x), dhat == 1.0 ? 1 : 4);
-        energy.update_pattern(x);
         energy::test::expect_derivatives_match(energy, x, 1e-5);
     }
 }
@@ -148,8 +148,6 @@ TEST(IPCContactEnergy, AreaWeightScalesValueAndDerivativesUsingRestGeometry) {
                           b = surface.positions.segment<3>(15) - surface.positions.segment<3>(9);
     const double weight = a.cross(b).norm() / 24; // quarter of vertex 3's one-third face area
     ASSERT_EQ(weighted.num_active_pairs(x), 1);
-    weighted.update_pattern(x);
-    unweighted.update_pattern(x);
     EXPECT_DOUBLE_EQ(weighted.eval_value(x), weight * unweighted.eval_value(x));
     EXPECT_TRUE(weighted.eval_gradient(x).isApprox(weight * unweighted.eval_gradient(x), 1e-12));
     EXPECT_TRUE(Eigen::MatrixXd(weighted.eval_hessian(x))
@@ -170,14 +168,12 @@ TEST(IPCContactEnergy, AreaWeightedDerivativesMatchFiniteDifferences) {
     Vec x = surface.positions;
     x.segment<3>(12) += Eigen::Vector3d(0.3, -0.2, 0.1);
     ASSERT_GE(weighted.num_active_pairs(x), 4);
-    weighted.update_pattern(x);
     energy::test::expect_derivatives_match(weighted, x, 1e-5);
 }
 
 TEST(IPCContactEnergy, ProjectedHessianIsPositiveSemidefinite) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
     IPCContactEnergy energy(surface, options(3.0), std::make_shared<SpatialHash>());
-    energy.update_pattern(surface.positions);
     const Eigen::MatrixXd exact = Eigen::MatrixXd(energy.eval_hessian(surface.positions));
     const Eigen::MatrixXd projected =
         Eigen::MatrixXd(energy.eval_hessian(surface.positions, energy::HessianKind::Projected));
@@ -190,14 +186,13 @@ TEST(IPCContactEnergy, ProjectedHessianIsPositiveSemidefinite) {
 TEST(IPCContactEnergy, EvaluationIsDeterministic) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
     IPCContactEnergy energy(surface, options(3.0), std::make_shared<SpatialHash>());
-    energy.update_pattern(surface.positions);
     Vec gradient;
-    SpMat hessian = energy.hessian_pattern();
-    const double value = energy.eval(surface.positions, &gradient, &hessian);
+    SpMat hessian;
+    const double value = litepgo::testing::evaluate_energy(energy, surface.positions, &gradient, &hessian);
     for (int repeat = 0; repeat < 20; ++repeat) {
         Vec again_gradient;
-        SpMat again_hessian = energy.hessian_pattern();
-        EXPECT_EQ(energy.eval(surface.positions, &again_gradient, &again_hessian), value);
+        SpMat again_hessian;
+        EXPECT_EQ(litepgo::testing::evaluate_energy(energy, surface.positions, &again_gradient, &again_hessian), value);
         EXPECT_EQ(again_gradient, gradient);
         EXPECT_EQ(Eigen::MatrixXd(again_hessian), Eigen::MatrixXd(hessian));
     }
@@ -256,7 +251,6 @@ TEST(IPCContactEnergy, ComposesWithASurfaceKinematics) {
             W.insert(9 + 3 * v + c, 3 * (2 - v) + c) = 1;
     const dof::SurfaceKinematics kinematics(barrier->rest_positions(), W);
     energy::AffineMappedEnergy mapped(barrier, kinematics.displacement_map(), kinematics.rest_positions());
-    EXPECT_FALSE(mapped.has_fixed_pattern());
 
     Vec u = Vec::Zero(10);
     u[9] = 7.0;  // drives nothing
@@ -270,7 +264,7 @@ TEST(IPCContactEnergy, ComposesWithASurfaceKinematics) {
     EXPECT_EQ(gradient.segment<3>(6), g.segment<3>(9));
     EXPECT_EQ(gradient.segment<3>(3), g.segment<3>(12));
     EXPECT_EQ(gradient.segment<3>(0), g.segment<3>(15));
-    ASSERT_TRUE(mapped.update_pattern(u));
+    EXPECT_NO_THROW(mapped.eval_hessian(u));
     energy::test::expect_derivatives_match(mapped, u, 1e-5);
 
     // Dropping B through the obstacle is caught on the mapped positions.
@@ -289,7 +283,6 @@ TEST(IPCContactEnergy, OriginalSquaredBarrierAndThickness) {
         IPCContactEnergy e(surface, unweighted_options, std::make_shared<SpatialHash>());
         double s = 0.25 - thickness * thickness, h = 1 + 2 * thickness;
         EXPECT_NEAR(e.eval_value(surface.positions), -(s - h) * (s - h) * std::log(s / h), 1e-13);
-        e.update_pattern(surface.positions);
         energy::test::expect_derivatives_match(e, surface.positions, 1e-5);
         Vec boundary = translate_b(surface.positions, Eigen::Vector3d(0, 0, 0.5 + thickness));
         EXPECT_NEAR(e.eval_value(boundary), 0, 1e-14);
@@ -343,7 +336,6 @@ TEST(IPCContactEnergy, NearParallelMollifierDerivatives) {
     x << -1, 0, 0, 1, 0, 0, 0, -4, -2, -0.7, -0.004, 0.2, 0.8, 0.008, 0.2, 0, 4, 2;
     mesh::TriangleMesh surface{x, mesh::TriangleTopology(6, {{0, 1, 2}, {3, 4, 5}})};
     IPCContactEnergy e(surface, options(0.5), std::make_shared<SpatialHash>());
-    e.update_pattern(x);
     energy::test::expect_derivatives_match(e, x, 2e-5);
     EXPECT_TRUE(e.eval_gradient(x).allFinite());
     const Eigen::MatrixXd h = e.eval_hessian(x);
@@ -398,7 +390,6 @@ TEST(IPCContactEnergy, MatchesBruteForceOriginalCandidateSum) {
                 expected += barrier(distance(p, edge_edge(p))) * (z < 1 ? z * (2 - z) : 1);
             }
         EXPECT_NEAR(e.eval_value(x), expected, 1e-11 * (1 + expected));
-        e.update_pattern(x);
         energy::test::expect_derivatives_match(e, x, 2e-5);
     }
 }
@@ -493,10 +484,9 @@ TEST(IPCContactEnergy, BitwiseDeterministicAcrossThreadCounts) {
             for (int threads : {1, 4, 8}) {
                 tbb::global_control limit(tbb::global_control::max_allowed_parallelism, threads);
                 for (int repeat = 0; repeat < 4; ++repeat) {
-                    e.update_pattern(x);
                     Vec g;
-                    SpMat h = e.hessian_pattern();
-                    double v = e.eval(x, &g, &h, kind);
+                    SpMat h;
+                    double v = litepgo::testing::evaluate_energy(e, x, &g, &h, kind);
                     double vo = e.eval_value(x), t = e.max_feasible_step(x, dx);
                     Vec go = e.eval_gradient(x);
                     SpMat ho = e.eval_hessian(x, kind);
@@ -528,31 +518,29 @@ TEST(IPCContactEnergy, BitwiseDeterministicAcrossThreadCounts) {
     }
 }
 
-TEST(IPCContactEnergy, OutputAssemblyClearsInactiveColumnsAndReusesSupersetPattern) {
+TEST(IPCContactEnergy, OwnedResultsFollowDisappearingAndReturningActiveSets) {
     const auto surface = two_triangles(0.5);
     const Vec far = translate_b(surface.positions, Eigen::Vector3d(0, 0, 10));
     for (int threads : {1, 4, 8}) {
         tbb::global_control limit(tbb::global_control::max_allowed_parallelism, threads);
         IPCContactEnergy e(surface, options(1), std::make_shared<SpatialHash>());
-        e.update_pattern(surface.positions);
         for (auto kind : {energy::HessianKind::Exact, energy::HessianKind::Projected}) {
             Vec expected_g;
-            SpMat expected_h = e.hessian_pattern();
-            const double expected_value = e.eval(surface.positions, &expected_g, &expected_h, kind);
+            SpMat expected_h;
+            const double expected_value =
+                litepgo::testing::evaluate_energy(e, surface.positions, &expected_g, &expected_h, kind);
             Vec g = Vec::Constant(18, 123);
             SpMat h = expected_h;
-            // Keep the larger pattern as the active set disappears, then returns.
-            EXPECT_EQ(e.eval(far, &g, &h, kind), 0);
+            // Each result follows the active set as it disappears, then returns.
+            EXPECT_EQ(litepgo::testing::evaluate_energy(e, far, &g, &h, kind), 0);
             EXPECT_TRUE(g.isZero(0));
             EXPECT_TRUE(Eigen::Map<const Vec>(h.valuePtr(), h.nonZeros()).isZero(0));
-            EXPECT_EQ(e.eval(surface.positions, &g, &h, kind), expected_value);
+            EXPECT_EQ(litepgo::testing::evaluate_energy(e, surface.positions, &g, &h, kind), expected_value);
             EXPECT_EQ(std::memcmp(g.data(), expected_g.data(), g.size() * sizeof(double)), 0);
             EXPECT_EQ(std::memcmp(h.valuePtr(), expected_h.valuePtr(), h.nonZeros() * sizeof(double)), 0);
         }
-        e.update_pattern(far);
-        ASSERT_EQ(e.hessian_pattern().nonZeros(), 0);
-        EXPECT_THROW(e.eval_hessian(surface.positions), std::logic_error);
-        e.update_pattern(surface.positions);
+        ASSERT_EQ(e.eval_hessian(far).nonZeros(), 0);
+        EXPECT_NO_THROW(e.eval_hessian(surface.positions));
         EXPECT_TRUE(e.eval_hessian(surface.positions).toDense().allFinite());
     }
 }
@@ -563,7 +551,6 @@ TEST(IPCContactEnergy, ParallelErrorsPropagateAndAllowRecovery) {
         auto surface = two_triangles(0.5);
         IPCContactEnergy e(surface, options(3, 0.1), std::make_shared<SpatialHash>());
         Vec bad = translate_b(surface.positions, Eigen::Vector3d(0, 0, -0.45));
-        e.update_pattern(bad);
         // These fail inside the parallel potential evaluation, not input validation.
         EXPECT_THROW(e.eval_value(bad), std::domain_error);
         EXPECT_THROW(e.eval_gradient(bad), std::domain_error);
@@ -573,8 +560,7 @@ TEST(IPCContactEnergy, ParallelErrorsPropagateAndAllowRecovery) {
         Vec huge = translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -1e160));
         EXPECT_THROW(e.max_feasible_step(surface.positions, huge), std::domain_error);
         IPCContactEnergy empty(surface, options(3), std::make_shared<SpatialHash>());
-        EXPECT_THROW(empty.eval_hessian(surface.positions), std::logic_error);
-        e.update_pattern(surface.positions);
+        EXPECT_NO_THROW(empty.eval_hessian(surface.positions));
         EXPECT_TRUE(e.eval_gradient(surface.positions).allFinite());
         EXPECT_GT(e.max_feasible_step(surface.positions, translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -2))), 0);
     }
@@ -587,10 +573,9 @@ TEST(IPCContactEnergy, RequestedDerivativeOrdersAgree) {
             surface.positions << -1, 0, 0, 1, 0, 0, 0, -4, -2, -0.7, -0.004, 0.2, 0.8, 0.008, 0.2, 0, 4, 2;
         IPCContactEnergy e(surface, options(0.7, 0.05), std::make_shared<SpatialHash>());
         const Vec x = surface.positions;
-        e.update_pattern(x);
         Vec g;
-        SpMat h = e.hessian_pattern();
-        const double value = e.eval(x, &g, &h, energy::HessianKind::Exact);
+        SpMat h;
+        const double value = litepgo::testing::evaluate_energy(e, x, &g, &h, energy::HessianKind::Exact);
         const Vec g_only = e.eval_gradient(x);
         const SpMat h_only = e.eval_hessian(x);
         EXPECT_EQ(value, e.eval_value(x));

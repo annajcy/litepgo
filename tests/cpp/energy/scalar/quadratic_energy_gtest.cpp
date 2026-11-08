@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -37,10 +38,18 @@ TEST(QuadraticEnergy, DefaultsToNoLinearTerm) {
     const QuadraticEnergy energy(symmetric_matrix());
     const Vec x = Vec::LinSpaced(3, -1.0, 2.0);
     EXPECT_EQ(energy.eval_gradient(x), Vec(symmetric_matrix() * x));
-    EXPECT_TRUE(energy.has_fixed_pattern());
 }
 
 TEST(QuadraticEnergy, RejectsInvalidInput) {
+    for (double bad : {std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {
+        SpMat A = symmetric_matrix();
+        A.coeffRef(0, 0) = bad;
+        EXPECT_THROW(QuadraticEnergy{A}, std::invalid_argument);
+        Vec b = Vec::Zero(3);
+        b[0] = bad;
+        EXPECT_THROW(QuadraticEnergy(symmetric_matrix(), b), std::invalid_argument);
+    }
+
     SpMat asymmetric_values = symmetric_matrix();
     asymmetric_values.coeffRef(0, 2) = -2.0;
     EXPECT_THROW(QuadraticEnergy{asymmetric_values}, std::invalid_argument);

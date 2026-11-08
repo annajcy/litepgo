@@ -1,0 +1,32 @@
+Single instrumented material Hessian call: 256 points, 2 weights, Torch threads=1.
+Uses neural_equilibrium_fit.make_material; same pointwise model and reference parameters.
+Warmup precedes profiling. cProfile timings are instrumented, not benchmark samples.
+
+         108744 function calls (93128 primitive calls) in 0.831 seconds
+
+   Ordered by: cumulative time
+   List reduced from 115 to 22 due to restriction <22>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      266    0.001    0.000    0.771    0.003 __init__.py:434(grad)
+      266    0.000    0.000    0.768    0.003 graph.py:1100(_engine_run_backward)
+      266    0.767    0.003    0.767    0.003 {method 'run_backward' of 'torch._C._EngineBase' objects}
+       10    0.000    0.000    0.759    0.076 torch.py:64(_grad)
+ 3328/256    0.001    0.000    0.067    0.000 module.py:1783(_wrapped_call_impl)
+ 3328/256    0.002    0.000    0.067    0.000 module.py:1791(_call_impl)
+      256    0.000    0.000    0.052    0.000 neural_neohookean.py:65(forward)
+      256    0.002    0.000    0.052    0.000 neural_neohookean.py:53(elastic_energy)
+      256    0.004    0.000    0.043    0.000 grad_mode.py:294(__exit__)
+      514    0.000    0.000    0.016    0.000 {built-in method builtins.next}
+      512    0.001    0.000    0.016    0.000 stateless.py:98(_reparametrize_module)
+      256    0.000    0.000    0.013    0.000 contextlib.py:132(__enter__)
+      512    0.001    0.000    0.013    0.000 container.py:254(forward)
+      257    0.001    0.000    0.012    0.000 grad_mode.py:290(__enter__)
+      256    0.005    0.000    0.011    0.000 neural_neohookean.py:43(invariants)
+      256    0.001    0.000    0.009    0.000 stateless.py:14(_untie_named_tensors_map)
+      768    0.000    0.000    0.007    0.000 {method 'update' of 'dict' objects}
+     1536    0.001    0.000    0.007    0.000 linear.py:130(forward)
+     1792    0.002    0.000    0.006    0.000 module.py:2654(_named_members)
+      512    0.001    0.000    0.006    0.000 _named_member_accessor.py:312(swap_tensors_dict)
+     1536    0.005    0.000    0.005    0.000 {built-in method torch._C._nn.linear}
+      514    0.005    0.000    0.005    0.000 {built-in method torch._C._linalg.linalg_det}

@@ -26,9 +26,83 @@ Jv = J_{outer}(c)(J_{inner}(p)v),\qquad
 J^T w = J_{inner}(p)^T(J_{outer}(c)^T w).
 $$
 
+`ComposedResponse` also implements exact weighted Hessians when both children
+support them. `AffineResponse` and `ExpResponse` support second derivatives; `ElementwiseResponse`
+and the FEM-specific responses currently remain first-order. See
+[Response Hessians](response-hessians.md) for the two-term chain rule.
+
 Products call the children’s products, without assembling either global numerical
 Jacobian. Children that do not override products still use their normal explicit
 Jacobian fallback. Native FEM mesh responses may form local element Jacobians.
+
+## Affine maps
+
+`energy.AffineResponse(A, offset=None)` directly represents
+
+$$
+y=Ax+b,\qquad J=A,\qquad Jv=Av,\qquad J^Tw=A^Tw,\qquad H_R(x,w)=0.
+$$
+
+For $A\in\mathbb R^{m\times n}$, inputs have length $n$, outputs have length
+$m$, and every weighted Hessian is an empty sparse $n\times n$ matrix.
+`has_hessian` is true; its declared derivative structures are fixed. Rectangular, rank-deficient,
+zero, and zero-dimensional maps are allowed; no inverse is required.
+
+```python
+import numpy as np
+from litepgo import energy
+
+A = np.array([[1.0, 0.0, -2.0], [0.5, 3.0, 0.0]])
+r = energy.AffineResponse(A, offset=np.array([4.0, -1.0]))
+x = np.array([1.0, 2.0, -3.0])
+np.testing.assert_allclose(r.eval_value(x), [11.0, 5.5])
+np.testing.assert_array_equal(r.eval_jacobian(x).toarray(), A)
+assert r.eval_hessian(x, weights=np.ones(2)).nnz == 0
+```
+
+Python accepts dense two-dimensional arrays or SciPy sparse matrices/arrays,
+using the existing sparse conversion (duplicate entries are summed). The object
+owns snapshots of $A$ and $b$; changing the constructor arguments later does not
+change the response. The matrix is stored sparsely. Stored zeros are retained
+in its fixed Jacobian pattern. An omitted, `None`, or empty offset means zero;
+a nonempty offset must have length $m$. Matrix entries and offsets must be finite.
+Non-finite numerical results, including overflow in JVP/VJP, raise a domain error
+(`ValueError` in Python). Input and direction checks follow the Response API.
+
+C++ accepts a `SpMat` and an optional `Vec` (an empty vector means zero):
+
+```cpp
+#include "litepgo/energy/response/affine_response.hpp"
+
+Eigen::Matrix<double, 2, 3> A;
+A << 1, 0, -2, 0.5, 3, 0;
+litepgo::energy::AffineResponse r(A.sparseView(), Eigen::Vector2d(4, -1));
+const auto y = r.eval_value(Eigen::Vector3d(1, 2, -3));
+```
+
+Unlike `AffineMappedEnergy(E, T, offset)`, this class has no inner function:
+it returns the affine map itself. Use `ComposedResponse(outer, affine)` for
+`outer(Ax+b)`, or `ComposedResponse(affine, inner)` for `A*inner(x)+b`.
+The [Triangle P1 response example](../../examples/fem/response-hessian.md)
+uses this built-in map for sampling and composes it with `ExpResponse`.
+It composes ordinary Responses without changing the Basis API.
+
+### Identity and constant maps
+
+`energy.IdentityResponse(size)` returns its input. Its JVP returns the input
+direction and its VJP returns the output weights. The explicit Jacobian is
+the sparse identity matrix.
+
+`energy.ConstantResponse(num_inputs, value)` owns a copy of `value` and returns
+it for every input of the declared width. Its JVP and VJP return zero vectors
+of the output and input widths, respectively. Its Jacobian is a sparse matrix
+with no stored entries. For example, `energy.ConstantResponse(3, trained_theta)`
+supplies one fixed vector of material parameters at any 3D reference coordinate.
+
+Both types support exact zero weighted Hessians and accept zero dimensions. Their
+direct products require no sparse matrix multiplication. C++ provides the same
+constructors in `litepgo/energy/response/identity_response.hpp` and
+`litepgo/energy/response/constant_response.hpp`.
 
 ## Plastic parameters
 
@@ -47,7 +121,7 @@ plastic = energy.ElementwiseResponse(parameter_map, fem.LogDiagonalFpResponse())
 # ElasticEnergy and ForceFp are the usual selected FEM template instantiations.
 def make_energy(p):
     packed = plastic.eval_value(p).reshape(-1, 9)
-    fields = [fem.IdentityField3D(row) for row in packed]
+    fields = [energy.AffineResponse(np.zeros((9, 3)), row) for row in packed]
     return ElasticEnergy(displacement_map, geometry, fields, theta)
 
 def make_response(u):
@@ -98,10 +172,11 @@ auto response = std::make_shared<energy::ComposedResponse>(force, plastic);
 ```
 
 Headers are `litepgo/energy/response/{elementwise_response,composed_response,exp_response}.hpp`
-and `litepgo/fem/parameter/log_diagonal_fp_response.hpp`. Child responses are
-shared-owned; Python subclass lifetimes and ownership cycles are handled by the
-bindings. Captured model configuration must remain fixed. As with other Responses,
-concurrent or reentrant evaluation of a shared child is unsupported and rejected.
+and `litepgo/fem/response/log_diagonal_fp_response.hpp`. Child responses are
+shared-owned; bindings keep Python subclasses alive. Child-to-owner back-references
+must be weak: cross-language ownership cycles are not collected by the bindings.
+See the [ownership contract](../concepts.md#python-ownership-must-remain-acyclic). Captured model configuration must remain fixed. Thread safety depends on each child implementation; children with shared
+workspaces protect their own evaluation.
 
 Elementwise evaluation calls the local Response sequentially, including Python
 subclass overrides. It is intended for small local parameter transforms; a batched
@@ -109,14 +184,15 @@ implementation may be appropriate for very large parameter fields.
 
 ## Sparse patterns and limits
 
-Call `update_pattern(p)` on the outermost response before derivatives when its
-pattern is dynamic. A composition's pattern is the structural product of its
+Ordinary evaluation automatically prepares the required dynamic patterns.
+All callers use ordinary evaluation and own the returned matrices; see
+[Response evaluation](responses.md). A composition's pattern is the structural product of its
 children's patterns. A dynamic child may be reused in both composition roles;
 each role evaluates its derivatives at its own input. Elementwise responses declare full local blocks in a fixed
 sparse gather/scatter structure, and refresh dynamic local child patterns at each
 local input. Sparse patterns are still explicitly stored even for product-only use.
 
 This parameterization transforms physical **coefficients**. It does not change the
-existing affine Field contract, implement `exp(interpolated log field)` semantics,
+affine coefficient-map contract, implement `exp(interpolated log field)` semantics,
 or supply automatic differentiation. The two equilibrium factories still must
 represent the same total potential, including any parameter-dependent loads.

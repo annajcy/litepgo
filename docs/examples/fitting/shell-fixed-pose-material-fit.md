@@ -18,7 +18,10 @@ These parameters are optimized directly, without a log transform.
 **API walkthrough.** Build stencils, `TriangleMidEdgeRestData`, and a
 `ShellFemEnergy[KoiterStVK]` to generate targets. A
 `ShellFemForceMaterialResponse[KoiterStVK]` with `ConstantDofMap(topology,2)`
-provides predictions/Jacobians. A `FixedPatternResponse` wrapper subtracts and
+provides predictions/Jacobians. The example checks its prediction at the true
+parameters against the energy gradient. Its per-face cache snapshots the fixed
+pose, natural forms, thickness and original area; only parameters vary during fitting.
+A `FixedPatternResponse` wrapper subtracts and
 scales targets, rejecting invalid material trials, then passes to Gauss–Newton.
 
 **Expected result.** Both parameters recover `(2,3)`. The program prints relative

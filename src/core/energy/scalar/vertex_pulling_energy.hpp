@@ -19,19 +19,9 @@ class VertexPullingEnergy final : public FixedPatternEnergy {
     VertexPullingEnergy(int num_dofs, std::vector<std::array<int, 3>> position_dofs, Vec targets, double stiffness);
 
   private:
-    struct Setup {
-        int num_dofs;
-        std::vector<int> dofs;
-        Vec targets;
-        double stiffness;
-    };
-    static Setup checked_setup(int num_dofs, const std::vector<std::array<int, 3>>& position_dofs, Vec targets,
-                               double stiffness);
-    explicit VertexPullingEnergy(Setup setup);
-
     double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const override;
 
-    std::vector<int> dofs_; // flattened position_dofs, matching targets_
+    std::vector<std::array<int, 3>> position_dofs_;
     Vec targets_;
     double stiffness_;
 };

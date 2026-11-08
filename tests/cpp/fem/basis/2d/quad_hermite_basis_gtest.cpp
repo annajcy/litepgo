@@ -30,7 +30,7 @@ TEST(QuadHermiteBasis, InterpolatesCornerValuesAndDerivativeSlots) {
     corners << 0, 0, 1, 0, 1, 1, 0, 1;
     for (int v = 0; v < 4; ++v) {
         for (int slot = 0; slot < 4; ++slot)
-            EXPECT_EQ(QuadHermiteBasis::reference_node(4 * v + slot), corners.row(v).transpose());
+            EXPECT_EQ(QuadHermiteBasis::coefficient_info(4 * v + slot).point, corners.row(v).transpose());
         const auto N = QuadHermiteBasis::eval_N(corners.row(v).transpose());
         const auto dN_dxi = QuadHermiteBasis::eval_dN_dxi(corners.row(v).transpose());
         const auto d2N_dxi2 = QuadHermiteBasis::eval_d2N_dxi2(corners.row(v).transpose());
@@ -39,8 +39,8 @@ TEST(QuadHermiteBasis, InterpolatesCornerValuesAndDerivativeSlots) {
         EXPECT_EQ(dN_dxi.col(1), (Eigen::Matrix<double, 16, 1>::Unit(4 * v + 2)));
         EXPECT_EQ(d2N_dxi2.col(1), (Eigen::Matrix<double, 16, 1>::Unit(4 * v + 3)));
     }
-    EXPECT_THROW(QuadHermiteBasis::reference_node(-1), std::out_of_range);
-    EXPECT_THROW(QuadHermiteBasis::reference_node(16), std::out_of_range);
+    EXPECT_THROW(QuadHermiteBasis::coefficient_info(-1), std::out_of_range);
+    EXPECT_THROW(QuadHermiteBasis::coefficient_info(16), std::out_of_range);
 }
 
 TEST(QuadHermiteBasis, ReproducesEveryBicubicMonomialAndItsFirstAndSecondDerivatives) {
@@ -54,8 +54,10 @@ TEST(QuadHermiteBasis, ReproducesEveryBicubicMonomialAndItsFirstAndSecondDerivat
             for (int v = 0; v < 4; ++v)
                 for (int s = 0; s < 4; ++s) {
                     const auto& derivative = slots[static_cast<std::size_t>(s)];
+                    const auto info = QuadHermiteBasis::coefficient_info(4 * v + s);
+                    EXPECT_EQ(info.derivative_order, (std::array<int, 2>{derivative.x(), derivative.y()}));
                     coefficients[4 * v + s] =
-                        monomial(i, j, QuadHermiteBasis::reference_node(4 * v), derivative.x(), derivative.y());
+                        monomial(i, j, info.point, info.derivative_order[0], info.derivative_order[1]);
                 }
             for (const auto& xi : samples) {
                 const auto N = QuadHermiteBasis::eval_N(xi);

@@ -15,8 +15,8 @@ integrates this density exactly for each fixed material element.
 
 **API walkthrough.** `read_veg` supplies rest positions and topology.
 `VertexDofMap(topology,3)` gathers coordinate and displacement data.
-`InterpolatedField3D[TetP1Basis]` constructs rest fields;
-`IdentityField3D` supplies $F_p=I$ and $\theta=(2,3)$.
+`InterpolatedResponse[TetP1Basis]` constructs rest fields;
+a constant `AffineResponse` supplies $F_p=I$ and $\theta=(2,3)$.
 Instantiate `VolumetricFemEnergy[NeoHookean,TetP1Basis,TetCentroidQuadrature]`,
 add `VertexPullingEnergy`, and call `newton_solve` on their sum.
 

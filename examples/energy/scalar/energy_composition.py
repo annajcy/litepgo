@@ -12,7 +12,7 @@ from litepgo.energy import (
     HessianKind,
     QuadraticEnergy,
     VertexPullingEnergy,
-    WeightedEnergySum,
+    WeightedSumEnergy,
 )
 
 
@@ -23,13 +23,12 @@ def main():
         3, np.array([[0, 1, 2]], dtype=np.int32), target[None, :], 1.0
     )
     # All terms share the same DOFs; weights scale their values and derivatives.
-    total = WeightedEnergySum([(regularizer, 0.5), (pulling, 2.0)])
+    total = WeightedSumEnergy([(regularizer, 0.5), (pulling, 2.0)])
     T = sp.csc_matrix([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
     offset = np.array([0.0, 0.0, 1.0])
     mapped = AffineMappedEnergy(total, T, offset)
     z = np.array([0.2, -0.3])
-    # Refresh sparsity before assembling a Hessian (also valid for fixed patterns).
-    mapped.update_pattern(z)
+    # Joint evaluation prepares structure and returns independent results.
     value, gradient, hessian = mapped.eval(z, gradient=True, hessian=HessianKind.Exact)
     x = T @ z + offset
     np.testing.assert_allclose(value, 0.25 * (x @ x) + np.sum((x - target) ** 2))
