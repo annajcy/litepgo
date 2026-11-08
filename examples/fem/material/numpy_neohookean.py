@@ -6,6 +6,7 @@ it against the native NeoHookean and solves a corner-pull equilibrium with each.
 Run: uv run --no-sync python examples/fem/material/numpy_neohookean.py
 """
 
+import argparse
 from pathlib import Path
 
 import numpy as np
@@ -77,8 +78,8 @@ class NumpyNeoHookean(fem.PyVolumetricMaterial):
 KEY = (fem.HexHermiteBasis, fem.GaussLegendre3D[4])
 
 
-def make_problem():
-    rest = mesh.read_veg(REPO / "assets/box-hex.veg")
+def make_problem(input_path):
+    rest = mesh.read_veg(input_path)
     topology = rest.topology
     rest_map = dof.VertexDofMap(topology, 3)
     mapping = dof.VertexDofMap(topology, 24)  # Hermite: 3 displacements x 8 per vertex.
@@ -109,7 +110,9 @@ def corner_pull(elastic, rest):
 
 
 def main():
-    rest, mapping, geometry, Fp, theta = make_problem()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("input", nargs="?", type=Path, default=REPO / "assets/box-hex.veg", help="rest hexahedral VEG mesh")
+    rest, mapping, geometry, Fp, theta = make_problem(parser.parse_args().input)
     native = fem.VolumetricFemEnergy[(fem.NeoHookean, *KEY)](mapping, geometry, Fp, theta)
     numpy = fem.VolumetricFemEnergy[(NumpyNeoHookean, *KEY)](mapping, geometry, Fp, theta)
     u = 0.02 * np.sin(np.arange(mapping.num_dofs) * 0.37)

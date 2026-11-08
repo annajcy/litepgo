@@ -10,10 +10,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def run(relative):
+def run(relative, *args):
     path = ROOT / "examples" / relative
     completed = subprocess.run(
-        [sys.executable, str(path)], capture_output=True, text=True, timeout=300, cwd=path.parent
+        [sys.executable, str(path), *args], capture_output=True, text=True, timeout=300, cwd=path.parent
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     return completed.stdout
@@ -34,7 +34,9 @@ def errors(output):
     ],
 )
 def test_example_matches_native(example, expected, tolerance):
-    output = run(example)
+    # Keep the Hermite solve practical in unoptimized Debug builds.
+    args = (ROOT / "tests/assets/box-hex.veg",) if example == "fem/material/numpy_neohookean.py" else ()
+    output = run(example, *args)
     reported = re.findall(r"(\w*error)=([-+0-9.e]+)", output)
     assert len(reported) == expected, output
     assert all(float(value) < tolerance for _, value in reported), output
