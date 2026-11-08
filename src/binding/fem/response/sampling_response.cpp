@@ -20,7 +20,7 @@ template <class B> void bind(nb::module_& m) {
     const auto key = nb::make_tuple(nb::type<B>());
     const auto add = [&](const char* name, auto factory, const char* doc) {
         const std::string instance_name =
-            std::string(name) + "[" + nb::str(nb::type<B>().attr("__name__")).c_str() + "]";
+            std::string(name) + "[" + nb::str(nb::getattr(nb::type<B>(), "__name__")).c_str() + "]";
         auto function = nb::cpp_function(
             [factory](const Eigen::MatrixXd& points, int components) {
                 return new energy::AffineResponse(factory(points, components));
@@ -41,8 +41,8 @@ template <class B> void bind(nb::module_& m) {
         "The response's own coefficient Hessian is zero.");
 }
 template <class B> void bind_deformation(nb::module_& m) {
-    const std::string name =
-        std::string("deformation_gradient_sampling_response[") + nb::str(nb::type<B>().attr("__name__")).c_str() + "]";
+    const std::string name = std::string("deformation_gradient_sampling_response[") +
+                             nb::str(nb::getattr(nb::type<B>(), "__name__")).c_str() + "]";
     auto function = nb::cpp_function(
         [](energy::Response& geometry, const Eigen::MatrixXd& points) {
             return new energy::AffineResponse(deformation_gradient_sampling_response<B>(geometry, points));
