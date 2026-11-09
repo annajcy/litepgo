@@ -17,7 +17,7 @@ for count in (128, 4096):
     x = np.tile(np.arange(12) * .001, count)
     reference = None
     for batch in (1, 16, 64, 256):
-        obj = fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature](mapping, [geometry]*count, [fp]*count, [theta]*count, batch_size=batch)
+        obj = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, [geometry]*count, [fp]*count, [theta]*count, batch_size=batch)
         actual = obj.eval_gradient(x)
         if reference is None:
             reference = actual

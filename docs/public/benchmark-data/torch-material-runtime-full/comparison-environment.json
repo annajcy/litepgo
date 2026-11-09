@@ -1,0 +1,14 @@
+{
+  "baseline_revision": "2b524daa5f08f62632ba696b9d1f5796501a7fbc",
+  "after": "uncommitted migration in the same checkout",
+  "order": "full before then full after; targeted rechecks before/after/after/before",
+  "full_repeats": 5,
+  "recheck_repeats_per_process": 10,
+  "timeout_seconds": 120,
+  "build": "same /usr/bin/c++, Release -O3 -DNDEBUG, Eigen vectorization enabled, Accelerate enabled; same dependency sources and Python environment",
+  "notes": "baseline extracted with git archive; explicit PYTHONPATH verified each extension; no concurrent compilation or benchmark processes; no profiler attribution",
+  "binary_sha256": {
+    "before": "554931e779d5e9352dcf11d21c002f15e1ccb99ce36be1a3ca95cf458088907c",
+    "after": "ac77e7f202f4679fda5247c379b4a3008dae7de7eda0da86dbc3b66b54893e2d"
+  }
+}

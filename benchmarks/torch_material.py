@@ -80,13 +80,13 @@ def worker(case, repeats):
         material, _, _, reference = make_material(k)
         p = reference.numpy().copy()
     else:
-        material = fem.NeoHookean if case["model"] == "native" else TorchNeoHookean
+        material = fem.PointwiseVolumetricAdapter[fem.NeoHookean]() if case["model"] == "native" else TorchNeoHookean()
         p = np.array([2., 3.])
     metadata = dict(case, parameters=k, import_peak_mib=baseline, build=build_info(),
                     torch_version=torch.__version__, numpy_version=np.__version__)
 
     def native_density(F, Fp, theta, name):
-        # Native exposes pointwise bindings here; this includes a Python loop.
+        # Independent pointwise reference for validating batch outputs.
         method = getattr(fem.NeoHookean, "eval_" + name)
         return np.array([method(f, fp, t) for f, fp, t in zip(F, Fp, theta)])
 
@@ -99,10 +99,7 @@ def worker(case, repeats):
             names = ("W", "dW_dF", "d2W_dF2", "d2W_dF_dtheta")
             operations = {}
             for name in names:
-                if case["model"] == "native":
-                    operations[name] = lambda name=name: native_density(F, Fp, theta, name)
-                else:
-                    operations[name] = lambda name=name: material.eval(F, Fp, theta, outputs=(name,))[name]
+                operations[name] = lambda name=name: material.eval(F, Fp, theta, outputs=(name,))[name]
             metadata["points"] = n
             def validate(name, value):
                 assert np.isfinite(value).all()
@@ -128,14 +125,14 @@ def worker(case, repeats):
             n = topology.num_cells
             geometry = [fem.InterpolatedResponse[fem.TetP1Basis](mapping.gather(e, X.ravel())) for e in range(n)]
             plastic = [energy.AffineResponse(np.zeros((9, 3)), np.eye(3).ravel())] * n
-            key = (material, fem.TetP1Basis, fem.TetCentroidQuadrature)
+            key = (fem.TetP1Basis, fem.TetCentroidQuadrature)
             parameter_map = dof.ConstantDofMap(topology, k)
             u = (X @ np.array([[.04, .02, 0], [0, -.02, .01], [.01, 0, .03]]).T).ravel()
             def elastic(parameters, batch=case["batch"], kind=material):
                 fields = [energy.AffineResponse(np.zeros((k, 3)), parameters)] * n
-                return fem.VolumetricFemEnergy[kind, *key[1:]](mapping, geometry, plastic, fields, batch)
+                return fem.VolumetricFemEnergy[key](kind, mapping, geometry, plastic, fields, batch)
             def forces(state, batch=case["batch"], kind=material):
-                return fem.VolumetricFemForceMaterialResponse[kind, *key[1:]](parameter_map, mapping, geometry, state, plastic, batch)
+                return fem.VolumetricFemForceMaterialResponse[key](kind, parameter_map, mapping, geometry, state, plastic, batch)
             obj = elastic(p)
             force = forces(u)
             upstream = np.linspace(-.2, .3, len(u))
@@ -149,9 +146,9 @@ def worker(case, repeats):
                     assert np.isfinite(array).all()
                     # A different batch partition checks the whole assembled result.
                     other = elastic(p, batch=32 if case["batch"] != 32 else 256,
-                                    kind=fem.NeoHookean if case["model"] == "torch" else material)
+                                    kind=fem.PointwiseVolumetricAdapter[fem.NeoHookean]() if case["model"] == "torch" else material)
                     if name == "parameter_vjp":
-                        expected = forces(u, batch=1, kind=fem.NeoHookean if case["model"] == "torch" else material).eval_vjp(p, upstream)
+                        expected = forces(u, batch=1, kind=fem.PointwiseVolumetricAdapter[fem.NeoHookean]() if case["model"] == "torch" else material).eval_vjp(p, upstream)
                     else:
                         expected = getattr(other, "eval_" + name)(u)
                     if sp.issparse(value):

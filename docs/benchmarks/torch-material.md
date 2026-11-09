@@ -62,11 +62,16 @@ points, 162-element FEM, and 6-element equilibrium. These are one-factor sweeps,
 not the Cartesian product of all combinations. The pilot uses 32 material points,
 6/48-element FEM, 6-element equilibrium, and smaller weight-sweep meshes.
 
-At the material layer, native Neo-Hookean is available only through **pointwise
-Python bindings**, so those rows include a Python loop. They are not a pure C++
-batched throughput baseline. The native FEM rows provide that compiled assembly
-baseline. Torch material calls return just the requested output; computing a
-second derivative still requires the first derivative internally.
+At the material layer, the current driver calls
+`PointwiseVolumetricAdapter[NeoHookean]().eval(...)` once per batch, with the
+pointwise loop running in C++. Timings include the Python binding and array
+conversion costs. The Python pointwise loop is used only as an untimed correctness
+reference for Torch outputs. Each material call requests one output; Torch second
+derivatives still require the first derivative internally.
+
+The archived runs below predate this interface migration. Their native material
+rows include a Python pointwise loop and should not be treated as measurements
+of the current batch adapter.
 
 For equilibrium, the x=0 face is fixed and the x=1 face receives a fixed total
 force `[0.015, -0.01, 0.02]`, distributed equally among its vertices. Each solve
@@ -131,13 +136,117 @@ the historical measurements. The current batched implementation below eliminates
 module replacement and the lock entirely. Invalid exploratory
 results are excluded from the recorded baseline.
 
-## Stateless batched implementation
+## Full migration comparison
+
+Recorded on 2026-11-09 on the same Apple M1 Pro, using baseline commit
+`2b524da` and the uncommitted runtime-material migration. Both versions were built
+with the same compiler, Release `-O3 -DNDEBUG`, Eigen settings, Accelerate backend,
+dependency sources and Python environment. The baseline was extracted into an
+isolated build; imports were verified using explicit `PYTHONPATH` values.
+
+Each version completed **42 cases and 152 validated measurements**, with five
+samples per operation, the same inputs, thread limits and 120-second case timeout.
+Neither version had a numerical error or timeout. Full scans ran serially, baseline
+first. Seven selected cases were then checked in before/after/after/before order,
+with ten samples per operation in each process. No compilation ran during timing.
+
+[Full comparison CSV](/benchmark-data/torch-material-runtime-full/comparison.csv),
+[alternating rechecks](/benchmark-data/torch-material-runtime-full/rechecks.csv),
+[recheck raw samples](/benchmark-data/torch-material-runtime-full/rechecks.jsonl.txt),
+[build and comparison provenance](/benchmark-data/torch-material-runtime-full/comparison-environment.json).
+Raw full results and environments:
+[before](/benchmark-data/torch-material-runtime-full/before/results.jsonl.txt)
+([environment](/benchmark-data/torch-material-runtime-full/before/environment.json)),
+[after](/benchmark-data/torch-material-runtime-full/after/results.jsonl.txt)
+([environment](/benchmark-data/torch-material-runtime-full/after/environment.json)).
+
+**Native FEM has a measurable cost increase, especially at batch size 1.**
+The following are medians over the 20 samples per version from alternating
+rechecks, in milliseconds, one thread and two material parameters. Positive
+change means slower after migration.
+
+| Native workload | Batch | Before | After | Change |
+| --- | ---: | ---: | ---: | ---: |
+| FEM value, 1,296 elements | 1 | 0.486 | 0.797 | +64.1% |
+| FEM gradient, 1,296 elements | 1 | 0.661 | 1.012 | +53.2% |
+| FEM Hessian, 1,296 elements | 1 | 1.910 | 2.281 | +19.4% |
+| FEM parameter VJP, 1,296 elements | 1 | 0.560 | 0.738 | +31.7% |
+| FEM value, 1,296 elements | 256 | 0.285 | 0.296 | +3.9% |
+| FEM gradient, 1,296 elements | 256 | 0.470 | 0.509 | +8.4% |
+| FEM Hessian, 1,296 elements | 256 | 1.619 | 1.867 | +15.3% |
+| FEM parameter VJP, 1,296 elements | 256 | 0.462 | 0.487 | +5.2% |
+| FEM Hessian, 10,368 elements | 256 | 13.265 | 14.091 | +6.2% |
+| Equilibrium forward, 48 elements | 256 | 2.226 | 2.339 | +5.1% |
+| Equilibrium backward, 48 elements | 256 | 2.674 | 3.031 | +13.3% |
+
+At default batch 256, the single-thread native rechecks increased by about 4–15%
+for 1,296-element FEM and 4–10% for 10,368-element FEM. Equilibrium forward and
+backward increased by about 5% and 13%. Four-thread results were mixed; a value-only
+increase did not imply a similar Hessian increase. These are desktop observations,
+not statistical confidence bounds or cross-machine guarantees.
+
+The full-scan median after/before ratios across FEM and equilibrium measurements
+were 1.061 for native, 0.947 for Torch and 0.960 for neural. These are unweighted
+medians across different workloads, not total application speedups. No Torch
+FEM/equilibrium row exceeded a 15% increase. One neural gradient row initially
+increased by 24%; alternating rechecks showed a 9% decrease instead, so that
+initial apparent regression was not stable.
+
+Native material-only rows are **not** a like-for-like interface cost comparison:
+the baseline uses a Python pointwise loop while the new version uses one batch
+binding call. They remain in the CSV with `comparable_path=False`, but are excluded
+from the FEM/equilibrium summaries above.
+
+The native assembly path now packs batch inputs, stores derivative buffers and
+checks batch outputs before integration. These changes are plausible sources of
+added overhead, especially for tiny batches; the measurements do not isolate them
+from virtual dispatch or other costs. Profiling is needed before attributing the
+regression to a specific mechanism. No performance optimization was applied in
+this comparison.
+
+## Runtime material interface pilot
+
+Recorded on 2026-11-09 after the runtime batch-material migration, using the
+Release build on Apple M1 Pro (8 logical CPUs), macOS 27.0.1, with five measured
+samples per operation. The default pilot completed **27 cases and all 98
+operation measurements**, with no timeouts or numerical errors. It includes
+native, Torch and neural materials, batch-size and thread variations, and neural
+weight counts of 2, 8 and 32.
+
+[Raw samples](/benchmark-data/torch-material-runtime-pilot/results.jsonl.txt),
+[CSV](/benchmark-data/torch-material-runtime-pilot/timings.csv),
+[environment/source hashes](/benchmark-data/torch-material-runtime-pilot/environment.json).
+
+Reproduce with:
+
+```sh
+PYTHONPATH=build/release/python uv run --no-sync python benchmarks/torch_material.py --profile pilot --output output/torch_material_runtime_pilot
+```
+
+Selected medians in milliseconds, one thread, batch 256, two active parameters:
+
+| Workload | Native | Torch | Neural |
+| --- | ---: | ---: | ---: |
+| Material Hessian, 32 points | 0.021 | 1.379 | 4.773 |
+| FEM Hessian, 48 elements | 0.078 | 1.392 | 5.295 |
+| FEM parameter VJP, 48 elements | 0.019 | 1.001 | 2.401 |
+| Equilibrium forward, 6 elements | 0.270 | 5.281 | 17.213 |
+| Equilibrium backward, 6 elements | 0.416 | 7.539 | 23.991 |
+
+This is a small-mesh pilot, not a repeat of the archived full scan. These results
+do not establish a migration speedup or slowdown: the historical tables use
+larger workloads, and the native material timing path changed from a Python
+pointwise loop to a batch adapter. The neural formula also differs from native
+and Torch Neo-Hookean. All runs are desktop observations with the measurement
+boundaries above.
+
+## Historical stateless batched implementation
 
 The current implementation uses explicit tensor weights, batched Linear/Softplus operations, and cached reference features/slopes for the fixed hidden layers. It never replaces module parameters and needs no lock. The benchmark and fitting example share `make_material(K)`, supporting 1–32 active final-layer weights. Hidden weights remain fixed; this is not an implementation for training all network layers.
 
-The updated full scan completed **42 cases and all 152 operation measurements**, with no timeouts or numerical errors. Tests additionally compare energy, stress, Hessian, weight mixed derivatives, and plastic mixed derivatives against the old functional-call formula for distinct parameter rows at K=2/8/32.
+The pre-migration full scan completed **42 cases and all 152 operation measurements**, with no timeouts or numerical errors. Tests additionally compare energy, stress, Hessian, weight mixed derivatives, and plastic mixed derivatives against the old functional-call formula for distinct parameter rows at K=2/8/32.
 
-[New raw samples](/benchmark-data/torch-material-batched/results.jsonl.txt), [CSV](/benchmark-data/torch-material-batched/timings.csv), [environment/source hashes](/benchmark-data/torch-material-batched/environment.json).
+[Archived raw samples](/benchmark-data/torch-material-batched/results.jsonl.txt), [CSV](/benchmark-data/torch-material-batched/timings.csv), [environment/source hashes](/benchmark-data/torch-material-batched/environment.json).
 
 Same machine and settings as the historical baseline; separate runs, not paired randomized experiments. Medians in milliseconds, one thread, batch 256, two active weights:
 
