@@ -262,17 +262,18 @@ def errors(model, F, Fp=None):
 
 
 def fem_material(model):
-    """A Python material class for native FEM; the trained model stays fixed."""
+    """A Python material instance for native FEM; the trained model stays fixed."""
 
     class LearnedNeoHookean(TorchVolumetricMaterial):
         num_parameters = 2
-        module = model
+        def __init__(self, module):
+            super().__init__()
+            self.module = module
 
-        @classmethod
-        def W(cls, F, Fp, theta):
-            return cls.module(F, Fp, theta)
+        def W(self, F, Fp, theta):
+            return self.module(F, Fp, theta)
 
-    return LearnedNeoHookean
+    return LearnedNeoHookean(model)
 
 
 def equilibrium_errors(model):
@@ -293,20 +294,16 @@ def equilibrium_errors(model):
     geometry = [Field(mapping.gather(e, nodes.ravel())) for e in range(2)]
     theta = [AffineResponse(np.zeros((2, 3)), np.array([2.0, 3.0]))] * 2
     fixed = dof.DofReduction(15, [*range(9), 12, 13, 14])
-    Native = fem.VolumetricFemEnergy[
-        fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
-    ]
-    Learned = fem.VolumetricFemEnergy[
-        fem_material(model), fem.TetP1Basis, fem.TetCentroidQuadrature
-    ]
+    Native = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature]
+    Learned = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature]
     reports = []
     for plastic in (
         np.eye(3),
         np.array([[1.04, 0.03, 0.0], [0.0, 0.98, 0.02], [0.01, 0.0, 1.02]]),
     ):
         Fp = [AffineResponse(np.zeros((9, 3)), plastic.ravel(order="F"))] * 2
-        learned = Learned(mapping, geometry, Fp, theta)
-        native = Native(mapping, geometry, Fp, theta)
+        learned = Learned(fem_material(model), mapping, geometry, Fp, theta)
+        native = Native(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, Fp, theta)
         for load in ([0.04, -0.02, 0.06], [-0.03, 0.02, -0.04], [0.1, 0.04, 0.08]):
             u = np.zeros(15)
             u[12:] = load

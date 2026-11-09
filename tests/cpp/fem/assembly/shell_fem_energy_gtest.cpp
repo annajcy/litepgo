@@ -1,10 +1,13 @@
+#include "../testing/evaluate_shell_element.hpp"
 #include "../../testing/finite_difference.hpp"
 #include "litepgo/fem/assembly/shell_fem_energy.hpp"
 #include "litepgo/fem/assembly/shell_fem_force_fp_response.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
+#include "litepgo/fem/material/shell/pointwise_shell_adapter.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include <gtest/gtest.h>
 #include <limits>
+#include <memory>
 
 namespace litepgo::fem::test {
 
@@ -34,7 +37,8 @@ struct Patch {
 
 TEST(ShellFemEnergy, PerFaceInputsMatchExplicitIntegrationAndScatter) {
     Patch patch;
-    ShellFemEnergy<KoiterStVK> energy(patch.map, patch.rest, patch.thickness, patch.theta);
+    ShellFemEnergy energy(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), patch.map, patch.rest,
+                          patch.thickness, patch.theta);
     Vec u = Vec::Zero(18);
     u[11] = 0.2;
     u[14] = -0.15;
@@ -51,7 +55,7 @@ TEST(ShellFemEnergy, PerFaceInputsMatchExplicitIntegrationAndScatter) {
         Eigen::MatrixXd local_H(local_u.size(), local_u.size());
         StridedVecRef gradient(local_g);
         StridedMatRef hessian(local_H);
-        expected += detail::eval_shell_element<KoiterStVK>(rest, local_u, patch.thickness[index], patch.theta[index],
+        expected += evaluate_shell_element<KoiterStVK>(rest, local_u, patch.thickness[index], patch.theta[index],
                                                            &gradient, &hessian);
         const auto indices = patch.map.dof_indices(e);
         for (std::size_t i = 0; i < indices.size(); ++i) {
@@ -75,35 +79,54 @@ TEST(ShellFemEnergy, PerFaceInputsMatchExplicitIntegrationAndScatter) {
 
 TEST(ShellFemEnergy, RejectsInvalidArraysStencilsThicknessAndMaterial) {
     Patch p;
-    using Shell = ShellFemEnergy<KoiterStVK>;
-    EXPECT_THROW((Shell(p.map, {}, p.thickness, p.theta)), std::invalid_argument);
-    EXPECT_THROW((Shell(p.map, p.rest, {}, p.theta)), std::invalid_argument);
-    EXPECT_THROW((Shell(p.map, p.rest, p.thickness, {})), std::invalid_argument);
+    using Shell = ShellFemEnergy;
+    EXPECT_THROW(
+        (Shell(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), p.map, {}, p.thickness, p.theta)),
+        std::invalid_argument);
+    EXPECT_THROW(
+        (Shell(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), p.map, p.rest, {}, p.theta)),
+        std::invalid_argument);
+    EXPECT_THROW(
+        (Shell(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), p.map, p.rest, p.thickness, {})),
+        std::invalid_argument);
     const auto vertices = mesh::make_triangle_mid_edge_stencils(topology()).vertices;
-    EXPECT_THROW((Shell(dof::StencilDofMap(6, vertices, 2), p.rest, p.thickness, p.theta)), std::invalid_argument);
+    EXPECT_THROW((Shell(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(),
+                        dof::StencilDofMap(6, vertices, 2), p.rest, p.thickness, p.theta)),
+                 std::invalid_argument);
     auto wrong = vertices;
     wrong[0].pop_back();
-    EXPECT_THROW((Shell(dof::StencilDofMap(6, wrong, 3), p.rest, p.thickness, p.theta)), std::invalid_argument);
+    EXPECT_THROW((Shell(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(),
+                        dof::StencilDofMap(6, wrong, 3), p.rest, p.thickness, p.theta)),
+                 std::invalid_argument);
     for (double value : {0., -1., std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()}) {
         auto thickness = p.thickness;
         thickness[3] = value;
-        EXPECT_THROW((Shell(p.map, p.rest, thickness, p.theta)), std::invalid_argument);
+        EXPECT_THROW((Shell(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), p.map, p.rest,
+                            thickness, p.theta)),
+                     std::invalid_argument);
         auto rest = p.rest;
         rest[3].sqrt_det_a_bar = value;
-        EXPECT_THROW((Shell(p.map, rest, p.thickness, p.theta)), std::invalid_argument);
+        EXPECT_THROW((Shell(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), p.map, rest,
+                            p.thickness, p.theta)),
+                     std::invalid_argument);
     }
     for (const Vec& value : {Vec::Ones(3).eval(), Vec(Eigen::Vector2d(2, -1)),
                              Vec::Constant(2, std::numeric_limits<double>::quiet_NaN()).eval()}) {
         auto theta = p.theta;
         theta[2] = value;
-        EXPECT_THROW((Shell(p.map, p.rest, p.thickness, theta)), std::invalid_argument);
+        EXPECT_THROW((Shell(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), p.map, p.rest,
+                            p.thickness, theta)),
+                     std::invalid_argument);
     }
     p.rest[0].opposite[0] = 100;
-    EXPECT_THROW((Shell(p.map, p.rest, p.thickness, p.theta)), std::invalid_argument);
+    EXPECT_THROW((Shell(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), p.map, p.rest, p.thickness,
+                        p.theta)),
+                 std::invalid_argument);
 }
 
 TEST(ShellFemEnergy, EmptyMeshProducesZeroAndFullStep) {
-    ShellFemEnergy<KoiterStVK> energy(dof::StencilDofMap(0, {}, 3), {}, {}, {});
+    ShellFemEnergy energy(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(),
+                          dof::StencilDofMap(0, {}, 3), {}, {}, {});
     EXPECT_EQ(energy.eval_value(Vec(0)), 0);
     EXPECT_EQ(energy.eval_gradient(Vec(0)).size(), 0);
     EXPECT_EQ(energy.eval_hessian(Vec(0)).rows(), 0);
@@ -124,10 +147,12 @@ TEST(ShellFemEnergy, PlasticFormsPreserveOriginalMeasureAndMatchResponse) {
     P << 1.12, .08, -.03, .02, .94, .04, -.01, .03, 1.05;
     std::vector<Eigen::Matrix3d> plastic(4, P);
     Vec u = .02 * Vec::LinSpaced(18, -1, 1);
-    ShellFemEnergy<KoiterStVK> elastic(p.map, p.rest, p.thickness, p.theta, plastic);
-    ShellFemEnergy<KoiterStVK> original(p.map, p.rest, p.thickness, p.theta);
-    ShellFemEnergy<KoiterStVK> identity(p.map, p.rest, p.thickness, p.theta,
-                                        std::vector<Eigen::Matrix3d>(4, Eigen::Matrix3d::Identity()));
+    ShellFemEnergy elastic(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), p.map, p.rest,
+                           p.thickness, p.theta, plastic);
+    ShellFemEnergy original(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), p.map, p.rest,
+                            p.thickness, p.theta);
+    ShellFemEnergy identity(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), p.map, p.rest,
+                            p.thickness, p.theta, std::vector<Eigen::Matrix3d>(4, Eigen::Matrix3d::Identity()));
     EXPECT_NEAR(identity.eval_value(u), original.eval_value(u), 1e-12);
     EXPECT_TRUE(identity.eval_gradient(u).isApprox(original.eval_gradient(u), 1e-12));
     EXPECT_DOUBLE_EQ(elastic.max_feasible_step(u, -2 * X), original.max_feasible_step(u, -2 * X));
@@ -137,12 +162,12 @@ TEST(ShellFemEnergy, PlasticFormsPreserveOriginalMeasureAndMatchResponse) {
         const Eigen::MatrixXd Y = r.X_local * P.transpose();
         TriangleMidEdgeRestData natural(Y, r.opposite);
         natural.sqrt_det_a_bar = r.sqrt_det_a_bar;
-        expected += detail::eval_shell_element<KoiterStVK>(natural, r.X_local + p.map.gather(e, u) - Y, p.thickness[e],
+        expected += evaluate_shell_element<KoiterStVK>(natural, r.X_local + p.map.gather(e, u) - Y, p.thickness[e],
                                                            p.theta[e]);
     }
     EXPECT_NEAR(elastic.eval_value(u), expected, 1e-12);
-    ShellFemForceFpResponse<KoiterStVK> response(dof::ConstantDofMap(topology(), 9), p.map, p.rest, u, p.thickness,
-                                                 p.theta);
+    ShellFemForceFpResponse response(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(),
+                                     dof::ConstantDofMap(topology(), 9), p.map, p.rest, u, p.thickness, p.theta);
     EXPECT_TRUE(elastic.eval_gradient(u).isApprox(response.eval_value(P.reshaped()), 1e-11));
     energy::test::expect_derivatives_match(elastic, u);
     plastic[0].setZero();
@@ -152,19 +177,23 @@ TEST(ShellFemEnergy, PlasticFormsPreserveOriginalMeasureAndMatchResponse) {
 
 TEST(ShellFemEnergy, RejectsInvalidPlasticFields) {
     Patch p;
-    using Shell = ShellFemEnergy<KoiterStVK>;
+    using Shell = ShellFemEnergy;
     auto malformed = p.rest;
     malformed[0].X_local.resize(malformed[0].X_local.rows(), 2);
-    EXPECT_THROW(
-        (Shell(p.map, malformed, p.thickness, p.theta, std::vector<Eigen::Matrix3d>(4, Eigen::Matrix3d::Identity()))),
-        std::invalid_argument);
+    EXPECT_THROW((Shell(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), p.map, malformed,
+                        p.thickness, p.theta, std::vector<Eigen::Matrix3d>(4, Eigen::Matrix3d::Identity()))),
+                 std::invalid_argument);
 
-    EXPECT_THROW((Shell(p.map, p.rest, p.thickness, p.theta, {Eigen::Matrix3d::Identity()})), std::invalid_argument);
+    EXPECT_THROW((Shell(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), p.map, p.rest, p.thickness,
+                        p.theta, {Eigen::Matrix3d::Identity()})),
+                 std::invalid_argument);
     for (const double diagonal :
          {0., -1., std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()}) {
         std::vector<Eigen::Matrix3d> plastic(4, Eigen::Matrix3d::Identity());
         plastic[2](0, 0) = diagonal;
-        EXPECT_THROW((Shell(p.map, p.rest, p.thickness, p.theta, plastic)), std::domain_error);
+        EXPECT_THROW((Shell(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), p.map, p.rest,
+                            p.thickness, p.theta, plastic)),
+                     std::domain_error);
     }
 }
 

@@ -15,7 +15,7 @@ def test_sampled_parameter_force_chain_rule(plastic):
     fixed = [energy.AffineResponse(np.zeros((2 if plastic else 9, 3)),
              np.array([2., 3.]) if plastic else np.eye(3).ravel(order="F"))]
     cls = fem.VolumetricFemForceFpResponse if plastic else fem.VolumetricFemForceMaterialResponse
-    force = cls[fem.NeoHookean, B, Q](parameters, displacement_map, geometry, .1 * nodes.ravel(), fixed)
+    force = cls[B, Q](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), parameters, displacement_map, geometry, .1 * nodes.ravel(), fixed)
     sampling = fem.value_sampling_response[B](Q.points(), components=m)
     composed = energy.ComposedResponse(force, sampling)
     base = np.eye(3).ravel(order="F") if plastic else np.array([2., 3.])

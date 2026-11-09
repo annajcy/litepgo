@@ -25,10 +25,10 @@ inline ShellElementState shell_element_state(const TriangleMidEdgeRestData& rest
         u_local.rows() != rest.X_local.rows() || u_local.cols() != 3 || !u_local.allFinite() ||
         !rest.X_local.allFinite() || !std::isfinite(thickness) || thickness <= 0 || theta.size() != num_parameters ||
         !theta.allFinite() || !std::isfinite(rest.sqrt_det_a_bar) || rest.sqrt_det_a_bar <= 0)
-        throw std::invalid_argument("eval_shell_element: invalid stencil, area, thickness, or parameters");
+        throw std::invalid_argument("shell_element_state: invalid stencil, area, thickness, or parameters");
     const Eigen::MatrixXd x_local = rest.X_local + u_local;
     if (!x_local.allFinite())
-        throw std::domain_error("eval_shell_element: non-finite current positions");
+        throw std::domain_error("shell_element_state: non-finite current positions");
     ShellElementState state;
     state.weight = 0.5 * rest.sqrt_det_a_bar;
     const auto current = eval_triangle_mid_edge_kinematics(x_local, rest.opposite,
@@ -45,58 +45,40 @@ inline double finish_shell_element(const ShellElementState& state, double densit
                                    const Eigen::Ref<const Eigen::VectorXd>& dW_dab,
                                    const Eigen::Ref<const Eigen::MatrixXd>& d2W_dab2, StridedVecRef* gradient,
                                    StridedMatRef* hessian) {
+    const auto n = state.dab_dx.cols();
+    if ((gradient && gradient->size() != n) || (hessian && (hessian->rows() != n || hessian->cols() != n)))
+        throw std::invalid_argument("finish_shell_element: invalid output dimensions");
     const double weight = state.weight;
     const double W = weight * density;
     if (!std::isfinite(W))
-        throw std::domain_error("eval_shell_element: non-finite density");
+        throw std::domain_error("finish_shell_element: non-finite density");
     if (gradient)
         gradient->setZero();
     if (hessian)
         hessian->setZero();
     if (gradient || hessian) {
         if (dW_dab.size() != 6)
-            throw std::logic_error("eval_shell_element: invalid material gradient");
+            throw std::logic_error("finish_shell_element: invalid material gradient");
         if (!dW_dab.allFinite())
-            throw std::domain_error("eval_shell_element: non-finite material gradient");
+            throw std::domain_error("finish_shell_element: non-finite material gradient");
         if (gradient) {
             gradient->noalias() += weight * (state.dab_dx.transpose() * dW_dab);
             if (!gradient->allFinite())
-                throw std::domain_error("eval_shell_element: non-finite gradient");
+                throw std::domain_error("finish_shell_element: non-finite gradient");
         }
         if (hessian) {
             if (d2W_dab2.rows() != 6 || d2W_dab2.cols() != 6)
-                throw std::logic_error("eval_shell_element: invalid material Hessian");
+                throw std::logic_error("finish_shell_element: invalid material Hessian");
             if (!d2W_dab2.allFinite())
-                throw std::domain_error("eval_shell_element: non-finite material Hessian");
+                throw std::domain_error("finish_shell_element: non-finite material Hessian");
             hessian->noalias() += weight * (state.dab_dx.transpose() * d2W_dab2 * state.dab_dx);
             for (std::size_t i = 0; i < state.d2ab_dx2.size(); ++i)
                 *hessian += weight * dW_dab[static_cast<Eigen::Index>(i)] * state.d2ab_dx2[i];
             if (!hessian->allFinite())
-                throw std::domain_error("eval_shell_element: non-finite Hessian");
+                throw std::domain_error("finish_shell_element: non-finite Hessian");
         }
     }
     return W;
-}
-
-// Constant density on the reference triangle; apply its physical area exactly once.
-// Outputs are pre-sized views and are overwritten, not accumulated.
-template <class Material>
-double eval_shell_element(const TriangleMidEdgeRestData& rest, const Eigen::Ref<const Eigen::MatrixXd>& u_local,
-                          double thickness, const Eigen::Ref<const Eigen::VectorXd>& theta,
-                          StridedVecRef* gradient = nullptr, StridedMatRef* hessian = nullptr) {
-    const auto n = u_local.size();
-    if ((gradient && gradient->size() != n) || (hessian && (hessian->rows() != n || hessian->cols() != n)))
-        throw std::invalid_argument("eval_shell_element: invalid output dimensions");
-    const auto state = shell_element_state(rest, u_local, thickness, theta, Material::num_parameters,
-                                           gradient != nullptr, hessian != nullptr);
-    const double density = Material::eval_W(state.inputs);
-    if (!std::isfinite(state.weight * density))
-        throw std::domain_error("eval_shell_element: non-finite density");
-    const Eigen::VectorXd dW_dab =
-        (gradient || hessian) ? Eigen::VectorXd(Material::eval_dW_dab(state.inputs)) : Eigen::VectorXd();
-    const Eigen::MatrixXd d2W_dab2 =
-        hessian ? Eigen::MatrixXd(Material::eval_d2W_dab2(state.inputs)) : Eigen::MatrixXd();
-    return finish_shell_element(state, density, dW_dab, d2W_dab2, gradient, hessian);
 }
 
 } // namespace litepgo::fem::detail

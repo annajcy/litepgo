@@ -57,7 +57,7 @@ def main():
     mapping = dof.VertexDofMap(topology, 3)
     fixed_Fp = energy.AffineResponse(np.zeros((9, 3)), Fp.ravel(order="F"))
     fixed_theta = energy.AffineResponse(np.zeros((2, 3)), theta)
-    native = fem.VolumetricFemEnergy[fem.NeoHookean, B, Q](mapping, [geometry], [fixed_Fp], [fixed_theta])
+    native = fem.VolumetricFemEnergy[B, Q](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, [geometry], [fixed_Fp], [fixed_theta])
     np.testing.assert_allclose(E, native.eval_value(coefficients), atol=1e-13)
     np.testing.assert_allclose(g, native.eval_gradient(coefficients), atol=1e-13)
     np.testing.assert_allclose(H, native.eval_hessian(coefficients).toarray(), atol=1e-13)

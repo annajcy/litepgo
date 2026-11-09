@@ -10,8 +10,8 @@ from functools import partial
 import numpy as np
 from litepgo import dof, energy, fem, mesh, solver
 
-ElasticEnergy = fem.ShellFemEnergy[fem.KoiterStVK]
-ForceFpResponse = fem.ShellFemForceFpResponse[fem.KoiterStVK]
+ElasticEnergy = fem.ShellFemEnergy
+ForceFpResponse = fem.ShellFemForceFpResponse
 
 
 @dataclass
@@ -75,7 +75,7 @@ def make_factories(problem):
     def make_energy(p):
         packed = plastic.eval_value(p).reshape(-1, 9)
         fields = [row.reshape(3, 3, order="F") for row in packed]
-        return ElasticEnergy(
+        return ElasticEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](),
             problem.displacement_map,
             problem.rest,
             problem.thickness,
@@ -84,7 +84,7 @@ def make_factories(problem):
         )
 
     def make_response(u):
-        force = ForceFpResponse(
+        force = ForceFpResponse(fem.PointwiseShellAdapter[fem.KoiterStVK](),
             problem.physical_map,
             problem.displacement_map,
             problem.rest,

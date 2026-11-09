@@ -14,9 +14,9 @@ using namespace nb::literals;
 namespace litepgo::fem::binding {
 namespace {
 
-template <class M, class B, class Q> struct BindForce {
+template <class B, class Q> struct BindForce {
     static void apply(nb::module_& m) {
-        bind_force<VolumetricFemForceMaterialResponse<M, B, Q>, M, B, Q>(
+        bind_force<VolumetricFemForceMaterialResponse<B, Q>, B, Q>(
             m, "VolumetricFemForceMaterialResponse", "Fp",
             "Fixed displacement/geometry/Fp; force and material-parameter Jacobian.");
     }

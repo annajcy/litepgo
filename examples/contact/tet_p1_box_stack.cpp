@@ -1,4 +1,6 @@
+#include "litepgo/fem/material/volumetric/pointwise_volumetric_adapter.hpp"
 #include "litepgo/fem/response/interpolated_response.hpp"
+#include <memory>
 // press two tet boxes together and solve static equilibrium with contact.
 // Build: cmake --build build/release --target tet_p1_box_stack
 // Run: build/release/examples/contact/tet_p1_box_stack
@@ -72,11 +74,11 @@ int main(int argc, char** argv) {
     auto Fp_field =
         std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped());
     auto theta_field = std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(2, 3));
-    auto elastic =
-        std::make_shared<fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>>(
-            rest_position_map, std::move(rest_position_fields),
-            std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), Fp_field),
-            std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), theta_field));
+    auto elastic = std::make_shared<fem::VolumetricFemEnergy<fem::TetP1Basis, fem::TetCentroidQuadrature>>(
+        std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), rest_position_map,
+        std::move(rest_position_fields),
+        std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), Fp_field),
+        std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), theta_field));
     const int num_dofs = elastic->num_dofs();
 
     // The lower box's bottom face is clamped; the upper box's top face is pulled down

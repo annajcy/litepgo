@@ -1,3 +1,4 @@
+#include "litepgo/fem/material/shell/pointwise_shell_adapter.hpp"
 #include <memory>
 // Fit two shared positive in-plane Fp stretches at a prescribed shell pose.
 // Build: cmake --build build/release --target shell_fixed_pose_fp_fit
@@ -83,14 +84,16 @@ Problem make_problem() {
     const Eigen::Matrix3d true_Fp = Eigen::Vector3d(truth[0], truth[1], 1).asDiagonal();
     const std::vector<Vec> theta(map.num_elements(), Eigen::Vector2d(2, 3));
     // The energy fixes Fp, while the force response below makes it the active input.
-    fem::ShellFemEnergy<fem::KoiterStVK> target_energy(map, rest, thickness, theta,
-                                                       std::vector<Eigen::Matrix3d>(map.num_elements(), true_Fp));
+    fem::ShellFemEnergy target_energy(std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(), map,
+                                      rest, thickness, theta,
+                                      std::vector<Eigen::Matrix3d>(map.num_elements(), true_Fp));
     const Vec target = target_energy.eval_gradient(u);
     const double scale = target.norm();
     if (!(scale > 0) || !std::isfinite(scale))
         throw std::runtime_error("Calibration requires finite nonzero target forces");
-    auto force = std::make_shared<fem::ShellFemForceFpResponse<fem::KoiterStVK>>(dof::ConstantDofMap(topology, 9), map,
-                                                                                 rest, u, thickness, theta);
+    auto force = std::make_shared<fem::ShellFemForceFpResponse>(
+        std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(), dof::ConstantDofMap(topology, 9), map,
+        rest, u, thickness, theta);
 
     // Fixed pose and original face areas are cached; only the parameter vector varies.
     if (!force->eval_value(true_Fp.reshaped()).isApprox(target, 1e-11))

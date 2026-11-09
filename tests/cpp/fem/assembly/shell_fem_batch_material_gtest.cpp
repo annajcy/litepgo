@@ -7,6 +7,7 @@
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 
+#include "litepgo/fem/material/shell/pointwise_shell_adapter.hpp"
 #include <atomic>
 #include <gtest/gtest.h>
 #include <limits>
@@ -17,14 +18,14 @@ namespace litepgo::fem::test {
 namespace {
 
 // KoiterStVK evaluated through the batch protocol, counting calls.
-class BatchKoiter {
+class BatchKoiter : public ShellBatchMaterial {
   public:
     explicit BatchKoiter(std::shared_ptr<std::atomic<int>> calls, bool poison = false)
         : calls_(std::move(calls)), poison_(poison) {}
-    int num_parameters() const {
+    int num_parameters() const override {
         return KoiterStVK::num_parameters;
     }
-    void eval(const ShellMaterialBatch& in, ShellMaterialBatchOutputs& out) const {
+    void eval(const ShellMaterialBatch& in, ShellMaterialBatchOutputs& out) const override {
         ++*calls_;
         const Eigen::Index n = in.size();
         if (out.W)
@@ -64,8 +65,8 @@ class BatchKoiter {
     std::shared_ptr<std::atomic<int>> calls_;
     bool poison_;
 };
-static_assert(ShellBatchMaterial<BatchKoiter>);
-static_assert(!ShellBatchMaterial<KoiterStVK>);
+static_assert(std::is_base_of_v<ShellBatchMaterial, BatchKoiter>);
+static_assert(!std::is_base_of_v<ShellBatchMaterial, KoiterStVK>);
 
 struct Patch {
     mesh::TriangleTopology topology{6, {{0, 1, 2}, {2, 1, 3}, {0, 2, 4}, {1, 0, 5}}};
@@ -96,11 +97,12 @@ struct Patch {
 TEST(ShellFemBatchMaterial, EnergyMatchesPointwiseMaterial) {
     Patch p;
     auto calls = std::make_shared<std::atomic<int>>(0);
-    const ShellFemEnergy<KoiterStVK> native(p.map, p.rest, p.thickness, p.theta, p.Fp);
+    const ShellFemEnergy native(std::make_shared<PointwiseShellAdapter<KoiterStVK>>(), p.map, p.rest, p.thickness,
+                                p.theta, p.Fp);
     for (int batch_size : {1, 256}) {
         SCOPED_TRACE(batch_size);
-        const ShellFemEnergy<BatchKoiter> batched(p.map, p.rest, p.thickness, p.theta, p.Fp, batch_size,
-                                                  BatchKoiter(calls));
+        const ShellFemEnergy batched(std::make_shared<BatchKoiter>(calls), p.map, p.rest, p.thickness, p.theta, p.Fp,
+                                     batch_size);
         for (auto kind : {litepgo::energy::HessianKind::Exact, litepgo::energy::HessianKind::Projected}) {
             Vec g0, g1;
             SpMat H0, H1;
@@ -116,18 +118,19 @@ TEST(ShellFemBatchMaterial, EnergyMatchesPointwiseMaterial) {
         const Vec dx = 3 * p.u;
         EXPECT_DOUBLE_EQ(native.max_feasible_step(p.u, dx), batched.max_feasible_step(p.u, dx));
     }
-    EXPECT_THROW(ShellFemEnergy<BatchKoiter>(p.map, p.rest, p.thickness, p.theta, p.Fp, 256, BatchKoiter(calls, true)),
-                 std::domain_error);
+    EXPECT_THROW(
+        ShellFemEnergy(std::make_shared<BatchKoiter>(calls, true), p.map, p.rest, p.thickness, p.theta, p.Fp, 256),
+        std::domain_error);
 }
 
 TEST(ShellFemBatchMaterial, ForceResponsesMatchPointwiseMaterial) {
     Patch p;
     auto calls = std::make_shared<std::atomic<int>>(0);
     const Vec theta = Eigen::Vector2d(2.5, 1.5);
-    ShellFemForceMaterialResponse<KoiterStVK> native_theta(dof::ConstantDofMap(p.topology, 2), p.map, p.rest, p.u,
-                                                           p.thickness);
-    ShellFemForceMaterialResponse<BatchKoiter> batch_theta(dof::ConstantDofMap(p.topology, 2), p.map, p.rest, p.u,
-                                                           p.thickness, 256, BatchKoiter(calls));
+    ShellFemForceMaterialResponse native_theta(std::make_shared<PointwiseShellAdapter<KoiterStVK>>(),
+                                               dof::ConstantDofMap(p.topology, 2), p.map, p.rest, p.u, p.thickness);
+    ShellFemForceMaterialResponse batch_theta(std::make_shared<BatchKoiter>(calls), dof::ConstantDofMap(p.topology, 2),
+                                              p.map, p.rest, p.u, p.thickness, 256);
     EXPECT_LT((native_theta.eval_value(theta) - batch_theta.eval_value(theta)).norm(), 1e-12);
     EXPECT_LT(Eigen::MatrixXd(native_theta.eval_jacobian(theta) - batch_theta.eval_jacobian(theta)).norm(), 1e-12);
     EXPECT_EQ(*calls, 4); // Two stencil-size batches per evaluation.
@@ -135,10 +138,10 @@ TEST(ShellFemBatchMaterial, ForceResponsesMatchPointwiseMaterial) {
     Eigen::Matrix3d P;
     P << 1.12, .07, -.02, .03, .94, .06, .01, -.03, 1.08;
     const Vec packed = P.reshaped();
-    ShellFemForceFpResponse<KoiterStVK> native_fp(dof::ConstantDofMap(p.topology, 9), p.map, p.rest, p.u, p.thickness,
-                                                  p.theta);
-    ShellFemForceFpResponse<BatchKoiter> batch_fp(dof::ConstantDofMap(p.topology, 9), p.map, p.rest, p.u, p.thickness,
-                                                  p.theta, 256, BatchKoiter(calls));
+    ShellFemForceFpResponse native_fp(std::make_shared<PointwiseShellAdapter<KoiterStVK>>(),
+                                      dof::ConstantDofMap(p.topology, 9), p.map, p.rest, p.u, p.thickness, p.theta);
+    ShellFemForceFpResponse batch_fp(std::make_shared<BatchKoiter>(calls), dof::ConstantDofMap(p.topology, 9), p.map,
+                                     p.rest, p.u, p.thickness, p.theta, 256);
     EXPECT_LT((native_fp.eval_value(packed) - batch_fp.eval_value(packed)).norm(), 1e-12);
     EXPECT_LT(Eigen::MatrixXd(native_fp.eval_jacobian(packed) - batch_fp.eval_jacobian(packed)).norm(), 1e-12);
     EXPECT_EQ(*calls, 8);

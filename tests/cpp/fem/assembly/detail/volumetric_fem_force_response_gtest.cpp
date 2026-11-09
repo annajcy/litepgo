@@ -3,6 +3,7 @@
 #include "litepgo/fem/assembly/volumetric_fem_force_fp_response.hpp"
 #include "litepgo/fem/assembly/volumetric_fem_force_material_response.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/pointwise_volumetric_adapter.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/response/interpolated_response.hpp"
 #include <cmath>
@@ -36,14 +37,18 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
     const std::vector<std::shared_ptr<litepgo::energy::Response>> plastic(
         2, std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((p).size(), 3), p)),
         parameters(2, std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((theta).size(), 3), theta));
-    using Energy = VolumetricFemEnergy<NeoHookean, B, Q>;
-    using MaterialForce = VolumetricFemForceMaterialResponse<NeoHookean, B, Q>;
-    using PlasticForce = VolumetricFemForceFpResponse<NeoHookean, B, Q>;
-    const Vec expected = Energy(map, geometry, plastic, parameters).eval_gradient(u);
+    using Energy = VolumetricFemEnergy<B, Q>;
+    using MaterialForce = VolumetricFemForceMaterialResponse<B, Q>;
+    using PlasticForce = VolumetricFemForceFpResponse<B, Q>;
+    const Vec expected = Energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), map, geometry,
+                                plastic, parameters)
+                             .eval_gradient(u);
     Eigen::MatrixXd material_reference, plastic_reference;
     for (int batch_size : {1, 3}) {
-        MaterialForce material(dof::ConstantDofMap(topology, 2), map, geometry, u, plastic, batch_size);
-        PlasticForce plastic_force(dof::ConstantDofMap(topology, 9), map, geometry, u, parameters, batch_size);
+        MaterialForce material(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
+                               dof::ConstantDofMap(topology, 2), map, geometry, u, plastic, batch_size);
+        PlasticForce plastic_force(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
+                                   dof::ConstantDofMap(topology, 9), map, geometry, u, parameters, batch_size);
         EXPECT_TRUE(material.eval_value(theta).isApprox(expected, 1e-11));
         EXPECT_TRUE(plastic_force.eval_value(p).isApprox(expected, 1e-11));
         const Eigen::MatrixXd M = material.eval_jacobian(theta), P = plastic_force.eval_jacobian(p);
@@ -62,12 +67,18 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
                                                                  p + h * direction)),
             minus(2, std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((p - h * direction).size(), 3),
                                                                        p - h * direction));
-        const Vec fd = (Energy(map, geometry, plus, parameters).eval_gradient(u) -
-                        Energy(map, geometry, minus, parameters).eval_gradient(u)) /
+        const Vec fd = (Energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), map, geometry,
+                               plus, parameters)
+                            .eval_gradient(u) -
+                        Energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), map, geometry,
+                               minus, parameters)
+                            .eval_gradient(u)) /
                        (2 * h);
         EXPECT_TRUE((P * direction).isApprox(fd, 1e-8));
-        MaterialForce material_elements(dof::ElementDofMap(topology, 2), map, geometry, u, plastic, batch_size);
-        PlasticForce plastic_elements(dof::ElementDofMap(topology, 9), map, geometry, u, parameters, batch_size);
+        MaterialForce material_elements(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
+                                        dof::ElementDofMap(topology, 2), map, geometry, u, plastic, batch_size);
+        PlasticForce plastic_elements(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
+                                      dof::ElementDofMap(topology, 9), map, geometry, u, parameters, batch_size);
         Vec ts(4), ps(18);
         ts << theta, theta;
         ps << p, p;
@@ -84,7 +95,9 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
             const std::vector<std::shared_ptr<litepgo::energy::Response>> fields{
                 std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((t.head(2)).size(), 3), t.head(2)),
                 std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((t.tail(2)).size(), 3), t.tail(2))};
-            return Energy(map, geometry, plastic, fields).eval_gradient(u);
+            return Energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), map, geometry,
+                          plastic, fields)
+                .eval_gradient(u);
         };
         const auto plastic_gradient = [&](const Vec& p_element) -> Vec {
             const std::vector<std::shared_ptr<litepgo::energy::Response>> fields{
@@ -92,7 +105,9 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
                                                                   p_element.head(9)),
                 std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((p_element.tail(9)).size(), 3),
                                                                   p_element.tail(9))};
-            return Energy(map, geometry, fields, parameters).eval_gradient(u);
+            return Energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), map, geometry,
+                          fields, parameters)
+                .eval_gradient(u);
         };
         EXPECT_TRUE(material_elements.eval_value(ts).isApprox(material_gradient(ts), 1e-11));
         EXPECT_TRUE(plastic_elements.eval_value(ps).isApprox(plastic_gradient(ps), 1e-11));
@@ -122,10 +137,12 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
     }
     const dof::VertexDofMap wrong(topology, BasisDofTransform<B>::dofs_per_vertex == 3 ? 24 : 3);
     EXPECT_THROW(
-        (MaterialForce(dof::ConstantDofMap(topology, 2), wrong, geometry, Vec::Zero(wrong.num_dofs()), plastic)),
+        (MaterialForce(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
+                       dof::ConstantDofMap(topology, 2), wrong, geometry, Vec::Zero(wrong.num_dofs()), plastic)),
         std::invalid_argument);
     EXPECT_THROW(
-        (PlasticForce(dof::ConstantDofMap(topology, 9), wrong, geometry, Vec::Zero(wrong.num_dofs()), parameters)),
+        (PlasticForce(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
+                      dof::ConstantDofMap(topology, 9), wrong, geometry, Vec::Zero(wrong.num_dofs()), parameters)),
         std::invalid_argument);
 }
 

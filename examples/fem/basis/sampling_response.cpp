@@ -2,6 +2,7 @@
 #include "litepgo/fem/assembly/volumetric_fem_energy.hpp"
 #include "litepgo/fem/basis/3d/hex_q1_basis.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/pointwise_volumetric_adapter.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/response/deformation_gradient_sampling_response.hpp"
 #include <iostream>
@@ -74,7 +75,8 @@ int main() {
     auto fixed_Fp =
         std::make_shared<energy::AffineResponse>(SpMat(9, 3), Eigen::Matrix3d::Identity().eval().reshaped());
     auto fixed_theta = std::make_shared<energy::AffineResponse>(SpMat(2, 3), Eigen::Vector2d(2, 3));
-    fem::VolumetricFemEnergy<M, B, Q> native(map, {fixed_geometry}, {fixed_Fp}, {fixed_theta});
+    fem::VolumetricFemEnergy<B, Q> native(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<M>>(), map,
+                                          {fixed_geometry}, {fixed_Fp}, {fixed_theta});
     if (std::abs(E - native.eval_value(u)) > 1e-13 || !g.isApprox(native.eval_gradient(u), 1e-12) ||
         !H.isApprox(Eigen::MatrixXd(native.eval_hessian(u)), 1e-12))
         throw std::runtime_error("explicit integration differs from native FEM");

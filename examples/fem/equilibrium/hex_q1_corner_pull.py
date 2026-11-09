@@ -47,9 +47,7 @@ def main():
     ]
     Fp_field = AffineResponse(np.zeros((9, 3)), np.eye(3).ravel(order="F"))
     theta_field = AffineResponse(np.zeros((2, 3)), np.array([2.0, 3.0]))
-    elastic = fem.VolumetricFemEnergy[
-        fem.NeoHookean, fem.HexQ1Basis, fem.GaussLegendre3D[2]
-    ](
+    elastic = fem.VolumetricFemEnergy[fem.HexQ1Basis, fem.GaussLegendre3D[2]](fem.PointwiseVolumetricAdapter[fem.NeoHookean](),
         rest_position_map,
         rest_position_fields,
         [Fp_field] * topology.num_cells,

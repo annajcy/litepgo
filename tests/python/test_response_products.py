@@ -247,10 +247,10 @@ def test_mesh_energy_super_step_and_fem_inheritance():
     obj = Quadratic()
     assert obj.max_feasible_step(np.ones(2), np.ones(2)) == .5
     assert issubclass(
-        fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature],
+        fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature],
         energy.MeshEnergy,
     )
-    assert issubclass(fem.ShellFemEnergy[fem.KoiterStVK], energy.MeshEnergy)
+    assert issubclass(fem.ShellFemEnergy, energy.MeshEnergy)
 
 
 def test_value_reentry_without_shared_workspace():

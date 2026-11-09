@@ -53,17 +53,17 @@ def test_fem_snapshots_material_responses_and_releases_owners():
     geometry = fem.InterpolatedResponse[fem.TetP1Basis](nodes)
     plastic = SpatialConstant(np.eye(3).ravel())
     material = SpatialConstant([2., 3.])
-    cls = fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
-    elastic = cls(mapping, [geometry], [plastic], [material])
-    force_cls = fem.VolumetricFemForceMaterialResponse[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
+    cls = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature]
+    elastic = cls(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, [geometry], [plastic], [material])
+    force_cls = fem.VolumetricFemForceMaterialResponse[fem.TetP1Basis, fem.TetCentroidQuadrature]
     u = .1 * nodes.ravel()
-    force = force_cls(dof.ConstantDofMap(topology, 2), mapping, [geometry], u, [plastic])
+    force = force_cls(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 2), mapping, [geometry], u, [plastic])
     value, g, H = elastic.eval(u, gradient=True, hessian=energy.HessianKind.Exact)
     assert (plastic.queries, material.queries) == (2, 1)
     material.value *= 2
     plastic.value *= 1.1
     assert elastic.eval_value(u) == value
-    rebuilt = cls(mapping, [geometry], [SpatialConstant(np.eye(3).ravel())], [material])
+    rebuilt = cls(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, [geometry], [SpatialConstant(np.eye(3).ravel())], [material])
     np.testing.assert_allclose(rebuilt.eval_gradient(u), 2*g)
     owners = [weakref.ref(obj) for obj in [geometry, plastic, material]]
     del geometry, plastic, material
@@ -72,7 +72,7 @@ def test_fem_snapshots_material_responses_and_releases_owners():
     np.testing.assert_allclose(force.eval_value(np.array([2., 3.])), g)
     np.testing.assert_allclose(elastic.eval_hessian(u).toarray(), H.toarray())
     with pytest.raises((TypeError, ValueError)):
-        cls(mapping, [None], [], [])
+        cls(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, [None], [], [])
 
 
 def test_spatial_deformation_requires_valid_geometry_and_child_capabilities():

@@ -8,6 +8,7 @@
 #include "litepgo/energy/scalar/weighted_sum_energy.hpp"
 #include "litepgo/fem/assembly/volumetric_fem_energy.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/pointwise_volumetric_adapter.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/response/interpolated_response.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
@@ -15,6 +16,7 @@
 #include "litepgo/mesh/io/obj.hpp"
 #include "litepgo/mesh/io/veg.hpp"
 #include "litepgo/solver/newton.hpp"
+#include <memory>
 
 #include <array>
 #include <cmath>
@@ -65,11 +67,11 @@ int main(int argc, char** argv) {
         std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped());
     auto theta_field =
         std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(0.5, 0.75));
-    auto elastic =
-        std::make_shared<fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>>(
-            rest_position_map, std::move(rest_position_fields),
-            std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), Fp_field),
-            std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), theta_field));
+    auto elastic = std::make_shared<fem::VolumetricFemEnergy<fem::TetP1Basis, fem::TetCentroidQuadrature>>(
+        std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), rest_position_map,
+        std::move(rest_position_fields),
+        std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), Fp_field),
+        std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), theta_field));
     const int num_dofs = elastic->num_dofs();
 
     // Pin the lateral DOFs on the outer faces to remove rigid modes.

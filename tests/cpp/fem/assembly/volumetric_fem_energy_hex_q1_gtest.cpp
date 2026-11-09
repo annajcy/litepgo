@@ -1,4 +1,6 @@
 #include "../../testing/evaluate_energy.hpp"
+#include "litepgo/fem/material/volumetric/pointwise_volumetric_adapter.hpp"
+#include <memory>
 
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/energy/response/affine_response.hpp"
@@ -41,8 +43,9 @@ inline auto make_hex_q1_energy(const Vec& rest_positions) {
     auto Fp_field =
         std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped());
     auto theta_field = std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(2, 3));
-    return fem::VolumetricFemEnergy<fem::NeoHookean, fem::HexQ1Basis, fem::GaussLegendre3D<2>>(
-        rest_position_map, std::move(rest_position_fields),
+    return fem::VolumetricFemEnergy<fem::HexQ1Basis, fem::GaussLegendre3D<2>>(
+        std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), rest_position_map,
+        std::move(rest_position_fields),
         std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), Fp_field),
         std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), theta_field));
 }

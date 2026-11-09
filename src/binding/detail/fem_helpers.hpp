@@ -1,6 +1,5 @@
 #pragma once
 #include "detail/templates.hpp"
-#include "fem/material/py_material.hpp"
 #include "litepgo/dof/constant_dof_map.hpp"
 #include "litepgo/dof/element_dof_map.hpp"
 #include "litepgo/dof/vertex_dof_map.hpp"
@@ -10,6 +9,7 @@
 #include "litepgo/fem/basis/3d/tet_p1_basis.hpp"
 #include "litepgo/fem/basis/basis.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/volumetric_material_batch.hpp"
 #include "litepgo/fem/quadrature/3d/gauss_legendre_3d.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include <memory>
@@ -70,54 +70,29 @@ inline std::string class_name(nb::handle cls) {
     return nb::cast<std::string>(cls.attr("__name__"));
 }
 
-// Python-material instantiations take the material class as a leading argument; litepgo.fem
-// binds it for each PyVolumetricMaterial subclass so public constructors match native ones.
-template <class ParameterMap, class Force, class M, class Cls>
+template <class ParameterMap, class Force, class Cls>
 void bind_force_init(Cls& cls, const char* fixed_name, const char* doc) {
-    if constexpr (is_py_material<M>)
-        cls.def(
-            "__init__",
-            [](nb::pointer_and_handle<Force> self, nb::handle material, const ParameterMap& parameter_map,
-               const dof::VertexDofMap& displacement_map, const Responses& rest_position_fields, Vec displacement,
-               const Responses& fixed, int batch_size) {
-                new (self.p) Force(parameter_map, displacement_map, rest_position_fields, std::move(displacement),
-                                   fixed, batch_size, owned_material<M>(self, material));
-            },
+    cls.def(nb::init<std::shared_ptr<const VolumetricBatchMaterial>, const ParameterMap&, const dof::VertexDofMap&,
+                     const Responses&, Vec, const Responses&, int>(),
             "material"_a, "parameter_map"_a, "displacement_map"_a, "rest_position_fields"_a, "displacement"_a,
             nb::arg(fixed_name), "batch_size"_a = 256, doc);
-    else
-        cls.def(
-            "__init__",
-            [](Force* self, const ParameterMap& parameter_map, const dof::VertexDofMap& displacement_map,
-               const Responses& rest_position_fields, Vec displacement, const Responses& fixed, int batch_size) {
-                new (self) Force(parameter_map, displacement_map, rest_position_fields, std::move(displacement), fixed,
-                                 batch_size);
-            },
-            "parameter_map"_a, "displacement_map"_a, "rest_position_fields"_a, "displacement"_a, nb::arg(fixed_name),
-            "batch_size"_a = 256, doc);
 }
 
-template <class Force, class M, class B, class Q>
+template <class Force, class B, class Q>
 void bind_force(nb::module_& m, const char* template_name, const char* fixed_name, const char* doc) {
-    const nb::tuple key = nb::make_tuple(material_key<M>(), nb::type<B>(), nb::type<Q>());
-    const std::string name = std::string(template_name) + "[" + class_name(key[0]) + ", " + class_name(key[1]) + ", " +
-                             class_name(key[2]) + "]";
+    const nb::tuple key = nb::make_tuple(nb::type<B>(), nb::type<Q>());
+    const std::string name = std::string(template_name) + "[" + class_name(key[0]) + ", " + class_name(key[1]) + "]";
     auto cls = nb::class_<Force, energy::MeshResponse>(m, name.c_str());
-    bind_force_init<dof::ConstantDofMap, Force, M>(cls, fixed_name, doc);
-    bind_force_init<dof::ElementDofMap, Force, M>(cls, fixed_name, doc);
+    bind_force_init<dof::ConstantDofMap, Force>(cls, fixed_name, doc);
+    bind_force_init<dof::ElementDofMap, Force>(cls, fixed_name, doc);
     register_instance(m, template_name, key, nb::type<Force>());
 }
 
-// Every native (Basis, Quadrature) pair, for NeoHookean and Python volumetric materials.
-template <template <class, class, class> class Bind> void for_each_volumetric_instance(nb::module_& m) {
-    auto all = [&]<class M>() {
-        Bind<M, TetP1Basis, TetCentroidQuadrature>::apply(m);
-        Bind<M, HexQ1Basis, GaussLegendre3D<2>>::apply(m);
-        Bind<M, HexQ1Basis, GaussLegendre3D<4>>::apply(m);
-        Bind<M, HexHermiteBasis, GaussLegendre3D<2>>::apply(m);
-        Bind<M, HexHermiteBasis, GaussLegendre3D<4>>::apply(m);
-    };
-    all.template operator()<NeoHookean>();
-    all.template operator()<PyVolumetricMaterial>();
+template <template <class, class> class Bind> void for_each_volumetric_instance(nb::module_& m) {
+    Bind<TetP1Basis, TetCentroidQuadrature>::apply(m);
+    Bind<HexQ1Basis, GaussLegendre3D<2>>::apply(m);
+    Bind<HexQ1Basis, GaussLegendre3D<4>>::apply(m);
+    Bind<HexHermiteBasis, GaussLegendre3D<2>>::apply(m);
+    Bind<HexHermiteBasis, GaussLegendre3D<4>>::apply(m);
 }
 } // namespace litepgo::fem::binding

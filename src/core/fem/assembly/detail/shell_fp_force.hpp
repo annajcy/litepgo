@@ -64,15 +64,5 @@ inline void check_shell_fp_input(const ShellFpForceData& data, const Eigen::Vect
         throw std::invalid_argument("Shell Fp force: invalid Fp, derivative, parameters or output dimensions");
 }
 
-// The nine column-major Fp entries are the active input.
-template <class Material>
-void eval_shell_fp_force(const ShellFpForceData& data, const Eigen::VectorXd& packed, StridedVecRef value,
-                         StridedMatRef* J) {
-    check_shell_fp_input(data, packed, Material::num_parameters, value.size(), J);
-    const auto natural = shell_fp_natural(data, packed, J != nullptr);
-    eval_shell_force_value<Material>(data.current, natural.inputs, value);
-    if (J)
-        shell_fp_force_jacobian(data, natural, Material::eval_d2W_dab_dabarbbar(natural.inputs), *J);
-}
 } // namespace detail
 } // namespace litepgo::fem

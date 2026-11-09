@@ -3,6 +3,7 @@
 #include "litepgo/fem/assembly/volumetric_fem_force_fp_response.hpp"
 #include "litepgo/fem/assembly/volumetric_fem_force_material_response.hpp"
 #include "litepgo/fem/material/volumetric/neo_hookean.hpp"
+#include "litepgo/fem/material/volumetric/pointwise_volumetric_adapter.hpp"
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/response/interpolated_response.hpp"
 #include <gtest/gtest.h>
@@ -11,8 +12,8 @@
 namespace litepgo::fem::test {
 namespace {
 
-using Force = VolumetricFemForceMaterialResponse<NeoHookean, TetP1Basis, TetCentroidQuadrature>;
-using Energy = VolumetricFemEnergy<NeoHookean, TetP1Basis, TetCentroidQuadrature>;
+using Force = VolumetricFemForceMaterialResponse<TetP1Basis, TetCentroidQuadrature>;
+using Energy = VolumetricFemEnergy<TetP1Basis, TetCentroidQuadrature>;
 struct Fixture {
     mesh::TetTopology topology{5, {{0, 1, 2, 3}, {1, 2, 3, 4}}};
     dof::VertexDofMap map{topology, 3};
@@ -42,7 +43,8 @@ struct Fixture {
             fields.push_back(std::make_shared<litepgo::energy::AffineResponse>(
                 litepgo::SpMat((theta.segment(theta.size() == 2 ? 0 : 2 * e, 2)).size(), 3),
                 theta.segment(theta.size() == 2 ? 0 : 2 * e, 2)));
-        return Energy(map, X, plastic, fields).eval_gradient(u);
+        return Energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), map, X, plastic, fields)
+            .eval_gradient(u);
     }
 };
 TEST(VolumetricFemForceMaterialResponse, MatchesEnergySharedAndPerElementAndBatchSizes) {
@@ -51,8 +53,10 @@ TEST(VolumetricFemForceMaterialResponse, MatchesEnergySharedAndPerElementAndBatc
     const Vec independent = (Vec(4) << 2, 3, 5, .8).finished();
     Eigen::MatrixXd reference;
     for (int size : {1, 3, 256}) {
-        Force shared(dof::ConstantDofMap(f.topology, 2), f.map, f.X, f.u, f.plastic, size);
-        Force per_element(dof::ElementDofMap(f.topology, 2), f.map, f.X, f.u, f.plastic, size);
+        Force shared(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
+                     dof::ConstantDofMap(f.topology, 2), f.map, f.X, f.u, f.plastic, size);
+        Force per_element(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
+                          dof::ElementDofMap(f.topology, 2), f.map, f.X, f.u, f.plastic, size);
         EXPECT_EQ(shared.num_inputs(), 2);
         EXPECT_EQ(shared.num_outputs(), 15);
         EXPECT_TRUE(shared.eval_value(theta).isApprox(f.force(theta), 1e-12));
@@ -74,21 +78,33 @@ TEST(VolumetricFemForceMaterialResponse, OwnsDisplacementAndValidatesConstructio
     Fixture f;
     const dof::ConstantDofMap p(f.topology, 2);
     const Vec theta = Eigen::Vector2d(2, 3), expected = f.force(theta);
-    Force r(p, f.map, f.X, f.u, f.plastic);
+    Force r(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), p, f.map, f.X, f.u, f.plastic);
     f.u.setZero();
     f.X.clear();
     f.plastic.clear();
     EXPECT_TRUE(r.eval_value(theta).isApprox(expected, 1e-12));
     Fixture good;
-    EXPECT_THROW((Force(p, good.map, good.X, Vec::Zero(1), good.plastic)), std::invalid_argument);
-    EXPECT_THROW((Force(p, good.map, {}, good.u, good.plastic)), std::invalid_argument);
-    EXPECT_THROW((Force(p, good.map, good.X, good.u, {})), std::invalid_argument);
-    EXPECT_THROW((Force(p, good.map, good.X, good.u, good.plastic, 0)), std::invalid_argument);
-    EXPECT_THROW((Force(dof::ConstantDofMap(good.topology, 3), good.map, good.X, good.u, good.plastic)),
+    EXPECT_THROW((Force(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), p, good.map, good.X,
+                        Vec::Zero(1), good.plastic)),
+                 std::invalid_argument);
+    EXPECT_THROW((Force(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), p, good.map, {},
+                        good.u, good.plastic)),
+                 std::invalid_argument);
+    EXPECT_THROW((Force(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), p, good.map, good.X,
+                        good.u, {})),
+                 std::invalid_argument);
+    EXPECT_THROW((Force(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), p, good.map, good.X,
+                        good.u, good.plastic, 0)),
+                 std::invalid_argument);
+    EXPECT_THROW((Force(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
+                        dof::ConstantDofMap(good.topology, 3), good.map, good.X, good.u, good.plastic)),
                  std::invalid_argument);
     const mesh::TetTopology empty(0, {});
-    EXPECT_THROW((Force(dof::ConstantDofMap(empty, 2), good.map, good.X, good.u, good.plastic)), std::invalid_argument);
-    Force zero(dof::ConstantDofMap(empty, 2), dof::VertexDofMap(empty, 3), {}, Vec(0), {});
+    EXPECT_THROW((Force(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
+                        dof::ConstantDofMap(empty, 2), good.map, good.X, good.u, good.plastic)),
+                 std::invalid_argument);
+    Force zero(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), dof::ConstantDofMap(empty, 2),
+               dof::VertexDofMap(empty, 3), {}, Vec(0), {});
     EXPECT_EQ(zero.eval_value(theta).size(), 0);
     EXPECT_EQ(zero.eval_jacobian(theta).nonZeros(), 0);
 }
@@ -97,7 +113,7 @@ TEST(VolumetricFemForceMaterialResponse, OwnsDisplacementAndValidatesConstructio
 
 namespace litepgo::fem::test {
 TEST(VolumetricFemForceFpResponse, EnergyConsistencySharedElementAndBatchJacobians) {
-    using PlasticForce = VolumetricFemForceFpResponse<NeoHookean, TetP1Basis, TetCentroidQuadrature>;
+    using PlasticForce = VolumetricFemForceFpResponse<TetP1Basis, TetCentroidQuadrature>;
     Fixture f;
     std::vector<std::shared_ptr<litepgo::energy::Response>> theta{
         std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(2, 3)),
@@ -107,9 +123,13 @@ TEST(VolumetricFemForceFpResponse, EnergyConsistencySharedElementAndBatchJacobia
         p.segment<9>(9 * e) = f.plastic[e]->eval_value(Eigen::Vector3d::Zero());
     Eigen::MatrixXd reference;
     for (int size : {1, 3, 256}) {
-        PlasticForce local(dof::ElementDofMap(f.topology, 9), f.map, f.X, f.u, theta, size);
-        PlasticForce shared(dof::ConstantDofMap(f.topology, 9), f.map, f.X, f.u, theta, size);
-        const auto expected = Energy(f.map, f.X, f.plastic, theta).eval_gradient(f.u);
+        PlasticForce local(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
+                           dof::ElementDofMap(f.topology, 9), f.map, f.X, f.u, theta, size);
+        PlasticForce shared(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
+                            dof::ConstantDofMap(f.topology, 9), f.map, f.X, f.u, theta, size);
+        const auto expected = Energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), f.map,
+                                     f.X, f.plastic, theta)
+                                  .eval_gradient(f.u);
         EXPECT_TRUE(local.eval_value(p).isApprox(expected, 1e-12));
         const Eigen::MatrixXd J = local.eval_jacobian(p);
         if (size == 1)
@@ -137,10 +157,15 @@ TEST(VolumetricFemForceFpResponse, EnergyConsistencySharedElementAndBatchJacobia
         EXPECT_TRUE(local.eval_value(p).isApprox(expected, 1e-12));
         f = Fixture{};
     }
-    EXPECT_THROW((PlasticForce(dof::ConstantDofMap(f.topology, 2), f.map, f.X, f.u, theta)), std::invalid_argument);
-    EXPECT_THROW((PlasticForce(dof::ConstantDofMap(f.topology, 9), f.map, f.X, f.u, {})), std::invalid_argument);
+    EXPECT_THROW((PlasticForce(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
+                               dof::ConstantDofMap(f.topology, 2), f.map, f.X, f.u, theta)),
+                 std::invalid_argument);
+    EXPECT_THROW((PlasticForce(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
+                               dof::ConstantDofMap(f.topology, 9), f.map, f.X, f.u, {})),
+                 std::invalid_argument);
     const mesh::TetTopology empty(0, {});
-    PlasticForce zero(dof::ConstantDofMap(empty, 9), dof::VertexDofMap(empty, 3), {}, Vec(0), {});
+    PlasticForce zero(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
+                      dof::ConstantDofMap(empty, 9), dof::VertexDofMap(empty, 3), {}, Vec(0), {});
     EXPECT_EQ(zero.eval_value(p.head(9)).size(), 0);
     EXPECT_EQ(zero.eval_jacobian(p.head(9)).cols(), 9);
 }

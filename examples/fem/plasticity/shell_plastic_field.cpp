@@ -1,3 +1,5 @@
+#include "litepgo/fem/material/shell/pointwise_shell_adapter.hpp"
+#include <memory>
 // Differential plastic growth of a clamped shell strip; solve u and write OBJ.
 // Build: cmake --build build/release --target shell_plastic_field
 // Run: build/release/examples/fem/plasticity/shell_plastic_field
@@ -55,7 +57,8 @@ int main(int argc, char** argv) {
             for (const auto& r : rest)
                 plastic.push_back(
                     Eigen::Vector3d(std::exp(alpha * 2 * r.X_local.topRows(3).col(1).mean()), 1, 1).asDiagonal());
-            fem::ShellFemEnergy<fem::KoiterStVK> elastic(map, rest, thickness, theta, plastic);
+            fem::ShellFemEnergy elastic(std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(), map,
+                                        rest, thickness, theta, plastic);
             linalg::AutoSparseSolver linear;
             const auto result = solver::newton_solve(elastic, fixed, u, options, linear);
             if (result.status != solver::NewtonStatus::Converged)

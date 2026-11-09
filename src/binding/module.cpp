@@ -90,6 +90,7 @@ NB_MODULE(_core, m) {
     litepgo::fem::binding::bind_positive_det_feasible_step(fem);
     litepgo::fem::binding::bind_dof_derivatives(fem);
     litepgo::fem::binding::bind_fem_point_displacement_map(fem);
+    litepgo::fem::binding::bind_batch_materials(fem);
     litepgo::fem::binding::bind_fem_volumetric_fem_energy(fem);
     litepgo::fem::binding::bind_fem_volumetric_fem_force_material_response(fem);
     litepgo::fem::binding::bind_fem_volumetric_fem_force_fp_response(fem);

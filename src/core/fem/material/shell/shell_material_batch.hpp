@@ -1,7 +1,6 @@
 #pragma once
 #include "litepgo/common/types.hpp"
 #include "litepgo/fem/material/shell/shell_material_inputs.hpp"
-#include <concepts>
 #include <stdexcept>
 #include <string>
 
@@ -30,27 +29,24 @@ struct ShellMaterialBatchOutputs {
     Eigen::Matrix<double, 36, Eigen::Dynamic>* d2W_dab_dabarbbar = nullptr;
 };
 
-// A shell material evaluated once per batch of faces. Static pointwise materials such as KoiterStVK
-// are used directly. Line searches use only the geometric shell step, so no feasible-step hook exists.
-template <class M>
-concept ShellBatchMaterial =
-    requires(const M& material, const ShellMaterialBatch& inputs, ShellMaterialBatchOutputs& outputs) {
-        { material.num_parameters() } -> std::convertible_to<int>;
-        material.eval(inputs, outputs);
-    };
+// One call evaluates independent material points. Implementations may be shared by FEM objects.
+class ShellBatchMaterial {
+  public:
+    virtual ~ShellBatchMaterial() = default;
+    virtual int num_parameters() const = 0;
+    virtual void eval(const ShellMaterialBatch& inputs, ShellMaterialBatchOutputs& outputs) const = 0;
+};
 
 inline Eigen::Matrix<double, 6, 1> pack_shell_forms(const Eigen::Matrix2d& a, const Eigen::Matrix2d& b) {
     return (Eigen::Matrix<double, 6, 1>() << a(0, 0), a(0, 1), a(1, 1), b(0, 0), b(0, 1), b(1, 1)).finished();
 }
 
 namespace detail {
-template <class M> int shell_num_parameters(const M& material) {
-    if constexpr (ShellBatchMaterial<M>)
-        return material.num_parameters();
-    else
-        return M::num_parameters;
+inline void check_shell_batch_inputs(const ShellMaterialBatch& in, int parameters) {
+    if (in.ab_bar.cols() != in.size() || in.thickness.size() != in.size() || in.theta.cols() != in.size() ||
+        in.theta.rows() != parameters)
+        throw std::invalid_argument("Shell batch material: incompatible input dimensions");
 }
-
 // Validates material-supplied batch outputs before assembly reads them.
 inline void check_shell_batch_outputs(const ShellMaterialBatchOutputs& out, Eigen::Index count, int k) {
     auto check = [&](const auto* value, Eigen::Index rows, const char* name) {

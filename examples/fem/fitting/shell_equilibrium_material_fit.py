@@ -54,13 +54,15 @@ def make_problem():
     )
 
 
-def make_factories(problem, material=fem.KoiterStVK):
-    """Energy and force-parameter response factories; material fills the Material slot."""
-    ElasticEnergy = fem.ShellFemEnergy[material]
-    ForceParameterResponse = fem.ShellFemForceMaterialResponse[material]
+def make_factories(problem, material=None):
+    """Energy and force-parameter response factories sharing one batch material."""
+    if material is None:
+        material = fem.PointwiseShellAdapter[fem.KoiterStVK]()
+    ElasticEnergy = fem.ShellFemEnergy
+    ForceParameterResponse = fem.ShellFemForceMaterialResponse
 
     def make_energy(theta):
-        return ElasticEnergy(
+        return ElasticEnergy(material,
             problem.displacement_map,
             problem.rest,
             problem.thickness,
@@ -68,7 +70,7 @@ def make_factories(problem, material=fem.KoiterStVK):
         )
 
     def make_response(u):
-        return ForceParameterResponse(
+        return ForceParameterResponse(material,
             problem.parameter_map,
             problem.displacement_map,
             problem.rest,

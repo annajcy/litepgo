@@ -50,7 +50,7 @@ def main():
     thickness, Y, nu = 0.1, 100.0, 0.3
     # Plane-stress Lame parameters for a shell.
     theta = np.array([Y * nu / (1 - nu * nu), Y / (2 * (1 + nu))])
-    elastic = fem.ShellFemEnergy[fem.KoiterStVK](
+    elastic = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](),
         stencil_map,
         rest,
         [thickness] * stencil_map.num_elements,

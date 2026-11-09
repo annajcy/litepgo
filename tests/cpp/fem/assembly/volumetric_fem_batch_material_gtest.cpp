@@ -13,6 +13,7 @@
 #include "litepgo/fem/quadrature/3d/tet_centroid_quadrature.hpp"
 #include "litepgo/fem/response/interpolated_response.hpp"
 
+#include "litepgo/fem/material/volumetric/pointwise_volumetric_adapter.hpp"
 #include <atomic>
 #include <gtest/gtest.h>
 #include <memory>
@@ -25,13 +26,13 @@ namespace {
 struct Calls {
     std::atomic<int> eval = 0, steps = 0, points = 0;
 };
-class BatchNeoHookean {
+class BatchNeoHookean : public VolumetricBatchMaterial {
   public:
     explicit BatchNeoHookean(std::shared_ptr<Calls> calls) : calls_(std::move(calls)) {}
-    int num_parameters() const {
+    int num_parameters() const override {
         return NeoHookean::num_parameters;
     }
-    void eval(const VolumetricMaterialBatch& in, VolumetricMaterialBatchOutputs& out) const {
+    void eval(const VolumetricMaterialBatch& in, VolumetricMaterialBatchOutputs& out) const override {
         ++calls_->eval;
         calls_->points += static_cast<int>(in.size());
         const Eigen::Index n = in.size();
@@ -60,7 +61,7 @@ class BatchNeoHookean {
         }
     }
     Vec eval_feasible_step(const VolumetricMaterialBatch& in,
-                           const Eigen::Matrix<double, 9, Eigen::Dynamic>& dF) const {
+                           const Eigen::Matrix<double, 9, Eigen::Dynamic>& dF) const override {
         ++calls_->steps;
         Vec steps(in.size());
         for (Eigen::Index p = 0; p < in.size(); ++p) {
@@ -78,8 +79,8 @@ class BatchNeoHookean {
     }
     std::shared_ptr<Calls> calls_;
 };
-static_assert(VolumetricBatchMaterial<BatchNeoHookean>);
-static_assert(!VolumetricBatchMaterial<NeoHookean>);
+static_assert(std::is_base_of_v<VolumetricBatchMaterial, BatchNeoHookean>);
+static_assert(!std::is_base_of_v<VolumetricBatchMaterial, NeoHookean>);
 
 using Responses = std::vector<std::shared_ptr<litepgo::energy::Response>>;
 std::shared_ptr<litepgo::energy::Response> constant(const Vec& value) {
@@ -127,11 +128,12 @@ template <class Basis, class Q> struct Fixture {
 template <class Basis, class Q> void check_energy() {
     Fixture<Basis, Q> f;
     auto calls = std::make_shared<Calls>();
-    const VolumetricFemEnergy<NeoHookean, Basis, Q> native(f.map, f.X, f.Fp, f.theta);
+    const VolumetricFemEnergy<Basis, Q> native(std::make_shared<PointwiseVolumetricAdapter<NeoHookean>>(), f.map, f.X,
+                                               f.Fp, f.theta);
     for (int batch_size : {1, 256}) {
         SCOPED_TRACE(batch_size);
-        const VolumetricFemEnergy<BatchNeoHookean, Basis, Q> batched(f.map, f.X, f.Fp, f.theta, batch_size,
-                                                                     BatchNeoHookean(calls));
+        const VolumetricFemEnergy<Basis, Q> batched(std::make_shared<BatchNeoHookean>(calls), f.map, f.X, f.Fp, f.theta,
+                                                    batch_size);
         for (auto kind : {litepgo::energy::HessianKind::Exact, litepgo::energy::HessianKind::Projected}) {
             Vec g0, g1;
             SpMat H0, H1;
@@ -160,18 +162,20 @@ template <class Basis, class Q> void check_forces() {
     auto calls = std::make_shared<Calls>();
     const int count = f.map.num_elements();
     const dof::ConstantDofMap material_map(f.topology(), 2), plastic_map(f.topology(), 9);
-    VolumetricFemForceMaterialResponse<NeoHookean, Basis, Q> native_theta(material_map, f.map, f.X, f.u, f.Fp);
-    VolumetricFemForceMaterialResponse<BatchNeoHookean, Basis, Q> batch_theta(material_map, f.map, f.X, f.u, f.Fp, 256,
-                                                                              BatchNeoHookean(calls));
+    VolumetricFemForceMaterialResponse<Basis, Q> native_theta(
+        std::make_shared<PointwiseVolumetricAdapter<NeoHookean>>(), material_map, f.map, f.X, f.u, f.Fp);
+    VolumetricFemForceMaterialResponse<Basis, Q> batch_theta(std::make_shared<BatchNeoHookean>(calls), material_map,
+                                                             f.map, f.X, f.u, f.Fp, 256);
     const Vec theta = Eigen::Vector2d(2.5, 1.5);
     calls->eval = 0;
     EXPECT_LT((native_theta.eval_value(theta) - batch_theta.eval_value(theta)).norm(), 1e-12);
     EXPECT_LT(Eigen::MatrixXd(native_theta.eval_jacobian(theta) - batch_theta.eval_jacobian(theta)).norm(), 1e-12);
     EXPECT_EQ(calls->eval, 2);
 
-    VolumetricFemForceFpResponse<NeoHookean, Basis, Q> native_fp(plastic_map, f.map, f.X, f.u, f.theta);
-    VolumetricFemForceFpResponse<BatchNeoHookean, Basis, Q> batch_fp(plastic_map, f.map, f.X, f.u, f.theta, 1,
-                                                                     BatchNeoHookean(calls));
+    VolumetricFemForceFpResponse<Basis, Q> native_fp(std::make_shared<PointwiseVolumetricAdapter<NeoHookean>>(),
+                                                     plastic_map, f.map, f.X, f.u, f.theta);
+    VolumetricFemForceFpResponse<Basis, Q> batch_fp(std::make_shared<BatchNeoHookean>(calls), plastic_map, f.map, f.X,
+                                                    f.u, f.theta, 1);
     Eigen::Matrix3d plastic = Eigen::Matrix3d::Identity();
     plastic(0, 1) = 0.07;
     plastic(2, 2) = 0.9;
@@ -193,7 +197,7 @@ class RecordingMaterial : public BatchNeoHookean {
   public:
     RecordingMaterial(std::shared_ptr<Calls> calls, std::shared_ptr<std::vector<Request>> requests)
         : BatchNeoHookean(std::move(calls)), requests_(std::move(requests)) {}
-    void eval(const VolumetricMaterialBatch& in, VolumetricMaterialBatchOutputs& out) const {
+    void eval(const VolumetricMaterialBatch& in, VolumetricMaterialBatchOutputs& out) const override {
         requests_->push_back({out.W != nullptr, out.dW_dF != nullptr, out.d2W_dF2 != nullptr,
                               out.d2W_dF_dtheta != nullptr, out.d2W_dF_dFp != nullptr});
         BatchNeoHookean::eval(in, out);
@@ -207,19 +211,18 @@ TEST(VolumetricFemBatchMaterial, RequestsOnlyNeededOutputs) {
     Fixture<TetP1Basis, TetCentroidQuadrature> f;
     auto calls = std::make_shared<Calls>();
     auto requests = std::make_shared<std::vector<Request>>();
-    const RecordingMaterial material(calls, requests);
-    const VolumetricFemEnergy<RecordingMaterial, TetP1Basis, TetCentroidQuadrature> energy(f.map, f.X, f.Fp, f.theta,
-                                                                                           256, material);
+    const auto material = std::make_shared<RecordingMaterial>(calls, requests);
+    const VolumetricFemEnergy<TetP1Basis, TetCentroidQuadrature> energy(material, f.map, f.X, f.Fp, f.theta, 256);
     energy.eval_value(f.u);
     energy.eval_gradient(f.u);
     Vec g;
     SpMat H;
     litepgo::testing::evaluate_energy(energy, f.u, &g, &H);
     const dof::ConstantDofMap material_map(f.topology(), 2), plastic_map(f.topology(), 9);
-    VolumetricFemForceMaterialResponse<RecordingMaterial, TetP1Basis, TetCentroidQuadrature> theta_force(
-        material_map, f.map, f.X, f.u, f.Fp, 256, material);
-    VolumetricFemForceFpResponse<RecordingMaterial, TetP1Basis, TetCentroidQuadrature> fp_force(
-        plastic_map, f.map, f.X, f.u, f.theta, 256, material);
+    VolumetricFemForceMaterialResponse<TetP1Basis, TetCentroidQuadrature> theta_force(material, material_map, f.map,
+                                                                                      f.X, f.u, f.Fp, 256);
+    VolumetricFemForceFpResponse<TetP1Basis, TetCentroidQuadrature> fp_force(material, plastic_map, f.map, f.X, f.u,
+                                                                             f.theta, 256);
     theta_force.eval_value(Eigen::Vector2d(2, 3));
     theta_force.eval_jacobian(Eigen::Vector2d(2, 3));
     fp_force.eval_jacobian(Eigen::Matrix3d::Identity().reshaped());
@@ -232,15 +235,15 @@ TEST(VolumetricFemBatchMaterial, RequestsOnlyNeededOutputs) {
 TEST(VolumetricFemBatchMaterial, RejectsInvalidMaterialOutputs) {
     struct Bad : BatchNeoHookean {
         using BatchNeoHookean::BatchNeoHookean;
-        void eval(const VolumetricMaterialBatch& in, VolumetricMaterialBatchOutputs& out) const {
+        void eval(const VolumetricMaterialBatch& in, VolumetricMaterialBatchOutputs& out) const override {
             BatchNeoHookean::eval(in, out);
             if (out.W)
                 (*out.W)[0] = std::numeric_limits<double>::quiet_NaN();
         }
     };
     Fixture<TetP1Basis, TetCentroidQuadrature> f;
-    const VolumetricFemEnergy<Bad, TetP1Basis, TetCentroidQuadrature> energy(f.map, f.X, f.Fp, f.theta, 256,
-                                                                             Bad(std::make_shared<Calls>()));
+    const VolumetricFemEnergy<TetP1Basis, TetCentroidQuadrature> energy(
+        std::make_shared<Bad>(std::make_shared<Calls>()), f.map, f.X, f.Fp, f.theta, 256);
     EXPECT_THROW(energy.eval_value(f.u), std::domain_error);
 }
 

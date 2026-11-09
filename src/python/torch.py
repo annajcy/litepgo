@@ -42,7 +42,7 @@ def _derivatives(material, inputs, active, mixed, outputs):
         W = material.W(*tensors.values())
         count = len(next(iter(inputs.values())))
         if not isinstance(W, torch.Tensor) or W.shape != (count,) or W.dtype != torch.float64:
-            raise ValueError(f"{material.__name__}.W must return a float64 tensor of shape ({count},)")
+            raise ValueError(f"{type(material).__name__}.W must return a float64 tensor of shape ({count},)")
         result = {}
         if "W" in outputs:
             result["W"] = W.detach().cpu().numpy()
@@ -72,26 +72,23 @@ def _grad(output, wrt, **options):
 class TorchVolumetricMaterial(fem.PyVolumetricMaterial):
     """A PyVolumetricMaterial whose density is written in PyTorch.
 
-    Subclass it, set ``num_parameters`` and define ``W(F, Fp, theta)`` as a static or
-    class method taking CPU float64 tensors (N,3,3), (N,3,3), (N,k) and returning
+    Subclass it, set ``num_parameters`` and define ``W(self, F, Fp, theta)`` as an instance method taking CPU float64 tensors (N,3,3), (N,3,3), (N,k) and returning
     the (N,) density per original reference volume. Rows must be independent and W
     twice differentiable in the inputs whose derivatives are requested. Keep fixed
-    state such as an nn.Module in class attributes and do not change it while the
-    FEM objects using the class are alive.
+    state such as an nn.Module on the material instance. Concurrent evaluations
+    must not mutate shared state.
 
     eval builds one graph per batch: dW/dF by one backward pass; d2W_dF2,
     d2W_dF_dtheta and d2W_dF_dFp by nine more. Network weights are constants here;
     use the outer energy/response adapters to differentiate a scalar loss.
     """
 
-    @classmethod
-    def W(cls, F, Fp, theta):
+    def W(self, F, Fp, theta):
         raise NotImplementedError("TorchVolumetricMaterial subclasses must define W(F, Fp, theta)")
 
-    @classmethod
-    def eval(cls, F, Fp, theta, *, outputs):
+    def eval(self, F, Fp, theta, *, outputs):
         mixed = {"dW_dF": None, "d2W_dF2": "F", "d2W_dF_dtheta": "theta", "d2W_dF_dFp": "Fp"}
-        return _derivatives(cls, {"F": F, "Fp": Fp, "theta": theta}, "F", mixed, outputs)
+        return _derivatives(self, {"F": F, "Fp": Fp, "theta": theta}, "F", mixed, outputs)
 
 
 class TorchShellMaterial(fem.PyShellMaterial):
@@ -104,15 +101,13 @@ class TorchShellMaterial(fem.PyShellMaterial):
     derivatives FEM expects. Second derivatives take six more backward passes.
     """
 
-    @classmethod
-    def W(cls, ab, ab_bar, thickness, theta):
+    def W(self, ab, ab_bar, thickness, theta):
         raise NotImplementedError("TorchShellMaterial subclasses must define W(ab, ab_bar, thickness, theta)")
 
-    @classmethod
-    def eval(cls, ab, ab_bar, thickness, theta, *, outputs):
+    def eval(self, ab, ab_bar, thickness, theta, *, outputs):
         mixed = {"dW_dab": None, "d2W_dab2": "ab", "d2W_dab_dtheta": "theta", "d2W_dab_dabarbbar": "ab_bar"}
         inputs = {"ab": ab, "ab_bar": ab_bar, "thickness": thickness, "theta": theta}
-        return _derivatives(cls, inputs, "ab", mixed, outputs)
+        return _derivatives(self, inputs, "ab", mixed, outputs)
 
 
 def _input(x):

@@ -59,14 +59,14 @@ def make_problem():
     theta = [np.array([2.0, 3.0])] * mapping.num_elements
     true_Fp = np.diag([*truth, 1.0])
     # The energy fixes Fp, while the force response below makes it the active input.
-    target_energy = fem.ShellFemEnergy[fem.KoiterStVK](
+    target_energy = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](),
         mapping, rest, thickness, theta, [true_Fp] * mapping.num_elements
     )
     target = target_energy.eval_gradient(displacement)
     scale = np.linalg.norm(target)
     if not np.isfinite(scale) or scale <= 0:
         raise RuntimeError("Calibration requires finite nonzero target forces")
-    force = fem.ShellFemForceFpResponse[fem.KoiterStVK](
+    force = fem.ShellFemForceFpResponse(fem.PointwiseShellAdapter[fem.KoiterStVK](),
         dof.ConstantDofMap(topology, 9), mapping, rest, displacement, thickness, theta
     )
 

@@ -12,8 +12,8 @@ from torch_neohookean import TorchNeoHookean, make_problem
 
 def make_equilibrium(kind, use_torch=True):
     _, mapping, geometry, plastic, theta, _, _ = make_problem()
-    material = TorchNeoHookean if use_torch else fem.NeoHookean
-    key = (material, fem.TetP1Basis, fem.TetCentroidQuadrature)
+    material = TorchNeoHookean() if use_torch else fem.PointwiseVolumetricAdapter[fem.NeoHookean]()
+    key = (fem.TetP1Basis, fem.TetCentroidQuadrature)
     topology = mesh.TetTopology(
         5, np.array([[0, 1, 2, 3], [1, 2, 3, 4]], dtype=np.int32)
     )
@@ -35,11 +35,11 @@ def make_equilibrium(kind, use_torch=True):
         Fp, material_fields = (
             (plastic, active) if kind == "material" else (active, theta)
         )
-        return Energy(mapping, geometry, Fp, material_fields)
+        return Energy(material, mapping, geometry, Fp, material_fields)
 
     def make_response(u):
         # Same density and field convention as make_energy: response(p) = dE(u,p)/du.
-        return Response(parameter_map, mapping, geometry, u, fixed_fields)
+        return Response(material, parameter_map, mapping, geometry, u, fixed_fields)
 
     fixed = dof.DofReduction(15, [*range(9), 12, 13, 14])
     initial = np.zeros(15)

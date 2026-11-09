@@ -1,3 +1,4 @@
+#include "litepgo/fem/material/shell/pointwise_shell_adapter.hpp"
 #include <memory>
 // Fit two material parameters from equilibrium reactions.
 // Geometry, thickness, and boundary displacements are fixed.
@@ -16,8 +17,8 @@
 
 namespace {
 using namespace litepgo;
-using ElasticEnergy = fem::ShellFemEnergy<fem::KoiterStVK>;
-using ForceParameterResponse = fem::ShellFemForceMaterialResponse<fem::KoiterStVK>;
+using ElasticEnergy = fem::ShellFemEnergy;
+using ForceParameterResponse = fem::ShellFemForceMaterialResponse;
 struct Problem {
     dof::StencilDofMap displacement_map;
     std::vector<fem::TriangleMidEdgeRestData> rest;
@@ -68,12 +69,14 @@ struct Factories {
 // The problem outlives both factories; both describe the same material parameters.
 Factories make_factories(const Problem& problem) {
     auto make_energy = [&problem](const Vec& theta) -> std::shared_ptr<energy::Energy> {
-        return std::make_shared<ElasticEnergy>(problem.displacement_map, problem.rest, problem.thickness,
+        return std::make_shared<ElasticEnergy>(std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(),
+                                               problem.displacement_map, problem.rest, problem.thickness,
                                                std::vector<Vec>(problem.displacement_map.num_elements(), theta));
     };
     auto make_response = [&problem](const Vec& u) -> std::shared_ptr<energy::Response> {
-        return std::make_shared<ForceParameterResponse>(problem.parameter_map, problem.displacement_map, problem.rest,
-                                                        u, problem.thickness);
+        return std::make_shared<ForceParameterResponse>(
+            std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(), problem.parameter_map,
+            problem.displacement_map, problem.rest, u, problem.thickness);
     };
     return {std::move(make_energy), std::move(make_response)};
 }

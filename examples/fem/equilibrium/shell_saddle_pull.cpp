@@ -1,3 +1,5 @@
+#include "litepgo/fem/material/shell/pointwise_shell_adapter.hpp"
+#include <memory>
 // pull a sheet's corners into a saddle and solve static equilibrium.
 // Build: cmake --build build/release --target shell_saddle_pull
 // Run: build/release/examples/fem/equilibrium/shell_saddle_pull
@@ -36,9 +38,9 @@ int main(int argc, char** argv) {
     const double thickness = 0.1, Y = 100, nu = 0.3;
     // Plane-stress Lame parameters for a shell.
     const Eigen::Vector2d theta(Y * nu / (1 - nu * nu), Y / (2 * (1 + nu)));
-    auto elastic = std::make_shared<fem::ShellFemEnergy<fem::KoiterStVK>>(
-        map, std::move(rest), std::vector<double>(map.num_elements(), thickness),
-        std::vector<Eigen::VectorXd>(map.num_elements(), theta));
+    auto elastic = std::make_shared<fem::ShellFemEnergy>(
+        std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(), map, std::move(rest),
+        std::vector<double>(map.num_elements(), thickness), std::vector<Eigen::VectorXd>(map.num_elements(), theta));
 
     // Pull the four corners of the flat xy-plane sheet outward in plane and alternately
     // up and down out of plane, so the anchors span a saddle.

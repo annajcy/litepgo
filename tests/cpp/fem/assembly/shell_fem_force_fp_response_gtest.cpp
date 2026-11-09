@@ -1,12 +1,15 @@
+#include "../testing/evaluate_shell_element.hpp"
 #include "litepgo/fem/assembly/detail/shell_element.hpp"
 #include "litepgo/fem/assembly/shell_fem_force_fp_response.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
+#include "litepgo/fem/material/shell/pointwise_shell_adapter.hpp"
 #include "litepgo/mesh/triangle_mid_edge_stencils.hpp"
 #include <gtest/gtest.h>
+#include <memory>
 
 namespace litepgo::fem::test {
 namespace {
-using Force = ShellFemForceFpResponse<KoiterStVK>;
+using Force = ShellFemForceFpResponse;
 struct Patch {
     mesh::TriangleTopology topology{6, {{0, 1, 2}, {2, 1, 3}, {0, 2, 4}, {1, 0, 5}}};
     dof::StencilDofMap map{6, mesh::make_triangle_mid_edge_stencils(topology).vertices, 3};
@@ -36,7 +39,7 @@ struct Patch {
             const Eigen::MatrixXd natural_u = rest[e].X_local + map.gather(e, u) - Y;
             Vec f(natural_u.size());
             StridedVecRef gradient(f);
-            detail::eval_shell_element<KoiterStVK>(natural, natural_u, thickness[e], theta[e], &gradient);
+            evaluate_shell_element<KoiterStVK>(natural, natural_u, thickness[e], theta[e], &gradient);
             const auto ids = map.dof_indices(e);
             for (int j = 0; j < f.size(); ++j)
                 result[ids[j]] += f[j];
@@ -54,8 +57,10 @@ TEST(ShellFemForceFpResponse, OriginalAreaAssemblyAndFullJacobianForSharedAndPer
         per.segment<9>(9 * e) = ((1 + .02 * e) * P).eval().reshaped();
     Eigen::MatrixXd previous;
     for (int batch : {1, 3, 256}) {
-        Force shared(dof::ConstantDofMap(p.topology, 9), p.map, p.rest, p.u, p.thickness, p.theta, batch);
-        Force element(dof::ElementDofMap(p.topology, 9), p.map, p.rest, p.u, p.thickness, p.theta, batch);
+        Force shared(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(),
+                     dof::ConstantDofMap(p.topology, 9), p.map, p.rest, p.u, p.thickness, p.theta, batch);
+        Force element(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(),
+                      dof::ElementDofMap(p.topology, 9), p.map, p.rest, p.u, p.thickness, p.theta, batch);
         EXPECT_TRUE(shared.eval_value(shared_P).isApprox(p.force(shared_P), 1e-11));
         EXPECT_TRUE(element.eval_value(per).isApprox(p.force(per), 1e-11));
         const Eigen::MatrixXd J = shared.eval_jacobian(shared_P), E = element.eval_jacobian(per);
@@ -89,23 +94,36 @@ TEST(ShellFemForceFpResponse, OriginalAreaAssemblyAndFullJacobianForSharedAndPer
 TEST(ShellFemForceFpResponse, FixedInputSnapshotsValidationAndEmptyMesh) {
     Patch p;
     const dof::ConstantDofMap params(p.topology, 9);
-    Force response(params, p.map, p.rest, p.u, p.thickness, p.theta);
+    Force response(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), params, p.map, p.rest, p.u,
+                   p.thickness, p.theta);
     const Vec identity = Eigen::Matrix3d::Identity().reshaped();
     const auto expected = response.eval_value(identity);
-    EXPECT_THROW((Force(params, p.map, {}, p.u, p.thickness, p.theta)), std::invalid_argument);
-    EXPECT_THROW((Force(params, p.map, p.rest, p.u, {}, p.theta)), std::invalid_argument);
-    EXPECT_THROW((Force(params, p.map, p.rest, p.u, p.thickness, {})), std::invalid_argument);
-    EXPECT_THROW((Force(dof::ConstantDofMap(p.topology, 8), p.map, p.rest, p.u, p.thickness, p.theta)),
+    EXPECT_THROW((Force(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), params, p.map, {}, p.u,
+                        p.thickness, p.theta)),
                  std::invalid_argument);
-    EXPECT_THROW((Force(params, p.map, p.rest, p.u, p.thickness, p.theta, 0)), std::invalid_argument);
+    EXPECT_THROW((Force(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), params, p.map, p.rest, p.u,
+                        {}, p.theta)),
+                 std::invalid_argument);
+    EXPECT_THROW((Force(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), params, p.map, p.rest, p.u,
+                        p.thickness, {})),
+                 std::invalid_argument);
+    EXPECT_THROW((Force(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(),
+                        dof::ConstantDofMap(p.topology, 8), p.map, p.rest, p.u, p.thickness, p.theta)),
+                 std::invalid_argument);
+    EXPECT_THROW((Force(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), params, p.map, p.rest, p.u,
+                        p.thickness, p.theta, 0)),
+                 std::invalid_argument);
     p.theta[0] = Vec::Ones(3);
-    EXPECT_THROW((Force(params, p.map, p.rest, p.u, p.thickness, p.theta)), std::invalid_argument);
+    EXPECT_THROW((Force(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), params, p.map, p.rest, p.u,
+                        p.thickness, p.theta)),
+                 std::invalid_argument);
     p.rest.clear();
     p.u.setZero();
     p.thickness[0] = 100;
     EXPECT_EQ((response.eval_value(identity) - expected).norm(), 0);
     const mesh::TriangleTopology empty(0, {});
-    Force zero(dof::ConstantDofMap(empty, 9), dof::StencilDofMap(0, {}, 3), {}, Vec(0), {}, {});
+    Force zero(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), dof::ConstantDofMap(empty, 9),
+               dof::StencilDofMap(0, {}, 3), {}, Vec(0), {}, {});
     EXPECT_EQ(zero.eval_value(identity).size(), 0);
     EXPECT_EQ(zero.eval_jacobian(identity).cols(), 9);
 }

@@ -54,7 +54,7 @@ def make_material(num_parameters=2):
             neural = torch.linalg.det(Fp) * (weights * features).sum(-1)
             return TorchNeoHookean.W(F, Fp, physical) + neural
 
-    return WeightMaterial, model, unpack, reference
+    return WeightMaterial(), model, unpack, reference
 
 
 def make_equilibrium(material, batch_size=256):
@@ -62,7 +62,7 @@ def make_equilibrium(material, batch_size=256):
     topology = mesh.TetTopology(5, np.array([[0, 1, 2, 3], [1, 2, 3, 4]], dtype=np.int32))
     plastic = [energy.AffineResponse(np.zeros((9, 3)), np.eye(3).ravel())] * 2
     parameter_map = dof.ConstantDofMap(topology, 2)
-    key = (material, fem.TetP1Basis, fem.TetCentroidQuadrature)
+    key = (fem.TetP1Basis, fem.TetCentroidQuadrature)
     free = np.array([9, 10, 11])
     fixed = dof.DofReduction(15, [*range(9), 12, 13, 14])
     load = np.zeros(15)
@@ -71,13 +71,13 @@ def make_equilibrium(material, batch_size=256):
 
     def make_energy(p):
         fields = [energy.AffineResponse(np.zeros((2, 3)), p)] * 2
-        elastic = fem.VolumetricFemEnergy[key](mapping, geometry, plastic, fields, batch_size)
+        elastic = fem.VolumetricFemEnergy[key](material, mapping, geometry, plastic, fields, batch_size)
         return energy.WeightedSumEnergy([(elastic, 1.0), (external, 1.0)])
 
     def make_response(u):
         # The fixed external load has zero parameter derivative.
         return fem.VolumetricFemForceMaterialResponse[key](
-            parameter_map, mapping, geometry, u, plastic, batch_size
+            material, parameter_map, mapping, geometry, u, plastic, batch_size
         )
 
     equilibrium = solver.StaticEquilibriumResponse(

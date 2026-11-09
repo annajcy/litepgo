@@ -5,8 +5,8 @@ import pytest
 
 from litepgo import dof, energy, fem, mesh, solver
 
-Force = fem.ShellFemForceMaterialResponse[fem.KoiterStVK]
-Energy = fem.ShellFemEnergy[fem.KoiterStVK]
+Force = fem.ShellFemForceMaterialResponse
+Energy = fem.ShellFemEnergy
 
 
 def problem():
@@ -24,15 +24,15 @@ def problem():
 def observed(data, theta):
     _, mapping, rest, u, thickness = data
     parameters = [theta if theta.size == 2 else theta[2*e:2*e+2] for e in range(4)]
-    return Energy(mapping, rest, thickness, parameters).eval_gradient(u)
+    return Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, parameters).eval_gradient(u)
 
 
 @pytest.mark.parametrize("batch_size", [1, 3, 256])
 def test_shared_and_per_face_parameters_match_energy(batch_size):
     data = problem()
     topology, mapping, rest, u, thickness = data
-    shared = Force(dof.ConstantDofMap(topology, 2), mapping, rest, u, thickness, batch_size)
-    element = Force(dof.ElementDofMap(topology, 2), mapping, rest, u, thickness, batch_size)
+    shared = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), dof.ConstantDofMap(topology, 2), mapping, rest, u, thickness, batch_size)
+    element = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), dof.ElementDofMap(topology, 2), mapping, rest, u, thickness, batch_size)
     theta = np.array([2., 3.])
     per = np.array([2., 3., 4., 5., -.5, 2., 8., 9.])
     assert isinstance(shared, energy.MeshResponse)
@@ -73,7 +73,7 @@ def test_material_mixed_derivative_and_parameter_recovery():
         np.testing.assert_allclose(J[:, j], fd, atol=1e-9)
     data = problem()
     topology, mapping, rest, u, thickness = data
-    response = Force(dof.ConstantDofMap(topology, 2), mapping, rest, u, thickness)
+    response = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), dof.ConstantDofMap(topology, 2), mapping, rest, u, thickness)
     target = observed(data, theta)
 
     class Residual(energy.FixedPatternResponse):
@@ -99,10 +99,10 @@ def test_invalid_fixed_inputs_and_empty_mesh():
                  (parameters, mapping, rest, u, [0.]*4),
                  (dof.ConstantDofMap(topology, 3), mapping, rest, u, thickness)]:
         with pytest.raises(ValueError):
-            Force(*args)
+            Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), *args)
     with pytest.raises(ValueError):
-        Force(parameters, mapping, rest, u, thickness, 0)
+        Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), parameters, mapping, rest, u, thickness, 0)
     empty = mesh.TriangleTopology(0, np.empty((0, 3), dtype=np.int32))
-    zero = Force(dof.ConstantDofMap(empty, 2), dof.StencilDofMap(0, [], 3), [], np.empty(0), [])
+    zero = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), dof.ConstantDofMap(empty, 2), dof.StencilDofMap(0, [], 3), [], np.empty(0), [])
     value, J = zero.eval_value_and_jacobian(np.array([2., 3.]))
     assert value.size == 0 and J.shape == (0, 2)

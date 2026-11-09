@@ -1,3 +1,4 @@
+#include "../../testing/evaluate_shell_element.hpp"
 #include "litepgo/fem/assembly/detail/shell_element.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
 
@@ -54,7 +55,7 @@ auto evaluate(const TriangleMidEdgeRestData& rest, const Eigen::MatrixXd& u, int
     StridedVecRef gv(g);
     StridedMatRef Hv(H);
     const double value =
-        detail::eval_shell_element<M>(rest, u, thickness, theta, mask & 1 ? &gv : nullptr, mask & 2 ? &Hv : nullptr);
+        evaluate_shell_element<M>(rest, u, thickness, theta, mask & 1 ? &gv : nullptr, mask & 2 ? &Hv : nullptr);
     return std::make_tuple(value, g, H);
 }
 
@@ -140,13 +141,13 @@ TEST(ShellElement, RejectsMalformedInputsAndOutputShapesBeforeWriting) {
     Eigen::MatrixXd H = Eigen::MatrixXd::Ones(17, 17);
     StridedVecRef gv(g);
     StridedMatRef Hv(H);
-    EXPECT_THROW(detail::eval_shell_element<KoiterStVK>(rest, displacements(6), 0.2, Eigen::Vector2d(2, 3), &gv, &Hv),
+    EXPECT_THROW(evaluate_shell_element<KoiterStVK>(rest, displacements(6), 0.2, Eigen::Vector2d(2, 3), &gv, &Hv),
                  std::invalid_argument);
     EXPECT_TRUE(g.isOnes());
     EXPECT_TRUE(H.isOnes());
     g.resize(17);
     StridedVecRef wrong(g);
-    EXPECT_THROW(detail::eval_shell_element<KoiterStVK>(rest, displacements(6), 0.2, Eigen::Vector2d(2, 3), &wrong),
+    EXPECT_THROW(evaluate_shell_element<KoiterStVK>(rest, displacements(6), 0.2, Eigen::Vector2d(2, 3), &wrong),
                  std::invalid_argument);
     auto bad = rest;
     bad.sqrt_det_a_bar = 0;

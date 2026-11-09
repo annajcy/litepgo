@@ -100,9 +100,7 @@ def main():
                 for u_p, X in zip(plastic_fields, rest_position_fields)
             ]
             theta_field = AffineResponse(np.zeros((2, 3)), np.array([2.0, 3.0]))
-            elastic = fem.VolumetricFemEnergy[
-                fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
-            ](
+            elastic = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature](fem.PointwiseVolumetricAdapter[fem.NeoHookean](),
                 rest_position_map,
                 rest_position_fields,
                 Fp_fields,

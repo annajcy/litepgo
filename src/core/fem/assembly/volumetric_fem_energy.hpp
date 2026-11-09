@@ -1,6 +1,7 @@
 #pragma once
 #include "litepgo/fem/assembly/detail/batch_views.hpp"
 #include <tbb/parallel_for.h>
+#include <tbb/task_group.h>
 
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/energy/scalar/mesh_energy.hpp"
@@ -19,21 +20,21 @@
 namespace litepgo::fem {
 
 // Geometry and fixed material responses are sampled at construction; rebuild after changing them.
-// Material is either a static pointwise material (NeoHookean) or a VolumetricBatchMaterial instance,
-// which receives every quadrature point of a MeshEnergy batch in one call. Both share integration.
-template <class Material, Basis3D UBasis, Quadrature3D Q> class VolumetricFemEnergy final : public energy::MeshEnergy {
-    static constexpr bool batched = VolumetricBatchMaterial<Material>;
+// Material receives every quadrature point of a MeshEnergy batch in one call.
+template <Basis3D UBasis, Quadrature3D Q> class VolumetricFemEnergy final : public energy::MeshEnergy {
 
   public:
     // One spatial response (input xi in R3) per element, in displacement-map order.
-    VolumetricFemEnergy(const dof::VertexDofMap& displacement_map,
+    VolumetricFemEnergy(std::shared_ptr<const VolumetricBatchMaterial> material,
+                        const dof::VertexDofMap& displacement_map,
                         const std::vector<std::shared_ptr<energy::Response>>& rest_positions,
                         const std::vector<std::shared_ptr<energy::Response>>& Fp,
-                        const std::vector<std::shared_ptr<energy::Response>>& theta, int batch_size = 256,
-                        Material material = Material())
+                        const std::vector<std::shared_ptr<energy::Response>>& theta, int batch_size = 256)
         : energy::MeshEnergy(displacement_map, batch_size), material_(std::move(material)) {
+        if (!material_ || material_->num_parameters() < 0)
+            throw std::invalid_argument("VolumetricFemEnergy: invalid material");
         const auto count = static_cast<std::size_t>(displacement_map.num_elements());
-        const int parameters = detail::volumetric_num_parameters(material_);
+        const int parameters = material_->num_parameters();
         if (displacement_map.dofs_per_vertex() != BasisDofTransform<UBasis>::dofs_per_vertex ||
             rest_positions.size() != count || Fp.size() != count || theta.size() != count)
             throw std::invalid_argument("VolumetricFemEnergy: incompatible map or response counts");
@@ -91,34 +92,23 @@ template <class Material, Basis3D UBasis, Quadrature3D Q> class VolumetricFemEne
             values[b] = eval_element(e, static_cast<int>(n), g ? &*g : nullptr, H ? &*H : nullptr, point_material);
             transforms_[e].pullback_into(g ? &*g : nullptr, H ? &*H : nullptr);
         };
-        if constexpr (!batched) {
-            tbb::parallel_for(Eigen::Index(0), count, [&](Eigen::Index b) {
-                const auto e = static_cast<std::size_t>(ids[b]);
-                const Vec c = local_coefficients(e, inputs.row(b));
-                integrate(b, [&](int q, bool need_gradient, bool need_hessian) {
-                    const auto input = material_inputs(e, q, c);
-                    return std::tuple{Material::eval_W(input),
-                                      need_gradient ? Material::eval_dW_dF(input) : Eigen::Matrix3d(),
-                                      need_hessian ? Material::eval_d2W_dF2(input) : Eigen::Matrix<double, 9, 9>()};
-                });
+
+        const VolumetricMaterialBatch batch = gather(ids, inputs, nullptr);
+        Vec W;
+        Eigen::Matrix<double, 9, Eigen::Dynamic> P;
+        Eigen::Matrix<double, 81, Eigen::Dynamic> A;
+        VolumetricMaterialBatchOutputs out{&W, gradients ? &P : nullptr, hessians ? &A : nullptr};
+        material_->eval(batch, out);
+        detail::check_volumetric_batch_outputs(out, batch.size(), material_->num_parameters());
+        tbb::parallel_for(Eigen::Index(0), count, [&](Eigen::Index b) {
+            integrate(b, [&](int q, bool need_gradient, bool need_hessian) {
+                const Eigen::Index point = b * Q::num_points + q;
+                return std::tuple{
+                    W[point], Eigen::Map<const Eigen::Matrix3d>(need_gradient ? P.col(point).data() : nullptr),
+                    Eigen::Map<const Eigen::Matrix<double, 9, 9>>(need_hessian ? A.col(point).data() : nullptr)};
             });
-        } else {
-            const VolumetricMaterialBatch batch = gather(ids, inputs, nullptr);
-            Vec W;
-            Eigen::Matrix<double, 9, Eigen::Dynamic> P;
-            Eigen::Matrix<double, 81, Eigen::Dynamic> A;
-            VolumetricMaterialBatchOutputs out{&W, gradients ? &P : nullptr, hessians ? &A : nullptr};
-            material_.eval(batch, out);
-            detail::check_volumetric_batch_outputs(out, batch.size(), detail::volumetric_num_parameters(material_));
-            tbb::parallel_for(Eigen::Index(0), count, [&](Eigen::Index b) {
-                integrate(b, [&](int q, bool need_gradient, bool need_hessian) {
-                    const Eigen::Index point = b * Q::num_points + q;
-                    return std::tuple{
-                        W[point], Eigen::Map<const Eigen::Matrix3d>(need_gradient ? P.col(point).data() : nullptr),
-                        Eigen::Map<const Eigen::Matrix<double, 9, 9>>(need_hessian ? A.col(point).data() : nullptr)};
-                });
-            });
-        }
+        });
+
         return values;
     }
 
@@ -130,57 +120,47 @@ template <class Material, Basis3D UBasis, Quadrature3D Q> class VolumetricFemEne
         VolumetricMaterialBatch batch;
         batch.F.resize(9, count * Q::num_points);
         batch.Fp.resize(9, count * Q::num_points);
-        batch.theta.resize(detail::volumetric_num_parameters(material_), count * Q::num_points);
+        batch.theta.resize(material_->num_parameters(), count * Q::num_points);
         if (dF)
             dF->resize(9, count * Q::num_points);
-        tbb::parallel_for(Eigen::Index(0), count, [&](Eigen::Index b) {
-            const auto e = static_cast<std::size_t>(ids[b]);
-            const Vec c = local_coefficients(e, inputs.row(b));
-            const Vec dc = deltas ? local_coefficients(e, deltas->row(b)) : Vec();
-            for (int q = 0; q < Q::num_points; ++q) {
-                const Eigen::Index point = b * Q::num_points + q;
-                const auto input = material_inputs(e, q, c);
-                batch.F.col(point) = input.F.reshaped();
-                batch.Fp.col(point) = input.Fp.reshaped();
-                batch.theta.col(point) = input.theta;
-                if (dF) {
-                    dF->col(point) = deformation_jacobians_[e][q] * dc;
-                    if (!dF->col(point).allFinite())
-                        throw std::domain_error("VolumetricFemEnergy: non-finite input increment");
+        // An outer batch failure must not cancel initialization of inputs consumed below.
+        tbb::task_group_context context(tbb::task_group_context::isolated);
+        tbb::parallel_for(
+            Eigen::Index(0), count,
+            [&](Eigen::Index b) {
+                const auto e = static_cast<std::size_t>(ids[b]);
+                const Vec c = local_coefficients(e, inputs.row(b));
+                const Vec dc = deltas ? local_coefficients(e, deltas->row(b)) : Vec();
+                for (int q = 0; q < Q::num_points; ++q) {
+                    const Eigen::Index point = b * Q::num_points + q;
+                    const auto input = material_inputs(e, q, c);
+                    batch.F.col(point) = input.F.reshaped();
+                    batch.Fp.col(point) = input.Fp.reshaped();
+                    batch.theta.col(point) = input.theta;
+                    if (dF) {
+                        dF->col(point) = deformation_jacobians_[e][q] * dc;
+                        if (!dF->col(point).allFinite())
+                            throw std::domain_error("VolumetricFemEnergy: non-finite input increment");
+                    }
                 }
-            }
-        });
+            },
+            context);
         return batch;
     }
 
     Vec eval_feasible_step_batch(std::span<const int> ids, const energy::BatchMatrix& inputs,
                                  const energy::BatchMatrix& deltas) const override {
         Vec steps(ids.size());
-        if constexpr (batched) {
-            Eigen::Matrix<double, 9, Eigen::Dynamic> dF;
-            const VolumetricMaterialBatch batch = gather(ids, inputs, &deltas, &dF);
-            const Vec bounds = material_.eval_feasible_step(batch, dF);
-            if (bounds.size() != batch.size())
-                throw std::logic_error("VolumetricFemEnergy: invalid batch feasible-step dimensions");
-            for (Eigen::Index b = 0; b < inputs.rows(); ++b)
-                steps[b] = integration_[static_cast<std::size_t>(ids[b])].max_feasible_step(
-                    [&](int q, const auto&) { return bounds[b * Q::num_points + q]; });
-        } else {
-            for (Eigen::Index b = 0; b < inputs.rows(); ++b) {
-                const auto index = static_cast<std::size_t>(ids[b]);
-                const Vec flattened = local_coefficients(index, inputs.row(b));
-                const Vec delta = local_coefficients(index, deltas.row(b));
-                steps[b] = integration_[index].max_feasible_step([&](int q, const auto&) {
-                    const auto input = material_inputs(index, q, flattened);
-                    const Vec delta_F = deformation_jacobians_[index][q] * delta;
-                    if (!delta_F.allFinite())
-                        throw std::domain_error("VolumetricFemEnergy: non-finite input increment");
-                    const VolumetricMaterialInputs direction{delta_F.reshaped(3, 3), Eigen::Matrix3d::Zero(),
-                                                             Vec::Zero(input.theta.size())};
-                    return Material::eval_feasible_step(input, direction);
-                });
-            }
-        }
+
+        Eigen::Matrix<double, 9, Eigen::Dynamic> dF;
+        const VolumetricMaterialBatch batch = gather(ids, inputs, &deltas, &dF);
+        const Vec bounds = material_->eval_feasible_step(batch, dF);
+        if (bounds.size() != batch.size())
+            throw std::logic_error("VolumetricFemEnergy: invalid batch feasible-step dimensions");
+        for (Eigen::Index b = 0; b < inputs.rows(); ++b)
+            steps[b] = integration_[static_cast<std::size_t>(ids[b])].max_feasible_step(
+                [&](int q, const auto&) { return bounds[b * Q::num_points + q]; });
+
         return steps;
     }
     VolumetricMaterialInputs material_inputs(std::size_t e, int q, const Vec& coefficients) const {
@@ -209,7 +189,7 @@ template <class Material, Basis3D UBasis, Quadrature3D Q> class VolumetricFemEne
             gradient, hessian);
     }
 
-    Material material_;
+    std::shared_ptr<const VolumetricBatchMaterial> material_;
     std::vector<std::array<Eigen::MatrixXd, Q::num_points>> deformation_jacobians_;
     std::vector<std::array<Eigen::Matrix3d, Q::num_points>> Fp_;
     std::vector<std::array<Vec, Q::num_points>> theta_;

@@ -1,4 +1,6 @@
 #include "../../testing/evaluate_energy.hpp"
+#include "litepgo/fem/material/volumetric/pointwise_volumetric_adapter.hpp"
+#include <memory>
 
 #include "litepgo/dof/vertex_dof_map.hpp"
 #include "litepgo/energy/response/affine_response.hpp"
@@ -42,8 +44,9 @@ inline auto make_tet_p1_energy(const Vec& rest_positions) {
     auto Fp_field =
         std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped());
     auto theta_field = std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(2, 3));
-    return fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>(
-        rest_position_map, std::move(rest_position_fields),
+    return fem::VolumetricFemEnergy<fem::TetP1Basis, fem::TetCentroidQuadrature>(
+        std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), rest_position_map,
+        std::move(rest_position_fields),
         std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), Fp_field),
         std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), theta_field));
 }
@@ -180,17 +183,29 @@ TEST(TetP1FemEnergy, VolumetricFemEnergyRejectsIncompatibleMapsAndFields) {
     auto Fp =
         std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped());
     auto theta = std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(2, 3));
-    using Fem = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
-    EXPECT_THROW((Fem(rest_position_map, {X[0]}, {Fp, Fp}, {theta, theta})), std::invalid_argument);
-    EXPECT_THROW((Fem(rest_position_map,
+    using Fem = fem::VolumetricFemEnergy<fem::TetP1Basis, fem::TetCentroidQuadrature>;
+    EXPECT_THROW((Fem(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), rest_position_map,
+                      {X[0]}, {Fp, Fp}, {theta, theta})),
+                 std::invalid_argument);
+    EXPECT_THROW((Fem(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), rest_position_map,
                       {X[0], std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(Eigen::MatrixXd::Zero(4, 2))},
                       {Fp, Fp}, {theta, theta})),
                  std::invalid_argument);
-    EXPECT_THROW((Fem(rest_position_map, X, {Fp}, {theta, theta})), std::invalid_argument);
-    EXPECT_THROW((Fem(rest_position_map, X, {Fp, Fp}, {theta})), std::invalid_argument);
-    EXPECT_THROW((Fem(wrong_width, X, {Fp, Fp}, {theta, theta})), std::invalid_argument);
-    EXPECT_THROW((Fem(wrong_count, X, {Fp, Fp}, {theta, theta})), std::invalid_argument);
-    EXPECT_THROW((Fem(rest_position_map, X, {Fp, theta}, {theta, theta})), std::invalid_argument);
+    EXPECT_THROW((Fem(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), rest_position_map,
+                      X, {Fp}, {theta, theta})),
+                 std::invalid_argument);
+    EXPECT_THROW((Fem(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), rest_position_map,
+                      X, {Fp, Fp}, {theta})),
+                 std::invalid_argument);
+    EXPECT_THROW((Fem(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), wrong_width, X,
+                      {Fp, Fp}, {theta, theta})),
+                 std::invalid_argument);
+    EXPECT_THROW((Fem(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), wrong_count, X,
+                      {Fp, Fp}, {theta, theta})),
+                 std::invalid_argument);
+    EXPECT_THROW((Fem(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), rest_position_map,
+                      X, {Fp, theta}, {theta, theta})),
+                 std::invalid_argument);
 }
 
 TEST(TetP1FemEnergy, VolumetricFemEnergyAcceptsInterpolatedFixedFields) {
@@ -202,14 +217,14 @@ TEST(TetP1FemEnergy, VolumetricFemEnergyAcceptsInterpolatedFixedFields) {
         plastic.row(i) = Fp.reshaped().transpose();
         parameters.row(i) = Eigen::RowVector2d(2 + i, 3 + i);
     }
-    using Fem = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
+    using Fem = fem::VolumetricFemEnergy<fem::TetP1Basis, fem::TetCentroidQuadrature>;
     const Vec positions = tet_p1_rest_positions();
 
     const std::vector<std::shared_ptr<litepgo::energy::Response>> X{
         std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(map.gather(0, positions)),
         std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(map.gather(1, positions))};
-    using InterpolatedFem = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
-    InterpolatedFem energy(map, X,
+    using InterpolatedFem = fem::VolumetricFemEnergy<fem::TetP1Basis, fem::TetCentroidQuadrature>;
+    InterpolatedFem energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), map, X,
                            {std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(plastic),
                             std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(1.1 * plastic)},
                            {std::make_shared<fem::InterpolatedResponse<fem::TetP1Basis>>(parameters),
@@ -217,7 +232,7 @@ TEST(TetP1FemEnergy, VolumetricFemEnergyAcceptsInterpolatedFixedFields) {
     const Eigen::VectorXd fp_mean = plastic.colwise().mean().transpose();
     const Eigen::VectorXd theta_mean = parameters.colwise().mean().transpose();
     Fem reference(
-        map, X,
+        std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), map, X,
         {std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((fp_mean).size(), 3), fp_mean),
          std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((1.1 * fp_mean).size(), 3), 1.1 * fp_mean)},
         {std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((theta_mean).size(), 3), theta_mean),
@@ -226,11 +241,11 @@ TEST(TetP1FemEnergy, VolumetricFemEnergyAcceptsInterpolatedFixedFields) {
     const Vec u = 0.03 * positions;
     const dof::VertexDofMap first_map(mesh::TetTopology(5, {{0, 1, 2, 3}}), 3);
     const dof::VertexDofMap second_map(mesh::TetTopology(5, {{0, 2, 1, 4}}), 3);
-    Fem first(first_map, {X[0]},
+    Fem first(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), first_map, {X[0]},
               {std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((fp_mean).size(), 3), fp_mean)},
               {std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((theta_mean).size(), 3), theta_mean)});
     Fem second(
-        second_map, {X[1]},
+        std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), second_map, {X[1]},
         {std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((1.1 * fp_mean).size(), 3), 1.1 * fp_mean)},
         {std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((2 * theta_mean).size(), 3),
                                                            2 * theta_mean)});

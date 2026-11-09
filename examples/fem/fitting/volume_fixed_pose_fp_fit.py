@@ -40,10 +40,8 @@ def make_problem():
     displacement = ((nodes - nodes.mean(axis=0)) @ (F - np.eye(3)).T).ravel()
     truth, initial = np.array([1.08, 0.94, 1.03]), np.ones(3)
     theta = [AffineResponse(np.zeros((2, 3)), np.array([2.0, 3.0])) for _ in geometry]
-    ElasticEnergy = fem.VolumetricFemEnergy[
-        fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
-    ]
-    elastic = ElasticEnergy(
+    ElasticEnergy = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature]
+    elastic = ElasticEnergy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](),
         mapping,
         geometry,
         [AffineResponse(np.zeros((9, 3)), np.diag(truth).ravel(order="F")) for _ in geometry],
@@ -54,10 +52,8 @@ def make_problem():
     scale = np.linalg.norm(target)
     if not np.isfinite(scale) or scale <= 0:
         raise RuntimeError("Calibration requires finite nonzero target forces")
-    ForceParameterResponse = fem.VolumetricFemForceFpResponse[
-        fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
-    ]
-    force = ForceParameterResponse(
+    ForceParameterResponse = fem.VolumetricFemForceFpResponse[fem.TetP1Basis, fem.TetCentroidQuadrature]
+    force = ForceParameterResponse(fem.PointwiseVolumetricAdapter[fem.NeoHookean](),
         dof.ConstantDofMap(topology, 9), mapping, geometry, displacement, theta
     )
 

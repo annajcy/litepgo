@@ -1,4 +1,5 @@
 #include "litepgo/energy/response/affine_response.hpp"
+#include "litepgo/fem/material/volumetric/pointwise_volumetric_adapter.hpp"
 #include "litepgo/fem/response/interpolated_response.hpp"
 #include <memory>
 // Fit three shared log plastic stretches from equilibrium displacement and reaction.
@@ -23,8 +24,8 @@
 namespace {
 using namespace litepgo;
 
-using ElasticEnergy = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
-using ForceFpResponse = fem::VolumetricFemForceFpResponse<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
+using ElasticEnergy = fem::VolumetricFemEnergy<fem::TetP1Basis, fem::TetCentroidQuadrature>;
+using ForceFpResponse = fem::VolumetricFemForceFpResponse<fem::TetP1Basis, fem::TetCentroidQuadrature>;
 
 struct Problem {
     dof::VertexDofMap displacement_map;
@@ -92,12 +93,14 @@ Factories make_factories(const Problem& problem) {
         for (int e = 0; e < problem.displacement_map.num_elements(); ++e)
             fields.push_back(std::make_shared<litepgo::energy::AffineResponse>(
                 litepgo::SpMat((packed.segment(9 * e, 9)).size(), 3), packed.segment(9 * e, 9)));
-        return std::make_shared<ElasticEnergy>(problem.displacement_map, problem.geometry, std::move(fields),
-                                               problem.theta);
+        return std::make_shared<ElasticEnergy>(
+            std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), problem.displacement_map,
+            problem.geometry, std::move(fields), problem.theta);
     };
     auto make_response = [&problem, plastic](const Vec& u) -> std::shared_ptr<energy::Response> {
-        auto force = std::make_shared<ForceFpResponse>(problem.physical_map, problem.displacement_map, problem.geometry,
-                                                       u, problem.theta);
+        auto force = std::make_shared<ForceFpResponse>(
+            std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), problem.physical_map,
+            problem.displacement_map, problem.geometry, u, problem.theta);
         return std::make_shared<energy::ComposedResponse>(force, plastic);
     };
     return {std::move(make_energy), std::move(make_response)};

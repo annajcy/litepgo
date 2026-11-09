@@ -181,7 +181,7 @@ def test_fem_parameterizations_match_energy_and_equilibrium(plastic, shared):
         fem.VolumetricFemForceFpResponse
         if plastic
         else fem.VolumetricFemForceMaterialResponse
-    )[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
+    )[fem.TetP1Basis, fem.TetCentroidQuadrature]
 
     def make_energy(p):
         fields = [
@@ -189,7 +189,7 @@ def test_fem_parameterizations_match_energy_and_equilibrium(plastic, shared):
             for row in transform.eval_value(p).reshape(2, physical_width)
         ]
         return Energy(
-            mapping,
+            fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping,
             geometry,
             fields if plastic else fixed_fp,
             theta if plastic else fields,
@@ -197,7 +197,7 @@ def test_fem_parameterizations_match_energy_and_equilibrium(plastic, shared):
 
     def make_response(state):
         force = force_type(
-            physical_map, mapping, geometry, state, theta if plastic else fixed_fp
+            fem.PointwiseVolumetricAdapter[fem.NeoHookean](), physical_map, mapping, geometry, state, theta if plastic else fixed_fp
         )
         return energy.ComposedResponse(force, transform)
 

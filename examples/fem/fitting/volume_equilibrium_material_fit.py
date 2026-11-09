@@ -14,12 +14,8 @@ import numpy as np
 from litepgo import energy, dof, fem, mesh, solver
 
 
-ElasticEnergy = fem.VolumetricFemEnergy[
-    fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
-]
-ForceParameterResponse = fem.VolumetricFemForceMaterialResponse[
-    fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
-]
+ElasticEnergy = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature]
+ForceParameterResponse = fem.VolumetricFemForceMaterialResponse[fem.TetP1Basis, fem.TetCentroidQuadrature]
 
 
 @dataclass
@@ -34,7 +30,7 @@ class Problem:
     solves: int = 0
 
     def make_energy(self, theta):
-        return ElasticEnergy(
+        return ElasticEnergy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](),
             self.mapping,
             self.geometry,
             self.plastic,
@@ -42,7 +38,7 @@ class Problem:
         )
 
     def make_response(self, u):
-        return ForceParameterResponse(
+        return ForceParameterResponse(fem.PointwiseVolumetricAdapter[fem.NeoHookean](),
             self.parameter_map, self.mapping, self.geometry, u, self.plastic
         )
 

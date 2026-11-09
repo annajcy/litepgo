@@ -1,3 +1,4 @@
+#include "litepgo/fem/material/volumetric/pointwise_volumetric_adapter.hpp"
 #include "litepgo/fem/response/interpolated_response.hpp"
 #include <memory>
 // Fit volume material parameters from reactions using analytic equilibrium sensitivities.
@@ -25,7 +26,7 @@
 namespace {
 using namespace litepgo;
 
-using Elastic = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
+using Elastic = fem::VolumetricFemEnergy<fem::TetP1Basis, fem::TetCentroidQuadrature>;
 struct Problem {
     dof::VertexDofMap map;
     std::vector<std::shared_ptr<litepgo::energy::Response>> geometry;
@@ -70,7 +71,7 @@ double reaction(const Problem& problem, const Eigen::Vector2d& theta, int axis, 
     const double height = problem.height;
     if (!theta.allFinite() || (theta.array() <= 0).any())
         throw std::domain_error("Invalid material parameters");
-    Elastic elastic(map, geometry,
+    Elastic elastic(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), map, geometry,
                     std::vector<std::shared_ptr<litepgo::energy::Response>>(
                         geometry.size(), std::make_shared<litepgo::energy::AffineResponse>(
                                              litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped())),
@@ -85,10 +86,10 @@ double reaction(const Problem& problem, const Eigen::Vector2d& theta, int axis, 
     options.max_iterations = 100;
     // Partial force derivative at fixed displacement; equilibrium supplies du/dp separately.
     const auto make_response = [&](const Vec& displacement) {
-        using Force =
-            fem::VolumetricFemForceMaterialResponse<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
+        using Force = fem::VolumetricFemForceMaterialResponse<fem::TetP1Basis, fem::TetCentroidQuadrature>;
         return std::make_shared<Force>(
-            problem.parameter_map, map, geometry, displacement,
+            std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), problem.parameter_map, map,
+            geometry, displacement,
             std::vector<std::shared_ptr<litepgo::energy::Response>>(
                 geometry.size(), std::make_shared<litepgo::energy::AffineResponse>(
                                      litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped())));
@@ -99,7 +100,7 @@ double reaction(const Problem& problem, const Eigen::Vector2d& theta, int axis, 
         [&](const Vec& parameters) -> std::shared_ptr<energy::Energy> {
             ++problem.solves;
             return std::make_shared<Elastic>(
-                map, geometry,
+                std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), map, geometry,
                 std::vector<std::shared_ptr<litepgo::energy::Response>>(
                     geometry.size(), std::make_shared<litepgo::energy::AffineResponse>(
                                          litepgo::SpMat(9, 3), Eigen::Matrix3d::Identity().reshaped())),

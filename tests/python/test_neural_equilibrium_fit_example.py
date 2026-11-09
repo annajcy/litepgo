@@ -143,7 +143,7 @@ def test_batched_material_matches_functional_reference(example, width):
     Fp = np.eye(3)[None] + .02 * rng.normal(size=(3, 3, 3))
     theta = reference.numpy()[None] + .1 * rng.normal(size=(3, width))
     outputs = ("W", "dW_dF", "d2W_dF2", "d2W_dF_dtheta", "d2W_dF_dFp")
-    expected = Pointwise.eval(F, Fp, theta, outputs=outputs)
+    expected = Pointwise().eval(F, Fp, theta, outputs=outputs)
     actual = material.eval(F, Fp, theta, outputs=outputs)
     for name in outputs:
         np.testing.assert_allclose(actual[name], expected[name], rtol=1e-9, atol=1e-11)

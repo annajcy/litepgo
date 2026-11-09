@@ -1,3 +1,4 @@
+#include "litepgo/fem/material/volumetric/pointwise_volumetric_adapter.hpp"
 #include "litepgo/fem/response/interpolated_response.hpp"
 #include <memory>
 // Fit three shared positive diagonal Fp stretches at a prescribed tetrahedral pose.
@@ -78,8 +79,8 @@ Problem make_problem() {
     const std::vector<std::shared_ptr<litepgo::energy::Response>> theta(
         geometry.size(),
         std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(2, 3)));
-    using Elastic = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
-    const Elastic elastic(map, geometry,
+    using Elastic = fem::VolumetricFemEnergy<fem::TetP1Basis, fem::TetCentroidQuadrature>;
+    const Elastic elastic(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), map, geometry,
                           std::vector<std::shared_ptr<litepgo::energy::Response>>(
                               geometry.size(), std::make_shared<litepgo::energy::AffineResponse>(
                                                    litepgo::SpMat((true_Fp.reshaped()).size(), 3), true_Fp.reshaped())),
@@ -89,8 +90,9 @@ Problem make_problem() {
     const double scale = target.norm();
     if (!(scale > 0) || !std::isfinite(scale))
         throw std::runtime_error("Calibration requires finite nonzero target forces");
-    using Force = fem::VolumetricFemForceFpResponse<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
-    auto force = std::make_shared<Force>(dof::ConstantDofMap(mesh.topology, 9), map, geometry, u, theta);
+    using Force = fem::VolumetricFemForceFpResponse<fem::TetP1Basis, fem::TetCentroidQuadrature>;
+    auto force = std::make_shared<Force>(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(),
+                                         dof::ConstantDofMap(mesh.topology, 9), map, geometry, u, theta);
 
     auto parameterized =
         std::make_shared<energy::ComposedResponse>(force, std::make_shared<fem::LogDiagonalFpResponse>(3));

@@ -7,7 +7,7 @@ import pytest
 from litepgo import dof, energy, fem, mesh
 from test_shell_material_force_response import problem
 
-Force = fem.ShellFemForceFpResponse[fem.KoiterStVK]
+Force = fem.ShellFemForceFpResponse
 P = np.array([[1.12, .07, -.02], [.03, .94, .06], [.01, -.03, 1.08]])
 
 
@@ -34,8 +34,8 @@ def test_shared_and_element_fp_jacobians_and_original_area(batch_size):
     data = problem()
     topology, mapping, rest, u, thickness = data
     theta = [np.array([2.+e, 3.]) for e in range(4)]
-    shared = Force(dof.ConstantDofMap(topology, 9), mapping, rest, u, thickness, theta, batch_size)
-    element = Force(dof.ElementDofMap(topology, 9), mapping, rest, u, thickness, theta, batch_size)
+    shared = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), dof.ConstantDofMap(topology, 9), mapping, rest, u, thickness, theta, batch_size)
+    element = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), dof.ElementDofMap(topology, 9), mapping, rest, u, thickness, theta, batch_size)
     packed = P.ravel(order="F")
     per = np.concatenate([(1+.02*e)*packed for e in range(4)])
     assert isinstance(shared, energy.MeshResponse) and isinstance(shared, fem.ShellFemForceFpResponse)
@@ -53,7 +53,7 @@ def test_shared_and_element_fp_jacobians_and_original_area(batch_size):
     repeated_J = element.eval_jacobian(np.tile(packed, 4)).toarray()
     np.testing.assert_allclose(J.toarray(), sum(repeated_J[:, 9*e:9*e+9] for e in range(4)), atol=1e-12)
     identity = np.eye(3).ravel(order="F")
-    original = fem.ShellFemEnergy[fem.KoiterStVK](mapping, rest, thickness, theta)
+    original = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta)
     np.testing.assert_allclose(shared.eval_value(identity), original.eval_gradient(u), atol=1e-12)
     with pytest.raises(ValueError):
         shared.eval_value(np.zeros(9))
@@ -99,13 +99,13 @@ def test_invalid_inputs_and_empty_mesh():
                  (params, mapping, rest, u[:-1], thickness, theta),
                  (dof.ConstantDofMap(topology, 8), mapping, rest, u, thickness, theta)]:
         with pytest.raises(ValueError):
-            Force(*args)
-    response = Force(params, mapping, rest, u, thickness, theta)
+            Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), *args)
+    response = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), params, mapping, rest, u, thickness, theta)
     for packed in [np.zeros(9), np.full(9, np.nan), np.diag([-1., 1., 1.]).ravel(), np.ones(8)]:
         with pytest.raises(ValueError):
             response.eval_value(packed)
     empty = mesh.TriangleTopology(0, np.empty((0, 3), dtype=np.int32))
-    zero = Force(dof.ConstantDofMap(empty, 9), dof.StencilDofMap(0, [], 3), [], np.empty(0), [], [])
+    zero = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), dof.ConstantDofMap(empty, 9), dof.StencilDofMap(0, [], 3), [], np.empty(0), [], [])
     value, J = zero.eval_value_and_jacobian(np.eye(3).ravel(order="F"))
     assert value.size == 0 and J.shape == (0, 9)
 
@@ -113,13 +113,13 @@ def test_invalid_inputs_and_empty_mesh():
 def test_shell_energy_fixed_fp_derivatives_and_validation():
     topology, mapping, rest, u, thickness = problem()
     theta = [np.array([2., 3.])] * len(rest)
-    Energy = fem.ShellFemEnergy[fem.KoiterStVK]
+    Energy = fem.ShellFemEnergy
     plastic = [P.copy() for _ in rest]
-    elastic = Energy(mapping, rest, thickness, theta, Fp=plastic)
-    original = Energy(mapping, rest, thickness, theta)
-    identity = Energy(mapping, rest, thickness, theta, [np.eye(3)]*len(rest))
+    elastic = Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta, Fp=plastic)
+    original = Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta)
+    identity = Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta, [np.eye(3)]*len(rest))
     np.testing.assert_allclose(identity.eval_gradient(u), original.eval_gradient(u), atol=1e-12)
-    response = Force(dof.ConstantDofMap(topology, 9), mapping, rest, u, thickness, theta)
+    response = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), dof.ConstantDofMap(topology, 9), mapping, rest, u, thickness, theta)
     np.testing.assert_allclose(elastic.eval_gradient(u), response.eval_value(P.ravel(order="F")), atol=1e-12)
     expected = explicit_force((topology, mapping, rest, u, thickness), P.ravel(order="F"), theta)
     np.testing.assert_allclose(elastic.eval_gradient(u), expected, atol=1e-12)
@@ -133,12 +133,12 @@ def test_shell_energy_fixed_fp_derivatives_and_validation():
         np.testing.assert_allclose(H[:, j], (elastic.eval_gradient(plus)-elastic.eval_gradient(minus))/2e-6,
                                    atol=1e-7, rtol=1e-6)
     with pytest.raises(ValueError):
-        Energy(mapping, rest, thickness, theta, plastic[:1])
+        Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta, plastic[:1])
     for value in (0., -1., np.nan, np.inf):
         invalid = [np.eye(3) for _ in rest]
         invalid[0][0, 0] = value
         with pytest.raises(ValueError):
-            Energy(mapping, rest, thickness, theta, invalid)
+            Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta, invalid)
     plastic[0][:] = 0
     rest.clear()
     np.testing.assert_array_equal(elastic.eval_gradient(u), g)

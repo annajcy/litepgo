@@ -1,4 +1,5 @@
 #include "litepgo/energy/response/affine_response.hpp"
+#include "litepgo/fem/material/volumetric/pointwise_volumetric_adapter.hpp"
 #include "litepgo/fem/response/interpolated_response.hpp"
 #include <memory>
 // Fit shared Neo-Hookean parameters from forces at a prescribed deformation, using batches.
@@ -22,7 +23,7 @@
 
 using namespace litepgo;
 
-using Force = fem::VolumetricFemForceMaterialResponse<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
+using Force = fem::VolumetricFemForceMaterialResponse<fem::TetP1Basis, fem::TetCentroidQuadrature>;
 
 class ForceResidual final : public energy::FixedPatternResponse {
   public:
@@ -86,14 +87,17 @@ int main(int argc, char** argv) {
     const std::vector<std::shared_ptr<litepgo::energy::Response>> plastic(
         topology.num_cells(),
         std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((I.reshaped()).size(), 3), I.reshaped()));
-    Force single(inputs, outputs, geometry, displacement, plastic, 1);
-    Force batched(inputs, outputs, geometry, displacement, plastic, batch_size);
+    Force single(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), inputs, outputs,
+                 geometry, displacement, plastic, 1);
+    Force batched(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), inputs, outputs,
+                  geometry, displacement, plastic, batch_size);
     const Vec truth = Eigen::Vector2d(2, 3); // lambda, mu
-    using Energy = fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature>;
-    const Energy energy(outputs, geometry, plastic,
-                        std::vector<std::shared_ptr<litepgo::energy::Response>>(
-                            topology.num_cells(), std::make_shared<litepgo::energy::AffineResponse>(
-                                                      litepgo::SpMat((truth).size(), 3), truth)));
+    using Energy = fem::VolumetricFemEnergy<fem::TetP1Basis, fem::TetCentroidQuadrature>;
+    const Energy energy(
+        std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), outputs, geometry, plastic,
+        std::vector<std::shared_ptr<litepgo::energy::Response>>(
+            topology.num_cells(),
+            std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((truth).size(), 3), truth)));
     const Vec observed = energy.eval_gradient(displacement);
     const Eigen::MatrixXd J = single.eval_jacobian(truth);
     if (!single.eval_value(truth).isApprox(observed) || !batched.eval_value(truth).isApprox(observed) ||

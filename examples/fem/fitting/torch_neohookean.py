@@ -61,9 +61,9 @@ def make_problem(batch_size=256):
     ]
     theta = [AffineResponse(np.zeros((2, 3)), np.array(p)) for p in ([2.0, 3.0], [3.0, 2.0])]
     key = (fem.TetP1Basis, fem.TetCentroidQuadrature)
-    native = fem.VolumetricFemEnergy[(fem.NeoHookean, *key)](mapping, geometry, plastic, theta)
-    # Same template and constructor; only the Material slot changes.
-    autodiff = fem.VolumetricFemEnergy[(TorchNeoHookean, *key)](
+    native = fem.VolumetricFemEnergy[key](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, plastic, theta)
+    # The same FEM type takes either native or Torch batch material instances.
+    autodiff = fem.VolumetricFemEnergy[key](TorchNeoHookean(),
         mapping, geometry, plastic, theta, batch_size
     )
     return nodes, mapping, geometry, plastic, theta, native, autodiff
@@ -90,8 +90,8 @@ def hex_box():
     Fp = [AffineResponse(np.zeros((9, 3)), np.eye(3).ravel(order="F"))] * topology.num_cells
     theta = [AffineResponse(np.zeros((2, 3)), np.array([2.0, 3.0]))] * topology.num_cells
     key = (fem.HexQ1Basis, fem.GaussLegendre3D[2])
-    native = fem.VolumetricFemEnergy[(fem.NeoHookean, *key)](mapping, geometry, Fp, theta)
-    autodiff = fem.VolumetricFemEnergy[(TorchNeoHookean, *key)](mapping, geometry, Fp, theta)
+    native = fem.VolumetricFemEnergy[key](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, Fp, theta)
+    autodiff = fem.VolumetricFemEnergy[key](TorchNeoHookean(), mapping, geometry, Fp, theta)
     stretch = np.diag([1.06, 0.97, 1.02]) + 0.02 * np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]])
     u = (rest.positions @ (stretch - np.eye(3)).T).ravel()
     return native, autodiff, u

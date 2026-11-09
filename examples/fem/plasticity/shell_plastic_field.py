@@ -58,7 +58,7 @@ def main():
             np.diag([np.exp(alpha * 2 * r.X_local[:3, 1].mean()), 1.0, 1.0])
             for r in rest
         ]
-        elastic = fem.ShellFemEnergy[fem.KoiterStVK](
+        elastic = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](),
             mapping, rest, thickness, theta, plastic
         )
         result = solver.newton_solve(

@@ -40,11 +40,4 @@ inline void shell_force_value(const ShellForceData& data, const Eigen::Ref<const
         throw std::domain_error("Shell force: non-finite force");
 }
 
-template <class Material>
-void eval_shell_force_value(const ShellForceData& data, const ShellMaterialInputs& inputs, StridedVecRef value) {
-    if (value.size() != data.dab_du.cols())
-        throw std::invalid_argument("Shell force: invalid output dimensions");
-    shell_force_value(data, Material::eval_dW_dab(inputs), value);
-}
-
 } // namespace litepgo::fem::detail

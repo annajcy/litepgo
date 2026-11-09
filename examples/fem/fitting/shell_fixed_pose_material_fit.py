@@ -59,7 +59,7 @@ def make_problem():
         ]
     ).ravel()
     truth, initial = np.array([2.0, 3.0]), np.array([0.7, 1.2])
-    elastic = fem.ShellFemEnergy[fem.KoiterStVK](
+    elastic = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](),
         mapping, rest, thickness, [truth] * mapping.num_elements
     )
     # Generate observations through the energy API, independently of the response path.
@@ -67,7 +67,7 @@ def make_problem():
     scale = np.linalg.norm(target)
     if not np.isfinite(scale) or scale <= 0:
         raise RuntimeError("Calibration requires finite nonzero target forces")
-    force = fem.ShellFemForceMaterialResponse[fem.KoiterStVK](
+    force = fem.ShellFemForceMaterialResponse(fem.PointwiseShellAdapter[fem.KoiterStVK](),
         dof.ConstantDofMap(topology, 2), mapping, rest, displacement, thickness
     )
     # Fixed pose and original face areas are cached; only the parameter vector varies.

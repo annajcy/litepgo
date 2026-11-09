@@ -1,7 +1,7 @@
 """Fit the parameters of a shell material written in PyTorch from equilibrium reactions.
 
-The Koiter density below is written in Torch and placed in the Material slot of the
-native shell templates; the problem, measurement and Gauss-Newton fit are those of
+The Koiter density below is written in Torch and passed as a material instance to
+native shell FEM; the problem, measurement and Gauss-Newton fit are those of
 shell_equilibrium_material_fit.py. The fit is repeated with the native KoiterStVK.
 Run: uv run --no-sync python examples/fem/fitting/torch_shell_material_fit.py
 """
@@ -53,13 +53,13 @@ def fit(material):
         residual, initial, solver.GaussNewtonOptions(gradient_tolerance=1e-10)
     )
     if result.status != solver.GaussNewtonStatus.Converged:
-        raise RuntimeError(f"{material.__name__} fit did not converge")
+        raise RuntimeError(f"{type(material).__name__} fit did not converge")
     return result.x, np.linalg.norm(result.x - truth) / np.linalg.norm(truth)
 
 
 def main():
-    torch_fit, torch_error = fit(TorchKoiter)
-    native_fit, native_error = fit(fem.KoiterStVK)
+    torch_fit, torch_error = fit(TorchKoiter())
+    native_fit, native_error = fit(fem.PointwiseShellAdapter[fem.KoiterStVK]())
     print(
         f"torch: fitted={torch_fit[0]:.12g} {torch_fit[1]:.12g}, parameter_error={torch_error:.3e}; "
         f"native: parameter_error={native_error:.3e}; "

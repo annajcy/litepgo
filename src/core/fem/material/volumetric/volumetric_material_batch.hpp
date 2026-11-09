@@ -1,6 +1,5 @@
 #pragma once
 #include "litepgo/common/types.hpp"
-#include <concepts>
 #include <stdexcept>
 #include <string>
 
@@ -27,26 +26,21 @@ struct VolumetricMaterialBatchOutputs {
     Eigen::Matrix<double, 81, Eigen::Dynamic>* d2W_dF_dFp = nullptr;
 };
 
-// A material evaluated once per batch of points instead of once per point. Static pointwise
-// materials such as NeoHookean are used directly; assembly integrates either kind identically.
-// eval_feasible_step receives dF only (Fp and theta are fixed) and returns one [0,1] bound per point.
-template <class M>
-concept VolumetricBatchMaterial =
-    requires(const M& material, const VolumetricMaterialBatch& inputs, VolumetricMaterialBatchOutputs& outputs,
-             const Eigen::Matrix<double, 9, Eigen::Dynamic>& dF) {
-        { material.num_parameters() } -> std::convertible_to<int>;
-        material.eval(inputs, outputs);
-        { material.eval_feasible_step(inputs, dF) } -> std::convertible_to<Vec>;
-    };
+// One call evaluates independent material points. Implementations may be shared by FEM objects.
+class VolumetricBatchMaterial {
+  public:
+    virtual ~VolumetricBatchMaterial() = default;
+    virtual int num_parameters() const = 0;
+    virtual void eval(const VolumetricMaterialBatch& inputs, VolumetricMaterialBatchOutputs& outputs) const = 0;
+    virtual Vec eval_feasible_step(const VolumetricMaterialBatch& inputs,
+                                   const Eigen::Matrix<double, 9, Eigen::Dynamic>& dF) const = 0;
+};
 
 namespace detail {
-template <class M> int volumetric_num_parameters(const M& material) {
-    if constexpr (VolumetricBatchMaterial<M>)
-        return material.num_parameters();
-    else
-        return M::num_parameters;
+inline void check_volumetric_batch_inputs(const VolumetricMaterialBatch& in, int parameters) {
+    if (in.Fp.cols() != in.size() || in.theta.cols() != in.size() || in.theta.rows() != parameters)
+        throw std::invalid_argument("Volumetric batch material: incompatible input dimensions");
 }
-
 // Validates material-supplied batch outputs before assembly reads them.
 inline void check_volumetric_batch_outputs(const VolumetricMaterialBatchOutputs& out, Eigen::Index count, int k) {
     auto check = [&](const auto* value, Eigen::Index rows, const char* name) {

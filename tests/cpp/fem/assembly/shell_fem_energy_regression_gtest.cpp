@@ -1,3 +1,5 @@
+#include "litepgo/fem/material/shell/pointwise_shell_adapter.hpp"
+#include <memory>
 
 #include "litepgo/dof/stencil_dof_map.hpp"
 #include "litepgo/fem/assembly/shell_fem_energy.hpp"
@@ -44,9 +46,9 @@ inline auto make_shell_energy(const Vec& X_nodes) {
     const double thickness = 0.1, Y = 100, nu = 0.3;
     // Plane-stress Lame parameters for a shell.
     const Eigen::Vector2d theta(Y * nu / (1 - nu * nu), Y / (2 * (1 + nu)));
-    return fem::ShellFemEnergy<fem::KoiterStVK>(map, std::move(rest),
-                                                std::vector<double>(map.num_elements(), thickness),
-                                                std::vector<Eigen::VectorXd>(map.num_elements(), theta));
+    return fem::ShellFemEnergy(std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(), map,
+                               std::move(rest), std::vector<double>(map.num_elements(), thickness),
+                               std::vector<Eigen::VectorXd>(map.num_elements(), theta));
 }
 
 namespace {
@@ -159,10 +161,14 @@ TEST(ShellFemEnergyRegression, OwnsReferenceDataAndRejectsInvalidRestAndTrialGeo
     EXPECT_THROW(make_shell_energy(X_nodes), std::invalid_argument);
     Vec collapsed = Vec::Zero(18);
     collapsed.segment<3>(3) = -shell_stvk_rest_positions().segment<3>(3);
-    EXPECT_THROW(energy.eval_value(collapsed), std::domain_error);
-    EXPECT_THROW(energy.eval_gradient(collapsed), std::domain_error);
-    EXPECT_THROW(energy.eval_hessian(collapsed), std::domain_error);
-    EXPECT_THROW(energy.max_feasible_step(collapsed, Vec::Zero(18)), std::domain_error);
+    // Repeat cancellation across concurrent batches and verify the object remains usable.
+    for (int attempt = 0; attempt < 25; ++attempt) {
+        EXPECT_THROW(energy.eval_value(collapsed), std::domain_error);
+        EXPECT_THROW(energy.eval_gradient(collapsed), std::domain_error);
+        EXPECT_THROW(energy.eval_hessian(collapsed), std::domain_error);
+        EXPECT_THROW(energy.max_feasible_step(collapsed, Vec::Zero(18)), std::domain_error);
+        EXPECT_DOUBLE_EQ(energy.eval_value(u), W);
+    }
 
     const auto stencils = mesh::make_triangle_mid_edge_stencils(shell_stvk_topology());
     const fem::TriangleMidEdgeRestData rest(shell_stvk_rest_positions().reshaped<Eigen::RowMajor>(6, 3),

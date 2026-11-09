@@ -18,8 +18,8 @@ NEO_HOOKEAN_THETA = np.array([2.0, 3.0])
 
 
 def test_templates_mirror_cpp_arguments():
-    Energy = fem.VolumetricFemEnergy[fem.NeoHookean, fem.HexQ1Basis, fem.GaussLegendre3D[2]]
-    assert Energy.__name__ == "VolumetricFemEnergy[NeoHookean, HexQ1Basis, GaussLegendre3D[2]]"
+    Energy = fem.VolumetricFemEnergy[fem.HexQ1Basis, fem.GaussLegendre3D[2]]
+    assert Energy.__name__ == "VolumetricFemEnergy[HexQ1Basis, GaussLegendre3D[2]]"
     assert issubclass(Energy, energy.Energy) and issubclass(Energy, fem.VolumetricFemEnergy)
     assert fem.InterpolatedResponse[fem.TetP1Basis] is fem.InterpolatedResponse[(fem.TetP1Basis,)]
     assert issubclass(fem.InterpolatedResponse[fem.TetP1Basis], energy.Response)
@@ -27,7 +27,7 @@ def test_templates_mirror_cpp_arguments():
     with pytest.raises(TypeError, match=r"available: .*GaussLegendre3D\[2\]"):
         fem.GaussLegendre3D[3]
     with pytest.raises(TypeError, match="VolumetricFemEnergy"):
-        fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis, fem.GaussLegendre3D[2]]
+        fem.VolumetricFemEnergy[fem.TetP1Basis, fem.GaussLegendre3D[2]]
     with pytest.raises(TypeError):
         fem.TetP1Basis()
 
@@ -220,8 +220,8 @@ def volumetric_energy(data, basis, quadrature, dofs_per_vertex, theta_fields=Non
     rest_map = dof.VertexDofMap(data.topology, 3)
     X_fields = rest_fields(fem.InterpolatedResponse[type_of_rest_basis(data)], rest_map, data.positions.ravel())
     n = data.topology.num_cells
-    Energy = fem.VolumetricFemEnergy[fem.NeoHookean, basis, quadrature]
-    return Energy(
+    Energy = fem.VolumetricFemEnergy[basis, quadrature]
+    return Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](),
         dof.VertexDofMap(data.topology, dofs_per_vertex),
         X_fields,
         constant_fields(np.eye(3), n),
@@ -259,16 +259,16 @@ def test_erased_field_types_can_be_mixed():
 
 def test_energy_rejects_bad_fields():
     data = mesh.read_veg(ASSETS / "box-tet.veg")
-    Energy = fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
+    Energy = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature]
     rest_map = dof.VertexDofMap(data.topology, 3)
     X = rest_fields(fem.InterpolatedResponse[fem.TetP1Basis], rest_map, data.positions.ravel())
     n = data.topology.num_cells
     with pytest.raises(ValueError):
-        Energy(rest_map, X[:-1], constant_fields(np.eye(3), n), constant_fields(NEO_HOOKEAN_THETA, n))
+        Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), rest_map, X[:-1], constant_fields(np.eye(3), n), constant_fields(NEO_HOOKEAN_THETA, n))
     with pytest.raises(ValueError):
-        Energy(rest_map, X, constant_fields(np.eye(2), n), constant_fields(NEO_HOOKEAN_THETA, n))
+        Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), rest_map, X, constant_fields(np.eye(2), n), constant_fields(NEO_HOOKEAN_THETA, n))
     with pytest.raises(TypeError):
-        Energy(rest_map, X, [np.eye(3)] * n, constant_fields(NEO_HOOKEAN_THETA, n))
+        Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), rest_map, X, [np.eye(3)] * n, constant_fields(NEO_HOOKEAN_THETA, n))
 
 
 # examples/fem/**/*.py mirror the C++ examples line by line. They solve with AutoSparseSolver, whose
@@ -425,7 +425,7 @@ def test_shell_material_integration_matches_shell_energy():
     stencil_map = dof.StencilDofMap(3, stencils.vertices, 3)
     rest = fem.TriangleMidEdgeRestData(X, stencils.opposite[0])
     theta = np.array([1.0, 2.0])
-    whole = fem.ShellFemEnergy[fem.KoiterStVK](stencil_map, [rest], [0.1], [theta])
+    whole = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](), stencil_map, [rest], [0.1], [theta])
     u = 0.1 * np.cos(np.arange(9.0))
     current, J, second = fem.eval_triangle_mid_edge_kinematics(
         X + u.reshape(3, 3), rest.opposite, gradient=True, hessian=True

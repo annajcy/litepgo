@@ -21,19 +21,5 @@ inline void shell_material_force_jacobian(const ShellForceData& data, const Eige
         throw std::domain_error("Shell force: non-finite Jacobian");
 }
 
-// The material parameter vector is the active input.
-template <class Material>
-void eval_shell_material_force(const ShellForceData& data, const Eigen::VectorXd& theta, StridedVecRef value,
-                               StridedMatRef* J) {
-    constexpr int n = Material::num_parameters;
-    if (theta.size() != Material::num_parameters || !theta.allFinite() || value.size() != data.dab_du.cols() ||
-        (J && (J->rows() != value.size() || J->cols() != n)))
-        throw std::invalid_argument("Shell force: invalid parameters, derivative or output dimensions");
-    auto inputs = data.inputs;
-    inputs.theta = theta;
-    eval_shell_force_value<Material>(data, inputs, value);
-    if (J)
-        shell_material_force_jacobian(data, Material::eval_d2W_dab_dtheta(inputs), n, *J);
-}
 } // namespace detail
 } // namespace litepgo::fem

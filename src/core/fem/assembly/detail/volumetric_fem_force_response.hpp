@@ -19,20 +19,21 @@ namespace litepgo::fem {
 namespace detail {
 enum class ForceInput { Material, Plastic };
 // Fixed displacement and geometry; the other material input is stored per element.
-template <class Material, Basis3D UBasis, Quadrature3D Q, ForceInput Input>
+template <Basis3D UBasis, Quadrature3D Q, ForceInput Input>
 class VolumetricFemForceResponse final : public energy::MeshResponse {
     static constexpr int output_size = 3 * UBasis::num_basis_functions;
-    static constexpr bool batched = VolumetricBatchMaterial<Material>;
 
   public:
     template <class ParameterMap>
         requires(std::same_as<ParameterMap, dof::ConstantDofMap> || std::same_as<ParameterMap, dof::ElementDofMap>)
-    VolumetricFemForceResponse(const ParameterMap& parameter_map, const dof::VertexDofMap& displacement_map,
+    VolumetricFemForceResponse(std::shared_ptr<const VolumetricBatchMaterial> material,
+                               const ParameterMap& parameter_map, const dof::VertexDofMap& displacement_map,
                                std::vector<std::shared_ptr<energy::Response>> rest_position_fields, Vec displacement,
-                               std::vector<std::shared_ptr<energy::Response>> fixed_fields, int batch_size = 256,
-                               Material material = Material())
+                               std::vector<std::shared_ptr<energy::Response>> fixed_fields, int batch_size = 256)
         : energy::MeshResponse(parameter_map, displacement_map, batch_size), material_(std::move(material)) {
-        const int parameters = volumetric_num_parameters(material_);
+        if (!material_ || material_->num_parameters() < 0)
+            throw std::invalid_argument("VolumetricFemForceResponse: invalid material");
+        const int parameters = material_->num_parameters();
         input_size_ = Input == ForceInput::Plastic ? 9 : parameters;
         const int fixed_size = Input == ForceInput::Plastic ? parameters : 9;
         if (parameter_map.num_elements() != displacement_map.num_elements() || batch_size <= 0)
@@ -83,58 +84,44 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
         energy::BatchMatrix values(ids.size(), output_size);
         if (jacobian)
             jacobian->resize(output_size * ids.size(), input_size_);
-        if constexpr (!batched) {
-            for (std::size_t b = 0; b < ids.size(); ++b) {
-                const Vec active = coefficients.row(b).transpose();
-                eval_row(values, jacobian, b, ids[b], [&](int q) {
-                    const auto inputs = material_inputs(ids[b], q, active);
-                    const Eigen::Matrix3d stress = Material::eval_dW_dF(inputs);
-                    if (!jacobian)
-                        return std::pair{stress, Eigen::MatrixXd()};
-                    if constexpr (Input == ForceInput::Plastic)
-                        return std::pair{stress, Eigen::MatrixXd(Material::eval_d2W_dF_dFp(inputs))};
-                    else
-                        return std::pair{stress, Eigen::MatrixXd(Material::eval_d2W_dF_dtheta(inputs))};
-                });
+
+        const auto points = static_cast<Eigen::Index>(ids.size()) * Q::num_points;
+        VolumetricMaterialBatch batch;
+        batch.F.resize(9, points);
+        batch.Fp.resize(9, points);
+        batch.theta.resize(material_->num_parameters(), points);
+        for (std::size_t b = 0; b < ids.size(); ++b) {
+            const Vec active = coefficients.row(b).transpose();
+            for (int q = 0; q < Q::num_points; ++q) {
+                const auto inputs = material_inputs(ids[b], q, active);
+                const Eigen::Index point = static_cast<Eigen::Index>(b) * Q::num_points + q;
+                batch.F.col(point) = inputs.F.reshaped();
+                batch.Fp.col(point) = inputs.Fp.reshaped();
+                batch.theta.col(point) = inputs.theta;
             }
-        } else {
-            const auto points = static_cast<Eigen::Index>(ids.size()) * Q::num_points;
-            VolumetricMaterialBatch batch;
-            batch.F.resize(9, points);
-            batch.Fp.resize(9, points);
-            batch.theta.resize(volumetric_num_parameters(material_), points);
-            for (std::size_t b = 0; b < ids.size(); ++b) {
-                const Vec active = coefficients.row(b).transpose();
-                for (int q = 0; q < Q::num_points; ++q) {
-                    const auto inputs = material_inputs(ids[b], q, active);
-                    const Eigen::Index point = static_cast<Eigen::Index>(b) * Q::num_points + q;
-                    batch.F.col(point) = inputs.F.reshaped();
-                    batch.Fp.col(point) = inputs.Fp.reshaped();
-                    batch.theta.col(point) = inputs.theta;
-                }
-            }
-            Eigen::Matrix<double, 9, Eigen::Dynamic> P;
-            Eigen::MatrixXd dP_dtheta;
-            Eigen::Matrix<double, 81, Eigen::Dynamic> dP_dFp;
-            VolumetricMaterialBatchOutputs out{nullptr, &P};
-            if (jacobian) {
-                if constexpr (Input == ForceInput::Plastic)
-                    out.d2W_dF_dFp = &dP_dFp;
-                else
-                    out.d2W_dF_dtheta = &dP_dtheta;
-            }
-            material_.eval(batch, out);
-            check_volumetric_batch_outputs(out, points, volumetric_num_parameters(material_));
-            for (std::size_t b = 0; b < ids.size(); ++b)
-                eval_row(values, jacobian, b, ids[b], [&](int q) {
-                    const Eigen::Index point = static_cast<Eigen::Index>(b) * Q::num_points + q;
-                    const double* mixed = !jacobian                      ? nullptr
-                                          : Input == ForceInput::Plastic ? dP_dFp.col(point).data()
-                                                                         : dP_dtheta.col(point).data();
-                    return std::pair{Eigen::Map<const Eigen::Matrix3d>(P.col(point).data()),
-                                     Eigen::Map<const Eigen::MatrixXd>(mixed, 9, mixed ? input_size_ : 0)};
-                });
         }
+        Eigen::Matrix<double, 9, Eigen::Dynamic> P;
+        Eigen::MatrixXd dP_dtheta;
+        Eigen::Matrix<double, 81, Eigen::Dynamic> dP_dFp;
+        VolumetricMaterialBatchOutputs out{nullptr, &P};
+        if (jacobian) {
+            if constexpr (Input == ForceInput::Plastic)
+                out.d2W_dF_dFp = &dP_dFp;
+            else
+                out.d2W_dF_dtheta = &dP_dtheta;
+        }
+        material_->eval(batch, out);
+        check_volumetric_batch_outputs(out, points, material_->num_parameters());
+        for (std::size_t b = 0; b < ids.size(); ++b)
+            eval_row(values, jacobian, b, ids[b], [&](int q) {
+                const Eigen::Index point = static_cast<Eigen::Index>(b) * Q::num_points + q;
+                const double* mixed = !jacobian                      ? nullptr
+                                      : Input == ForceInput::Plastic ? dP_dFp.col(point).data()
+                                                                     : dP_dtheta.col(point).data();
+                return std::pair{Eigen::Map<const Eigen::Matrix3d>(P.col(point).data()),
+                                 Eigen::Map<const Eigen::MatrixXd>(mixed, 9, mixed ? input_size_ : 0)};
+            });
+
         return values;
     }
 
@@ -178,7 +165,7 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
         transforms_[e].pullback_response_into(value, J ? &*J : nullptr);
     }
 
-    Material material_;
+    std::shared_ptr<const VolumetricBatchMaterial> material_;
     int input_size_ = 0;
     std::vector<std::array<Vec, Q::num_points>> fixed_;
     std::vector<std::array<Eigen::Matrix3d, Q::num_points>> deformation_;

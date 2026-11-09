@@ -12,12 +12,8 @@ from pathlib import Path
 import numpy as np
 from litepgo import dof, energy, fem, mesh, solver
 
-ElasticEnergy = fem.VolumetricFemEnergy[
-    fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
-]
-ForceFpResponse = fem.VolumetricFemForceFpResponse[
-    fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
-]
+ElasticEnergy = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature]
+ForceFpResponse = fem.VolumetricFemForceFpResponse[fem.TetP1Basis, fem.TetCentroidQuadrature]
 
 
 @dataclass
@@ -81,12 +77,12 @@ def make_factories(problem):
     def make_energy(p):
         packed = plastic.eval_value(p).reshape(-1, 9)
         fields = [AffineResponse(np.zeros((9, 3)), row) for row in packed]
-        return ElasticEnergy(
+        return ElasticEnergy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](),
             problem.displacement_map, problem.geometry, fields, problem.theta
         )
 
     def make_response(u):
-        force = ForceFpResponse(
+        force = ForceFpResponse(fem.PointwiseVolumetricAdapter[fem.NeoHookean](),
             problem.physical_map,
             problem.displacement_map,
             problem.geometry,

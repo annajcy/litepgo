@@ -113,8 +113,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", nargs="?", type=Path, default=REPO / "assets/box-hex.veg", help="rest hexahedral VEG mesh")
     rest, mapping, geometry, Fp, theta = make_problem(parser.parse_args().input)
-    native = fem.VolumetricFemEnergy[(fem.NeoHookean, *KEY)](mapping, geometry, Fp, theta)
-    numpy = fem.VolumetricFemEnergy[(NumpyNeoHookean, *KEY)](mapping, geometry, Fp, theta)
+    native = fem.VolumetricFemEnergy[KEY](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, Fp, theta)
+    numpy = fem.VolumetricFemEnergy[KEY](NumpyNeoHookean(), mapping, geometry, Fp, theta)
     u = 0.02 * np.sin(np.arange(mapping.num_dofs) * 0.37)
     a = native.eval(u, gradient=True, hessian=energy.HessianKind.Exact)
     b = numpy.eval(u, gradient=True, hessian=energy.HessianKind.Exact)
@@ -130,8 +130,8 @@ def main():
         (fem.VolumetricFemForceFpResponse, theta, np.diag([1.1, 0.95, 1.0]).ravel(order="F")),
     ):
         parameter_map = dof.ConstantDofMap(topology, len(p))
-        reference = Force[(fem.NeoHookean, *KEY)](parameter_map, mapping, geometry, u, fixed)
-        actual = Force[(NumpyNeoHookean, *KEY)](parameter_map, mapping, geometry, u, fixed)
+        reference = Force[KEY](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), parameter_map, mapping, geometry, u, fixed)
+        actual = Force[KEY](NumpyNeoHookean(), parameter_map, mapping, geometry, u, fixed)
         print(
             f"{Force.__name__}: value_error={np.abs(actual.eval_value(p) - reference.eval_value(p)).max():.2e}, "
             f"jacobian_error={abs(actual.eval_jacobian(p) - reference.eval_jacobian(p)).max():.2e}"

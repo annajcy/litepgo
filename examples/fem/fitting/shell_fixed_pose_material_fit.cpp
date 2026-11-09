@@ -1,3 +1,4 @@
+#include "litepgo/fem/material/shell/pointwise_shell_adapter.hpp"
 #include <memory>
 // Recover shared KoiterStVK parameters from forces at a prescribed shell pose.
 // Build: cmake --build build/release --target shell_fixed_pose_material_fit
@@ -81,15 +82,16 @@ Problem make_problem() {
         u.segment<3>(3 * v) = Eigen::Vector3d(.08 * X.x() + .04 * X.y(), -.03 * X.y(), .15 * X.x() * X.y() / size);
     }
     const Eigen::Vector2d truth(2, 3), initial(.7, 1.2);
-    const fem::ShellFemEnergy<fem::KoiterStVK> elastic(map, rest, thickness,
-                                                       std::vector<Vec>(map.num_elements(), truth));
+    const fem::ShellFemEnergy elastic(std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(), map,
+                                      rest, thickness, std::vector<Vec>(map.num_elements(), truth));
     // Generate observations through the energy API, independently of the response path.
     const Vec target = elastic.eval_gradient(u);
     const double scale = target.norm();
     if (!(scale > 0) || !std::isfinite(scale))
         throw std::runtime_error("Calibration requires finite nonzero target forces");
-    auto force = std::make_shared<fem::ShellFemForceMaterialResponse<fem::KoiterStVK>>(dof::ConstantDofMap(topology, 2),
-                                                                                       map, rest, u, thickness);
+    auto force = std::make_shared<fem::ShellFemForceMaterialResponse>(
+        std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(), dof::ConstantDofMap(topology, 2), map,
+        rest, u, thickness);
     // Fixed pose and original face areas are cached; only the parameter vector varies.
     if (!force->eval_value(truth).isApprox(target, 1e-11))
         throw std::runtime_error("Fixed-pose response differs from the energy gradient");

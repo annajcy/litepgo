@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from litepgo import dof, fem, mesh, energy, solver
 
-Force = fem.VolumetricFemForceMaterialResponse[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
-Energy = fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
+Force = fem.VolumetricFemForceMaterialResponse[fem.TetP1Basis, fem.TetCentroidQuadrature]
+Energy = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature]
 
 
 def problem():
@@ -23,15 +23,15 @@ def problem():
 def observed(data, theta):
     _, mapping, geometry, u, plastic = data
     fields = [AffineResponse(np.zeros((np.asarray(theta if theta.size == 2 else theta[2*e:2*e+2]).size, 3)), theta if theta.size == 2 else theta[2*e:2*e+2]) for e in range(2)]
-    return Energy(mapping, geometry, plastic, fields).eval_gradient(u)
+    return Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, plastic, fields).eval_gradient(u)
 
 
 @pytest.mark.parametrize("batch_size", [1, 3, 256])
 def test_shared_and_element_parameters_match_energy(batch_size):
     data = problem()
     topology, mapping, geometry, u, plastic = data
-    shared = Force(dof.ConstantDofMap(topology, 2), mapping, geometry, u, plastic, batch_size)
-    element = Force(dof.ElementDofMap(topology, 2), mapping, geometry, u, plastic, batch_size)
+    shared = Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 2), mapping, geometry, u, plastic, batch_size)
+    element = Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ElementDofMap(topology, 2), mapping, geometry, u, plastic, batch_size)
     theta = np.array([2., 3.])
     independent = np.array([2., 3., 5., .8])
     assert isinstance(shared, energy.Response)
@@ -59,8 +59,8 @@ def test_parameter_recovery_and_batch_consistency():
     topology, mapping, geometry, u, plastic = data
     theta = np.array([2., 3.])
     target = observed(data, theta)
-    r1 = Force(dof.ConstantDofMap(topology, 2), mapping, geometry, u, plastic, 1)
-    r2 = Force(dof.ConstantDofMap(topology, 2), mapping, geometry, u, plastic, 3)
+    r1 = Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 2), mapping, geometry, u, plastic, 1)
+    r2 = Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 2), mapping, geometry, u, plastic, 3)
     np.testing.assert_array_equal(r1.eval_jacobian(theta).data, r2.eval_jacobian(theta).data)
     class Residual(energy.FixedPatternResponse):
         def __init__(self):
@@ -77,22 +77,22 @@ def test_validation_and_empty_mesh():
     topology, mapping, geometry, u, plastic = problem()
     params = dof.ConstantDofMap(topology, 2)
     with pytest.raises(ValueError):
-        Force(params, mapping, geometry, u[:-1], plastic)
+        Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), params, mapping, geometry, u[:-1], plastic)
     with pytest.raises(ValueError):
-        Force(params, mapping, [], u, plastic)
+        Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), params, mapping, [], u, plastic)
     with pytest.raises(ValueError):
-        Force(params, mapping, geometry, u, [])
+        Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), params, mapping, geometry, u, [])
     with pytest.raises(ValueError):
-        Force(params, mapping, geometry, u, plastic, 0)
+        Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), params, mapping, geometry, u, plastic, 0)
     with pytest.raises(ValueError):
-        Force(dof.ConstantDofMap(topology, 3), mapping, geometry, u, plastic)
+        Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 3), mapping, geometry, u, plastic)
     with pytest.raises(ValueError):
-        Force(params, mapping, geometry, np.full(15, np.nan), plastic)
+        Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), params, mapping, geometry, np.full(15, np.nan), plastic)
     with pytest.raises(ValueError):
-        Force(params, mapping, geometry, u, [AffineResponse(np.zeros((np.asarray(np.ones(8)).size, 3)), np.ones(8))]*2)
+        Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), params, mapping, geometry, u, [AffineResponse(np.zeros((np.asarray(np.ones(8)).size, 3)), np.ones(8))]*2)
     with pytest.raises(TypeError):
-        Force(dof.VertexDofMap(topology, 2), mapping, geometry, u, plastic)
+        Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.VertexDofMap(topology, 2), mapping, geometry, u, plastic)
     empty = mesh.TetTopology(0, np.empty((0, 4), dtype=np.int32))
-    zero = Force(dof.ConstantDofMap(empty, 2), dof.VertexDofMap(empty, 3), [], np.empty(0), [])
+    zero = Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(empty, 2), dof.VertexDofMap(empty, 3), [], np.empty(0), [])
     assert zero.eval_value(np.array([2., 3.])).size == 0
     assert zero.eval_jacobian(np.array([2., 3.])).shape == (0, 2)

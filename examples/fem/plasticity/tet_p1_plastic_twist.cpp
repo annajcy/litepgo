@@ -1,3 +1,4 @@
+#include "litepgo/fem/material/volumetric/pointwise_volumetric_adapter.hpp"
 #include "litepgo/fem/response/interpolated_response.hpp"
 #include <memory>
 // release and clamp a tet bar with a plastic twist Fp.
@@ -102,8 +103,9 @@ int main(int argc, char** argv) {
                     std::make_shared<fem::DeformationGradientResponse>(plastic_fields[e], rest_position_fields[e]));
             auto theta_field =
                 std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(2, 3));
-            fem::VolumetricFemEnergy<fem::NeoHookean, fem::TetP1Basis, fem::TetCentroidQuadrature> elastic(
-                rest_position_map, rest_position_fields, std::move(Fp_fields),
+            fem::VolumetricFemEnergy<fem::TetP1Basis, fem::TetCentroidQuadrature> elastic(
+                std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<fem::NeoHookean>>(), rest_position_map,
+                rest_position_fields, std::move(Fp_fields),
                 std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), theta_field));
 
             result = solver::newton_solve(elastic, fixed, initial, options, solver);

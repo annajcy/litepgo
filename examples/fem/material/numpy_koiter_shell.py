@@ -100,8 +100,8 @@ def make_problem():
 
 def main():
     topology, mapping, rest, thickness, theta, Fp, prescribed = make_problem()
-    native = fem.ShellFemEnergy[fem.KoiterStVK](mapping, rest, thickness, theta, Fp)
-    numpy = fem.ShellFemEnergy[NumpyKoiter](mapping, rest, thickness, theta, Fp)
+    native = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta, Fp)
+    numpy = fem.ShellFemEnergy(NumpyKoiter(), mapping, rest, thickness, theta, Fp)
     u = prescribed + 0.02 * np.sin(np.arange(27))
     a = native.eval(u, gradient=True, hessian=energy.HessianKind.Exact)
     b = numpy.eval(u, gradient=True, hessian=energy.HessianKind.Exact)
@@ -115,8 +115,8 @@ def main():
     plastic = (fem.ShellFemForceFpResponse, (u, thickness, theta), np.diag([1.1, 0.95, 1.0]).ravel(order="F"))
     for Force, fixed, p in (material, plastic):
         parameter_map = dof.ConstantDofMap(topology, len(p))
-        reference = Force[fem.KoiterStVK](parameter_map, mapping, rest, *fixed)
-        actual = Force[NumpyKoiter](parameter_map, mapping, rest, *fixed)
+        reference = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), parameter_map, mapping, rest, *fixed)
+        actual = Force(NumpyKoiter(), parameter_map, mapping, rest, *fixed)
         print(
             f"{Force.__name__}: value_error={np.abs(actual.eval_value(p) - reference.eval_value(p)).max():.2e}, "
             f"jacobian_error={abs(actual.eval_jacobian(p) - reference.eval_jacobian(p)).max():.2e}"

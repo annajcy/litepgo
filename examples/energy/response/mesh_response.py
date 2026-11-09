@@ -41,12 +41,10 @@ def problem(copies=1):
 
 def make_responses(topology, mapping, geometry, displacement, plastic, batch_size):
     parameters = dof.ConstantDofMap(topology, 2)
-    Force = fem.VolumetricFemForceMaterialResponse[
-        fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
-    ]
+    Force = fem.VolumetricFemForceMaterialResponse[fem.TetP1Basis, fem.TetCentroidQuadrature]
     return (
-        Force(parameters, mapping, geometry, displacement, plastic, batch_size=1),
-        Force(
+        Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), parameters, mapping, geometry, displacement, plastic, batch_size=1),
+        Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](),
             parameters, mapping, geometry, displacement, plastic, batch_size=batch_size
         ),
     )
@@ -69,10 +67,8 @@ def run(copies=1, batch_size=256, repeats=0):
     single, batched = make_responses(*data, batch_size)
     truth = np.array([2.0, 3.0])
     # Independent observations from the energy API, at the same fixed displacement.
-    Energy = fem.VolumetricFemEnergy[
-        fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature
-    ]
-    energy = Energy(
+    Energy = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature]
+    energy = Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](),
         mapping, geometry, plastic, [AffineResponse(np.zeros((2, 3)), truth)] * topology.num_cells
     )
     expected = energy.eval_gradient(displacement)

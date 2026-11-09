@@ -1,3 +1,4 @@
+#include "litepgo/fem/material/shell/pointwise_shell_adapter.hpp"
 #include <memory>
 // Fit two shared in-plane log plastic stretches from equilibrium displacement and reaction.
 // Geometry, material theta=(2,3), and boundary displacements are fixed.
@@ -19,8 +20,8 @@
 
 namespace {
 using namespace litepgo;
-using ElasticEnergy = fem::ShellFemEnergy<fem::KoiterStVK>;
-using ForceFpResponse = fem::ShellFemForceFpResponse<fem::KoiterStVK>;
+using ElasticEnergy = fem::ShellFemEnergy;
+using ForceFpResponse = fem::ShellFemForceFpResponse;
 struct Problem {
     dof::StencilDofMap displacement_map;
     std::vector<fem::TriangleMidEdgeRestData> rest;
@@ -86,12 +87,14 @@ Factories make_factories(const Problem& problem) {
         std::vector<Eigen::Matrix3d> fields;
         for (int e = 0; e < problem.displacement_map.num_elements(); ++e)
             fields.emplace_back(packed.segment(9 * e, 9).reshaped(3, 3));
-        return std::make_shared<ElasticEnergy>(problem.displacement_map, problem.rest, problem.thickness, problem.theta,
+        return std::make_shared<ElasticEnergy>(std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(),
+                                               problem.displacement_map, problem.rest, problem.thickness, problem.theta,
                                                std::move(fields));
     };
     auto make_response = [&problem, plastic](const Vec& u) -> std::shared_ptr<energy::Response> {
-        auto force = std::make_shared<ForceFpResponse>(problem.physical_map, problem.displacement_map, problem.rest, u,
-                                                       problem.thickness, problem.theta);
+        auto force = std::make_shared<ForceFpResponse>(
+            std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(), problem.physical_map,
+            problem.displacement_map, problem.rest, u, problem.thickness, problem.theta);
         return std::make_shared<energy::ComposedResponse>(force, plastic);
     };
     return {std::move(make_energy), std::move(make_response)};

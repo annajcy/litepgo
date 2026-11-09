@@ -18,33 +18,15 @@ using namespace nb::literals;
 namespace litepgo::fem::binding {
 namespace {
 
-template <class M, class B, class Q> struct BindEnergy {
+template <class B, class Q> struct BindEnergy {
     static void apply(nb::module_& m) {
-        using Energy = VolumetricFemEnergy<M, B, Q>;
-        const nb::tuple key = nb::make_tuple(material_key<M>(), nb::type<B>(), nb::type<Q>());
-        const std::string name =
-            "VolumetricFemEnergy[" + class_name(key[0]) + ", " + class_name(key[1]) + ", " + class_name(key[2]) + "]";
-        nb::class_<Energy, energy::MeshEnergy> cls(m, name.c_str());
-        const char* doc = "One spatial Response per element in map order for each of rest positions, Fp (9 components) "
-                          "and theta; the energy snapshots their values at construction.";
-        if constexpr (is_py_material<M>)
-            cls.def(
-                "__init__",
-                [](nb::pointer_and_handle<Energy> self, nb::handle material, const dof::VertexDofMap& displacement_map,
-                   const Responses& rest_position_fields, const Responses& Fp, const Responses& theta, int batch_size) {
-                    new (self.p) Energy(displacement_map, rest_position_fields, Fp, theta, batch_size,
-                                        owned_material<M>(self, material));
-                },
-                "material"_a, "displacement_map"_a, "rest_position_fields"_a, "Fp"_a, "theta"_a, "batch_size"_a = 256,
-                doc);
-        else
-            cls.def(
-                "__init__",
-                [](Energy* self, const dof::VertexDofMap& displacement_map, const Responses& rest_position_fields,
-                   const Responses& Fp, const Responses& theta, int batch_size) {
-                    new (self) Energy(displacement_map, rest_position_fields, Fp, theta, batch_size);
-                },
-                "displacement_map"_a, "rest_position_fields"_a, "Fp"_a, "theta"_a, "batch_size"_a = 256, doc);
+        using Energy = VolumetricFemEnergy<B, Q>;
+        const nb::tuple key = nb::make_tuple(nb::type<B>(), nb::type<Q>());
+        const std::string name = "VolumetricFemEnergy[" + class_name(key[0]) + ", " + class_name(key[1]) + "]";
+        nb::class_<Energy, energy::MeshEnergy>(m, name.c_str())
+            .def(nb::init<std::shared_ptr<const VolumetricBatchMaterial>, const dof::VertexDofMap&, const Responses&,
+                          const Responses&, const Responses&, int>(),
+                 "material"_a, "displacement_map"_a, "rest_position_fields"_a, "Fp"_a, "theta"_a, "batch_size"_a = 256);
         register_instance(m, "VolumetricFemEnergy", key, nb::type<Energy>());
     }
 };
