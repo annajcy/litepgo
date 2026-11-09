@@ -21,6 +21,7 @@ else()
     set(LITEPGO_WITH_MKL OFF)
 endif()
 option(LITEPGO_WITH_IPC_TOOLKIT "Build the optional IPC Toolkit backend (litepgo::contact_ipctk)" OFF)
+option(LITEPGO_WITH_ALEMBIC "Enable Alembic mesh animation export" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -39,6 +40,9 @@ endif()
 
 include(cmake/litepgo_warnings.cmake)
 include(cmake/litepgo_dependencies.cmake)
+if(LITEPGO_WITH_ALEMBIC)
+    include(cmake/third-party/alembic.cmake)
+endif()
 
 add_subdirectory(src/core)
 if(LITEPGO_BUILD_PYTHON)

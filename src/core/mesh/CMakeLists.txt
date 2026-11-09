@@ -11,6 +11,13 @@ target_link_libraries(litepgo_mesh
 include("${PROJECT_SOURCE_DIR}/cmake/third-party/tinyobjloader.cmake")
 target_link_libraries(litepgo_mesh PRIVATE tinyobjloader_double)
 
+if(LITEPGO_WITH_ALEMBIC)
+    add_library(litepgo_mesh_alembic STATIC io/alembic.cpp)
+    add_library(litepgo::mesh_alembic ALIAS litepgo_mesh_alembic)
+    target_link_libraries(litepgo_mesh_alembic PUBLIC litepgo::mesh PRIVATE Alembic::Alembic litepgo::warnings)
+    target_compile_definitions(litepgo_mesh_alembic PUBLIC LITEPGO_HAS_ALEMBIC=1)
+endif()
+
 option(LITEPGO_WITH_GMSH "Enable Gmsh mesh I/O" OFF)
 if(LITEPGO_WITH_GMSH)
     include("${PROJECT_SOURCE_DIR}/cmake/third-party/gmsh.cmake")

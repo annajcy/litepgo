@@ -147,6 +147,10 @@ target_link_libraries(litepgo_mesh_tests PRIVATE
     litepgo::mesh litepgo::warnings GTest::gtest_main)
 add_dependencies(litepgo_tests litepgo_mesh_tests)
 gtest_discover_tests(litepgo_mesh_tests DISCOVERY_MODE PRE_TEST)
+if(TARGET litepgo::mesh_alembic)
+    target_sources(litepgo_mesh_tests PRIVATE mesh/alembic_gtest.cpp)
+    target_link_libraries(litepgo_mesh_tests PRIVATE litepgo::mesh_alembic Alembic::Alembic)
+endif()
 
 if(TARGET litepgo::mesh_cgal)
     add_executable(litepgo_mesh_cgal_tests

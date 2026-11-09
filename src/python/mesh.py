@@ -17,11 +17,13 @@ extract_surface = _native.extract_surface
 make_triangle_mid_edge_stencils = _native.make_triangle_mid_edge_stencils
 read_obj = _native.read_obj
 write_obj = _native.write_obj
+write_abc_from_objs = _native.write_abc_from_objs
 read_veg = _native.read_veg
 write_veg = _native.write_veg
 read_msh = _native.read_msh
 write_msh = _native.write_msh
 has_gmsh = _native.has_gmsh
+has_alembic = _native.has_alembic
 has_cgal = _native.has_cgal
 has_self_intersections = _native.has_self_intersections
 isotropic_remesh = _native.isotropic_remesh
@@ -42,11 +44,13 @@ __all__ = ["ExtractedSurface", "extract_surface_with_vertices",
     "make_triangle_mid_edge_stencils",
     "read_obj",
     "write_obj",
+    "write_abc_from_objs",
     "read_veg",
     "write_veg",
     "read_msh",
     "write_msh",
     "has_gmsh",
+    "has_alembic",
     "has_cgal",
     "has_self_intersections",
     "isotropic_remesh",

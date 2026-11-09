@@ -11,6 +11,7 @@ void bind_mesh_mesh_data(nanobind::module_& m);
 void bind_extract_surface(nanobind::module_& m);
 void bind_triangle_mid_edge_stencils(nanobind::module_& m);
 void bind_obj(nanobind::module_& m);
+void bind_alembic(nanobind::module_& m);
 void bind_veg(nanobind::module_& m);
 void bind_msh(nanobind::module_& m);
 void bind_self_intersections(nanobind::module_& m);

@@ -25,7 +25,7 @@ target_link_libraries(litepgo_core INTERFACE
     litepgo::mesh litepgo::linalg litepgo::spatial litepgo::common)
 
 include("${PROJECT_SOURCE_DIR}/cmake/litepgo_module_graph.cmake")
-foreach(module litepgo_core litepgo_mesh_gmsh litepgo_mesh_cgal litepgo_contact_ipctk)
+foreach(module litepgo_core litepgo_mesh_alembic litepgo_mesh_gmsh litepgo_mesh_cgal litepgo_contact_ipctk)
     if(TARGET ${module})
         litepgo_check_module_dag(${module} "")
     endif()

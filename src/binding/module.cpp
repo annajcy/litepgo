@@ -17,6 +17,7 @@ NB_MODULE(_core, m) {
     litepgo::mesh::binding::bind_extract_surface(mesh);
     litepgo::mesh::binding::bind_triangle_mid_edge_stencils(mesh);
     litepgo::mesh::binding::bind_obj(mesh);
+    litepgo::mesh::binding::bind_alembic(mesh);
     litepgo::mesh::binding::bind_veg(mesh);
     litepgo::mesh::binding::bind_msh(mesh);
     litepgo::mesh::binding::bind_self_intersections(mesh);

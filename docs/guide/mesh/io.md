@@ -28,12 +28,34 @@ vertex IDs, needed for displacement maps without point-location roundoff.
 | OBJ | `read_obj`, `write_obj` | Triangle surface geometry |
 | VEG | `read_veg`, `write_veg` | Text TET/CUBIC volume geometry; relative `*INCLUDE` with cycle detection |
 | MSH | `read_msh`, `write_msh` | Optional Gmsh backend; homogeneous tet4/hex8; ASCII MSH 4.1 output |
+| ABC | `write_abc_from_objs` | Optional Alembic Ogawa cache for a triangle mesh with fixed connectivity |
 
 C++ I/O headers are `litepgo/mesh/io/obj.hpp`, `veg.hpp`, and optional `msh.hpp`.
 Link `litepgo::mesh`, and `litepgo::mesh_gmsh` for MSH. Python exposes
 `mesh.has_gmsh` to test the configured capability. Configure
 `LITEPGO_WITH_GMSH=ON` to build it; the backend owns a serialized Gmsh session and
 rejects an already initialized external session.
+
+## Export an OBJ sequence
+
+Build with `LITEPGO_WITH_ALEMBIC=ON` and check `mesh.has_alembic` in Python.
+C++ callers include `litepgo/mesh/io/alembic.hpp` and link `litepgo::mesh_alembic`.
+
+```python
+from pathlib import Path
+from litepgo import mesh
+
+# These frame numbers are zero-padded, so name order matches playback order.
+frames = sorted(Path("output/obj").glob("frame_*.obj"))
+mesh.write_abc_from_objs("output/loading.abc", frames, fps=24)
+```
+
+The exporter reads the paths in the supplied order and writes one mesh sampled
+from time zero at intervals of `1 / fps` seconds. Frames must have matching
+vertex numbering and identical face indices in the same order. The first
+frame supplies the topology and later frames update positions. The cache
+stores float32 XYZ positions in the OBJ coordinate system, with faces wound
+according to Alembic convention. A failed export preserves an existing destination.
 
 ## Geometry limitations and write behavior
 

@@ -125,6 +125,7 @@ See [linear algebra](linalg/index.md) for backend selection and
 | `LITEPGO_MKL_ROOT` | Use a local oneMKL 2026.1 installation with `include/`, `lib/`, and (on Windows) `bin/` instead of downloading wheels |
 | `LITEPGO_WITH_IPC_TOOLKIT` | Defaults off; adds the optional `litepgo::contact_ipctk` backend |
 | `LITEPGO_WITH_GMSH` | Defaults off; adds MSH I/O through fetched Gmsh sources |
+| `LITEPGO_WITH_ALEMBIC` | Defaults off; fetches Alembic 1.8.12 and Imath 3.2.3 for Ogawa mesh animation export. The fetched Alembic build requires CMake 3.29 or newer. |
 | `LITEPGO_WITH_CGAL` | Defaults off; fetches CGAL 6.2.1 and Boost 1.92.0 headers for the mesh module |
 | `LITEPGO_BUILD_PYTHON` | Enables the nanobind extension; enabled by ordinary presets |
 | `LITEPGO_BUILD_TESTS` | Builds and registers the native/Python regression suites |
@@ -133,6 +134,9 @@ To opt into CGAL, configure with `cmake --preset release -DLITEPGO_WITH_CGAL=ON`
 CMake downloads and verifies both pinned archives. CGAL uses Boost.Multiprecision
 for exact arithmetic, so this build needs no system Boost, GMP, or MPFR packages.
 In Python, `litepgo.mesh.has_cgal` reports the compiled setting.
+
+Configure with `cmake --preset release -DLITEPGO_WITH_ALEMBIC=ON` and build
+with `cmake --build --preset release` for [Alembic animation export](mesh/io.md#export-an-obj-sequence).
 
 Native IPC is available in the default build. To enable the optional IPC Toolkit
 backend:
