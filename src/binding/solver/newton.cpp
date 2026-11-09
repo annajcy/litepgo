@@ -27,17 +27,19 @@ void bind_newton(nb::module_& m) {
         .def(
             "__init__",
             [](NewtonOptions* self, double gradient_tolerance, int max_iterations, energy::HessianKind hessian,
-               int max_line_search_steps, double line_search_shrink) {
-                new (self) NewtonOptions{gradient_tolerance, max_iterations, hessian, max_line_search_steps,
-                                         line_search_shrink};
+               int max_line_search_steps, double line_search_shrink, double max_coordinate_step) {
+                new (self) NewtonOptions{gradient_tolerance,    max_iterations,     hessian,
+                                         max_line_search_steps, line_search_shrink, max_coordinate_step};
             },
             "gradient_tolerance"_a = std::numeric_limits<double>::quiet_NaN(), "max_iterations"_a = 50,
-            "hessian"_a = energy::HessianKind::Projected, "max_line_search_steps"_a = 30, "line_search_shrink"_a = 0.5)
+            "hessian"_a = energy::HessianKind::Projected, "max_line_search_steps"_a = 30, "line_search_shrink"_a = 0.5,
+            "max_coordinate_step"_a = std::numeric_limits<double>::infinity())
         .def_rw("gradient_tolerance", &NewtonOptions::gradient_tolerance)
         .def_rw("max_iterations", &NewtonOptions::max_iterations)
         .def_rw("hessian", &NewtonOptions::hessian)
         .def_rw("max_line_search_steps", &NewtonOptions::max_line_search_steps)
-        .def_rw("line_search_shrink", &NewtonOptions::line_search_shrink);
+        .def_rw("line_search_shrink", &NewtonOptions::line_search_shrink)
+        .def_rw("max_coordinate_step", &NewtonOptions::max_coordinate_step);
 
     nb::class_<NewtonStep>(m, "NewtonStep")
         .def_ro("iteration", &NewtonStep::iteration)

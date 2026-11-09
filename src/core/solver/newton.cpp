@@ -28,6 +28,9 @@ void check_arguments(const energy::Energy& energy, const dof::DofReduction& fixe
     if (!(options.line_search_shrink > 0.0 && options.line_search_shrink < 1.0)) {
         throw std::invalid_argument("newton_solve: line_search_shrink must lie in (0, 1)");
     }
+    if (!(options.max_coordinate_step > 0.0)) {
+        throw std::invalid_argument("newton_solve: max_coordinate_step must be positive or infinity");
+    }
 }
 
 // Termination: the free gradient's max-norm is within the tolerance.
@@ -91,7 +94,8 @@ bool accepts(double energy, double trial_energy) {
 // accepted point in trial and returns its step length, or nullopt.
 std::optional<double> line_search(const energy::Energy& energy, const Vec& x, const Vec& direction,
                                   const NewtonOptions& options, Vec& trial, NewtonStep& step) {
-    double alpha = energy.max_feasible_step(x, direction);
+    const double scale = std::min(1.0, options.max_coordinate_step / direction.cwiseAbs().maxCoeff());
+    double alpha = scale * energy.max_feasible_step(x, scale * direction);
     step.feasible_step = alpha;
     for (int j = 0; j < options.max_line_search_steps; ++j) {
         trial = x + alpha * direction;
@@ -115,6 +119,7 @@ NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed
     check_arguments(energy, fixed, x0, options);
     NewtonResult result;
     result.x = x0;
+    energy.max_feasible_step(result.x, Vec::Zero(result.x.size()));
     if (fixed.num_free() == 0) {
         result.status = NewtonStatus::Converged;
         result.energy = energy.eval_value(result.x);

@@ -1,5 +1,10 @@
 """Nonlinear solvers, mirroring src/core/solver.
 
+Newton checks initial feasibility before convergence, including with all DOFs
+fixed. NewtonOptions.max_coordinate_step bounds movement in solver coordinates
+before the feasible-step query; its default is infinity. Each iteration requests
+value, gradient and Hessian jointly once.
+
 Gauss-Newton accepts a Response and uses sparse damped normal equations for damped steps.
 Jacobian patterns are updated at current iterates; symbolic analysis is reused
 while the structure is unchanged. Trials evaluate only the residual vector.

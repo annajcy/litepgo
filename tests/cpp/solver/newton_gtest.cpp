@@ -357,3 +357,82 @@ TEST(Newton, ReusesSymbolicAnalysisForUnchangedReturnedStructure) {
     for (size_t i = 1; i < steps.size(); ++i)
         EXPECT_FALSE(steps[i].pattern_changed);
 }
+
+TEST(Newton, LimitsCoordinateMovementBeforeFeasibilityQuery) {
+    using namespace litepgo;
+    class BoundedQuadratic final : public energy::FixedPatternEnergy {
+      public:
+        mutable std::vector<Vec> directions;
+        mutable int hessians = 0;
+        BoundedQuadratic() : FixedPatternEnergy(energy::test::chain_pattern(2, {})) {}
+
+      private:
+        double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, energy::HessianKind) const override {
+            const Vec residual = x - Eigen::Vector2d(1.0, -0.4);
+            if (gradient)
+                *gradient = residual;
+            if (hessian) {
+                ++hessians;
+                hessian->valuePtr()[0] = hessian->valuePtr()[1] = 1.0;
+            }
+            return 0.5 * residual.squaredNorm();
+        }
+        double feasible_step(const ConstVecRef&, const ConstVecRef& direction) const override {
+            directions.emplace_back(direction);
+            return 0.5;
+        }
+    } energy;
+    solver::NewtonOptions options;
+    options.gradient_tolerance = 1e-10;
+    options.max_iterations = 1;
+    options.max_coordinate_step = 0.1;
+    linalg::AutoSparseSolver linear_solver;
+    std::vector<solver::NewtonStep> steps;
+    const auto result = solver::newton_solve(energy, dof::DofReduction(2, {}), Vec::Zero(2), options, linear_solver,
+                                             [&](const auto& step) { steps.push_back(step); });
+    ASSERT_EQ(energy.directions.size(), 2);
+    EXPECT_EQ(energy.directions[0], Vec::Zero(2));
+    EXPECT_NEAR(energy.directions[1].cwiseAbs().maxCoeff(), 0.1, 1e-15);
+    EXPECT_LT((result.x - Eigen::Vector2d(0.05, -0.02)).norm(), 1e-15);
+    EXPECT_DOUBLE_EQ(steps.front().step, 0.05);
+    EXPECT_EQ(energy.hessians, result.iterations + 1);
+}
+
+TEST(Newton, ChecksInitialFeasibilityBeforeStationaryOrFixedReturn) {
+    using namespace litepgo;
+    class Infeasible final : public energy::FixedPatternEnergy {
+      public:
+        Infeasible() : FixedPatternEnergy(energy::test::chain_pattern(2, {})) {}
+
+      private:
+        double eval_values(const ConstVecRef&, Vec*, SpMat*, energy::HessianKind) const override {
+            throw std::logic_error("initial feasibility must be checked before evaluation");
+        }
+        double feasible_step(const ConstVecRef&, const ConstVecRef& direction) const override {
+            EXPECT_EQ(direction, Vec::Zero(2));
+            throw std::domain_error("invalid initial geometry");
+        }
+    } energy;
+    solver::NewtonOptions options;
+    options.gradient_tolerance = 1e-10;
+    linalg::AutoSparseSolver linear_solver;
+    for (const auto& fixed : {std::vector<int>{}, std::vector<int>{0, 1}}) {
+        EXPECT_THROW(solver::newton_solve(energy, dof::DofReduction(2, fixed), Vec::Zero(2), options, linear_solver),
+                     std::domain_error);
+    }
+}
+
+TEST(Newton, RejectsInvalidCoordinateStepLimits) {
+    using namespace litepgo;
+    SpMat identity(2, 2);
+    identity.setIdentity();
+    energy::QuadraticEnergy energy(identity);
+    solver::NewtonOptions options;
+    options.gradient_tolerance = 1e-10;
+    linalg::AutoSparseSolver linear_solver;
+    for (double limit : {0.0, -1.0, -std::numeric_limits<double>::infinity(), std::nan("")}) {
+        options.max_coordinate_step = limit;
+        EXPECT_THROW(solver::newton_solve(energy, dof::DofReduction(2, {}), Vec::Ones(2), options, linear_solver),
+                     std::invalid_argument);
+    }
+}

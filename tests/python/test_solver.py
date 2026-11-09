@@ -184,3 +184,62 @@ def test_gauss_newton_explicit_sparse_solver():
     result = gauss_newton_solve(r, np.zeros(2), GaussNewtonOptions(gradient_tolerance=1e-9), solver=EigenLDLT())
     assert result.status == GaussNewtonStatus.Converged
     np.testing.assert_allclose(result.x, np.ones(2), atol=1e-8)
+
+
+@pytest.mark.parametrize('maximum', [.1, np.inf])
+@pytest.mark.parametrize('ccd_bound', [.5, 1.])
+def test_newton_coordinate_limit_precedes_ccd_without_extra_hessian(maximum, ccd_bound):
+    from litepgo.energy import FixedPatternEnergy
+
+    class CountingQuadratic(FixedPatternEnergy):
+        def __init__(self):
+            super().__init__(sp.eye(2, format='csc'))
+            self.hessians = 0
+            self.feasibility_queries = []
+
+        def eval_values(self, x, want_gradient, kind):
+            r = x - [1., -.4]
+            self.hessians += kind is not None
+            return .5*r @ r, r if want_gradient else None, np.eye(2) if kind is not None else None
+
+        def feasible_step(self, x, direction):
+            self.feasibility_queries.append((x.copy(), direction.copy()))
+            return ccd_bound
+
+    potential = CountingQuadratic()
+    steps = []
+    options = NewtonOptions(gradient_tolerance=1e-12, max_iterations=1, max_coordinate_step=maximum)
+    result = newton_solve(potential, free(2), np.zeros(2), options, on_iteration=steps.append)
+    scale = min(1., maximum)
+    np.testing.assert_array_equal(potential.feasibility_queries[0][1], np.zeros(2))
+    np.testing.assert_allclose(potential.feasibility_queries[1][1], scale*np.array([1., -.4]))
+    np.testing.assert_allclose(result.x, ccd_bound*scale*np.array([1., -.4]))
+    assert steps[0].feasible_step == steps[0].step == ccd_bound*scale
+    assert potential.hessians == result.iterations + 1
+
+
+@pytest.mark.parametrize('maximum', [0., -1., -np.inf, np.nan])
+def test_newton_rejects_invalid_coordinate_limit(maximum):
+    with pytest.raises(ValueError, match='max_coordinate_step'):
+        newton_solve(QuadraticEnergy(sp.eye(2, format='csc')), free(2), np.ones(2),
+                     NewtonOptions(gradient_tolerance=1e-10, max_coordinate_step=maximum))
+
+
+@pytest.mark.parametrize('fixed', [[], [0, 1]])
+def test_newton_checks_feasibility_before_stationary_or_fixed_return(fixed):
+    from litepgo.energy import FixedPatternEnergy
+
+    class InvalidStationaryState(FixedPatternEnergy):
+        def __init__(self):
+            super().__init__(sp.eye(2, format='csc'))
+
+        def eval_values(self, x, want_gradient, kind):
+            pytest.fail('initial feasibility must be checked before evaluation')
+
+        def feasible_step(self, x, direction):
+            np.testing.assert_array_equal(direction, np.zeros(2))
+            raise ValueError('invalid initial geometry')
+
+    with pytest.raises(ValueError, match='invalid initial geometry'):
+        newton_solve(InvalidStationaryState(), DofReduction(2, fixed), np.zeros(2),
+                     NewtonOptions(gradient_tolerance=1e-10))

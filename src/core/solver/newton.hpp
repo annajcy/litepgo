@@ -17,6 +17,9 @@ struct NewtonOptions {
     energy::HessianKind hessian = energy::HessianKind::Projected;
     int max_line_search_steps = 30;
     double line_search_shrink = 0.5;
+    // Bounds max_i |x_next[i] - x[i]| per accepted iteration in solver coordinates.
+    // Scales the whole direction before CCD; infinity disables the bound.
+    double max_coordinate_step = std::numeric_limits<double>::infinity();
 };
 
 enum class NewtonStatus {
@@ -38,7 +41,7 @@ struct NewtonStep {
     // True on the first evaluation and whenever the returned full Hessian structure changes.
     bool pattern_changed = false;
     int diagonal_shifts = 0;
-    double feasible_step = 0.0; // max_feasible_step's bound on the step
+    double feasible_step = 0.0; // combined coordinate and feasibility bound on the original direction
     double step = 0.0;          // the accepted step length; 0 when none was
     int line_search_evaluations = 0;
 };
@@ -55,11 +58,13 @@ struct NewtonResult {
 // their x0 values exactly. solver factors the free block of the Hessian; it is
 // analyzed at the start and whenever the energy's pattern changes.
 //
-// Each iteration: update the pattern, eval value, gradient and Hessian once,
+// Checks initial feasibility with a zero-direction max_feasible_step query,
+// including when all DOFs are fixed. Each iteration: update the pattern, eval
+// value, gradient and Hessian once,
 // stop if converged, solve for a descent direction (shifting the diagonal when the
 // system does not factor or the solution is not a descent direction), then search
-// along it: start at max_feasible_step, shrink until the energy decreases or stays
-// within floating-point noise of it. Evaluation exceptions propagate immediately;
+// along it: cap coordinate movement before querying max_feasible_step, then shrink
+// until the energy decreases or stays within floating-point noise of it. Evaluation exceptions propagate immediately;
 // a std::domain_error trial point aborts the solve without retrying.
 //
 // Outcomes are statuses. Any infeasible state throws std::domain_error; a broken energy
