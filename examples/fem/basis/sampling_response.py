@@ -14,25 +14,23 @@ def main():
     gradients = fem.gradient_sampling_response[B](points, components=2)
     hessians = fem.hessian_sampling_response[B](points, components=2)
     assert all(type(r) is energy.AffineResponse for r in (values, gradients, hessians))
-    np.testing.assert_allclose(values.eval_value(c).reshape(2, 2), [[.06, .12], [.42, .56]])
+    np.testing.assert_allclose(values.evaluate(c).value.reshape(2, 2), [[0.06, 0.12], [0.42, 0.56]])
     # Per point: xi direction first, then component.
-    np.testing.assert_allclose(gradients.eval_value(c).reshape(2, 3, 2),
-                               [[[.3, 0], [.2, .4], [0, .3]],
-                                [[.7, 0], [.6, .8], [0, .7]]])
+    np.testing.assert_allclose(gradients.evaluate(c).value.reshape(2, 3, 2), [[[0.3, 0], [0.2, 0.4], [0, 0.3]], [[0.7, 0], [0.6, 0.8], [0, 0.7]]])
     # Per point: (11,12,13,22,23,33), then component; no factor of two.
     expected = np.array([[0, 0], [1, 0], [0, 0], [0, 0], [0, 1], [0, 0]])
-    np.testing.assert_allclose(hessians.eval_value(c).reshape(2, 6, 2), np.tile(expected, (2, 1, 1)))
-    A = gradients.eval_jacobian(c)
+    np.testing.assert_allclose(hessians.evaluate(c).value.reshape(2, 6, 2), np.tile(expected, (2, 1, 1)))
+    A = gradients.evaluate(c).jacobian()
     direction = np.ones_like(c)
     weights = np.arange(gradients.num_outputs, dtype=float)
-    np.testing.assert_allclose(gradients.eval_jvp(c, direction), A @ direction)
-    np.testing.assert_allclose(gradients.eval_vjp(c, weights), A.T @ weights)
+    np.testing.assert_allclose(gradients.evaluate(c).jvp(direction), A @ direction)
+    np.testing.assert_allclose(gradients.evaluate(c).vjp(weights), A.T @ weights)
     # The sampled spatial Hessian is nonzero; its derivative twice with respect to c is zero.
-    assert hessians.eval_hessian(c, np.ones(hessians.num_outputs)).nnz == 0
+    assert hessians.evaluate(c).hessian(np.ones(hessians.num_outputs)).nnz == 0
     geometry = energy.AffineResponse(np.diag([2., 3., 4.]))
     deformation = fem.deformation_gradient_sampling_response[B](geometry, points)
     U = .1 * np.array([B.coefficient_info(a).point for a in range(8)])
-    packed_F = deformation.eval_value(U.ravel()).reshape(-1, 9)
+    packed_F = deformation.evaluate(U.ravel()).value.reshape(-1, 9)
     expected_F = np.diag([1.05, 1 + .1 / 3, 1.025])
     for packed in packed_F:
         np.testing.assert_allclose(packed.reshape(3, 3, order="F"), expected_F, atol=1e-14)
@@ -41,8 +39,8 @@ def main():
     element = fem.VolumetricElement3D[Q](geometry)
     sample = fem.deformation_gradient_sampling_response[B](geometry, element.points())
     coefficients = U.ravel()  # Q1 nodal DOFs already equal reference coefficients.
-    A = sample.eval_jacobian(coefficients).toarray()
-    samples = sample.eval_value(coefficients).reshape(-1, 9)
+    A = sample.evaluate(coefficients).jacobian().toarray()
+    samples = sample.evaluate(coefficients).value.reshape(-1, 9)
     Fp, theta = np.eye(3), np.array([2., 3.])
     E, g, H = 0., np.zeros(24), np.zeros((24, 24))
     for q, weight in enumerate(element.weights()):

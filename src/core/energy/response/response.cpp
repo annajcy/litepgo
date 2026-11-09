@@ -2,89 +2,125 @@
 #include "litepgo/linalg/sparse_pattern.hpp"
 #include <stdexcept>
 namespace litepgo::energy {
-void Response::check_input(const ConstVecRef& x) const {
-    if (x.size() != num_inputs() || !x.allFinite())
-        throw std::invalid_argument("Response: invalid input");
+namespace {
+void check_vector(const ConstVecRef& x, int size, const char* message) {
+    if (x.size() != size || !x.allFinite())
+        throw std::invalid_argument(message);
 }
-void Response::check_weights(const ConstVecRef& w) const {
-    if (w.size() != num_outputs() || !w.allFinite())
-        throw std::invalid_argument("Response: invalid output weights");
-}
-void Response::check_value(const Vec& v) const {
-    if (v.size() != num_outputs() || !v.allFinite())
-        throw std::logic_error("Response: invalid value");
-}
-Vec Response::eval_value(const ConstVecRef& x) {
-    check_input(x);
-    Vec value = eval_value_impl(x);
-    check_value(value);
-    return value;
-}
-std::pair<Vec, SpMat> Response::eval_value_and_jacobian(const ConstVecRef& x) {
-    check_input(x);
-    auto result = eval_value_and_jacobian_impl(x);
-    check_value(result.first);
-    const auto& J = result.second;
-    if (J.rows() != num_outputs() || J.cols() != num_inputs())
-        throw std::logic_error("Response: invalid Jacobian");
+void check_matrix(const SpMat& matrix, int rows, int cols) {
+    if (matrix.rows() != rows || matrix.cols() != cols || !matrix.coeffs().allFinite())
+        throw std::logic_error("ResponseEvaluation: invalid derivative");
 #ifndef NDEBUG
-    if (!linalg::is_canonical(J))
-        throw std::logic_error("Response: invalid Jacobian structure");
+    if (!linalg::is_canonical(matrix))
+        throw std::logic_error("ResponseEvaluation: invalid derivative structure");
 #endif
-    if (!J.coeffs().allFinite())
-        throw std::logic_error("Response: invalid Jacobian");
-    return result;
 }
-SpMat Response::eval_jacobian(const ConstVecRef& x) {
-    return eval_value_and_jacobian(x).second;
+} // namespace
+void ResponseEvaluation::save_value(Vec v) {
+    if (v.size() != outputs_ || !v.allFinite())
+        throw std::logic_error("ResponseEvaluation: invalid value");
+    value_ = std::move(v);
 }
-SpMat Response::eval_weighted_hessian_impl(const ConstVecRef&, const ConstVecRef&) {
-    throw std::logic_error("Response does not implement Hessian evaluation");
+const Vec& ResponseEvaluation::value() {
+    if (!value_)
+        save_value(value_impl());
+    return *value_;
 }
-SpMat Response::eval_hessian(const ConstVecRef& x, const ConstVecRef& weights) {
-    check_input(x);
-    check_weights(weights);
+SpMat ResponseEvaluation::jacobian() {
+    SpMat J = jacobian_impl();
+    check_matrix(J, outputs_, inputs_);
+    return J;
+}
+SpMat ResponseEvaluation::hessian(const ConstVecRef& w) {
+    check_vector(w, outputs_, "ResponseEvaluation: invalid output weights");
     if (!has_hessian())
         throw std::logic_error("Response does not support Hessians");
-    SpMat H = eval_weighted_hessian_impl(x, weights);
-    if (H.rows() != num_inputs() || H.cols() != num_inputs())
-        throw std::logic_error("Response: invalid Hessian");
+    SpMat H = hessian_impl(w);
+    check_matrix(H, inputs_, inputs_);
 #ifndef NDEBUG
-    if (!linalg::is_canonical(H))
-        throw std::logic_error("Response: invalid Hessian structure");
-#endif
-    if (!H.coeffs().allFinite())
-        throw std::logic_error("Response: invalid Hessian");
-#ifndef NDEBUG
-    if (!linalg::same_pattern(H, SpMat(H.transpose())) || (H.rows() != 0 && !H.isApprox(SpMat(H.transpose()), 1e-12)))
-        throw std::logic_error("Response: invalid Hessian structure or symmetry");
+    if (!linalg::same_pattern(H, SpMat(H.transpose())) || (H.rows() && !H.isApprox(SpMat(H.transpose()), 1e-12)))
+        throw std::logic_error("ResponseEvaluation: invalid Hessian symmetry");
 #endif
     return H;
 }
-Vec Response::eval_jvp(const ConstVecRef& x, const ConstVecRef& dx) {
-    check_input(x);
-    if (dx.size() != num_inputs() || !dx.allFinite())
-        throw std::invalid_argument("Response: invalid jvp direction");
-    Vec result = eval_jvp_impl(x, dx);
-    if (result.size() != num_outputs() || !result.allFinite())
-        throw std::logic_error("Response: invalid jvp result");
+Vec ResponseEvaluation::jvp(const ConstVecRef& d) {
+    check_vector(d, inputs_, "ResponseEvaluation: invalid jvp direction");
+    Vec result = jvp_impl(d);
+    if (result.size() != outputs_ || !result.allFinite())
+        throw std::logic_error("ResponseEvaluation: invalid jvp result");
     return result;
 }
-Vec Response::eval_vjp(const ConstVecRef& x, const ConstVecRef& weights) {
-    check_input(x);
-    check_weights(weights);
-    Vec result = eval_vjp_impl(x, weights);
-    if (result.size() != num_inputs() || !result.allFinite())
-        throw std::logic_error("Response: invalid vjp result");
+Vec ResponseEvaluation::vjp(const ConstVecRef& w) {
+    check_vector(w, outputs_, "ResponseEvaluation: invalid output weights");
+    Vec result = vjp_impl(w);
+    if (result.size() != inputs_ || !result.allFinite())
+        throw std::logic_error("ResponseEvaluation: invalid vjp result");
     return result;
 }
-Vec Response::eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& dx) {
-    if (dx.size() != num_inputs() || !dx.allFinite())
-        throw std::invalid_argument("Response: invalid jvp direction");
-    return eval_jacobian(x) * dx;
+SpMat ResponseEvaluation::hessian_impl(const ConstVecRef&) {
+    throw std::logic_error("Response does not implement Hessians");
 }
-Vec Response::eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& weights) {
-    check_weights(weights);
-    return eval_jacobian(x).transpose() * weights;
+Vec ResponseEvaluation::jvp_impl(const ConstVecRef& d) {
+    return jacobian() * d;
+}
+Vec ResponseEvaluation::vjp_impl(const ConstVecRef& w) {
+    return jacobian().transpose() * w;
+}
+class PointEvaluation final : public ResponseEvaluation {
+  public:
+    PointEvaluation(Response& response, const ConstVecRef& x)
+        : ResponseEvaluation(response.num_inputs(), response.num_outputs()), response_(response), x_(x) {}
+    bool has_hessian() const override {
+        return response_.has_hessian();
+    }
+
+  private:
+    Vec value_impl() override {
+        return response_.value_at(x_);
+    }
+    SpMat jacobian_impl() override {
+        auto [v, J] = response_.value_jacobian_at(x_);
+        save_value(std::move(v));
+        return J;
+    }
+    SpMat hessian_impl(const ConstVecRef& w) override {
+        return response_.hessian_at(x_, w);
+    }
+    Vec jvp_impl(const ConstVecRef& d) override {
+        return response_.jvp_at(x_, d);
+    }
+    Vec vjp_impl(const ConstVecRef& w) override {
+        return response_.vjp_at(x_, w);
+    }
+    Response& response_;
+    Vec x_;
+};
+std::shared_ptr<ResponseEvaluation> Response::evaluate(const ConstVecRef& x) {
+    check_vector(x, num_inputs(), "Response: invalid input");
+    auto state = make_evaluation(x);
+    if (!state || state->num_inputs() != num_inputs() || state->num_outputs() != num_outputs())
+        throw std::logic_error("Response: invalid evaluation");
+    state->owner_ = weak_from_this().lock();
+    return state;
+}
+std::shared_ptr<ResponseEvaluation> Response::make_evaluation(const ConstVecRef& x) {
+    return std::make_shared<PointEvaluation>(*this, x);
+}
+Vec Response::value_at(const ConstVecRef&) {
+    throw std::logic_error("Response: missing value implementation");
+}
+std::pair<Vec, SpMat> Response::value_jacobian_at(const ConstVecRef&) {
+    throw std::logic_error("Response: missing Jacobian implementation");
+}
+SpMat Response::hessian_at(const ConstVecRef&, const ConstVecRef&) {
+    throw std::logic_error("Response does not implement Hessians");
+}
+Vec Response::jvp_at(const ConstVecRef& x, const ConstVecRef& d) {
+    check_vector(d, num_inputs(), "Response: invalid jvp direction");
+    return evaluate(x)->jacobian() * d;
+}
+Vec Response::vjp_at(const ConstVecRef& x, const ConstVecRef& w) {
+    check_vector(w, num_outputs(), "Response: invalid output weights");
+    return evaluate(x)->jacobian().transpose() * w;
 }
 } // namespace litepgo::energy

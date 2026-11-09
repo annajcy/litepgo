@@ -29,12 +29,12 @@ struct ReferenceResponse : energy::Response {
     int num_outputs() const noexcept override {
         return components;
     }
-    Vec eval_value_impl(const ConstVecRef&) override {
+    Vec value_at(const ConstVecRef&) override {
         return Vec::Zero(components);
     }
-    std::pair<Vec, SpMat> eval_value_and_jacobian_impl(const ConstVecRef& x) override {
+    std::pair<Vec, SpMat> value_jacobian_at(const ConstVecRef& x) override {
         ++queries;
-        return {eval_value_impl(x), J_X.sparseView()};
+        return {value_at(x), J_X.sparseView()};
     }
 };
 

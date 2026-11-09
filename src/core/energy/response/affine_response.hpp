@@ -32,10 +32,10 @@ class AffineResponse final : public FixedPatternResponse {
             J->coeffs() = A_.coeffs();
         return checked_result(A_ * x + offset_);
     }
-    Vec eval_jvp_impl(const ConstVecRef&, const ConstVecRef& dx) override {
+    Vec jvp_at(const ConstVecRef&, const ConstVecRef& dx) override {
         return checked_result(A_ * dx);
     }
-    Vec eval_vjp_impl(const ConstVecRef&, const ConstVecRef& gy) override {
+    Vec vjp_at(const ConstVecRef&, const ConstVecRef& gy) override {
         return checked_result(A_.transpose() * gy);
     }
     void eval_hessian_impl(const ConstVecRef&, const ConstVecRef&, SpMat&) override {}

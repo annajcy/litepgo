@@ -76,12 +76,12 @@ TEST(HexHermiteDofTransform, ReproducesPhysicalPolynomialWithMixedDerivatives) {
     auto displacement = std::make_shared<InterpolatedResponse<HexHermiteBasis>>(S.to_coefficients(x_local));
     for (const Eigen::Vector3d xi :
          {Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(1, 1, 1), Eigen::Vector3d(0.2, 0.3, 0.4)}) {
-        const auto& X = X_field->eval_value(xi);
-        EXPECT_TRUE(displacement->eval_value(xi).isApprox(factors * X.x() * X.y() * X.z(), 1e-12));
+        const Vec X = X_field->evaluate(xi)->value();
+        EXPECT_TRUE(displacement->evaluate(xi)->value().isApprox(factors * X.x() * X.y() * X.z(), 1e-12));
         const Eigen::Vector3d gradient(X.y() * X.z(), X.x() * X.z(), X.x() * X.y());
-        EXPECT_TRUE(
-            (Eigen::MatrixXd(displacement->eval_jacobian(xi)) * Eigen::MatrixXd(X_field->eval_jacobian(xi)).inverse())
-                .isApprox(factors * gradient.transpose(), 1e-12));
+        EXPECT_TRUE((Eigen::MatrixXd(displacement->evaluate(xi)->jacobian()) *
+                     Eigen::MatrixXd(X_field->evaluate(xi)->jacobian()).inverse())
+                        .isApprox(factors * gradient.transpose(), 1e-12));
     }
 }
 

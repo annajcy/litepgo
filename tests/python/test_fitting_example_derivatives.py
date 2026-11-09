@@ -12,13 +12,8 @@ ROOT = Path(__file__).resolve().parents[2] / "examples/fem/fitting"
 
 
 def check_jacobian(residual, p, h=1e-6, tolerance=1e-6):
-    J = residual.eval_jacobian(p).toarray()
-    fd = np.column_stack(
-        [
-            (residual.eval_value(p + delta) - residual.eval_value(p - delta)) / (2 * h)
-            for delta in h * np.eye(len(p))
-        ]
-    )
+    J = residual.evaluate(p).jacobian().toarray()
+    fd = np.column_stack([(residual.evaluate(p + delta).value - residual.evaluate(p - delta).value) / (2 * h) for delta in h * np.eye(len(p))])
     assert np.linalg.norm(J - fd) / np.linalg.norm(J) < tolerance
     singular = np.linalg.svd(J, compute_uv=False)
     assert singular[-1] / singular[0] > 1e-6
@@ -44,8 +39,8 @@ def test_fixed_pose_derivatives_and_identifiability(case):
     for p in (p0, target, result.x):
         check_jacobian(residual, p)
     # Target was generated independently through the energy gradient.
-    assert np.linalg.norm(residual.eval_value(target)) < 1e-12
-    assert np.linalg.norm(residual.eval_value(result.x)) < 1e-9
+    assert np.linalg.norm(residual.evaluate(target).value) < 1e-12
+    assert np.linalg.norm(residual.evaluate(result.x).value) < 1e-9
 
 
 def test_shell_material_equilibrium_derivatives_and_boundary():
@@ -66,7 +61,7 @@ def test_shell_material_equilibrium_derivatives_and_boundary():
             force = make_energy(theta).eval_gradient(u)
             assert np.max(np.abs(force[free])) < 2e-12
             np.testing.assert_allclose(
-                force, make_response(u).eval_value(theta), atol=1e-12
+                force, make_response(u).evaluate(theta).value, atol=1e-12
             )
             np.testing.assert_allclose(obs.jacobian @ theta, obs.reaction, atol=1e-11)
             for delta in 1e-4 * np.eye(2):
@@ -97,7 +92,7 @@ def test_volume_material_reaction_scaling_and_derivatives():
             problem.make_energy,
             problem.make_response,
         )
-        u = equilibrium.eval_value(truth)
+        u = equilibrium.evaluate(truth).value
         np.testing.assert_array_equal(
             u[problem.fixed.fixed_dofs], initial[problem.fixed.fixed_dofs]
         )

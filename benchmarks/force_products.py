@@ -47,9 +47,9 @@ def cases():
 def main():
     with tbb_thread_limit(1):
         for name,obj,x in cases():
-            J=obj.eval_jacobian(x)
+            J=obj.evaluate(x).jacobian()
             for op,d in [('jvp',np.sin(np.arange(obj.num_inputs))),('vjp',np.cos(np.arange(obj.num_outputs)))]:
-                fn=lambda: getattr(obj,'eval_'+op)(x,d)
+                fn=lambda: getattr(obj.evaluate(x),op)(d)
                 expected=J@d if op=='jvp' else J.T@d
                 np.testing.assert_allclose(fn(),expected,rtol=1e-9,atol=1e-10)
                 samples=[]

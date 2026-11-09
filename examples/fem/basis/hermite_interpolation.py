@@ -44,7 +44,7 @@ def main():
             field = Field[B](coefficients[:, None])
             points = [0.2 + 0.15 * np.arange(len(point)) + 0.1 * i for i in range(3)]
             for query in points:
-                np.testing.assert_allclose(field.eval_value(query)[0], target(query))
+                np.testing.assert_allclose(field.evaluate(query).value[0], target(query))
             print(f"{name} field: samples={len(points)}, verified=1")
 
 

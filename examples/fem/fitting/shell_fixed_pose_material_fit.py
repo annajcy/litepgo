@@ -23,7 +23,9 @@ class MaterialResidual(energy.FixedPatternResponse):
         # None rejects infeasible trials without changing parameterization.
         if not np.isfinite(theta).all() or theta[1] <= 0 or theta.sum() <= 0:
             return None
-        value, J = (self.force.eval_value_and_jacobian(theta) if need_jacobian else (self.force.eval_value(theta), None))
+        evaluation = self.force.evaluate(theta)
+        J = evaluation.jacobian() if need_jacobian else None
+        value = evaluation.value
         residual = (value - self.target) / self.scale
         return (residual, J / self.scale) if need_jacobian else residual
 
@@ -71,7 +73,7 @@ def make_problem():
         dof.ConstantDofMap(topology, 2), mapping, rest, displacement, thickness
     )
     # Fixed pose and original face areas are cached; only the parameter vector varies.
-    np.testing.assert_allclose(force.eval_value(truth), target, rtol=1e-11, atol=1e-12)
+    np.testing.assert_allclose(force.evaluate(truth).value, target, rtol=1e-11, atol=1e-12)
     return MaterialResidual(force, target, scale), truth, initial, scale
 
 
@@ -82,7 +84,7 @@ def main():
         residual, initial, solver.GaussNewtonOptions(gradient_tolerance=1e-12)
     )
     parameter_error = np.linalg.norm(result.x - truth) / np.linalg.norm(truth)
-    force_residual = scale * np.linalg.norm(residual.eval_value(result.x))
+    force_residual = scale * np.linalg.norm(residual.evaluate(result.x).value)
     converged = result.status == solver.GaussNewtonStatus.Converged
     print(
         f"truth={truth[0]:.12g} {truth[1]:.12g}, initial={initial[0]:.12g} {initial[1]:.12g}, "

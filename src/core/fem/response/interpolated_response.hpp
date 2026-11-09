@@ -43,10 +43,10 @@ template <class B> class InterpolatedResponse final : public energy::FixedPatter
         }
         return coefficients_.transpose() * B::eval_N(point);
     }
-    Vec eval_jvp_impl(const ConstVecRef& xi, const ConstVecRef& v) override {
+    Vec jvp_at(const ConstVecRef& xi, const ConstVecRef& v) override {
         return coefficients_.transpose() * (B::eval_dN_dxi(coordinate(xi)) * v);
     }
-    Vec eval_vjp_impl(const ConstVecRef& xi, const ConstVecRef& w) override {
+    Vec vjp_at(const ConstVecRef& xi, const ConstVecRef& w) override {
         return B::eval_dN_dxi(coordinate(xi)).transpose() * (coefficients_ * w);
     }
     void eval_hessian_impl(const ConstVecRef& xi, const ConstVecRef& w, SpMat& H) override {

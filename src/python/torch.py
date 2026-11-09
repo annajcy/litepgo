@@ -5,8 +5,9 @@ litepgo.fem Python material; native FEM assembles it for every basis and quadrat
 The energy/response functions are first-order outer autograd adapters.
 
 Only the explicit tensor input is differentiable. Callbacks and model configuration
-must remain fixed from forward through differentiation. Response products are
-evaluated at a saved input copy; no response Jacobian is saved.
+must remain fixed from forward through differentiation. Each Response forward saves an independent evaluation with its input copy and
+reusable state; backward and forward AD request its products. No response
+Jacobian is saved.
 """
 
 import numpy as np
@@ -139,20 +140,19 @@ class _Energy(torch.autograd.Function):
 class _Response(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, model):
-        ctx.values = _input(x)
-        ctx.model = model
-        value = model.eval_value(ctx.values)
+        ctx.evaluation = model.evaluate(_input(x))
+        value = ctx.evaluation.value
         return torch.from_numpy(np.array(value, copy=True))
 
     @staticmethod
     @once_differentiable
     def backward(ctx, upstream):
-        gradient = ctx.model.eval_vjp(ctx.values, _input(upstream))
+        gradient = ctx.evaluation.vjp(_input(upstream))
         return torch.from_numpy(np.array(gradient, copy=True)), None
 
     @staticmethod
     def jvp(ctx, tangent, _model):
-        product = ctx.model.eval_jvp(ctx.values, _input(tangent))
+        product = ctx.evaluation.jvp(_input(tangent))
         return torch.from_numpy(np.array(product, copy=True))
 
 

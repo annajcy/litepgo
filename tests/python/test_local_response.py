@@ -22,10 +22,11 @@ def test_sampled_parameter_force_chain_rule(plastic):
     coefficients = np.tile(base, (4, 1))
     coefficients *= np.arange(4)[:, None] * .01 + 1
     c = coefficients.ravel()
-    value, J = composed.eval_value_and_jacobian(c)
-    np.testing.assert_allclose(value, force.eval_value(coefficients.mean(axis=0)))
+    composed_evaluation = composed.evaluate(c)
+    J = composed_evaluation.jacobian()
+    value = composed_evaluation.value
+    np.testing.assert_allclose(value, force.evaluate(coefficients.mean(axis=0)).value)
     h = 1e-6
-    fd = np.column_stack([(composed.eval_value(c + h*d) - composed.eval_value(c - h*d))/(2*h)
-                          for d in np.eye(c.size)])
+    fd = np.column_stack([(composed.evaluate(c + h * d).value - composed.evaluate(c - h * d).value) / (2 * h) for d in np.eye(c.size)])
     np.testing.assert_allclose(J.toarray(), fd, atol=2e-9)
     assert J.shape == (12, 4*m)

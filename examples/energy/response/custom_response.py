@@ -33,19 +33,18 @@ class NonlinearResidual(energy.DynamicPatternResponse):
 
 def main():
     fixed, dynamic = LinearResidual(), NonlinearResidual()
-    r, J = fixed.eval_value_and_jacobian(np.array([1.0, 2.0]))
+    fixed_evaluation = fixed.evaluate(np.array([1.0, 2.0]))
+    J = fixed_evaluation.jacobian()
+    r = fixed_evaluation.value
     active = np.ones(2)
-    dynamic.eval_jacobian(active)
-    dynamic.eval_jacobian(-active)
+    dynamic.evaluate(active).jacobian()
+    dynamic.evaluate(-active).jacobian()
     result = solver.gauss_newton_solve(
         dynamic, -active, solver.GaussNewtonOptions(gradient_tolerance=1e-9)
     )
     if result.status != solver.GaussNewtonStatus.Converged:
         raise RuntimeError("Response fit failed")
-    print(
-        f"fixed Jacobian={J.shape[0]}x{J.shape[1]}, dynamic solution={result.x[0]:g} {result.x[1]:g}, "
-        f"Jacobian nnz={dynamic.eval_jacobian(result.x).nnz}"
-    )
+    print(f'fixed Jacobian={J.shape[0]}x{J.shape[1]}, dynamic solution={result.x[0]:g} {result.x[1]:g}, Jacobian nnz={dynamic.evaluate(result.x).jacobian().nnz}')
 
 
 if __name__ == "__main__":

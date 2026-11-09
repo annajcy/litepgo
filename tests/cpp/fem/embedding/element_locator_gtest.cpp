@@ -14,7 +14,7 @@ TEST(ElementLocator, TetBoundaryInteriorAndOutside) {
     auto result = locator.locate(points);
     EXPECT_EQ(result.element_ids, Eigen::VectorXi::Zero(5));
     for (int i = 0; i < 5; ++i)
-        EXPECT_TRUE(field->eval_value(result.xi.row(i).transpose()).isApprox(points.row(i).transpose(), 1e-9));
+        EXPECT_TRUE(field->evaluate(result.xi.row(i).transpose())->value().isApprox(points.row(i).transpose(), 1e-9));
     points.row(0) << 1.9, 2.9, 3.9;
     EXPECT_THROW(locator.locate(points), std::runtime_error);
     points.row(0) << -10, 0, 0;
@@ -32,7 +32,7 @@ TEST(ElementLocator, WarpedHexInverseAndDegenerateRejection) {
     xi << 0.2, 0.3, 0.4, 0, 0.8, 1, 1, 1, 1;
     Eigen::MatrixXd points(3, 3);
     for (int i = 0; i < 3; ++i)
-        points.row(i) = field->eval_value(xi.row(i).transpose()).transpose();
+        points.row(i) = field->evaluate(xi.row(i).transpose())->value().transpose();
     EXPECT_TRUE(locator.locate(points).xi.isApprox(xi, 1e-8));
     X.col(2).setZero();
     ElementLocator<HexQ1Basis> flat({std::make_shared<InterpolatedResponse<HexQ1Basis>>(X)});

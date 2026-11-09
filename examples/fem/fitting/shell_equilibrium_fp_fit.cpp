@@ -83,7 +83,7 @@ Factories make_factories(const Problem& problem) {
     auto plastic = std::make_shared<energy::ElementwiseResponse>(problem.parameter_map,
                                                                  std::make_shared<fem::LogDiagonalFpResponse>(2));
     auto make_energy = [&problem, plastic](const Vec& p) -> std::shared_ptr<energy::Energy> {
-        const Vec packed = plastic->eval_value(p);
+        const Vec packed = plastic->evaluate(p)->value();
         std::vector<Eigen::Matrix3d> fields;
         for (int e = 0; e < problem.displacement_map.num_elements(); ++e)
             fields.emplace_back(packed.segment(9 * e, 9).reshaped(3, 3));
@@ -115,18 +115,18 @@ Observation measure(const Problem& problem, const Factories& factories, const Ve
                                                   factories.make_energy, factories.make_response);
     SpMat state_jacobian = SpMat();
     const Vec displacement = (need_jacobian ? ([&] {
-        auto result = equilibrium.eval_value_and_jacobian(p);
-        state_jacobian = std::move(result.second);
-        return std::move(result.first);
+        auto evaluation = equilibrium.evaluate(p);
+        state_jacobian = evaluation->jacobian();
+        return evaluation->value();
     }())
-                                            : equilibrium.eval_value(p));
+                                            : equilibrium.evaluate(p)->value());
 
     // 2. Compute force and its total derivative along the equilibrium branch.
     const auto elastic = factories.make_energy(p);
     const Vec force = elastic->eval_gradient(displacement);
     Eigen::MatrixXd reaction_jacobian;
     if (need_jacobian) {
-        const SpMat force_parameter_jacobian = factories.make_response(displacement)->eval_jacobian(p);
+        const SpMat force_parameter_jacobian = factories.make_response(displacement)->evaluate(p)->jacobian();
         const SpMat stiffness = elastic->eval_hessian(displacement);
         reaction_jacobian = Eigen::MatrixXd(force_parameter_jacobian) + stiffness * state_jacobian;
     }
@@ -196,7 +196,7 @@ int main() {
         const bool converged = result.status == solver::GaussNewtonStatus::Converged;
         const Vec fitted = result.x.array().exp();
         const double parameter_error = (fitted - truth).norm() / truth.norm();
-        const double relative_residual = residual.eval_value(result.x).norm();
+        const double relative_residual = residual.evaluate(result.x)->value().norm();
 
         // Predict a load that was not used for fitting.
         const Vec held_out = measure(problem, factories, truth_p, .6).value;

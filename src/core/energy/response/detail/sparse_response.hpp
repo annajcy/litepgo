@@ -24,10 +24,10 @@ class SparseResponse : public Response {
     }
 
   private:
-    Vec eval_value_impl(const ConstVecRef& x) final {
+    Vec value_at(const ConstVecRef& x) final {
         return eval_impl(x, nullptr);
     }
-    std::pair<Vec, SpMat> eval_value_and_jacobian_impl(const ConstVecRef& x) final {
+    std::pair<Vec, SpMat> value_jacobian_at(const ConstVecRef& x) final {
         SpMat J = make_jacobian_pattern(x);
 #ifndef NDEBUG
         const SpMat pattern = J;
@@ -39,7 +39,7 @@ class SparseResponse : public Response {
 #endif
         return {std::move(value), std::move(J)};
     }
-    SpMat eval_weighted_hessian_impl(const ConstVecRef& x, const ConstVecRef& weights) final {
+    SpMat hessian_at(const ConstVecRef& x, const ConstVecRef& weights) final {
         SpMat H = make_hessian_pattern(x);
 #ifndef NDEBUG
         const SpMat pattern = H;

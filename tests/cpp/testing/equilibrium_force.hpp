@@ -1,4 +1,5 @@
 #pragma once
+#include "litepgo/energy/response/fixed_pattern_response.hpp"
 #include "litepgo/solver/static_equilibrium_response.hpp"
 namespace litepgo::testing {
 class FormulaForce final : public energy::FixedPatternResponse {

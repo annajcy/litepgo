@@ -13,7 +13,7 @@ def run(basis, geometry, name, width):
     X = np.array([geometry.coefficient_info(i).point for i in range(n)]) * [2.0, 3.0, 4.0]
     fields = [fem.InterpolatedResponse[geometry](X)]
     xi = np.array([[0.1, 0.2, 0.3], [0.2, 0.1, 0.2]])
-    points = np.array([fields[0].eval_value(p) for p in xi])
+    points = np.array([fields[0].evaluate(p).value for p in xi])
     embedding = fem.ElementLocator[geometry](fields).locate(points)
     known = fem.PointEmbedding(np.zeros(2, dtype=np.int32), xi)
     topology = (mesh.TetTopology if n == 4 else mesh.HexTopology)(
@@ -28,7 +28,7 @@ def run(basis, geometry, name, width):
     )
     field = fem.InterpolatedResponse[basis](coefficients)
     kinematics = dof.SurfaceKinematics(points, W)
-    expected = np.array([field.eval_value(p) for p in xi]).ravel()
+    expected = np.array([field.evaluate(p).value for p in xi]).ravel()
     np.testing.assert_allclose(kinematics.displacements(u), expected, atol=1e-10)
     np.testing.assert_allclose(W @ u, exact @ u, atol=1e-10)
     print(f"{name}: points=2, verified=1")

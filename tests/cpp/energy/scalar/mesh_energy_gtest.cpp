@@ -511,7 +511,7 @@ TEST(MeshEnergy, BatchCallbacksRunConcurrentlyForEnergyResponseAndStep) {
     };
     check([&] { EXPECT_DOUBLE_EQ(E.eval_value(x), 32); });
     check([&] { EXPECT_DOUBLE_EQ(E.max_feasible_step(x, x), 0.5); });
-    check([&] { EXPECT_DOUBLE_EQ(R.eval_value(x)[0], 64); });
+    check([&] { EXPECT_DOUBLE_EQ(R.evaluate(x)->value()[0], 64); });
 }
 
 TEST(MeshEnergy, EmptyLocalDofsStillHaveOneValuePerElement) {

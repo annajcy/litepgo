@@ -35,14 +35,14 @@ class Residual final : public energy::FixedPatternResponse {
     Vec eval_impl(const ConstVecRef& p, SpMat* J) override {
         Vec value;
         if (J) {
-            auto evaluated = force_->eval_value_and_jacobian(p);
-            value = std::move(evaluated.first);
-            const SpMat& derivative = evaluated.second;
+            auto evaluation = force_->evaluate(p);
+            const SpMat& derivative = evaluation->jacobian();
+            value = evaluation->value();
             for (int c = 0; c < J->outerSize(); ++c)
                 for (SpMat::InnerIterator it(*J, c); it; ++it)
                     it.valueRef() = derivative.coeff(it.row(), c);
         } else {
-            value = force_->eval_value(p);
+            value = force_->evaluate(p)->value();
         }
         if (J)
             *J /= scale_;
@@ -114,7 +114,7 @@ int main() {
         const auto result = solver::gauss_newton_solve(residual, initial_p, options);
         const Eigen::Vector3d fitted = result.x.array().exp();
         const double parameter_error = (fitted - truth).norm() / truth.norm();
-        const double relative_residual = residual.eval_value(result.x).norm();
+        const double relative_residual = residual.evaluate(result.x)->value().norm();
         const bool converged = result.status == solver::GaussNewtonStatus::Converged;
         std::cout << std::setprecision(12) << "truth=" << truth.transpose() << ", initial=" << initial.transpose()
                   << ", fitted=" << fitted.transpose() << ", converged=" << converged

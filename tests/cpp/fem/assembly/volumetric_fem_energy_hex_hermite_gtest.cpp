@@ -100,8 +100,8 @@ TEST(HexHermiteFemEnergy, ReproducesAffineDisplacementAndVolumeWeightedEnergy) {
         auto displacement = std::make_shared<fem::InterpolatedResponse<fem::HexHermiteBasis>>(coefficients);
         const auto F = std::make_shared<fem::DeformationGradientResponse>(displacement, X_field);
         for (const auto& xi : points) {
-            EXPECT_TRUE(displacement->eval_value(xi).isApprox(A * X_field->eval_value(xi) + b, 1e-13));
-            EXPECT_TRUE(F->eval_value(xi).reshaped(3, 3).isApprox(Eigen::Matrix3d::Identity() + A, 1e-13));
+            EXPECT_TRUE(displacement->evaluate(xi)->value().isApprox(A * X_field->evaluate(xi)->value() + b, 1e-13));
+            EXPECT_TRUE(F->evaluate(xi)->value().reshaped(3, 3).isApprox(Eigen::Matrix3d::Identity() + A, 1e-13));
         }
     }
 }
@@ -153,9 +153,9 @@ TEST(HexHermiteFemEnergy, SharedFacesHaveContinuousValuesAndPhysicalGradientsInA
                 const Eigen::Vector3d p0_xi = xi;
                 xi[normal] = 0;
                 const Eigen::Vector3d p1_xi = xi;
-                EXPECT_TRUE(X_fields[0]->eval_value(p0_xi).isApprox(X_fields[1]->eval_value(p1_xi), 1e-14));
-                EXPECT_LT((u0->eval_value(p0_xi) - u1->eval_value(p1_xi)).norm(), 1e-13);
-                EXPECT_LT((F0->eval_value(p0_xi).reshaped(3, 3) - F1->eval_value(p1_xi).reshaped(3, 3)).norm(), 1e-13);
+                EXPECT_TRUE(X_fields[0]->evaluate(p0_xi)->value().isApprox(X_fields[1]->evaluate(p1_xi)->value(), 1e-14));
+                EXPECT_LT((u0->evaluate(p0_xi)->value() - u1->evaluate(p1_xi)->value()).norm(), 1e-13);
+                EXPECT_LT((F0->evaluate(p0_xi)->value().reshaped(3, 3) - F1->evaluate(p1_xi)->value().reshaped(3, 3)).norm(), 1e-13);
             }
     }
 }
@@ -303,7 +303,7 @@ TEST(HexHermiteFemEnergy, AcceptsHermiteReferenceFieldsRepresentingAffineBoxes) 
         Eigen::MatrixXd coefficients = Eigen::MatrixXd::Zero(64, 3);
         for (int v = 0; v < 8; ++v) {
             coefficients.row(8 * v) = nodes.row(v);
-            const auto jacobian = q1->eval_jacobian(fem::HexQ1Basis::coefficient_info(v).point);
+            const auto jacobian = q1->evaluate(fem::HexQ1Basis::coefficient_info(v).point)->jacobian();
             for (int axis = 0; axis < 3; ++axis)
                 coefficients.row(8 * v + 1 + axis) = jacobian.col(axis).transpose();
         }
@@ -350,7 +350,7 @@ TEST(HexHermiteFemEnergy, CachedKinematicsMatchesUncachedAcrossChangingDisplacem
         using Q = fem::GaussLegendre3D<4>;
         for (int q = 0; q < Q::num_points; ++q) {
             const Eigen::Vector3d xi = Q::points().row(q).transpose();
-            const Eigen::Matrix3d J = X.eval_jacobian(xi);
+            const Eigen::Matrix3d J = X.evaluate(xi)->jacobian();
             const Eigen::MatrixXd gradients = fem::HexHermiteBasis::eval_dN_dxi(xi) * J.inverse();
             const Eigen::MatrixXd B = Eigen::kroneckerProduct(gradients.transpose(), Eigen::Matrix3d::Identity());
             const Vec increment = B * c;

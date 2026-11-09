@@ -24,13 +24,15 @@ def test_direct_sensitivity_callbacks_and_fixed_values():
         lambda u: FormulaForce(2, u, make_energy, partial),
     )
     p = np.array([2.0, 3.0])
-    u, J = response.eval_value_and_jacobian(p)
+    response_evaluation = response.evaluate(p)
+    J = response_evaluation.jacobian()
+    u = response_evaluation.value
     np.testing.assert_allclose(u, [0.4, 3.0])
     np.testing.assert_allclose(J.toarray(), [[0, 0], [0, 1]])
     for c in range(2):
         delta = np.eye(2)[c] * 1e-4
         numerical = (
-            response.eval_value(p + delta) - response.eval_value(p - delta)
+            response.evaluate(p + delta).value - response.evaluate(p - delta).value
         ) / 2e-4
         np.testing.assert_allclose(J.toarray()[:, c], numerical, atol=1e-10)
     assert len(calls) == 1
@@ -66,10 +68,15 @@ def test_bound_callbacks_are_kept_alive_without_an_owner_cycle():
     del problem
     gc.collect()
     assert owner() is not None  # A live response must keep its callback owner alive.
-    u, J = response.eval_value_and_jacobian(np.array([2.0, 3.0]))
+    response_evaluation = response.evaluate(np.array([2.0, 3.0]))
+    J = response_evaluation.jacobian()
+    u = response_evaluation.value
     np.testing.assert_allclose(u, [2.0, 3.0])
     np.testing.assert_allclose(J.toarray(), np.eye(2))
     del response
+    gc.collect()
+    assert owner() is not None  # The retained evaluation still owns the callbacks.
+    del response_evaluation
     gc.collect()
     assert owner() is None
 
@@ -98,7 +105,9 @@ def test_global_callback_cycle_is_collected():
         )
         scope["equilibrium"] = equilibrium
         gc.collect()
-        u, jacobian = equilibrium.eval_value_and_jacobian(np.array([2.0]))
+        equilibrium_evaluation = equilibrium.evaluate(np.array([2.0]))
+        jacobian = equilibrium_evaluation.jacobian()
+        u = equilibrium_evaluation.value
         np.testing.assert_allclose(u, [2.0])
         np.testing.assert_allclose(jacobian.toarray(), [[1.0]])
         return [weakref.ref(scope[name]) for name in ("equilibrium", "make_energy", "make_response")]
@@ -153,39 +162,30 @@ def test_fast_products_rectangular_fixed_dofs_and_recovery():
     )
     p = np.array([0.6, -1.1])
     v, w = np.array([0.3, -0.7]), np.array([0.4, 10.0, -0.8])
-    J = response.eval_jacobian(p)
+    J = response.evaluate(p).jacobian()
     calls.clear()
-    jv = response.eval_jvp(p, v)
-    vjp = response.eval_vjp(p, w)
+    jv = response.evaluate(p).jvp(v)
+    vjp = response.evaluate(p).vjp(w)
     assert len(calls) == 2
     np.testing.assert_allclose(jv, J @ v, atol=1e-12)
     np.testing.assert_allclose(vjp, J.T @ w, atol=1e-12)
     np.testing.assert_allclose(w @ jv, v @ vjp, atol=1e-12)
     assert jv[1] == 0.0
-    np.testing.assert_array_equal(
-        response.eval_vjp(p, np.array([0.0, 1.0, 0.0])), np.zeros(2)
-    )
+    np.testing.assert_array_equal(response.evaluate(p).vjp(np.array([0.0, 1.0, 0.0])), np.zeros(2))
     h = 1e-5
-    numerical = np.array(
-        [
-            w
-            @ (response.eval_value(p + h * e) - response.eval_value(p - h * e))
-            / (2 * h)
-            for e in np.eye(2)
-        ]
-    )
+    numerical = np.array([w @ (response.evaluate(p + h * e).value - response.evaluate(p - h * e).value) / (2 * h) for e in np.eye(2)])
     np.testing.assert_allclose(vjp, numerical, atol=1e-9)
     for mode, error in [("throw", RuntimeError), ("nan", RuntimeError)]:
         with pytest.raises(error):
-            response.eval_jvp(p, v)
+            response.evaluate(p).jvp(v)
         with pytest.raises(error):
-            response.eval_vjp(p, w)
+            response.evaluate(p).vjp(w)
     mode = "ok"
-    np.testing.assert_allclose(response.eval_vjp(p, w), vjp, atol=1e-12)
+    np.testing.assert_allclose(response.evaluate(p).vjp(w), vjp, atol=1e-12)
     with pytest.raises(ValueError):
-        response.eval_jvp(p, np.ones(3))
+        response.evaluate(p).jvp(np.ones(3))
     with pytest.raises(ValueError):
-        response.eval_vjp(p, np.full(3, np.nan))
+        response.evaluate(p).vjp(np.full(3, np.nan))
 
 
 def test_fully_fixed_products_do_not_request_partials():
@@ -206,8 +206,8 @@ def test_fully_fixed_products_do_not_request_partials():
         ),
     )
     p = np.ones(2)
-    np.testing.assert_array_equal(response.eval_jvp(p, p), np.zeros(3))
-    np.testing.assert_array_equal(response.eval_vjp(p, np.ones(3)), np.zeros(2))
+    np.testing.assert_array_equal(response.evaluate(p).jvp(p), np.zeros(3))
+    np.testing.assert_array_equal(response.evaluate(p).vjp(np.ones(3)), np.zeros(2))
 
 
 def test_products_use_exact_indefinite_stiffness():
@@ -227,8 +227,8 @@ def test_products_use_exact_indefinite_stiffness():
     )
     # At this stationary point Newton need not move; derivatives must retain the negative curvature.
     p, direction = np.zeros(2), np.array([3.0, 2.0])
-    np.testing.assert_allclose(response.eval_jvp(p, direction), [1.5, -0.5])
-    np.testing.assert_allclose(response.eval_vjp(p, direction), [1.5, -0.5])
+    np.testing.assert_allclose(response.evaluate(p).jvp(direction), [1.5, -0.5])
+    np.testing.assert_allclose(response.evaluate(p).vjp(direction), [1.5, -0.5])
 
 
 def test_response_factory_direct_products_and_invalid_results():
@@ -249,10 +249,10 @@ def test_response_factory_direct_products_and_invalid_results():
                 raise AssertionError("explicit B requested")
             return K @ self.u - A @ p
 
-        def eval_jvp_impl(self, p, v):
+        def jvp_at(self, p, v):
             return -A @ v
 
-        def eval_vjp_impl(self, p, w):
+        def vjp_at(self, p, w):
             return -A.T @ w
 
     def make_response(u):
@@ -277,36 +277,32 @@ def test_response_factory_direct_products_and_invalid_results():
         make_response,
     )
     p, v, w = np.array([0.6, -1.1]), np.array([0.3, -0.7]), np.array([0.4, 7.0, -0.8])
-    u = eq.eval_value(p)
+    u = eq.evaluate(p).value
     assert not states
-    np.testing.assert_allclose(make_energy(p).eval_gradient(u), Force(u).eval_value(p))
+    np.testing.assert_allclose(make_energy(p).eval_gradient(u), Force(u).evaluate(p).value)
     J = np.zeros((3, 2))
     J[[0, 2]] = np.linalg.solve(K[np.ix_([0, 2], [0, 2])], A[[0, 2]])
-    np.testing.assert_allclose(eq.eval_jvp(p, v), J @ v, atol=1e-12)
-    np.testing.assert_allclose(eq.eval_vjp(p, w), J.T @ w, atol=1e-12)
+    np.testing.assert_allclose(eq.evaluate(p).jvp(v), J @ v, atol=1e-12)
+    np.testing.assert_allclose(eq.evaluate(p).vjp(w), J.T @ w, atol=1e-12)
     np.testing.assert_allclose(states[-1], u)
     h = 1e-5
-    np.testing.assert_allclose(
-        eq.eval_jvp(p, v),
-        (eq.eval_value(p + h * v) - eq.eval_value(p - h * v)) / (2 * h),
-        atol=1e-9,
-    )
+    np.testing.assert_allclose(eq.evaluate(p).jvp(v), (eq.evaluate(p + h * v).value - eq.evaluate(p - h * v).value) / (2 * h), atol=1e-09)
     with pytest.raises(AssertionError, match="explicit B"):
-        eq.eval_jacobian(p)
+        eq.evaluate(p).jacobian()
     for mode, error in [
         ("null", ValueError),
         ("dimensions", ValueError),
         ("throw", RuntimeError),
     ]:
         for call in [
-            lambda: eq.eval_jvp(p, v),
-            lambda: eq.eval_vjp(p, w),
-            lambda: eq.eval_jacobian(p),
+            lambda: eq.evaluate(p).jvp(v),
+            lambda: eq.evaluate(p).vjp(w),
+            lambda: eq.evaluate(p).jacobian(),
         ]:
             with pytest.raises(error):
                 call()
     mode = "ok"
-    np.testing.assert_allclose(eq.eval_vjp(p, w), J.T @ w, atol=1e-12)
+    np.testing.assert_allclose(eq.evaluate(p).vjp(w), J.T @ w, atol=1e-12)
     # The Torch bridge must reach these products rather than requesting B.
     torch = pytest.importorskip("torch")
     from litepgo import torch as bridge
@@ -348,6 +344,6 @@ def test_factory_response_dynamic_pattern_is_refreshed():
     )
     for p in [np.array([0.3, 0.4]), np.array([-0.3, 0.4])]:
         J = np.array([[1.0, 0.0], [2 * max(p[0], 0.0), 1.0]])
-        np.testing.assert_allclose(eq.eval_jacobian(p).toarray(), J)
-        np.testing.assert_allclose(eq.eval_jvp(p, p), J @ p)
-        np.testing.assert_allclose(eq.eval_vjp(p, p), J.T @ p)
+        np.testing.assert_allclose(eq.evaluate(p).jacobian().toarray(), J)
+        np.testing.assert_allclose(eq.evaluate(p).jvp(p), J @ p)
+        np.testing.assert_allclose(eq.evaluate(p).vjp(p), J.T @ p)

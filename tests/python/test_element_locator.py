@@ -11,7 +11,7 @@ def test_extracted_surface_and_geometry_snapshot():
     surface = mesh.extract_surface(mesh.TetMesh(X, cells))
     result = locator.locate(surface.positions)
     for p, e, xi in zip(surface.positions, result.element_ids, result.xi):
-        np.testing.assert_allclose(fields[e].eval_value(xi), p, atol=1e-10)
+        np.testing.assert_allclose(fields[e].evaluate(xi).value, p, atol=1e-10)
     del fields
     np.testing.assert_array_equal(locator.locate(surface.positions).element_ids, result.element_ids)
     with pytest.raises(RuntimeError, match='point 0'):
@@ -27,5 +27,5 @@ def test_hex_geometry_for_hermite_displacement():
     field = fem.InterpolatedResponse[fem.HexQ1Basis](X)
     locator = fem.ElementLocator[fem.HexQ1Basis]([field])
     xi = np.array([[.2, .3, .4], [0, .5, 1]])
-    points = np.array([field.eval_value(p) for p in xi])
+    points = np.array([field.evaluate(p).value for p in xi])
     np.testing.assert_allclose(locator.locate(points).xi, xi, atol=1e-8)

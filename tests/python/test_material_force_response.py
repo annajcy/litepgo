@@ -37,27 +37,31 @@ def test_shared_and_element_parameters_match_energy(batch_size):
     assert isinstance(shared, energy.Response)
     assert isinstance(shared, fem.VolumetricFemForceMaterialResponse)
     assert isinstance(shared, energy.MeshResponse)
-    force, J = shared.eval_value_and_jacobian(theta)
-    per_force, E = element.eval_value_and_jacobian(independent)
+    shared_evaluation = shared.evaluate(theta)
+    J = shared_evaluation.jacobian()
+    force = shared_evaluation.value
+    element_evaluation = element.evaluate(independent)
+    E = element_evaluation.jacobian()
+    per_force = element_evaluation.value
     np.testing.assert_allclose(force, observed(data, theta), rtol=1e-12, atol=1e-13)
     np.testing.assert_allclose(per_force, observed(data, independent), rtol=1e-12, atol=1e-13)
     np.testing.assert_allclose(J.toarray(), E[:, :2].toarray() + E[:, 2:].toarray(), rtol=1e-12, atol=1e-13)
     np.testing.assert_allclose(E @ independent, per_force, rtol=1e-12, atol=1e-13)
     for response, point in [(shared, theta), (element, independent)]:
-        derivative = response.eval_jacobian(point)
+        derivative = response.evaluate(point).jacobian()
         d = np.sin(np.arange(response.num_inputs))
         w = np.cos(np.arange(response.num_outputs))
-        np.testing.assert_allclose(response.eval_jvp(point, d), derivative @ d, rtol=1e-10, atol=1e-11)
-        np.testing.assert_allclose(response.eval_vjp(point, w), derivative.T @ w, rtol=1e-10, atol=1e-11)
+        np.testing.assert_allclose(response.evaluate(point).jvp(d), derivative @ d, rtol=1e-10, atol=1e-11)
+        np.testing.assert_allclose(response.evaluate(point).vjp(w), derivative.T @ w, rtol=1e-10, atol=1e-11)
     with pytest.raises(ValueError):
-        shared.eval_value(np.array([2., 0.]))
-    np.testing.assert_allclose(shared.eval_value(theta), force)
-    np.testing.assert_array_equal(shared.eval_jacobian(theta).indices, J.indices)
+        shared.evaluate(np.array([2.0, 0.0])).value
+    np.testing.assert_allclose(shared.evaluate(theta).value, force)
+    np.testing.assert_array_equal(shared.evaluate(theta).jacobian().indices, J.indices)
     # Input displacement is copied; temporary maps/field wrappers remain alive.
     u[:] = 0
     del topology, mapping, geometry, plastic, data
     gc.collect()
-    np.testing.assert_allclose(shared.eval_value(theta), force)
+    np.testing.assert_allclose(shared.evaluate(theta).value, force)
 
 
 def test_parameter_recovery_and_batch_consistency():
@@ -67,12 +71,14 @@ def test_parameter_recovery_and_batch_consistency():
     target = observed(data, theta)
     r1 = Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 2), mapping, geometry, u, plastic, 1)
     r2 = Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 2), mapping, geometry, u, plastic, 3)
-    np.testing.assert_array_equal(r1.eval_jacobian(theta).data, r2.eval_jacobian(theta).data)
+    np.testing.assert_array_equal(r1.evaluate(theta).jacobian().data, r2.evaluate(theta).jacobian().data)
     class Residual(energy.FixedPatternResponse):
         def __init__(self):
             super().__init__(np.ones((r2.num_outputs, r2.num_inputs)))
         def eval_impl(self, x, need):
-            value, J = (r2.eval_value_and_jacobian(x) if need else (r2.eval_value(x), None))
+            evaluation = r2.evaluate(x)
+            J = evaluation.jacobian() if need else None
+            value = evaluation.value
             return (value-target, J) if need else value-target
     result = solver.gauss_newton_solve(Residual(), np.array([.7, 1.2]), solver.GaussNewtonOptions(gradient_tolerance=1e-10))
     assert result.status == solver.GaussNewtonStatus.Converged
@@ -100,5 +106,5 @@ def test_validation_and_empty_mesh():
         Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.VertexDofMap(topology, 2), mapping, geometry, u, plastic)
     empty = mesh.TetTopology(0, np.empty((0, 4), dtype=np.int32))
     zero = Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(empty, 2), dof.VertexDofMap(empty, 3), [], np.empty(0), [])
-    assert zero.eval_value(np.array([2., 3.])).size == 0
-    assert zero.eval_jacobian(np.array([2., 3.])).shape == (0, 2)
+    assert zero.evaluate(np.array([2.0, 3.0])).value.size == 0
+    assert zero.evaluate(np.array([2.0, 3.0])).jacobian().shape == (0, 2)

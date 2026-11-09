@@ -131,8 +131,10 @@ TEST(ShellFemBatchMaterial, ForceResponsesMatchPointwiseMaterial) {
                                                dof::ConstantDofMap(p.topology, 2), p.map, p.rest, p.u, p.thickness);
     ShellFemForceMaterialResponse batch_theta(std::make_shared<BatchKoiter>(calls), dof::ConstantDofMap(p.topology, 2),
                                               p.map, p.rest, p.u, p.thickness, 256);
-    EXPECT_LT((native_theta.eval_value(theta) - batch_theta.eval_value(theta)).norm(), 1e-12);
-    EXPECT_LT(Eigen::MatrixXd(native_theta.eval_jacobian(theta) - batch_theta.eval_jacobian(theta)).norm(), 1e-12);
+    EXPECT_LT((native_theta.evaluate(theta)->value() - batch_theta.evaluate(theta)->value()).norm(), 1e-12);
+    EXPECT_LT(
+        Eigen::MatrixXd(native_theta.evaluate(theta)->jacobian() - batch_theta.evaluate(theta)->jacobian()).norm(),
+        1e-12);
     EXPECT_EQ(*calls, 4); // Two stencil-size batches per evaluation.
 
     Eigen::Matrix3d P;
@@ -142,8 +144,9 @@ TEST(ShellFemBatchMaterial, ForceResponsesMatchPointwiseMaterial) {
                                       dof::ConstantDofMap(p.topology, 9), p.map, p.rest, p.u, p.thickness, p.theta);
     ShellFemForceFpResponse batch_fp(std::make_shared<BatchKoiter>(calls), dof::ConstantDofMap(p.topology, 9), p.map,
                                      p.rest, p.u, p.thickness, p.theta, 256);
-    EXPECT_LT((native_fp.eval_value(packed) - batch_fp.eval_value(packed)).norm(), 1e-12);
-    EXPECT_LT(Eigen::MatrixXd(native_fp.eval_jacobian(packed) - batch_fp.eval_jacobian(packed)).norm(), 1e-12);
+    EXPECT_LT((native_fp.evaluate(packed)->value() - batch_fp.evaluate(packed)->value()).norm(), 1e-12);
+    EXPECT_LT(Eigen::MatrixXd(native_fp.evaluate(packed)->jacobian() - batch_fp.evaluate(packed)->jacobian()).norm(),
+              1e-12);
     EXPECT_EQ(*calls, 8);
 }
 

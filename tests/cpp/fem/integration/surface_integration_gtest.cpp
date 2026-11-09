@@ -47,14 +47,14 @@ testing::ElementFormulaEnergy surface_energy() {
             double result = 0;
             for (int q = 0; q < Q::num_points; ++q) {
                 const Eigen::Vector2d xi = Q::points().row(q).transpose();
-                const Eigen::MatrixXd derivative = X_fields[static_cast<std::size_t>(e)]->eval_jacobian(xi);
+                const Eigen::MatrixXd derivative = X_fields[static_cast<std::size_t>(e)]->evaluate(xi)->jacobian();
                 const Eigen::Vector3d a = derivative.col(0), b = derivative.col(1);
                 const Eigen::MatrixXd points = xi.transpose();
                 auto value = value_sampling_response<QuadHermiteBasis>(points, 3);
                 auto gradient = gradient_sampling_response<QuadHermiteBasis>(points, 3);
                 auto hessian = hessian_sampling_response<QuadHermiteBasis>(points, 3);
-                const Eigen::MatrixXd A = value.eval_jacobian(c), B = gradient.eval_jacobian(c),
-                                      C = hessian.eval_jacobian(c);
+                const Eigen::MatrixXd A = value.evaluate(c)->jacobian(), B = gradient.evaluate(c)->jacobian(),
+                                      C = hessian.evaluate(c)->jacobian();
                 const Eigen::MatrixXd tangent =
                     Q::weights()[q] * a.cross(b).norm() * (A.transpose() * A + B.transpose() * B + C.transpose() * C);
                 result += 0.5 * c.dot(tangent * c);

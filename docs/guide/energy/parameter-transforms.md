@@ -55,9 +55,9 @@ from litepgo import energy
 A = np.array([[1.0, 0.0, -2.0], [0.5, 3.0, 0.0]])
 r = energy.AffineResponse(A, offset=np.array([4.0, -1.0]))
 x = np.array([1.0, 2.0, -3.0])
-np.testing.assert_allclose(r.eval_value(x), [11.0, 5.5])
-np.testing.assert_array_equal(r.eval_jacobian(x).toarray(), A)
-assert r.eval_hessian(x, weights=np.ones(2)).nnz == 0
+np.testing.assert_allclose(r.evaluate(x).value, [11.0, 5.5])
+np.testing.assert_array_equal(r.evaluate(x).jacobian().toarray(), A)
+assert r.evaluate(x).hessian(weights=np.ones(2)).nnz == 0
 ```
 
 Python accepts dense two-dimensional arrays or SciPy sparse matrices/arrays,
@@ -77,7 +77,7 @@ C++ accepts a `SpMat` and an optional `Vec` (an empty vector means zero):
 Eigen::Matrix<double, 2, 3> A;
 A << 1, 0, -2, 0.5, 3, 0;
 litepgo::energy::AffineResponse r(A.sparseView(), Eigen::Vector2d(4, -1));
-const auto y = r.eval_value(Eigen::Vector3d(1, 2, -3));
+const auto y = r.evaluate(Eigen::Vector3d(1, 2, -3))->value();
 ```
 
 Unlike `AffineMappedEnergy(E, T, offset)`, this class has no inner function:
@@ -120,7 +120,7 @@ plastic = energy.ElementwiseResponse(parameter_map, fem.LogDiagonalFpResponse())
 
 # ElasticEnergy and ForceFp are the usual selected FEM template instantiations.
 def make_energy(p):
-    packed = plastic.eval_value(p).reshape(-1, 9)
+    packed = plastic.evaluate(p).value.reshape(-1, 9)
     fields = [energy.AffineResponse(np.zeros((9, 3)), row) for row in packed]
     return ElasticEnergy(displacement_map, geometry, fields, theta)
 
@@ -148,7 +148,7 @@ material = energy.ElementwiseResponse(
     dof.ConstantDofMap(topology, 2), energy.ExpResponse(2))
 physical_map = dof.ElementDofMap(topology, 2)
 
-# Value path: material.eval_value(p).reshape(-1, 2) → theta field list.
+# Value path: material.evaluate(p).value.reshape(-1, 2) → theta field list.
 # Derivative path, with the same fixed Fp fields:
 force = ForceMaterial(physical_map, displacement_map, geometry, u, fixed_fp)
 response = energy.ComposedResponse(force, material)
@@ -178,9 +178,12 @@ must be weak: cross-language ownership cycles are not collected by the bindings.
 See the [ownership contract](../concepts.md#python-ownership-must-remain-acyclic). Captured model configuration must remain fixed. Thread safety depends on each child implementation; children with shared
 workspaces protect their own evaluation.
 
-Elementwise evaluation calls the local Response sequentially, including Python
-subclass overrides. It is intended for small local parameter transforms; a batched
-implementation may be appropriate for very large parameter fields.
+Elementwise evaluations retain one child evaluation per element. Reading values
+and then requesting products or a Jacobian reuses those child states, including
+when the transform is an equilibrium response. Child calls remain sequential
+because the transform may have shared workspaces.
+It is intended for small local parameter transforms; a batched implementation may
+be appropriate for very large parameter fields.
 
 ## Sparse patterns and limits
 

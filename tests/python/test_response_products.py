@@ -15,20 +15,20 @@ class Rectangular(energy.FixedPatternResponse):
 
 
 def check_products(r, x):
-    J = r.eval_jacobian(x)
+    J = r.evaluate(x).jacobian()
     dx = np.arange(r.num_inputs, dtype=float) + .3
     gy = np.arange(r.num_outputs, dtype=float) - .4
-    a, b = r.eval_jvp(x, dx), r.eval_vjp(x, gy)
+    a, b = r.evaluate(x).jvp(dx), r.evaluate(x).vjp(gy)
     np.testing.assert_allclose(a, J @ dx)
     np.testing.assert_allclose(b, J.T @ gy)
     np.testing.assert_allclose(gy @ a, dx @ b, atol=1e-12)
     eps = 1e-6
-    np.testing.assert_allclose(a, (r.eval_value(x+eps*dx)-r.eval_value(x-eps*dx))/(2*eps), atol=1e-8)
-    for call, n in [(r.eval_jvp, r.num_inputs), (r.eval_vjp, r.num_outputs)]:
+    np.testing.assert_allclose(a, (r.evaluate(x + eps * dx).value - r.evaluate(x - eps * dx).value) / (2 * eps), atol=1e-08)
+    for call, n in [(r.evaluate(x).jvp, r.num_inputs), (r.evaluate(x).vjp, r.num_outputs)]:
         with pytest.raises(ValueError):
-            call(x, np.zeros(n+1))
+            call(np.zeros(n+1))
         with pytest.raises(ValueError):
-            call(x, np.full(n, np.nan))
+            call(np.full(n, np.nan))
 
 
 def test_base_fallback_and_override():
@@ -36,13 +36,13 @@ def test_base_fallback_and_override():
     class Direct(Rectangular):
         def eval_impl(self, x, need_jacobian):
             raise AssertionError('Jacobian path used')
-        def eval_jvp_impl(self, x, dx):
+        def jvp_at(self, x, dx):
             return self.A @ dx
-        def eval_vjp_impl(self, x, gy):
+        def vjp_at(self, x, gy):
             return self.A.T @ gy
     r = Direct()
-    np.testing.assert_allclose(r.eval_jvp(np.zeros(2), np.ones(2)), [3, 1, 5])
-    np.testing.assert_allclose(r.eval_vjp(np.zeros(2), np.ones(3)), [3, 6])
+    np.testing.assert_allclose(r.evaluate(np.zeros(2)).jvp(np.ones(2)), [3, 1, 5])
+    np.testing.assert_allclose(r.evaluate(np.zeros(2)).vjp(np.ones(3)), [3, 6])
 
 
 @pytest.mark.parametrize('batch_size', [1, 2, 256])
@@ -67,8 +67,8 @@ def test_mesh_fallback_and_direct_products(batch_size):
         def eval_vjp_batch(self, ids, x, gy):
             return 2*x*(gy @ A)
     direct = Direct()
-    np.testing.assert_allclose(direct.eval_jvp(x, x), r.eval_jvp(x,x))
-    np.testing.assert_allclose(direct.eval_vjp(x, np.ones(4)), r.eval_vjp(x,np.ones(4)))
+    np.testing.assert_allclose(direct.evaluate(x).jvp(x), r.evaluate(x).jvp(x))
+    np.testing.assert_allclose(direct.evaluate(x).vjp(np.ones(4)), r.evaluate(x).vjp(np.ones(4)))
     class Fallback(Direct):
         def eval_batch(self, ids, x, need_jacobian):
             return batch(ids, x, need_jacobian)
@@ -94,7 +94,7 @@ def test_mesh_energy_subclass():
     x = np.array([2.,3.])
     assert obj.eval_value(x) == 6.5
     np.testing.assert_array_equal(obj.eval_gradient(x),x)
-    np.testing.assert_array_equal(obj.eval_hessian(x).toarray(),np.eye(2))
+    np.testing.assert_array_equal(obj.eval_hessian(x).toarray(), np.eye(2))
     assert obj.max_feasible_step(x,x) == .25
 
 
@@ -103,8 +103,8 @@ def test_empty_mesh_products():
     def forbidden(*args):
         raise AssertionError('empty mesh called evaluator')
     r = BatchResponseFixture(mapping, mapping, forbidden)
-    np.testing.assert_array_equal(r.eval_jvp(np.ones(2),np.ones(2)),np.zeros(2))
-    np.testing.assert_array_equal(r.eval_vjp(np.ones(2),np.ones(2)),np.zeros(2))
+    np.testing.assert_array_equal(r.evaluate(np.ones(2)).jvp(np.ones(2)), np.zeros(2))
+    np.testing.assert_array_equal(r.evaluate(np.ones(2)).vjp(np.ones(2)), np.zeros(2))
 
 
 @pytest.mark.parametrize('ni, no', [(0, 0), (0, 2), (2, 0)])
@@ -137,9 +137,9 @@ def test_invalid_product_and_recovery():
     for mode, error in [('nan',RuntimeError),('shape',RuntimeError),('throw',KeyError)]:
         r.mode=mode
         with pytest.raises(error):
-            r.eval_jvp(np.ones(1),np.ones(1))
+            r.evaluate(np.ones(1)).jvp(np.ones(1))
     r.mode='ok'
-    np.testing.assert_array_equal(r.eval_jvp(np.ones(1),np.ones(1)),np.ones(1))
+    np.testing.assert_array_equal(r.evaluate(np.ones(1)).jvp(np.ones(1)), np.ones(1))
 
 
 def test_dynamic_patterns_and_mixed_mesh_shapes():
@@ -164,29 +164,29 @@ def test_response_super_products():
     class Conditional(Rectangular):
         direct = False
 
-        def eval_jvp_impl(self, x, dx):
+        def jvp_at(self, x, dx):
             if self.direct:
                 return self.A @ dx
-            return super().eval_jvp_impl(x, dx)
+            return super().jvp_at(x, dx)
 
-        def eval_vjp_impl(self, x, gy):
+        def vjp_at(self, x, gy):
             if self.direct:
                 return self.A.T @ gy
-            return super().eval_vjp_impl(x, gy)
+            return super().vjp_at(x, gy)
 
     r = Conditional()
     for direct in [False, True, False]:
         r.direct = direct
         check_products(r, np.array([.2, .4]))
     with pytest.raises(ValueError):
-        r.eval_jvp_impl(np.zeros(2), np.ones(3))
+        r.jvp_at(np.zeros(2), np.ones(3))
 
     class Dynamic(Piecewise):
-        def eval_jvp_impl(self, x, dx):
-            return super().eval_jvp_impl(x, dx)
+        def jvp_at(self, x, dx):
+            return super().jvp_at(x, dx)
 
-        def eval_vjp_impl(self, x, gy):
-            return super().eval_vjp_impl(x, gy)
+        def vjp_at(self, x, gy):
+            return super().vjp_at(x, gy)
 
     r = Dynamic()
     for x in [np.array([.3, .4]), np.array([-.3, .4])]:
@@ -257,7 +257,7 @@ def test_value_reentry_without_shared_workspace():
     class Reentrant(Rectangular):
         def eval_impl(self, x, need):
             if need:
-                return self.eval_value(x), self.A
+                return self.evaluate(x).value, self.A
             return super().eval_impl(x, False)
 
     check_products(Reentrant(), np.array([.2, .4]))
@@ -276,16 +276,16 @@ def test_direct_products_accept_infeasible_none():
         def eval_impl(self, x, need_jacobian):
             return None
 
-        def eval_jvp_impl(self, x, dx):
+        def jvp_at(self, x, dx):
             return None
 
-        def eval_vjp_impl(self, x, gy):
+        def vjp_at(self, x, gy):
             return None
 
     model = Infeasible()
-    for operation in (model.eval_jvp, model.eval_vjp):
+    for operation in (model.evaluate(np.ones(1)).jvp, model.evaluate(np.ones(1)).vjp):
         with pytest.raises(ValueError, match="infeasible"):
-            operation(np.ones(1), np.ones(1))
+            operation(np.ones(1))
 
 
 def test_mesh_products_accept_infeasible_none():
@@ -304,6 +304,6 @@ def test_mesh_products_accept_infeasible_none():
     topology = mesh.TetTopology(4, np.array([[0, 1, 2, 3]], dtype=np.int32))
     mapping = dof.ConstantDofMap(topology, 1)
     model = Infeasible(mapping, mapping)
-    for operation in (model.eval_jvp, model.eval_vjp):
+    for operation in (model.evaluate(np.ones(1)).jvp, model.evaluate(np.ones(1)).vjp):
         with pytest.raises(ValueError, match="infeasible"):
-            operation(np.ones(1), np.ones(1))
+            operation(np.ones(1))

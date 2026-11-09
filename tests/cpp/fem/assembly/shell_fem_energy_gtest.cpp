@@ -1,5 +1,5 @@
-#include "../testing/evaluate_shell_element.hpp"
 #include "../../testing/finite_difference.hpp"
+#include "../testing/evaluate_shell_element.hpp"
 #include "litepgo/fem/assembly/shell_fem_energy.hpp"
 #include "litepgo/fem/assembly/shell_fem_force_fp_response.hpp"
 #include "litepgo/fem/material/shell/koiter_stvk.hpp"
@@ -56,7 +56,7 @@ TEST(ShellFemEnergy, PerFaceInputsMatchExplicitIntegrationAndScatter) {
         StridedVecRef gradient(local_g);
         StridedMatRef hessian(local_H);
         expected += evaluate_shell_element<KoiterStVK>(rest, local_u, patch.thickness[index], patch.theta[index],
-                                                           &gradient, &hessian);
+                                                       &gradient, &hessian);
         const auto indices = patch.map.dof_indices(e);
         for (std::size_t i = 0; i < indices.size(); ++i) {
             g[indices[i]] += local_g[static_cast<Eigen::Index>(i)];
@@ -162,13 +162,13 @@ TEST(ShellFemEnergy, PlasticFormsPreserveOriginalMeasureAndMatchResponse) {
         const Eigen::MatrixXd Y = r.X_local * P.transpose();
         TriangleMidEdgeRestData natural(Y, r.opposite);
         natural.sqrt_det_a_bar = r.sqrt_det_a_bar;
-        expected += evaluate_shell_element<KoiterStVK>(natural, r.X_local + p.map.gather(e, u) - Y, p.thickness[e],
-                                                           p.theta[e]);
+        expected +=
+            evaluate_shell_element<KoiterStVK>(natural, r.X_local + p.map.gather(e, u) - Y, p.thickness[e], p.theta[e]);
     }
     EXPECT_NEAR(elastic.eval_value(u), expected, 1e-12);
     ShellFemForceFpResponse response(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(),
                                      dof::ConstantDofMap(topology(), 9), p.map, p.rest, u, p.thickness, p.theta);
-    EXPECT_TRUE(elastic.eval_gradient(u).isApprox(response.eval_value(P.reshaped()), 1e-11));
+    EXPECT_TRUE(elastic.eval_gradient(u).isApprox(response.evaluate(P.reshaped())->value(), 1e-11));
     energy::test::expect_derivatives_match(elastic, u);
     plastic[0].setZero();
     p.rest.clear();

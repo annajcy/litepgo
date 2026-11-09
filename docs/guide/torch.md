@@ -11,32 +11,29 @@ that native FEM assembles.
 
 ## Module architecture
 
-The response adapter copies the input and retains the model. Forward requests
-only values; backward calls `eval_vjp(saved_x, upstream)`. Forward-mode AD
-calls `eval_jvp(saved_x, tangent)`. Before either product, the adapter updates
-the model's pattern at the saved point, including when several forwards share
-one model. No response Jacobian is saved. The energy adapter is unchanged:
-it saves the energy gradient for backward.
+The response adapter calls `model.evaluate(x)` and saves the returned evaluation
+in the autograd context. Forward reads `evaluation.value`; backward calls
+`evaluation.vjp(upstream)` and forward-mode AD calls `evaluation.jvp(tangent)`.
+Each forward owns independent state, so reverse-order backwards cannot overwrite
+each other's inputs or equilibrium solutions. No full response Jacobian is saved.
+The energy adapter saves the energy gradient for backward as before.
 
 ```mermaid
 flowchart TB
-  accTitle: Response values and derivative products
-  accDescr: Forward saves an input copy and model. Reverse AD requests a VJP and forward AD requests a JVP at the saved input.
-  input["CPU float64 tensor"] --> forward["Response eval_value"]
-  input --> saved["Saved input copy and model"]
-  forward --> value["Output tensor"]
-  saved --> vjp["Backward: eval_vjp"]
-  saved --> jvp["Forward AD: eval_jvp"]
-  upstream["Loss gradient"] --> vjp
-  tangent["Input tangent"] --> jvp
+  input["CPU float64 tensor"] --> evaluation["Response.evaluate: independent state"]
+  evaluation --> value["evaluation.value"]
+  evaluation --> saved["Saved evaluation in autograd context"]
+  saved --> vjp["Backward: evaluation.vjp"]
+  saved --> jvp["Forward AD: evaluation.jvp"]
 ```
 
-A `StaticEquilibriumResponse` uses its adjoint VJP and directional JVP.
-Each product currently re-solves equilibrium; the adapter does not cache
-linearizations. Other responses can implement direct products or use the
-explicit-Jacobian fallback. Wrapping an equilibrium response inside a custom
-residual does not automatically forward its fast paths: that residual must
-implement its own product hooks to avoid the fallback.
+A `StaticEquilibriumResponse` evaluation solves equilibrium once and prepares
+exact stiffness on first derivative use. Subsequent products reuse that solve
+and factorization. `ComposedResponse` retains child evaluations and carries this
+reuse through composition. Other responses can use direct products or an explicit
+Jacobian fallback. A custom residual that manually creates a new equilibrium
+evaluation on every hook call does not receive this reuse automatically.
+Retained autograd graphs also retain the evaluation's memory until released.
 See [inverse problems](solver/inverse.md) for fixed-pose versus total derivatives.
 
 ## Use the adapter
@@ -90,15 +87,16 @@ with torch.autograd.forward_ad.dual_level():
     value, jvp = torch.autograd.forward_ad.unpack_dual(torch_response(R, dual))
 ```
 
-The saved input is a copy, but the model is a retained reference, not a snapshot.
-Derivative exceptions propagate. Repeated backward calls recompute products.
+The saved evaluation owns an input copy and retains the model; it does not
+snapshot mutable model configuration. Derivative exceptions propagate. Repeated
+backward calls compute new products using the same retained evaluation state.
 
 ## Constitutive energy written in Torch
 
 The reverse direction of the adapters above is a material written in Torch and
 assembled by native FEM. Subclass `TorchVolumetricMaterial` or
-`TorchShellMaterial`, define the density `W`, and put the class in the Material
-slot of any compiled FEM template:
+`TorchShellMaterial`, define the density `W`, and pass a material instance as the
+first argument to the FEM constructor:
 
 ```python
 import torch
@@ -155,7 +153,9 @@ material_force = fem.VolumetricFemForceMaterialResponse[key](material,
     parameter_map, displacement_map, rest_position_fields, u, Fp)
 plastic_force = fem.VolumetricFemForceFpResponse[key](material,
     parameter_map, displacement_map, rest_position_fields, u, theta)
-force, J = material_force.eval_value_and_jacobian(p)
+evaluation = material_force.evaluate(p)
+J = evaluation.jacobian()
+force = evaluation.value
 ```
 
 They request `d2W_dF_dtheta` or `d2W_dF_dFp` from the material, which the Torch

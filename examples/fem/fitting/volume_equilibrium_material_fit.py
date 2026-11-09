@@ -89,7 +89,9 @@ def reaction(problem, theta, axis, strain, need_jacobian):
         problem.make_energy,
         problem.make_response,
     )
-    displacement, J = (equilibrium.eval_value_and_jacobian(theta) if need_jacobian else (equilibrium.eval_value(theta), None))
+    evaluation = equilibrium.evaluate(theta)
+    J = evaluation.jacobian() if need_jacobian else None
+    displacement = evaluation.value
     problem.solves += 1
     elastic = problem.make_energy(theta)
     force = elastic.eval_gradient(displacement)[loaded].sum()
@@ -97,7 +99,7 @@ def reaction(problem, theta, axis, strain, need_jacobian):
         return force, None
     # Total reaction derivative: direct material dependence plus equilibrium motion.
     force_derivative = (
-        problem.make_response(displacement).eval_jacobian(theta)
+        problem.make_response(displacement).evaluate(theta).jacobian()
         + elastic.eval_hessian(displacement) @ J
     )
     return force, np.asarray(force_derivative[loaded].sum(axis=0)).ravel()
@@ -149,7 +151,7 @@ def main():
         residual, np.zeros(2), solver.GaussNewtonOptions(gradient_tolerance=1e-8)
     )
     fitted = np.exp(result.x)
-    r = residual.eval_value(result.x)
+    r = residual.evaluate(result.x).value
     parameter_error = np.linalg.norm(fitted - truth) / np.linalg.norm(truth)
     reference = reaction(truth, 2, -0.07, False)
     prediction = reaction(fitted, 2, -0.07, False)

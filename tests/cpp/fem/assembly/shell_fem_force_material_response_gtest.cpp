@@ -49,11 +49,11 @@ TEST(ShellFemForceMaterialResponse, SharedAndPerFaceParametersMatchEnergyAndFini
                      dof::ConstantDofMap(p.topology, 2), p.map, p.rest, p.u, p.thickness, batch);
         Force element(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(),
                       dof::ElementDofMap(p.topology, 2), p.map, p.rest, p.u, p.thickness, batch);
-        const Eigen::MatrixXd J = shared.eval_jacobian(theta), E = element.eval_jacobian(per);
-        EXPECT_TRUE(shared.eval_value(theta).isApprox(p.force(theta), 1e-12));
-        EXPECT_TRUE(element.eval_value(per).isApprox(p.force(per), 1e-12));
-        EXPECT_TRUE((J * theta).isApprox(shared.eval_value(theta), 1e-12));
-        EXPECT_TRUE((E * per).isApprox(element.eval_value(per), 1e-12));
+        const Eigen::MatrixXd J = shared.evaluate(theta)->jacobian(), E = element.evaluate(per)->jacobian();
+        EXPECT_TRUE(shared.evaluate(theta)->value().isApprox(p.force(theta), 1e-12));
+        EXPECT_TRUE(element.evaluate(per)->value().isApprox(p.force(per), 1e-12));
+        EXPECT_TRUE((J * theta).isApprox(shared.evaluate(theta)->value(), 1e-12));
+        EXPECT_TRUE((E * per).isApprox(element.evaluate(per)->value(), 1e-12));
         Eigen::MatrixXd sum = Eigen::MatrixXd::Zero(18, 2);
         for (int e = 0; e < 4; ++e)
             sum += E.middleCols(2 * e, 2);
@@ -67,8 +67,8 @@ TEST(ShellFemForceMaterialResponse, SharedAndPerFaceParametersMatchEnergyAndFini
             minus[j] -= 1e-6;
             EXPECT_LT((E.col(j) - (p.force(plus) - p.force(minus)) / 2e-6).norm(), 1e-8);
         }
-        EXPECT_THROW(shared.eval_value(Eigen::Vector2d(1, 0)), std::invalid_argument);
-        EXPECT_TRUE(shared.eval_value(theta).isApprox(p.force(theta), 1e-12));
+        EXPECT_THROW(shared.evaluate(Eigen::Vector2d(1, 0))->value(), std::invalid_argument);
+        EXPECT_TRUE(shared.evaluate(theta)->value().isApprox(p.force(theta), 1e-12));
     }
 }
 TEST(ShellFemForceMaterialResponse, SnapshotsFixedInputsAndRejectsInvalidConstruction) {
@@ -77,7 +77,7 @@ TEST(ShellFemForceMaterialResponse, SnapshotsFixedInputsAndRejectsInvalidConstru
     Force response(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), params, p.map, p.rest, p.u,
                    p.thickness);
     const Eigen::Vector2d theta(2, 3);
-    const auto before = response.eval_value(theta);
+    const auto before = response.evaluate(theta)->value();
     EXPECT_THROW((Force(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), params, p.map, {}, p.u,
                         p.thickness)),
                  std::invalid_argument);
@@ -99,14 +99,14 @@ TEST(ShellFemForceMaterialResponse, SnapshotsFixedInputsAndRejectsInvalidConstru
                  std::invalid_argument);
     p.u.setZero();
     p.rest.clear();
-    EXPECT_EQ((response.eval_value(theta) - before).norm(), 0);
+    EXPECT_EQ((response.evaluate(theta)->value() - before).norm(), 0);
     const mesh::TriangleTopology empty(0, {});
     const dof::StencilDofMap map(0, {}, 3);
     Force zero(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), dof::ConstantDofMap(empty, 2), map,
                {}, Vec(0), {});
-    EXPECT_EQ(zero.eval_value(theta).size(), 0);
-    EXPECT_EQ(zero.eval_jacobian(theta).rows(), 0);
-    EXPECT_EQ(zero.eval_jacobian(theta).cols(), 2);
+    EXPECT_EQ(zero.evaluate(theta)->value().size(), 0);
+    EXPECT_EQ(zero.evaluate(theta)->jacobian().rows(), 0);
+    EXPECT_EQ(zero.evaluate(theta)->jacobian().cols(), 2);
 }
 
 TEST(ShellForceEvaluation, OverwritesStridedViewsAndAppliesOriginalAreaOnce) {

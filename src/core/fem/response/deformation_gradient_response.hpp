@@ -21,15 +21,15 @@ class DeformationGradientResponse final : public energy::FixedPatternResponse {
     }
 
   private:
-    Vec eval_jvp_impl(const ConstVecRef& xi, const ConstVecRef& v) override {
+    Vec jvp_at(const ConstVecRef& xi, const ConstVecRef& v) override {
         return product(xi, v, false);
     }
-    Vec eval_vjp_impl(const ConstVecRef& xi, const ConstVecRef& v) override {
+    Vec vjp_at(const ConstVecRef& xi, const ConstVecRef& v) override {
         return product(xi, v, true);
     }
     Vec product(const ConstVecRef& xi, const ConstVecRef& v, bool transpose) {
-        const Eigen::Matrix3d U = displacement_->eval_jacobian(xi);
-        const Eigen::Matrix3d X = geometry_->eval_jacobian(xi);
+        const Eigen::Matrix3d U = displacement_->evaluate(xi)->jacobian();
+        const Eigen::Matrix3d X = geometry_->evaluate(xi)->jacobian();
         const double determinant = X.determinant();
         if (!std::isfinite(determinant) || determinant <= 0)
             throw std::domain_error("DeformationGradientResponse: positive geometry determinant required");
@@ -43,8 +43,8 @@ class DeformationGradientResponse final : public energy::FixedPatternResponse {
         }
         for (int component = 0; component < 3; ++component) {
             const Vec w = Vec::Unit(3, component);
-            const Eigen::Matrix3d Hu = displacement_->eval_hessian(xi, w);
-            const Eigen::Matrix3d Hx = geometry_->eval_hessian(xi, w);
+            const Eigen::Matrix3d Hu = displacement_->evaluate(xi)->hessian(w);
+            const Eigen::Matrix3d Hx = geometry_->evaluate(xi)->hessian(w);
             if (transpose) {
                 result += Hu * adjoint.row(component).transpose() + Hx * geometry_adjoint.row(component).transpose();
             } else {
@@ -58,8 +58,8 @@ class DeformationGradientResponse final : public energy::FixedPatternResponse {
         return derivative.reshaped();
     }
     Vec eval_impl(const ConstVecRef& xi, SpMat* J) override {
-        const Eigen::Matrix3d U = displacement_->eval_jacobian(xi);
-        const Eigen::Matrix3d X = geometry_->eval_jacobian(xi);
+        const Eigen::Matrix3d U = displacement_->evaluate(xi)->jacobian();
+        const Eigen::Matrix3d X = geometry_->evaluate(xi)->jacobian();
         const double determinant = X.determinant();
         if (!std::isfinite(determinant) || determinant <= 0)
             throw std::domain_error("DeformationGradientResponse: positive geometry determinant required");
@@ -69,8 +69,8 @@ class DeformationGradientResponse final : public energy::FixedPatternResponse {
             std::array<Eigen::Matrix3d, 3> dU, dX;
             for (int component = 0; component < 3; ++component) {
                 const Vec w = Vec::Unit(3, component);
-                const Eigen::Matrix3d Hu = displacement_->eval_hessian(xi, w);
-                const Eigen::Matrix3d Hx = geometry_->eval_hessian(xi, w);
+                const Eigen::Matrix3d Hu = displacement_->evaluate(xi)->hessian(w);
+                const Eigen::Matrix3d Hx = geometry_->evaluate(xi)->hessian(w);
                 for (int k = 0; k < 3; ++k) {
                     dU[k].row(component) = Hu.col(k).transpose();
                     dX[k].row(component) = Hx.col(k).transpose();

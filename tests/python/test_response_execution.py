@@ -27,11 +27,11 @@ def test_mesh_workspace_guard_covers_overlapping_calls_and_recovers():
     r = Blocking(mapping, mapping)
     x = np.ones(1)
     with ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(r.eval_value, x)
+        future = pool.submit(lambda: r.evaluate(x).value)
         try:
             assert entered.wait(10)
-            for call in (lambda: r.eval_value(x), lambda: r.eval_jacobian(x),
-                         lambda: r.eval_jvp(x, x), lambda: r.eval_vjp(x, x)):
+            for call in (lambda: r.evaluate(x).value, lambda: r.evaluate(x).jacobian(),
+                         lambda: r.evaluate(x).jvp(x), lambda: r.evaluate(x).vjp(x)):
                 with pytest.raises(RuntimeError, match="already in use"):
                     call()
         finally:
@@ -40,10 +40,10 @@ def test_mesh_workspace_guard_covers_overlapping_calls_and_recovers():
     r.block = False
     r.fail = True
     with pytest.raises(ValueError, match="callback failed"):
-        r.eval_value(x)
+        r.evaluate(x).value
     r.fail = False
-    np.testing.assert_array_equal(r.eval_jvp(x, x), x)
-    np.testing.assert_array_equal(r.eval_jacobian(x).toarray(), [[1]])
+    np.testing.assert_array_equal(r.evaluate(x).jvp(x), x)
+    np.testing.assert_array_equal(r.evaluate(x).jacobian().toarray(), [[1]])
 
 
 def test_mesh_workspace_guard_rejects_callback_reentry():
@@ -54,14 +54,14 @@ def test_mesh_workspace_guard_rejects_callback_reentry():
 
         def eval_batch(self, ids, x, need):
             if self.reenter:
-                self.eval_value(np.ones(1))
+                self.evaluate(np.ones(1)).value
             return (x.copy(), np.ones_like(x)) if need else x.copy()
 
     r = Reentrant(mapping, mapping)
     with pytest.raises(RuntimeError, match="already in use"):
-        r.eval_value(np.ones(1))
+        r.evaluate(np.ones(1)).value
     r.reenter = False
-    np.testing.assert_array_equal(r.eval_value(np.ones(1)), [1])
+    np.testing.assert_array_equal(r.evaluate(np.ones(1)).value, [1])
 
 
 def test_dynamic_capability_errors_propagate_through_native_composition():
@@ -81,8 +81,8 @@ def test_dynamic_capability_errors_propagate_through_native_composition():
 
     r = energy.ComposedResponse(energy.ExpResponse(1), Dynamic())
     with pytest.raises(ValueError, match="capability query failed"):
-        r.eval_hessian(np.ones(1), np.ones(1))
-    np.testing.assert_allclose(r.eval_value(np.zeros(1)), [1])
+        r.evaluate(np.ones(1)).hessian(np.ones(1))
+    np.testing.assert_allclose(r.evaluate(np.zeros(1)).value, [1])
 
 
 def test_public_pattern_protocol_is_removed_and_dimensions_validated():
@@ -99,12 +99,12 @@ def test_composition_retains_structure_under_numerical_cancellation():
     nonlinear = energy.ComposedResponse(energy.ExpResponse(2), duplicate)
     r = energy.ComposedResponse(energy.AffineResponse(np.array([[1., -1.]])), nonlinear)
     x = np.array([.3])
-    J = r.eval_jacobian(x)
-    H = r.eval_hessian(x, np.ones(1))
+    J = r.evaluate(x).jacobian()
+    H = r.evaluate(x).hessian(np.ones(1))
     assert J.nnz == H.nnz == 1
     np.testing.assert_array_equal(J.data, 0)
     np.testing.assert_array_equal(H.data, 0)
-    np.testing.assert_array_equal(r.eval_hessian(x, np.zeros(1)).indices, H.indices)
+    np.testing.assert_array_equal(r.evaluate(x).hessian(np.zeros(1)).indices, H.indices)
 
 
 @pytest.mark.parametrize("dynamic", [False, True])
@@ -134,29 +134,29 @@ def test_derivative_hooks_allow_finite_reentry_and_recover(dynamic, operation):
         def eval_impl(self, x, need):
             return (x*x, np.diag(2*x)) if need else x*x
 
-        def evaluate(self, kind, x, direction):
+        def derivative(self, kind, x, direction):
             self.visited.append((kind, float(x[0])))
             if x[0] > 0:
-                result = getattr(self, "eval_" + kind)(-x, direction)
+                result = getattr(self.evaluate(-x), kind)(direction)
                 return result if kind == "hessian" else -result
             if self.fail:
                 raise ValueError("nested derivative failed")
             if kind == "hessian":
                 return np.diag(2 * direction)
             # Calling super still explicitly selects the Jacobian fallback.
-            return getattr(super(), "eval_" + kind + "_impl")(x, direction)
+            return getattr(super(), kind + "_at")(x, direction)
 
         def eval_hessian_impl(self, x, weights):
-            return self.evaluate("hessian", x, weights)
+            return self.derivative("hessian", x, weights)
 
-        def eval_jvp_impl(self, x, dx):
-            return self.evaluate("jvp", x, dx)
+        def jvp_at(self, x, dx):
+            return self.derivative("jvp", x, dx)
 
-        def eval_vjp_impl(self, x, weights):
-            return self.evaluate("vjp", x, weights)
+        def vjp_at(self, x, weights):
+            return self.derivative("vjp", x, weights)
 
     r = Reentrant()
-    call = getattr(r, "eval_" + operation)
+    call = lambda x, direction: getattr(r.evaluate(x), operation)(direction)
     x, direction = np.array([3.]), np.array([2.])
     actual = call(x, direction)
     np.testing.assert_allclose(actual.toarray() if operation == "hessian" else actual,

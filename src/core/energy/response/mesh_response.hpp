@@ -26,8 +26,8 @@ class MeshResponse : public FixedPatternResponse {
                              bool transpose) const;
 
   private:
-    Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& dx) override;
-    Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& gy) override;
+    Vec jvp_at(const ConstVecRef& x, const ConstVecRef& dx) override;
+    Vec vjp_at(const ConstVecRef& x, const ConstVecRef& gy) override;
     BatchMatrix eval_batch_jacobian(std::span<const int> ids, const BatchMatrix& x) const;
     void gather(const std::vector<int>& ids, const ConstVecRef& x, BatchMatrix& result, bool output) const;
     Vec product(const ConstVecRef& x, const ConstVecRef& direction, bool transpose) const;

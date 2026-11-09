@@ -16,11 +16,7 @@ class ComposedResponse final : public Response {
     bool has_hessian() const override;
 
   private:
-    Vec eval_value_impl(const ConstVecRef& x) override;
-    std::pair<Vec, SpMat> eval_value_and_jacobian_impl(const ConstVecRef& x) override;
-    SpMat eval_weighted_hessian_impl(const ConstVecRef& x, const ConstVecRef& weights) override;
-    Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& v) override;
-    Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& w) override;
+    std::shared_ptr<ResponseEvaluation> make_evaluation(const ConstVecRef& x) override;
     std::shared_ptr<Response> outer_, inner_;
     int num_inputs_, num_outputs_;
 };

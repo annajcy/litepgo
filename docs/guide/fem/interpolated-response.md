@@ -33,12 +33,12 @@ C++ constructs `fem::InterpolatedResponse<Basis> r(C)` from
 | `num_inputs` | $d$ |
 | `num_outputs` | $m$ |
 | `has_hessian` | true, including zero curvature |
-| `eval_value(xi)` | `(m,)` |
-| `eval_jacobian(xi)` | `(m,d)` |
-| `eval_value_and_jacobian(xi)` | value and Jacobian |
-| `eval_jvp(xi, direction)` | `(m,)`, direction has length $d$ |
-| `eval_vjp(xi, weights)` | `(d,)`, weights have length $m$ |
-| `eval_hessian(xi, weights)` | full symmetric `(d,d)` matrix |
+| `evaluate(xi).value` | `(m,)` |
+| `evaluate(xi).jacobian()` | `(m,d)` |
+| `evaluate(xi)` then `jacobian()` and `value` | value and Jacobian |
+| `evaluate(xi).jvp(direction)` | `(m,)`, direction has length $d$ |
+| `evaluate(xi).vjp(weights)` | `(d,)`, weights have length $m$ |
+| `evaluate(xi).hessian(weights)` | full symmetric `(d,d)` matrix |
 
 Python coordinates are always vectors of shape `(d,)`, **including `(1,)`
 for a 1D Response**, whereas the 1D Basis methods take a scalar.

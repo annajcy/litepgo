@@ -109,20 +109,19 @@ double reaction(const Problem& problem, const Eigen::Vector2d& theta, int axis, 
                                          litepgo::SpMat((parameters).size(), 3), parameters)));
         },
         make_response);
-    SpMat J = SpMat();
-    const Vec displacement = (derivative ? ([&] {
-        auto result = equilibrium.eval_value_and_jacobian(theta);
-        J = std::move(result.second);
-        return std::move(result.first);
-    }())
-                                         : equilibrium.eval_value(theta));
+    auto evaluation = equilibrium.evaluate(theta);
+    SpMat J;
+    if (derivative)
+        J = evaluation->jacobian();
+    const Vec displacement = evaluation->value();
     const Vec gradient = elastic.eval_gradient(displacement);
     double force = 0;
     for (int v : top_vertices)
         force += gradient[3 * v + axis];
     if (derivative) {
         const Eigen::MatrixXd force_derivative =
-            Eigen::MatrixXd(make_response(displacement)->eval_jacobian(theta)) + elastic.eval_hessian(displacement) * J;
+            Eigen::MatrixXd(make_response(displacement)->evaluate(theta)->jacobian()) +
+            elastic.eval_hessian(displacement) * J;
         derivative->setZero();
         for (int v : top_vertices)
             *derivative += force_derivative.row(3 * v + axis);
@@ -177,7 +176,7 @@ int main() {
         // Fit the measured response using its analytic parameter Jacobian.
         const auto result = solver::gauss_newton_solve(residual, Vec::Zero(2), options);
         const Eigen::Vector2d fitted = result.x.array().exp().matrix();
-        const Vec r = residual.eval_value(result.x);
+        const Vec r = residual.evaluate(result.x)->value();
         const double parameter_error = (fitted - truth).norm() / truth.norm();
         const double reference = reaction(problem, truth, 2, -0.07, nullptr);
         const double prediction_error =

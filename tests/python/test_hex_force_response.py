@@ -33,8 +33,12 @@ def test_hex_force_responses_match_energy_and_physical_derivatives(basis, width,
     expected = Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, plastic, parameters).eval_gradient(u)
     material = Material(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 2), mapping, geometry, u, plastic, batch_size)
     fp = Plastic(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 9), mapping, geometry, u, parameters, batch_size)
-    g, M = material.eval_value_and_jacobian(theta)
-    f, P = fp.eval_value_and_jacobian(p)
+    material_evaluation = material.evaluate(theta)
+    M = material_evaluation.jacobian()
+    g = material_evaluation.value
+    fp_evaluation = fp.evaluate(p)
+    P = fp_evaluation.jacobian()
+    f = fp_evaluation.value
     np.testing.assert_allclose(g, expected, atol=1e-12)
     np.testing.assert_allclose(f, expected, atol=1e-12)
     np.testing.assert_allclose(M @ theta, expected, atol=1e-12)
@@ -46,19 +50,19 @@ def test_hex_force_responses_match_energy_and_physical_derivatives(basis, width,
                                rtol=1e-6, atol=1e-8)
     me = Material(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ElementDofMap(topology, 2), mapping, geometry, u, plastic, batch_size)
     pe = Plastic(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ElementDofMap(topology, 9), mapping, geometry, u, parameters, batch_size)
-    MJ = me.eval_jacobian(np.tile(theta, 2)).toarray()
-    PJ = pe.eval_jacobian(np.tile(p, 2)).toarray()
+    MJ = me.evaluate(np.tile(theta, 2)).jacobian().toarray()
+    PJ = pe.evaluate(np.tile(p, 2)).jacobian().toarray()
     np.testing.assert_allclose(M.toarray(), MJ[:, :2]+MJ[:, 2:], atol=1e-13)
     np.testing.assert_allclose(P.toarray(), PJ[:, :9]+PJ[:, 9:], atol=1e-13)
     for response, point in [(material, theta), (fp, p), (me, np.tile(theta, 2)), (pe, np.tile(p, 2))]:
-        derivative = response.eval_jacobian(point)
+        derivative = response.evaluate(point).jacobian()
         d = np.sin(np.arange(response.num_inputs))
         w = np.cos(np.arange(response.num_outputs))
-        np.testing.assert_allclose(response.eval_jvp(point, d), derivative @ d, rtol=1e-10, atol=1e-11)
-        np.testing.assert_allclose(response.eval_vjp(point, w), derivative.T @ w, rtol=1e-10, atol=1e-11)
+        np.testing.assert_allclose(response.evaluate(point).jvp(d), derivative @ d, rtol=1e-10, atol=1e-11)
+        np.testing.assert_allclose(response.evaluate(point).vjp(w), derivative.T @ w, rtol=1e-10, atol=1e-11)
     with pytest.raises(ValueError):
-        fp.eval_value(np.zeros(9))
-    np.testing.assert_allclose(fp.eval_value(p), expected, atol=1e-12)
+        fp.evaluate(np.zeros(9)).value
+    np.testing.assert_allclose(fp.evaluate(p).value, expected, atol=1e-12)
 
 
 @pytest.mark.parametrize("family,size", [(fem.VolumetricFemForceMaterialResponse, 2),

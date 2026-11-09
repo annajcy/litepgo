@@ -30,10 +30,10 @@ class ConstantResponse final : public FixedPatternResponse {
     Vec eval_impl(const ConstVecRef&, SpMat*) override {
         return value_;
     }
-    Vec eval_jvp_impl(const ConstVecRef&, const ConstVecRef&) override {
+    Vec jvp_at(const ConstVecRef&, const ConstVecRef&) override {
         return Vec::Zero(num_outputs());
     }
-    Vec eval_vjp_impl(const ConstVecRef&, const ConstVecRef&) override {
+    Vec vjp_at(const ConstVecRef&, const ConstVecRef&) override {
         return Vec::Zero(num_inputs());
     }
     void eval_hessian_impl(const ConstVecRef&, const ConstVecRef&, SpMat&) override {}

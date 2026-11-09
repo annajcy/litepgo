@@ -22,7 +22,7 @@ def make_equilibrium(kind, use_torch=True):
         fixed_fields = plastic
         Response = fem.VolumetricFemForceMaterialResponse[key]
     elif kind == "fp":
-        parameters = plastic[0].eval_value(np.full(3, 0.25))
+        parameters = plastic[0].evaluate(np.full(3, 0.25)).value
         fixed_fields = theta
         Response = fem.VolumetricFemForceFpResponse[key]
     else:
@@ -59,13 +59,17 @@ def main():
     for kind in ("material", "fp"):
         equilibrium, p = make_equilibrium(kind)
         native, _ = make_equilibrium(kind, use_torch=False)
-        u, J = equilibrium.eval_value_and_jacobian(p)
-        expected_u, expected_J = native.eval_value_and_jacobian(p)
+        equilibrium_evaluation = equilibrium.evaluate(p)
+        J = equilibrium_evaluation.jacobian()
+        u = equilibrium_evaluation.value
+        native_evaluation = native.evaluate(p)
+        expected_J = native_evaluation.jacobian()
+        expected_u = native_evaluation.value
         v = np.linspace(0.1, 0.3, len(p))
         w = np.linspace(-0.2, 0.4, len(u))
         # These calls solve directional/adjoint equations and use the force products.
-        jv = equilibrium.eval_jvp(p, v)
-        jtw = equilibrium.eval_vjp(p, w)
+        jv = equilibrium.evaluate(p).jvp(v)
+        jtw = equilibrium.evaluate(p).vjp(w)
         print(
             f"{kind}: state_error={np.linalg.norm(u - expected_u):.3e}, "
             f"Jacobian_error={np.linalg.norm((J - expected_J).toarray()):.3e}, "

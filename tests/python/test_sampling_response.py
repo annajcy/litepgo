@@ -33,29 +33,31 @@ def test_sampling_matches_spatial_response(basis, d, order):
     expected = []
     for xi in saved:
         if order == 0:
-            expected.extend(spatial.eval_value(xi))
+            expected.extend(spatial.evaluate(xi).value)
         elif order == 1:
-            expected.extend(spatial.eval_jacobian(xi).toarray().ravel(order="F"))
+            expected.extend(spatial.evaluate(xi).jacobian().toarray().ravel(order='F'))
         else:
-            component_hessians = [spatial.eval_hessian(xi, w).toarray() for w in np.eye(m)]
+            component_hessians = [spatial.evaluate(xi).hessian(w).toarray() for w in np.eye(m)]
             for i in range(d):
                 for j in range(i, d):
                     expected.extend(H[i, j] for H in component_hessians)
-    value, A = sample.eval_value_and_jacobian(c)
+    sample_evaluation = sample.evaluate(c)
+    A = sample_evaluation.jacobian()
+    value = sample_evaluation.value
     assert sample.num_inputs == len(c) and sample.num_outputs == len(expected)
     np.testing.assert_allclose(value, expected, atol=1e-12)
     np.testing.assert_allclose(A @ c, expected, atol=1e-12)
     v = np.linspace(-.3, .8, len(c))
     w = np.linspace(-1., .7, len(value))
     eps = 1e-5
-    numerical = (sample.eval_value(c + eps*v) - sample.eval_value(c - eps*v))/(2*eps)
-    np.testing.assert_allclose(sample.eval_jvp(c, v), numerical, atol=1e-8)
-    np.testing.assert_allclose(sample.eval_vjp(c, w), A.T @ w)
+    numerical = (sample.evaluate(c + eps * v).value - sample.evaluate(c - eps * v).value)/(2*eps)
+    np.testing.assert_allclose(sample.evaluate(c).jvp(v), numerical, atol=1e-08)
+    np.testing.assert_allclose(sample.evaluate(c).vjp(w), A.T @ w)
     assert sample.has_hessian
-    H = sample.eval_hessian(c, w)
+    H = sample.evaluate(c).hessian(w)
     assert H.shape == (len(c), len(c)) and H.nnz == 0
     original = value.copy()
-    sample.eval_value(-c)
+    sample.evaluate(-c).value
     np.testing.assert_array_equal(value, original)
 
 
@@ -70,28 +72,27 @@ def test_validation_and_empty_points(factory):
             make(np.empty((0, 3)), components=components)
     empty = make(np.empty((0, 3)), components=2)
     c = np.ones(8)
-    assert empty.eval_value(c).shape == (0,)
-    assert empty.eval_jacobian(c).shape == (0, 8)
-    np.testing.assert_array_equal(empty.eval_vjp(c, np.empty(0)), np.zeros(8))
-    assert empty.eval_hessian(c, np.empty(0)).nnz == 0
+    assert empty.evaluate(c).value.shape == (0,)
+    assert empty.evaluate(c).jacobian().shape == (0, 8)
+    np.testing.assert_array_equal(empty.evaluate(c).vjp(np.empty(0)), np.zeros(8))
+    assert empty.evaluate(c).hessian(np.empty(0)).nnz == 0
     with pytest.raises(ValueError):
-        empty.eval_value(np.zeros(7))
+        empty.evaluate(np.zeros(7)).value
     with pytest.raises(ValueError):
-        empty.eval_value(np.full(8, np.nan))
+        empty.evaluate(np.full(8, np.nan)).value
 
 
 def test_zero_spatial_hessian_and_composition():
     sample = fem.hessian_sampling_response[fem.TetP1Basis](np.zeros((2, 3)), components=2)
     assert sample.num_outputs == 24  # two points * six independent entries * two components
-    assert sample.eval_jacobian(np.ones(8)).nnz == 0
-    np.testing.assert_array_equal(sample.eval_value(np.ones(8)), np.zeros(24))
+    assert sample.evaluate(np.ones(8)).jacobian().nnz == 0
+    np.testing.assert_array_equal(sample.evaluate(np.ones(8)).value, np.zeros(24))
     value = fem.value_sampling_response[fem.LinearLagrangeBasis](np.array([[.25], [.75]]), components=1)
     composed = energy.ComposedResponse(energy.ExpResponse(2), value)
     c = np.array([.1, -.2])
-    A = value.eval_jacobian(c).toarray()
+    A = value.evaluate(c).jacobian().toarray()
     w = np.array([1., -2.])
-    np.testing.assert_allclose(composed.eval_hessian(c, w).toarray(),
-                               A.T @ np.diag(w*np.exp(A @ c)) @ A)
+    np.testing.assert_allclose(composed.evaluate(c).hessian(w).toarray(), A.T @ np.diag(w * np.exp(A @ c)) @ A)
 
 
 def test_overflow_and_1d_points_shape():

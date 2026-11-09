@@ -90,11 +90,11 @@ def test_direct_products_skip_explicit_jacobian():
             assert not need_jacobian, "explicit Jacobian requested"
             return x * x
 
-        def eval_jvp_impl(self, x, dx):
+        def jvp_at(self, x, dx):
             self.products.append("jvp")
             return 2 * x * dx
 
-        def eval_vjp_impl(self, x, gy):
+        def vjp_at(self, x, gy):
             self.products.append("vjp")
             return 2 * x * gy
 
@@ -135,14 +135,12 @@ def test_dynamic_products_restore_saved_point_and_input_copy():
         a.add_(10)  # Forward owns an independent input copy.
     ga, gb = torch.autograd.grad(ya.sum() + yb.sum(), (a, b))
     for point, actual in [(saved_a, ga), (b.detach(), gb)]:
-        expected = model.eval_jacobian(point.numpy()).T @ np.ones(2)
+        expected = model.evaluate(point.numpy()).jacobian().T @ np.ones(2)
         np.testing.assert_allclose(actual.numpy(), expected)
         tangent = torch.tensor([0.5, -0.2], dtype=torch.float64)
-        model.eval_jacobian(-point.numpy())  # Interleave another input.
+        model.evaluate(-point.numpy()).jacobian()  # Interleave another input.
         _, product = forward_product(model, point, tangent)
-        np.testing.assert_allclose(
-            product.numpy(), model.eval_jvp(point.numpy(), tangent.numpy())
-        )
+        np.testing.assert_allclose(product.numpy(), model.evaluate(point.numpy()).jvp(tangent.numpy()))
 
 
 def test_equilibrium_forward_ad_and_product_errors():
@@ -175,10 +173,10 @@ def test_equilibrium_forward_ad_and_product_errors():
     assert len(calls) == 2
 
     class Failure(Square):
-        def eval_vjp_impl(self, x, gy):
+        def vjp_at(self, x, gy):
             raise ValueError("product failure")
 
-        def eval_jvp_impl(self, x, dx):
+        def jvp_at(self, x, dx):
             raise ValueError("product failure")
 
     with pytest.raises(ValueError, match="product failure"):

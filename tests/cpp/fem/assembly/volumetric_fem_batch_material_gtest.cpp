@@ -168,8 +168,10 @@ template <class Basis, class Q> void check_forces() {
                                                              f.map, f.X, f.u, f.Fp, 256);
     const Vec theta = Eigen::Vector2d(2.5, 1.5);
     calls->eval = 0;
-    EXPECT_LT((native_theta.eval_value(theta) - batch_theta.eval_value(theta)).norm(), 1e-12);
-    EXPECT_LT(Eigen::MatrixXd(native_theta.eval_jacobian(theta) - batch_theta.eval_jacobian(theta)).norm(), 1e-12);
+    EXPECT_LT((native_theta.evaluate(theta)->value() - batch_theta.evaluate(theta)->value()).norm(), 1e-12);
+    EXPECT_LT(
+        Eigen::MatrixXd(native_theta.evaluate(theta)->jacobian() - batch_theta.evaluate(theta)->jacobian()).norm(),
+        1e-12);
     EXPECT_EQ(calls->eval, 2);
 
     VolumetricFemForceFpResponse<Basis, Q> native_fp(std::make_shared<PointwiseVolumetricAdapter<NeoHookean>>(),
@@ -181,8 +183,9 @@ template <class Basis, class Q> void check_forces() {
     plastic(2, 2) = 0.9;
     const Vec packed = plastic.reshaped();
     calls->eval = 0;
-    EXPECT_LT((native_fp.eval_value(packed) - batch_fp.eval_value(packed)).norm(), 1e-12);
-    EXPECT_LT(Eigen::MatrixXd(native_fp.eval_jacobian(packed) - batch_fp.eval_jacobian(packed)).norm(), 1e-12);
+    EXPECT_LT((native_fp.evaluate(packed)->value() - batch_fp.evaluate(packed)->value()).norm(), 1e-12);
+    EXPECT_LT(Eigen::MatrixXd(native_fp.evaluate(packed)->jacobian() - batch_fp.evaluate(packed)->jacobian()).norm(),
+              1e-12);
     EXPECT_EQ(calls->eval, 2 * count);
 }
 
@@ -223,9 +226,9 @@ TEST(VolumetricFemBatchMaterial, RequestsOnlyNeededOutputs) {
                                                                                       f.X, f.u, f.Fp, 256);
     VolumetricFemForceFpResponse<TetP1Basis, TetCentroidQuadrature> fp_force(material, plastic_map, f.map, f.X, f.u,
                                                                              f.theta, 256);
-    theta_force.eval_value(Eigen::Vector2d(2, 3));
-    theta_force.eval_jacobian(Eigen::Vector2d(2, 3));
-    fp_force.eval_jacobian(Eigen::Matrix3d::Identity().reshaped());
+    theta_force.evaluate(Eigen::Vector2d(2, 3))->value();
+    theta_force.evaluate(Eigen::Vector2d(2, 3))->jacobian();
+    fp_force.evaluate(Eigen::Matrix3d::Identity().reshaped())->jacobian();
     const std::vector<Request> expected{{true, false, false, false, false}, {true, true, false, false, false},
                                         {true, true, true, false, false},   {false, true, false, false, false},
                                         {false, true, false, true, false},  {false, true, false, false, true}};

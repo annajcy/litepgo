@@ -48,7 +48,7 @@ def main():
     fitted_parameters = parameters.detach().numpy().copy()
     fitted = np.exp(fitted_parameters)
     parameter_error = np.linalg.norm(fitted - truth) / np.linalg.norm(truth)
-    relative_residual = np.linalg.norm(residual.eval_value(fitted_parameters))
+    relative_residual = np.linalg.norm(residual.evaluate(fitted_parameters).value)
     held_out, _ = measurement(np.log(truth), load=0.6)
     prediction, _ = measurement(fitted_parameters, load=0.6)
     held_out_error = np.linalg.norm((prediction - held_out) / scales)

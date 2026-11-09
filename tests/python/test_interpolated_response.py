@@ -20,46 +20,41 @@ def test_spatial_derivatives_and_snapshot(basis, d):
     x = np.linspace(.2, .4, d)
     w = np.array([1.3, -.7])
     v = np.linspace(-.4, .6, d)
-    y, J = r.eval_value_and_jacobian(x)
+    r_evaluation = r.evaluate(x)
+    J = r_evaluation.jacobian()
+    y = r_evaluation.value
     np.testing.assert_allclose(y, saved.T @ basis.eval_N(x[0] if d == 1 else x))
     eps = 1e-5
-    numerical = np.column_stack([
-        (r.eval_value(x + eps*e) - r.eval_value(x - eps*e))/(2*eps)
-        for e in np.eye(d)
-    ])
+    numerical = np.column_stack([(r.evaluate(x + eps * e).value - r.evaluate(x - eps * e).value) / (2 * eps) for e in np.eye(d)])
     np.testing.assert_allclose(J.toarray(), numerical, atol=1e-8)
-    H = r.eval_hessian(x, w)
-    numerical_H = np.column_stack([
-        (r.eval_vjp(x + eps*e, w) - r.eval_vjp(x - eps*e, w))/(2*eps)
-        for e in np.eye(d)
-    ])
+    H = r.evaluate(x).hessian(w)
+    numerical_H = np.column_stack([(r.evaluate(x + eps * e).vjp(w) - r.evaluate(x - eps * e).vjp(w)) / (2 * eps) for e in np.eye(d)])
     np.testing.assert_allclose(H.toarray(), numerical_H, atol=1e-8)
     np.testing.assert_allclose(H.toarray(), H.toarray().T)
-    np.testing.assert_allclose(r.eval_jvp(x, v), J @ v)
-    np.testing.assert_allclose(r.eval_vjp(x, w), J.T @ w)
-    np.testing.assert_array_equal(r.eval_hessian(x, np.zeros(2)).toarray(), np.zeros((d, d)))
+    np.testing.assert_allclose(r.evaluate(x).jvp(v), J @ v)
+    np.testing.assert_allclose(r.evaluate(x).vjp(w), J.T @ w)
+    np.testing.assert_array_equal(r.evaluate(x).hessian(np.zeros(2)).toarray(), np.zeros((d, d)))
     original = H.toarray().copy()
-    r.eval_hessian(x + .3, -w)
+    r.evaluate(x + 0.3).hessian(-w)
     np.testing.assert_array_equal(H.toarray(), original)
     outside = np.full(d, 1.4)
-    np.testing.assert_allclose(r.eval_value(outside), saved.T @ basis.eval_N(
-        outside[0] if d == 1 else outside))
+    np.testing.assert_allclose(r.evaluate(outside).value, saved.T @ basis.eval_N(outside[0] if d == 1 else outside))
 
 
 def test_tet_geometry_and_invalid_inputs():
     cls = fem.InterpolatedResponse[fem.TetP1Basis]
     X = np.vstack([np.zeros(3), np.diag([2., 3., 4.])])
     r = cls(X)
-    np.testing.assert_allclose(r.eval_value(np.array([.2, .3, .1])), [.4, .9, .4])
-    np.testing.assert_array_equal(r.eval_jacobian(np.zeros(3)).toarray(), np.diag([2., 3., 4.]))
-    np.testing.assert_array_equal(r.eval_hessian(np.zeros(3), np.ones(3)).toarray(), np.zeros((3, 3)))
+    np.testing.assert_allclose(r.evaluate(np.array([0.2, 0.3, 0.1])).value, [0.4, 0.9, 0.4])
+    np.testing.assert_array_equal(r.evaluate(np.zeros(3)).jacobian().toarray(), np.diag([2.0, 3.0, 4.0]))
+    np.testing.assert_array_equal(r.evaluate(np.zeros(3)).hessian(np.ones(3)).toarray(), np.zeros((3, 3)))
     for invalid in [np.zeros((3, 2)), np.empty((4, 0)), np.full((4, 2), np.nan), np.full((4, 2), np.inf)]:
         with pytest.raises(ValueError):
             cls(invalid)
     for x in [np.ones(2), np.full(3, np.nan)]:
         with pytest.raises(ValueError):
-            r.eval_value(x)
+            r.evaluate(x).value
     with pytest.raises(ValueError):
-        r.eval_hessian(np.zeros(3), np.ones(2))
+        r.evaluate(np.zeros(3)).hessian(np.ones(2))
     with pytest.raises(ValueError):
-        r.eval_jvp(np.zeros(3), np.ones(2))
+        r.evaluate(np.zeros(3)).jvp(np.ones(2))

@@ -55,7 +55,7 @@ template <class B, int Dim> void run(const typename fem::CoefficientInfo<Dim>::C
             Eigen::Matrix<double, Dim, 1> query;
             for (int d = 0; d < Dim; ++d)
                 query[d] = 0.2 + 0.15 * d + 0.1 * sample;
-            if (std::abs(field.eval_value(query)[0] - target(query)) > 1e-12)
+            if (std::abs(field.evaluate(query)->value()[0] - target(query)) > 1e-12)
                 throw std::runtime_error("Hermite field does not reconstruct the target");
         }
         std::cout << name << " field: samples=3, verified=1\n";

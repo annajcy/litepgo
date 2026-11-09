@@ -42,7 +42,9 @@ For example, after constructing the fixed geometry as in the
 ```python
 Force = fem.VolumetricFemForceMaterialResponse[fem.TetP1Basis, fem.TetCentroidQuadrature]
 force = Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 2), mapping, geometry, u0, plastic)
-value, B = force.eval_value_and_jacobian(theta)
+evaluation = force.evaluate(theta)
+B = evaluation.jacobian()
+value = evaluation.value
 ```
 
 `value` has displacement-gradient force rows, and `B` has material-parameter

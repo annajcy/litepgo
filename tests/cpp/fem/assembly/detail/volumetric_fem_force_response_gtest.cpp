@@ -49,9 +49,9 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
                                dof::ConstantDofMap(topology, 2), map, geometry, u, plastic, batch_size);
         PlasticForce plastic_force(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
                                    dof::ConstantDofMap(topology, 9), map, geometry, u, parameters, batch_size);
-        EXPECT_TRUE(material.eval_value(theta).isApprox(expected, 1e-11));
-        EXPECT_TRUE(plastic_force.eval_value(p).isApprox(expected, 1e-11));
-        const Eigen::MatrixXd M = material.eval_jacobian(theta), P = plastic_force.eval_jacobian(p);
+        EXPECT_TRUE(material.evaluate(theta)->value().isApprox(expected, 1e-11));
+        EXPECT_TRUE(plastic_force.evaluate(p)->value().isApprox(expected, 1e-11));
+        const Eigen::MatrixXd M = material.evaluate(theta)->jacobian(), P = plastic_force.evaluate(p)->jacobian();
         EXPECT_TRUE((M * theta).isApprox(expected, 1e-11));
         if (batch_size == 1) {
             material_reference = M;
@@ -82,15 +82,16 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
         Vec ts(4), ps(18);
         ts << theta, theta;
         ps << p, p;
-        const Eigen::MatrixXd Me = material_elements.eval_jacobian(ts), Pe = plastic_elements.eval_jacobian(ps);
+        const Eigen::MatrixXd Me = material_elements.evaluate(ts)->jacobian(),
+                              Pe = plastic_elements.evaluate(ps)->jacobian();
         EXPECT_TRUE(M.isApprox(Me.leftCols(2) + Me.rightCols(2), 1e-13));
         EXPECT_TRUE(P.isApprox(Pe.leftCols(9) + Pe.rightCols(9), 1e-13));
-        EXPECT_TRUE(plastic_elements.eval_value(ps).isApprox(expected, 1e-11));
+        EXPECT_TRUE(plastic_elements.evaluate(ps)->value().isApprox(expected, 1e-11));
         // Unequal element parameters expose column swaps hidden by shared-block sums.
         ts.tail(2) *= 1.3;
         ps.tail(9) *= 1.05;
-        const Eigen::MatrixXd heterogeneous_M = material_elements.eval_jacobian(ts);
-        const Eigen::MatrixXd heterogeneous_P = plastic_elements.eval_jacobian(ps);
+        const Eigen::MatrixXd heterogeneous_M = material_elements.evaluate(ts)->jacobian();
+        const Eigen::MatrixXd heterogeneous_P = plastic_elements.evaluate(ps)->jacobian();
         const auto material_gradient = [&](const Vec& t) -> Vec {
             const std::vector<std::shared_ptr<litepgo::energy::Response>> fields{
                 std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((t.head(2)).size(), 3), t.head(2)),
@@ -109,8 +110,8 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
                           fields, parameters)
                 .eval_gradient(u);
         };
-        EXPECT_TRUE(material_elements.eval_value(ts).isApprox(material_gradient(ts), 1e-11));
-        EXPECT_TRUE(plastic_elements.eval_value(ps).isApprox(plastic_gradient(ps), 1e-11));
+        EXPECT_TRUE(material_elements.evaluate(ts)->value().isApprox(material_gradient(ts), 1e-11));
+        EXPECT_TRUE(plastic_elements.evaluate(ps)->value().isApprox(plastic_gradient(ps), 1e-11));
         for (double step : {1e-4, 1e-6}) {
             SCOPED_TRACE(step);
             for (int c = 0; c < ts.size(); ++c) {
@@ -132,8 +133,8 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
                           1e-7 * (1 + numerical.lpNorm<Eigen::Infinity>()));
             }
         }
-        EXPECT_THROW(plastic_force.eval_jacobian(Vec::Zero(9)), std::domain_error);
-        EXPECT_TRUE(plastic_force.eval_value(p).isApprox(expected, 1e-11));
+        EXPECT_THROW(plastic_force.evaluate(Vec::Zero(9))->jacobian(), std::domain_error);
+        EXPECT_TRUE(plastic_force.evaluate(p)->value().isApprox(expected, 1e-11));
     }
     const dof::VertexDofMap wrong(topology, BasisDofTransform<B>::dofs_per_vertex == 3 ? 24 : 3);
     EXPECT_THROW(

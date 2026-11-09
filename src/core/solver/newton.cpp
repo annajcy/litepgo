@@ -115,7 +115,7 @@ std::optional<double> line_search(const energy::Energy& energy, const Vec& x, co
 
 NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed, const ConstVecRef& x0,
                           const NewtonOptions& options, linalg::SparseSolver& solver,
-                          const std::function<void(const NewtonStep&)>& on_iteration) {
+                          const std::function<void(const NewtonStep&)>& on_iteration, SpMat* converged_hessian) {
     check_arguments(energy, fixed, x0, options);
     NewtonResult result;
     result.x = x0;
@@ -164,6 +164,8 @@ NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed
         step.gradient_norm = gradient_free.cwiseAbs().maxCoeff();
 
         if (is_converged(step, options)) {
+            if (converged_hessian)
+                *converged_hessian = std::move(hessian);
             return finish(NewtonStatus::Converged, step);
         }
         if (iteration == options.max_iterations) {

@@ -18,19 +18,15 @@ def test_mesh_response_subclass_assembly_and_solution():
     x = np.array([0.7, 1.2])
     # Independently sum the local rows assigned to each global output.
     J = np.array([[2.0, 4.0], [4.0, 1.0], [6.0, -2.0]])
-    np.testing.assert_allclose(response.eval_value(x), J @ (x - truth))
-    np.testing.assert_allclose(response.eval_jacobian(x).toarray(), J)
+    np.testing.assert_allclose(response.evaluate(x).value, J @ (x - truth))
+    np.testing.assert_allclose(response.evaluate(x).jacobian().toarray(), J)
     v, w = np.array([0.3, -0.8]), np.array([0.2, -0.5, 0.7])
-    jv, jtw = response.eval_jvp(x, v), response.eval_vjp(x, w)
+    jv, jtw = response.evaluate(x).jvp(v), response.evaluate(x).vjp(w)
     np.testing.assert_allclose(jv, J @ v)
     np.testing.assert_allclose(jtw, J.T @ w)
     np.testing.assert_allclose(w @ jv, v @ jtw)
     h = 1e-5
-    np.testing.assert_allclose(
-        jv,
-        (response.eval_value(x + h * v) - response.eval_value(x - h * v)) / (2 * h),
-        atol=1e-9,
-    )
+    np.testing.assert_allclose(jv, (response.evaluate(x + h * v).value - response.evaluate(x - h * v).value) / (2 * h), atol=1e-09)
     result = solver.gauss_newton_solve(
         response, x, solver.GaussNewtonOptions(gradient_tolerance=1e-10)
     )

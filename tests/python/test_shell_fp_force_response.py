@@ -39,8 +39,12 @@ def test_shared_and_element_fp_jacobians_and_original_area(batch_size):
     packed = P.ravel(order="F")
     per = np.concatenate([(1+.02*e)*packed for e in range(4)])
     assert isinstance(shared, energy.MeshResponse) and isinstance(shared, fem.ShellFemForceFpResponse)
-    value, J = shared.eval_value_and_jacobian(packed)
-    per_value, E = element.eval_value_and_jacobian(per)
+    shared_evaluation = shared.evaluate(packed)
+    J = shared_evaluation.jacobian()
+    value = shared_evaluation.value
+    element_evaluation = element.evaluate(per)
+    E = element_evaluation.jacobian()
+    per_value = element_evaluation.value
     np.testing.assert_allclose(value, explicit_force(data, packed, theta), rtol=1e-11, atol=1e-12)
     np.testing.assert_allclose(per_value, explicit_force(data, per, theta), rtol=1e-11, atol=1e-12)
     for response, point, derivative in [(shared, packed, J), (element, per, E)]:
@@ -48,28 +52,28 @@ def test_shared_and_element_fp_jacobians_and_original_area(batch_size):
             plus, minus = point.copy(), point.copy()
             plus[j] += 1e-6
             minus[j] -= 1e-6
-            fd = (response.eval_value(plus)-response.eval_value(minus))/2e-6
+            fd = (response.evaluate(plus).value-response.evaluate(minus).value)/2e-6
             np.testing.assert_allclose(derivative.toarray()[:, j], fd, atol=2e-7, rtol=1e-6)
     for response, point in [(shared, packed), (element, per)]:
-        derivative = response.eval_jacobian(point)
+        derivative = response.evaluate(point).jacobian()
         d = np.sin(np.arange(response.num_inputs))
         w = np.cos(np.arange(response.num_outputs))
-        np.testing.assert_allclose(response.eval_jvp(point, d), derivative @ d, rtol=1e-10, atol=1e-11)
-        np.testing.assert_allclose(response.eval_vjp(point, w), derivative.T @ w, rtol=1e-10, atol=1e-11)
-    repeated_J = element.eval_jacobian(np.tile(packed, 4)).toarray()
+        np.testing.assert_allclose(response.evaluate(point).jvp(d), derivative @ d, rtol=1e-10, atol=1e-11)
+        np.testing.assert_allclose(response.evaluate(point).vjp(w), derivative.T @ w, rtol=1e-10, atol=1e-11)
+    repeated_J = element.evaluate(np.tile(packed, 4)).jacobian().toarray()
     np.testing.assert_allclose(J.toarray(), sum(repeated_J[:, 9*e:9*e+9] for e in range(4)), atol=1e-12)
     identity = np.eye(3).ravel(order="F")
     original = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta)
-    np.testing.assert_allclose(shared.eval_value(identity), original.eval_gradient(u), atol=1e-12)
+    np.testing.assert_allclose(shared.evaluate(identity).value, original.eval_gradient(u), atol=1e-12)
     with pytest.raises(ValueError):
-        shared.eval_value(np.zeros(9))
-    np.testing.assert_array_equal(shared.eval_jacobian(packed).indices, J.indices)
+        shared.evaluate(np.zeros(9)).value
+    np.testing.assert_array_equal(shared.evaluate(packed).jacobian().indices, J.indices)
     u[:] = 0
     rest.clear()
     theta[0][:] = 100
     del data, mapping, topology
     gc.collect()
-    np.testing.assert_allclose(shared.eval_value(packed), value, atol=1e-12)
+    np.testing.assert_allclose(shared.evaluate(packed).value, value, atol=1e-12)
 
 
 
@@ -109,10 +113,12 @@ def test_invalid_inputs_and_empty_mesh():
     response = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), params, mapping, rest, u, thickness, theta)
     for packed in [np.zeros(9), np.full(9, np.nan), np.diag([-1., 1., 1.]).ravel(), np.ones(8)]:
         with pytest.raises(ValueError):
-            response.eval_value(packed)
+            response.evaluate(packed).value
     empty = mesh.TriangleTopology(0, np.empty((0, 3), dtype=np.int32))
     zero = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), dof.ConstantDofMap(empty, 9), dof.StencilDofMap(0, [], 3), [], np.empty(0), [], [])
-    value, J = zero.eval_value_and_jacobian(np.eye(3).ravel(order="F"))
+    zero_evaluation = zero.evaluate(np.eye(3).ravel(order='F'))
+    J = zero_evaluation.jacobian()
+    value = zero_evaluation.value
     assert value.size == 0 and J.shape == (0, 9)
 
 
@@ -126,7 +132,7 @@ def test_shell_energy_fixed_fp_derivatives_and_validation():
     identity = Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta, [np.eye(3)]*len(rest))
     np.testing.assert_allclose(identity.eval_gradient(u), original.eval_gradient(u), atol=1e-12)
     response = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), dof.ConstantDofMap(topology, 9), mapping, rest, u, thickness, theta)
-    np.testing.assert_allclose(elastic.eval_gradient(u), response.eval_value(P.ravel(order="F")), atol=1e-12)
+    np.testing.assert_allclose(elastic.eval_gradient(u), response.evaluate(P.ravel(order='F')).value, atol=1e-12)
     expected = explicit_force((topology, mapping, rest, u, thickness), P.ravel(order="F"), theta)
     np.testing.assert_allclose(elastic.eval_gradient(u), expected, atol=1e-12)
     H = elastic.eval_hessian(u).toarray()

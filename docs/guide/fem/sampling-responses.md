@@ -65,8 +65,8 @@ $$
 J_R=A,\qquad J_Rv=Av,\qquad J_R^Tw=A^Tw,\qquad H_R(c,w)=0.
 $$
 
-In particular, `hessian.eval_value(c)` samples the spatial Hessian of $f$,
-whereas `hessian.eval_hessian(c,w)` differentiates twice with respect to
+In particular, `hessian.evaluate(c).value` samples the spatial Hessian of $f$,
+whereas `hessian.evaluate(c).hessian(w)` differentiates twice with respect to
 **coefficients** and returns an empty sparse $(km,km)$ zero matrix.
 Every sampling response reports `has_hessian == True`.
 

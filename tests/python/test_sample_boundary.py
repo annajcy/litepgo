@@ -35,7 +35,7 @@ def test_conforming_two_hex_boundary(n):
     assert volume == pytest.approx(48.)
     assert all(count == 1 and edges[(b,a)] == 1 for (a,b),count in edges.items())
     for p,e,xi in zip(surface.positions,sampled.embedding.element_ids,sampled.embedding.xi):
-        np.testing.assert_allclose(fields[e].eval_value(xi),p,atol=1e-12)
+        np.testing.assert_allclose(fields[e].evaluate(xi).value, p, atol=1e-12)
     # The resulting topology is accepted as a contact surface.
     barrier = contact.IPCContactEnergy(surface,contact.IPCContactOptions(dhat=.01),contact.SpatialHash())
     assert barrier.num_vertices == len(surface.positions)
@@ -58,7 +58,7 @@ def test_hermite_derivatives_move_face_samples_but_not_corners():
             np.testing.assert_array_equal(displacement[:len(X)],0)
         for i,(e,xi) in enumerate(zip(sampled.embedding.element_ids,sampled.embedding.xi)):
             coeffs = fem.BasisDofTransform[fem.HexHermiteBasis](fields[e]).to_coefficients(layout.gather(e,u))
-            expected = fem.InterpolatedResponse[fem.HexHermiteBasis](coeffs).eval_value(xi)
+            expected = fem.InterpolatedResponse[fem.HexHermiteBasis](coeffs).evaluate(xi).value
             np.testing.assert_allclose(displacement[i],expected,atol=1e-12)
 
 

@@ -18,10 +18,10 @@ TEST(SamplingResponse, CoefficientMapsReturnAffineResponses) {
     Vec c(4);
     c << 0, 0, 1, 3; // t^3
     points.setZero();
-    EXPECT_TRUE(value.eval_value(c).isApprox(Eigen::Vector2d(.125, 8)));
-    EXPECT_TRUE(gradient.eval_value(c).isApprox(Eigen::Vector2d(.75, 12)));
-    EXPECT_TRUE(hessian.eval_value(c).isApprox(Eigen::Vector2d(3, 12)));
-    EXPECT_EQ(hessian.eval_hessian(c, Eigen::Vector2d(2, -3)).nonZeros(), 0);
+    EXPECT_TRUE(value.evaluate(c)->value().isApprox(Eigen::Vector2d(.125, 8)));
+    EXPECT_TRUE(gradient.evaluate(c)->value().isApprox(Eigen::Vector2d(.75, 12)));
+    EXPECT_TRUE(hessian.evaluate(c)->value().isApprox(Eigen::Vector2d(3, 12)));
+    EXPECT_EQ(hessian.evaluate(c)->hessian(Eigen::Vector2d(2, -3)).nonZeros(), 0);
 }
 TEST(SamplingResponse, PointDerivativeComponentOrdering) {
     Eigen::MatrixXd points(2, 3);
@@ -36,18 +36,18 @@ TEST(SamplingResponse, PointDerivativeComponentOrdering) {
     auto g = gradient_sampling_response<HexQ1Basis>(points, 2);
     Vec expected_g(12);
     expected_g << .3, 0, .2, .4, 0, .3, .7, 0, .6, .8, 0, .7;
-    EXPECT_TRUE(g.eval_value(c).isApprox(expected_g));
+    EXPECT_TRUE(g.evaluate(c)->value().isApprox(expected_g));
     auto h = hessian_sampling_response<HexQ1Basis>(points, 2);
     Vec expected_h(24);
     expected_h << 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0;
-    EXPECT_TRUE(h.eval_value(c).isApprox(expected_h));
+    EXPECT_TRUE(h.evaluate(c)->value().isApprox(expected_h));
 }
 TEST(SamplingResponse, InvalidAndEmptyInputs) {
     Eigen::MatrixXd points = Eigen::MatrixXd::Zero(0, 3);
     auto empty = value_sampling_response<HexQ1Basis>(points, 2);
     EXPECT_EQ(empty.num_inputs(), 16);
     EXPECT_EQ(empty.num_outputs(), 0);
-    EXPECT_EQ(empty.eval_jacobian(Vec::Zero(16)).rows(), 0);
+    EXPECT_EQ(empty.evaluate(Vec::Zero(16))->jacobian().rows(), 0);
     EXPECT_THROW(value_sampling_response<HexQ1Basis>(points, 0), std::invalid_argument);
     EXPECT_THROW(gradient_sampling_response<HexQ1Basis>(points, std::numeric_limits<int>::max()),
                  std::invalid_argument);
@@ -69,8 +69,8 @@ TEST(DeformationGradientSampling, PhysicalGradientAndIdentityOffset) {
     const Vec c = C.reshaped<Eigen::RowMajor>();
     auto r = fem::deformation_gradient_sampling_response<B>(geometry, points);
     const Eigen::Matrix3d expected = Eigen::Vector3d(1.05, 1 + .1 / 3, 1.025).asDiagonal();
-    const Vec values = r.eval_value(c);
+    const Vec values = r.evaluate(c)->value();
     for (int q = 0; q < 2; ++q)
         EXPECT_TRUE(values.segment<9>(9 * q).isApprox(expected.reshaped()));
-    EXPECT_EQ(r.eval_hessian(c, Vec::Ones(18)).nonZeros(), 0);
+    EXPECT_EQ(r.evaluate(c)->hessian(Vec::Ones(18)).nonZeros(), 0);
 }

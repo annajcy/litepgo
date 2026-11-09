@@ -55,12 +55,14 @@ class NonlinearResidual final : public energy::DynamicPatternResponse {
 
 int main() {
     LinearResidual fixed;
-    const auto [r, J] = fixed.eval_value_and_jacobian(Eigen::Vector2d(1, 2));
+    auto evaluation = fixed.evaluate(Eigen::Vector2d(1, 2));
+    const auto J = evaluation->jacobian();
+    const Vec r = evaluation->value();
     NonlinearResidual dynamic;
     const Vec active = Vec::Ones(2);
-    dynamic.eval_jacobian(active);
-    dynamic.eval_jacobian(-active);
-    const SpMat buffer = dynamic.eval_jacobian(2 * active);
+    dynamic.evaluate(active)->jacobian();
+    dynamic.evaluate(-active)->jacobian();
+    const SpMat buffer = dynamic.evaluate(2 * active)->jacobian();
     if (buffer.coeff(1, 0) != 4)
         throw std::runtime_error("Response Jacobian evaluation failed");
     solver::GaussNewtonOptions options;
@@ -69,5 +71,5 @@ int main() {
     if (result.status != solver::GaussNewtonStatus::Converged)
         throw std::runtime_error("Response fit failed");
     std::cout << "fixed Jacobian=" << J.rows() << "x" << J.cols() << ", dynamic solution=" << result.x.transpose()
-              << ", Jacobian nnz=" << dynamic.eval_jacobian(result.x).nonZeros() << '\n';
+              << ", Jacobian nnz=" << dynamic.evaluate(result.x)->jacobian().nonZeros() << '\n';
 }

@@ -54,20 +54,20 @@ class ShellFemForceFpResponse final : public energy::MeshResponse {
     energy::BatchMatrix eval_jvp_batch(std::span<const int> ids, const energy::BatchMatrix& x,
                                        const energy::BatchMatrix& d) const override {
         check_batch_product(ids, x, d, false);
-        return evaluate(ids, x, nullptr, &d, false);
+        return evaluate_batch(ids, x, nullptr, &d, false);
     }
     energy::BatchMatrix eval_vjp_batch(std::span<const int> ids, const energy::BatchMatrix& x,
                                        const energy::BatchMatrix& d) const override {
         check_batch_product(ids, x, d, true);
-        return evaluate(ids, x, nullptr, &d, true);
+        return evaluate_batch(ids, x, nullptr, &d, true);
     }
     energy::BatchMatrix eval_batch(std::span<const int> ids, const energy::BatchMatrix& plastic,
                                    energy::BatchMatrix* jacobian) const override {
-        return evaluate(ids, plastic, jacobian);
+        return evaluate_batch(ids, plastic, jacobian);
     }
-    energy::BatchMatrix evaluate(std::span<const int> ids, const energy::BatchMatrix& plastic,
-                                 energy::BatchMatrix* jacobian, const energy::BatchMatrix* direction = nullptr,
-                                 bool transpose = false) const {
+    energy::BatchMatrix evaluate_batch(std::span<const int> ids, const energy::BatchMatrix& plastic,
+                                       energy::BatchMatrix* jacobian, const energy::BatchMatrix* direction = nullptr,
+                                       bool transpose = false) const {
         const Eigen::Index n = ids.empty() ? 0 : faces_[ids[0]].current.dab_du.cols();
         energy::BatchMatrix values(ids.size(), n);
         energy::BatchMatrix product(direction ? ids.size() : 0, transpose ? 9 : n);

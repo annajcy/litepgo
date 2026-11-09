@@ -140,7 +140,7 @@ def worker(case, repeats):
             prepares = {}
             if case["layer"] == "fem":
                 operations = {"value": lambda: obj.eval_value(u), "gradient": lambda: obj.eval_gradient(u),
-                              "hessian": lambda: obj.eval_hessian(u), "parameter_vjp": lambda: force.eval_vjp(p, upstream)}
+                              "hessian": lambda: obj.eval_hessian(u), "parameter_vjp": lambda: force.evaluate(p).vjp(upstream)}
                 def validate(name, value):
                     array = value.data if sp.issparse(value) else value
                     assert np.isfinite(array).all()
@@ -148,7 +148,7 @@ def worker(case, repeats):
                     other = elastic(p, batch=32 if case["batch"] != 32 else 256,
                                     kind=fem.PointwiseVolumetricAdapter[fem.NeoHookean]() if case["model"] == "torch" else material)
                     if name == "parameter_vjp":
-                        expected = forces(u, batch=1, kind=fem.PointwiseVolumetricAdapter[fem.NeoHookean]() if case["model"] == "torch" else material).eval_vjp(p, upstream)
+                        expected = forces(u, batch=1, kind=fem.PointwiseVolumetricAdapter[fem.NeoHookean]() if case['model'] == 'torch' else material).evaluate(p).vjp(upstream)
                     else:
                         expected = getattr(other, "eval_" + name)(u)
                     if sp.issparse(value):
@@ -188,7 +188,7 @@ def worker(case, repeats):
                 def backward():
                     saved_loss.backward()
                     return tensor.grad
-                operations = {"forward": lambda: eq.eval_value(p), "loss_backward": backward}
+                operations = {"forward": lambda: eq.evaluate(p).value, "loss_backward": backward}
                 prepares["loss_backward"] = prepare_backward
                 def validate(name, value):
                     if name == "forward":
@@ -197,7 +197,7 @@ def worker(case, repeats):
                         assert torch.isfinite(value).all()
                         direction = np.linspace(.3, .7, k)
                         def loss(q):
-                            return .5 * np.mean(eq.eval_value(q)[free] ** 2)
+                            return .5 * np.mean(eq.evaluate(q).value[free] ** 2)
                         fd = (loss(p + 1e-4*direction) - loss(p - 1e-4*direction)) / 2e-4
                         np.testing.assert_allclose(value.detach().numpy() @ direction, fd, rtol=2e-4, atol=1e-9)
         metadata["setup_ms"] = 1000 * (time.perf_counter() - setup_start) - diagnostic_ms

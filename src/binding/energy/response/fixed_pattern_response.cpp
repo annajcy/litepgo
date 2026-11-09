@@ -11,13 +11,13 @@ void bind_fixed_pattern_response(nb::module_& m) {
     using linalg::binding::SparseArgument;
     nb::class_<FixedPatternResponse, Response, PyResponse<FixedPatternResponse>>(m, "FixedPatternResponse")
         .def(
-            "eval_jvp_impl",
+            "jvp_at",
             [](FixedPatternResponse& r, const ConstVecRef& x, const ConstVecRef& d) {
                 return dynamic_cast<PyResponse<FixedPatternResponse>&>(r).default_jvp(x, d);
             },
             "x"_a, "dx"_a)
         .def(
-            "eval_vjp_impl",
+            "vjp_at",
             [](FixedPatternResponse& r, const ConstVecRef& x, const ConstVecRef& d) {
                 return dynamic_cast<PyResponse<FixedPatternResponse>&>(r).default_vjp(x, d);
             },

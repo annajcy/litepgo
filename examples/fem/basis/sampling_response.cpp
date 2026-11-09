@@ -27,15 +27,15 @@ int main() {
     Vec expected_g(12), expected_h(24);
     expected_g << .3, 0, .2, .4, 0, .3, .7, 0, .6, .8, 0, .7;
     expected_h << 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0;
-    if (!values.eval_value(c).isApprox(Eigen::Vector4d(.06, .12, .42, .56)) ||
-        !gradients.eval_value(c).isApprox(expected_g) || !hessians.eval_value(c).isApprox(expected_h))
+    if (!values.evaluate(c)->value().isApprox(Eigen::Vector4d(.06, .12, .42, .56)) ||
+        !gradients.evaluate(c)->value().isApprox(expected_g) || !hessians.evaluate(c)->value().isApprox(expected_h))
         throw std::runtime_error("sampling mismatch");
-    const auto A = gradients.eval_jacobian(c);
+    const auto A = gradients.evaluate(c)->jacobian();
     const Vec direction = Vec::Ones(c.size());
     const Vec weights = Vec::LinSpaced(gradients.num_outputs(), 0, gradients.num_outputs() - 1);
-    if (!gradients.eval_jvp(c, direction).isApprox(Vec(A * direction)) ||
-        !gradients.eval_vjp(c, weights).isApprox(Vec(A.transpose() * weights)) ||
-        hessians.eval_hessian(c, Vec::Ones(hessians.num_outputs())).nonZeros() != 0)
+    if (!gradients.evaluate(c)->jvp(direction).isApprox(Vec(A * direction)) ||
+        !gradients.evaluate(c)->vjp(weights).isApprox(Vec(A.transpose() * weights)) ||
+        hessians.evaluate(c)->hessian(Vec::Ones(hessians.num_outputs())).nonZeros() != 0)
         throw std::runtime_error("coefficient derivative mismatch");
     energy::AffineResponse geometry(Eigen::Vector3d(2, 3, 4).asDiagonal().toDenseMatrix().sparseView());
     auto deformation = fem::deformation_gradient_sampling_response<B>(geometry, points);
@@ -43,7 +43,7 @@ int main() {
     for (int a = 0; a < 8; ++a)
         U.row(a) = .1 * B::coefficient_info(a).point.transpose();
     const Vec u = U.reshaped<Eigen::RowMajor>();
-    const Vec F = deformation.eval_value(u);
+    const Vec F = deformation.evaluate(u)->value();
     const Eigen::Matrix3d expected = Eigen::Vector3d(1.05, 1 + .1 / 3, 1.025).asDiagonal();
     for (int q = 0; q < points.rows(); ++q)
         if (!F.segment<9>(9 * q).isApprox(expected.reshaped()))
@@ -53,8 +53,8 @@ int main() {
     using M = fem::NeoHookean;
     const fem::VolumetricElement3D<Q> element(geometry);
     auto sample = fem::deformation_gradient_sampling_response<B>(geometry, Q::points());
-    const Eigen::MatrixXd J = sample.eval_jacobian(u);
-    const Vec samples = sample.eval_value(u);
+    const Eigen::MatrixXd J = sample.evaluate(u)->jacobian();
+    const Vec samples = sample.evaluate(u)->value();
     Vec g = Vec::Zero(24);
     Eigen::MatrixXd H = Eigen::MatrixXd::Zero(24, 24);
     double E = 0;

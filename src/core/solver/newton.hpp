@@ -71,6 +71,7 @@ struct NewtonResult {
 // (a non-finite gradient) throws std::logic_error.
 NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed, const ConstVecRef& x0,
                           const NewtonOptions& options, linalg::SparseSolver& solver,
-                          const std::function<void(const NewtonStep&)>& on_iteration = {});
+                          const std::function<void(const NewtonStep&)>& on_iteration = {},
+                          SpMat* converged_hessian = nullptr);
 
 } // namespace litepgo::solver

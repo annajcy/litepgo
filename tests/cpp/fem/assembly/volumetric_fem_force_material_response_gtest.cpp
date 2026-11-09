@@ -59,19 +59,19 @@ TEST(VolumetricFemForceMaterialResponse, MatchesEnergySharedAndPerElementAndBatc
                           dof::ElementDofMap(f.topology, 2), f.map, f.X, f.u, f.plastic, size);
         EXPECT_EQ(shared.num_inputs(), 2);
         EXPECT_EQ(shared.num_outputs(), 15);
-        EXPECT_TRUE(shared.eval_value(theta).isApprox(f.force(theta), 1e-12));
-        EXPECT_TRUE(per_element.eval_value(independent).isApprox(f.force(independent), 1e-12));
-        const Eigen::MatrixXd J = shared.eval_jacobian(theta), E = per_element.eval_jacobian(independent);
+        EXPECT_TRUE(shared.evaluate(theta)->value().isApprox(f.force(theta), 1e-12));
+        EXPECT_TRUE(per_element.evaluate(independent)->value().isApprox(f.force(independent), 1e-12));
+        const Eigen::MatrixXd J = shared.evaluate(theta)->jacobian(), E = per_element.evaluate(independent)->jacobian();
         EXPECT_TRUE(J.isApprox(E.leftCols(2) + E.rightCols(2), 1e-13));
         EXPECT_TRUE((E * independent).isApprox(f.force(independent), 1e-12));
         if (size == 1)
             reference = J;
         else
             EXPECT_EQ((reference - J).norm(), 0);
-        const SpMat before = shared.eval_jacobian(theta);
-        EXPECT_THROW(shared.eval_value(Eigen::Vector2d(2, 0)), std::invalid_argument);
-        EXPECT_TRUE(shared.eval_value(theta).isApprox(f.force(theta), 1e-12));
-        EXPECT_EQ(before.nonZeros(), shared.eval_jacobian(theta).nonZeros());
+        const SpMat before = shared.evaluate(theta)->jacobian();
+        EXPECT_THROW(shared.evaluate(Eigen::Vector2d(2, 0))->value(), std::invalid_argument);
+        EXPECT_TRUE(shared.evaluate(theta)->value().isApprox(f.force(theta), 1e-12));
+        EXPECT_EQ(before.nonZeros(), shared.evaluate(theta)->jacobian().nonZeros());
     }
 }
 TEST(VolumetricFemForceMaterialResponse, OwnsDisplacementAndValidatesConstruction) {
@@ -82,7 +82,7 @@ TEST(VolumetricFemForceMaterialResponse, OwnsDisplacementAndValidatesConstructio
     f.u.setZero();
     f.X.clear();
     f.plastic.clear();
-    EXPECT_TRUE(r.eval_value(theta).isApprox(expected, 1e-12));
+    EXPECT_TRUE(r.evaluate(theta)->value().isApprox(expected, 1e-12));
     Fixture good;
     EXPECT_THROW((Force(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), p, good.map, good.X,
                         Vec::Zero(1), good.plastic)),
@@ -105,8 +105,8 @@ TEST(VolumetricFemForceMaterialResponse, OwnsDisplacementAndValidatesConstructio
                  std::invalid_argument);
     Force zero(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), dof::ConstantDofMap(empty, 2),
                dof::VertexDofMap(empty, 3), {}, Vec(0), {});
-    EXPECT_EQ(zero.eval_value(theta).size(), 0);
-    EXPECT_EQ(zero.eval_jacobian(theta).nonZeros(), 0);
+    EXPECT_EQ(zero.evaluate(theta)->value().size(), 0);
+    EXPECT_EQ(zero.evaluate(theta)->jacobian().nonZeros(), 0);
 }
 } // namespace
 } // namespace litepgo::fem::test
@@ -120,7 +120,7 @@ TEST(VolumetricFemForceFpResponse, EnergyConsistencySharedElementAndBatchJacobia
         std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat(2, 3), Eigen::Vector2d(4, 2))};
     Vec p(18);
     for (int e = 0; e < 2; ++e)
-        p.segment<9>(9 * e) = f.plastic[e]->eval_value(Eigen::Vector3d::Zero());
+        p.segment<9>(9 * e) = f.plastic[e]->evaluate(Eigen::Vector3d::Zero())->value();
     Eigen::MatrixXd reference;
     for (int size : {1, 3, 256}) {
         PlasticForce local(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
@@ -130,8 +130,8 @@ TEST(VolumetricFemForceFpResponse, EnergyConsistencySharedElementAndBatchJacobia
         const auto expected = Energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), f.map,
                                      f.X, f.plastic, theta)
                                   .eval_gradient(f.u);
-        EXPECT_TRUE(local.eval_value(p).isApprox(expected, 1e-12));
-        const Eigen::MatrixXd J = local.eval_jacobian(p);
+        EXPECT_TRUE(local.evaluate(p)->value().isApprox(expected, 1e-12));
+        const Eigen::MatrixXd J = local.evaluate(p)->jacobian();
         if (size == 1)
             reference = J;
         else
@@ -140,21 +140,21 @@ TEST(VolumetricFemForceFpResponse, EnergyConsistencySharedElementAndBatchJacobia
             Vec plus = p, minus = p;
             plus[c] += 1e-6;
             minus[c] -= 1e-6;
-            const Vec difference = (local.eval_value(plus) - local.eval_value(minus)) / 2e-6;
+            const Vec difference = (local.evaluate(plus)->value() - local.evaluate(minus)->value()) / 2e-6;
             EXPECT_TRUE(J.col(c).isApprox(difference, 1e-8));
         }
         Vec repeated(18);
         repeated << p.head(9), p.head(9);
-        const Eigen::MatrixXd element_J = local.eval_jacobian(repeated);
-        EXPECT_TRUE(Eigen::MatrixXd(shared.eval_jacobian(p.head(9)))
+        const Eigen::MatrixXd element_J = local.evaluate(repeated)->jacobian();
+        EXPECT_TRUE(Eigen::MatrixXd(shared.evaluate(p.head(9))->jacobian())
                         .isApprox(element_J.leftCols(9) + element_J.rightCols(9), 1e-13));
-        EXPECT_TRUE(shared.eval_value(p.head(9)).isApprox(local.eval_value(repeated), 1e-13));
+        EXPECT_TRUE(shared.evaluate(p.head(9))->value().isApprox(local.evaluate(repeated)->value(), 1e-13));
         Vec bad = p;
         bad.head(9).setZero();
-        EXPECT_THROW(local.eval_jacobian(bad), std::domain_error);
-        EXPECT_TRUE(local.eval_value(p).isApprox(expected, 1e-12));
+        EXPECT_THROW(local.evaluate(bad)->jacobian(), std::domain_error);
+        EXPECT_TRUE(local.evaluate(p)->value().isApprox(expected, 1e-12));
         f.u.setZero();
-        EXPECT_TRUE(local.eval_value(p).isApprox(expected, 1e-12));
+        EXPECT_TRUE(local.evaluate(p)->value().isApprox(expected, 1e-12));
         f = Fixture{};
     }
     EXPECT_THROW((PlasticForce(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
@@ -166,7 +166,7 @@ TEST(VolumetricFemForceFpResponse, EnergyConsistencySharedElementAndBatchJacobia
     const mesh::TetTopology empty(0, {});
     PlasticForce zero(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
                       dof::ConstantDofMap(empty, 9), dof::VertexDofMap(empty, 3), {}, Vec(0), {});
-    EXPECT_EQ(zero.eval_value(p.head(9)).size(), 0);
-    EXPECT_EQ(zero.eval_jacobian(p.head(9)).cols(), 9);
+    EXPECT_EQ(zero.evaluate(p.head(9))->value().size(), 0);
+    EXPECT_EQ(zero.evaluate(p.head(9))->jacobian().cols(), 9);
 }
 } // namespace litepgo::fem::test

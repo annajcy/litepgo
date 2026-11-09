@@ -13,34 +13,35 @@ Force = fem.VolumetricFemForceFpResponse[fem.TetP1Basis, fem.TetCentroidQuadratu
 def test_fp_force_energy_jacobian_and_recovery(batch_size):
     topology, mapping, geometry, u, plastic = problem()
     theta = [AffineResponse(np.zeros((np.asarray(np.array([2., 3.])).size, 3)), np.array([2., 3.])), AffineResponse(np.zeros((np.asarray(np.array([4., 2.])).size, 3)), np.array([4., 2.]))]
-    p = np.concatenate([field.eval_value(np.zeros(3)) for field in plastic])
+    p = np.concatenate([field.evaluate(np.zeros(3)).value for field in plastic])
     obj = Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ElementDofMap(topology, 9), mapping, geometry, u, theta=theta, batch_size=batch_size)
     assert isinstance(obj, energy.MeshResponse)
     expected = Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, plastic, theta).eval_gradient(u)
-    value, J = obj.eval_value_and_jacobian(p)
+    obj_evaluation = obj.evaluate(p)
+    J = obj_evaluation.jacobian()
+    value = obj_evaluation.value
     np.testing.assert_allclose(value, expected, atol=1e-13)
     for c in range(18):
         delta = np.zeros(18)
         delta[c] = 1e-6
-        np.testing.assert_allclose(J.toarray()[:, c], (obj.eval_value(p+delta)-obj.eval_value(p-delta))/2e-6,
-                                   rtol=1e-7, atol=1e-9)
+        np.testing.assert_allclose(J.toarray()[:, c], (obj.evaluate(p + delta).value - obj.evaluate(p - delta).value) / 2e-06, rtol=1e-07, atol=1e-09)
     shared = Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 9), mapping, geometry, u, theta)
     repeated = np.tile(p[:9], 2)
-    element_J = obj.eval_jacobian(repeated).toarray()
-    np.testing.assert_allclose(shared.eval_jacobian(p[:9]).toarray(), element_J[:, :9]+element_J[:, 9:], atol=1e-13)
+    element_J = obj.evaluate(repeated).jacobian().toarray()
+    np.testing.assert_allclose(shared.evaluate(p[:9]).jacobian().toarray(), element_J[:, :9] + element_J[:, 9:], atol=1e-13)
     for response, point in [(shared, p[:9]), (obj, p)]:
-        derivative = response.eval_jacobian(point)
+        derivative = response.evaluate(point).jacobian()
         d = np.sin(np.arange(response.num_inputs))
         w = np.cos(np.arange(response.num_outputs))
-        np.testing.assert_allclose(response.eval_jvp(point, d), derivative @ d, rtol=1e-10, atol=1e-11)
-        np.testing.assert_allclose(response.eval_vjp(point, w), derivative.T @ w, rtol=1e-10, atol=1e-11)
+        np.testing.assert_allclose(response.evaluate(point).jvp(d), derivative @ d, rtol=1e-10, atol=1e-11)
+        np.testing.assert_allclose(response.evaluate(point).vjp(w), derivative.T @ w, rtol=1e-10, atol=1e-11)
     with pytest.raises(ValueError):
-        obj.eval_value(np.zeros(18))
-    np.testing.assert_array_equal(obj.eval_jacobian(p).indices, J.indices)
+        obj.evaluate(np.zeros(18)).value
+    np.testing.assert_array_equal(obj.evaluate(p).jacobian().indices, J.indices)
     u[:] = 0
     del mapping, geometry, theta, topology
     gc.collect()
-    np.testing.assert_allclose(obj.eval_value(p), expected, atol=1e-13)
+    np.testing.assert_allclose(obj.evaluate(p).value, expected, atol=1e-13)
 
 
 
@@ -50,7 +51,7 @@ def test_fp_force_fits_a_constrained_plastic_scale():
     theta = [AffineResponse(np.zeros((np.asarray(np.array([2., 3.])).size, 3)), np.array([2., 3.])) for _ in range(2)]
     obj = Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 9), mapping, geometry, u, theta)
     direction = np.eye(3).ravel(order="F")
-    target = obj.eval_value(1.05*direction)
+    target = obj.evaluate(1.05 * direction).value
 
     class ScaleResidual(energy.FixedPatternResponse):
         def __init__(self):
@@ -58,7 +59,9 @@ def test_fp_force_fits_a_constrained_plastic_scale():
             super().__init__(scipy.sparse.csc_matrix(np.ones((15, 1))))
 
         def eval_impl(self, x, need):
-            value, J = (obj.eval_value_and_jacobian(x[0]*direction) if need else (obj.eval_value(x[0]*direction), None))
+            evaluation = obj.evaluate(x[0] * direction)
+            J = evaluation.jacobian() if need else None
+            value = evaluation.value
             if not need:
                 return value-target
             import scipy.sparse
@@ -83,5 +86,5 @@ def test_fp_force_validation_and_empty_mesh():
         Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 2), mapping, geometry, u, theta)
     empty = mesh.TetTopology(0, np.empty((0, 4), dtype=np.int32))
     zero = Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(empty, 9), dof.VertexDofMap(empty, 3), [], np.empty(0), [])
-    assert zero.eval_value(np.eye(3).ravel()).size == 0
-    assert zero.eval_jacobian(np.eye(3).ravel()).shape == (0, 9)
+    assert zero.evaluate(np.eye(3).ravel()).value.size == 0
+    assert zero.evaluate(np.eye(3).ravel()).jacobian().shape == (0, 9)

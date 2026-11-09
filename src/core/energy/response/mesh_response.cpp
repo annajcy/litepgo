@@ -61,10 +61,10 @@ Vec MeshResponse::eval_impl(const ConstVecRef& x, SpMat* J) {
     assembler_.assemble(views_, result, J);
     return result;
 }
-Vec MeshResponse::eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& dx) {
+Vec MeshResponse::jvp_at(const ConstVecRef& x, const ConstVecRef& dx) {
     return product(x, dx, false);
 }
-Vec MeshResponse::eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& gy) {
+Vec MeshResponse::vjp_at(const ConstVecRef& x, const ConstVecRef& gy) {
     return product(x, gy, true);
 }
 Vec MeshResponse::product(const ConstVecRef& x, const ConstVecRef& direction, bool transpose) const {

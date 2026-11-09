@@ -158,14 +158,14 @@ def test_response_pattern_and_object_protocol():
     r = TestResponse(sp.eye(2, format="csc"),
                              lambda x, need: (x*x, np.diag(2*x)) if need else x*x)
     assert isinstance(r, Response)
-    np.testing.assert_array_equal(r.eval_value(np.array([2., 3.])), [4., 9.])
-    J = r.eval_jacobian(np.zeros(2))
+    np.testing.assert_array_equal(r.evaluate(np.array([2.0, 3.0])).value, [4.0, 9.0])
+    J = r.evaluate(np.zeros(2)).jacobian()
     assert J.nnz == 2  # Numerical zeros do not remove structural slots.
     with pytest.raises(ValueError):
-        r.eval_value(np.zeros(3))
+        r.evaluate(np.zeros(3)).value
     bad = TestResponse(sp.eye(2), lambda x, need: (x, np.ones((2, 2))))
     with pytest.raises(RuntimeError, match="outside pattern"):
-        bad.eval_jacobian(np.ones(2))
+        bad.evaluate(np.ones(2)).jacobian()
     with pytest.raises(TypeError):
         gauss_newton_solve(lambda x, need: x, np.ones(1), GaussNewtonOptions(gradient_tolerance=1e-8))
 
@@ -173,7 +173,7 @@ def test_response_pattern_and_object_protocol():
 def test_fixed_response_requires_override():
     base = FixedPatternResponse(np.ones((1, 1)))
     with pytest.raises(RuntimeError, match="eval_impl"):
-        base.eval_value(np.ones(1))
+        base.evaluate(np.ones(1)).value
     with pytest.raises(TypeError):
         FixedPatternResponse(np.ones((1, 1)), lambda x, need: x)
 

@@ -10,12 +10,12 @@ FEM uses the same `Response` interface as the rest of litepgo. A response differ
 | `IdentityField2D/3D(c)` as fixed configuration | `AffineResponse(zeros((m,d)), c)`; coordinate derivatives are zero |
 | Active coefficient derivatives of an interpolated field | The value, gradient and Hessian sampling factories at fixed points |
 | `DeformationGradientField3D(u,X)` queried in space | `DeformationGradientResponse(u,X)`; its Jacobian differentiates `xi`, not `u` coefficients |
-| Its active displacement-coefficient derivative | `deformation_gradient_sampling_response<B>(geometry, points).eval_jacobian(c)` |
+| Its active displacement-coefficient derivative | `deformation_gradient_sampling_response<B>(geometry, points).evaluate(c).jacobian()` |
 | `SharedField3D` and concrete field template arguments | Ordinary Response ownership at the API boundary; FEM caches numerical samples |
 | Field-dependent local material wrappers | Pointwise material functions and explicit DOF pullbacks, or a global FEM force response composed with coefficient sampling |
 
 The removed interfaces have no compatibility aliases. In particular, do not mechanically
-replace a coefficient derivative with `eval_jacobian(xi)`: those have different independent variables.
+replace a coefficient derivative with `evaluate(xi).jacobian()`: those have different independent variables.
 
 ## Fixed coefficients, variable coordinates
 

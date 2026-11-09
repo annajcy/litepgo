@@ -31,7 +31,7 @@ def main():
     field = fem.InterpolatedResponse[B](coefficients)
     points = np.array([[0.25, 0.25, 0.25], [0.2, 0.3, 0.1], [0.1, 0.1, 0.2]])
     for point in points:
-        np.testing.assert_allclose(field.eval_value(point)[0], target(point))
+        np.testing.assert_allclose(field.evaluate(point).value[0], target(point))
     print(f"TetP1 field: samples={len(points)}, verified=1")
 
 

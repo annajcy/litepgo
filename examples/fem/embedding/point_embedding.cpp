@@ -23,7 +23,7 @@ template <class B, class G> void run(const char* name) {
     coordinates << .1, .2, .3, .2, .1, .2;
     Eigen::MatrixXd points(2, 3);
     for (int i = 0; i < 2; ++i)
-        points.row(i) = fields[0]->eval_value(coordinates.row(i).transpose()).transpose();
+        points.row(i) = fields[0]->evaluate(coordinates.row(i).transpose())->value().transpose();
     auto embedding = fem::ElementLocator<G>(fields).locate(points);
     fem::PointEmbedding known{Eigen::VectorXi::Zero(2), coordinates};
     dof::VertexDofMap map(mesh::MeshTopology<nodes>(nodes, {cell}), width);
@@ -36,8 +36,8 @@ template <class B, class G> void run(const char* name) {
     const Vec displacement = kinematics.displacements(u);
     double error = 0;
     for (int i = 0; i < 2; ++i)
-        error = std::max(error,
-                         (displacement.segment<3>(3 * i) - field->eval_value(coordinates.row(i).transpose())).norm());
+        error = std::max(
+            error, (displacement.segment<3>(3 * i) - field->evaluate(coordinates.row(i).transpose())->value()).norm());
     if (error > 1e-10 || !(Vec(W * u)).isApprox(exact * u, 1e-10))
         throw std::runtime_error("Embedding interpolation mismatch");
     std::cout << name << ": points=2, verified=1\n";

@@ -56,7 +56,9 @@ class ForceResidual(energy.FixedPatternResponse):
         self.force, self.observed = force, observed
 
     def eval_impl(self, theta, need_jacobian):
-        value, J = (self.force.eval_value_and_jacobian(theta) if need_jacobian else (self.force.eval_value(theta), None))
+        evaluation = self.force.evaluate(theta)
+        J = evaluation.jacobian() if need_jacobian else None
+        value = evaluation.value
         residual = value - self.observed
         return (residual, J) if need_jacobian else residual
 
@@ -72,9 +74,13 @@ def run(copies=1, batch_size=256, repeats=0):
         mapping, geometry, plastic, [AffineResponse(np.zeros((2, 3)), truth)] * topology.num_cells
     )
     expected = energy.eval_gradient(displacement)
-    single_value, J = single.eval_value_and_jacobian(truth)
+    single_evaluation = single.evaluate(truth)
+    J = single_evaluation.jacobian()
+    single_value = single_evaluation.value
     np.testing.assert_allclose(single_value, expected, atol=1e-13)
-    value, batch_J = batched.eval_value_and_jacobian(truth)
+    batched_evaluation = batched.evaluate(truth)
+    batch_J = batched_evaluation.jacobian()
+    value = batched_evaluation.value
     np.testing.assert_allclose(value, expected, atol=1e-14)
     np.testing.assert_array_equal(batch_J.indptr, J.indptr)
     np.testing.assert_array_equal(batch_J.indices, J.indices)
@@ -92,11 +98,17 @@ def run(copies=1, batch_size=256, repeats=0):
             times = []
             for obj in (single, batched):
                 for _ in range(3):
-                    (obj.eval_value_and_jacobian(truth) if need else (obj.eval_value(truth), None))
+                    evaluation = obj.evaluate(truth)
+                    if need:
+                        evaluation.jacobian()
+                    evaluation.value
                 samples = []
                 for _ in range(repeats):
                     start = perf_counter()
-                    (obj.eval_value_and_jacobian(truth) if need else (obj.eval_value(truth), None))
+                    evaluation = obj.evaluate(truth)
+                    if need:
+                        evaluation.jacobian()
+                    evaluation.value
                     samples.append(perf_counter() - start)
                 times.append(1000 * median(samples))
             print(

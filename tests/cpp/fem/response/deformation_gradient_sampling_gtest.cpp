@@ -26,7 +26,7 @@ template <class B, class XBasis, class Q> void check_against_spatial_response() 
         auto temporary = std::make_shared<InterpolatedResponse<XBasis>>(positions);
         return deformation_gradient_sampling_response<B>(*temporary, Q::points());
     }();
-    const Eigen::MatrixXd A = cache.eval_jacobian(Vec::Zero(3 * B::num_basis_functions));
+    const Eigen::MatrixXd A = cache.evaluate(Vec::Zero(3 * B::num_basis_functions))->jacobian();
     for (int pose : {0, 1, 2, 0}) {
         Eigen::MatrixXd u(B::num_basis_functions, 3);
         for (int i = 0; i < u.rows(); ++i)
@@ -35,16 +35,16 @@ template <class B, class XBasis, class Q> void check_against_spatial_response() 
         auto displacement = std::make_shared<InterpolatedResponse<B>>(u);
         auto field = std::make_shared<DeformationGradientResponse>(displacement, X);
         const Eigen::VectorXd coefficients = u.reshaped<Eigen::RowMajor>();
-        const Vec sampled = cache.eval_value(coefficients);
+        const Vec sampled = cache.evaluate(coefficients)->value();
         for (int q = 0; q < Q::num_points; ++q) {
             const Eigen::Vector3d xi = Q::points().row(q).transpose();
-            EXPECT_TRUE(sampled.segment<9>(9 * q).isApprox(field->eval_value(xi), 1e-12));
+            EXPECT_TRUE(sampled.segment<9>(9 * q).isApprox(field->evaluate(xi)->value(), 1e-12));
             const double h = 1e-6;
             for (int j = 0; j < coefficients.size(); ++j) {
                 Eigen::MatrixXd plus = u, minus = u;
                 plus(j / 3, j % 3) += h;
                 minus(j / 3, j % 3) -= h;
-                const Eigen::Matrix3d J = X->eval_jacobian(xi);
+                const Eigen::Matrix3d J = X->evaluate(xi)->jacobian();
                 const Eigen::Matrix3d difference =
                     (plus - minus).transpose() * B::eval_dN_dxi(xi) * J.inverse() / (2 * h);
                 EXPECT_TRUE(A.middleRows(9 * q, 9).col(j).isApprox(difference.reshaped(), 1e-8));

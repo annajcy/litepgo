@@ -29,10 +29,10 @@ class IdentityResponse final : public FixedPatternResponse {
             J->coeffs().setOnes();
         return x;
     }
-    Vec eval_jvp_impl(const ConstVecRef&, const ConstVecRef& dx) override {
+    Vec jvp_at(const ConstVecRef&, const ConstVecRef& dx) override {
         return dx;
     }
-    Vec eval_vjp_impl(const ConstVecRef&, const ConstVecRef& weights) override {
+    Vec vjp_at(const ConstVecRef&, const ConstVecRef& weights) override {
         return weights;
     }
     void eval_hessian_impl(const ConstVecRef&, const ConstVecRef&, SpMat&) override {}

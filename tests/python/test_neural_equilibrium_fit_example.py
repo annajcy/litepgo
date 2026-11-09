@@ -96,19 +96,19 @@ def test_equilibrium_gradient_and_batch_partition(example, problem):
     material, _, _, _ = example["make_material"]()
     _, free, make_energy, make_response = example["make_equilibrium"](material)
     for weights in (reference.numpy(), initial.numpy()):
-        u = equilibrium.eval_value(weights)
+        u = equilibrium.evaluate(weights).value
         potential = make_energy(weights)
         np.testing.assert_allclose(potential.eval_gradient(u)[free], 0, atol=1e-11)
         K = potential.eval_hessian(u).toarray()[np.ix_(free, free)]
         assert np.linalg.eigvalsh(K).min() > 0
-        partial = make_response(u).eval_jacobian(weights).toarray()
+        partial = make_response(u).evaluate(weights).jacobian().toarray()
         for j, delta in enumerate(1e-4 * np.eye(2)):
             fd = (make_energy(weights + delta).eval_gradient(u)
                   - make_energy(weights - delta).eval_gradient(u)) / 2e-4
             np.testing.assert_allclose(partial[:, j], fd, atol=1e-10, rtol=1e-6)
 
     single, _, _, single_loss = example["make_fit"](batch_size=1)
-    np.testing.assert_allclose(single.eval_value(initial.numpy()), equilibrium.eval_value(initial.numpy()), atol=1e-11)
+    np.testing.assert_allclose(single.evaluate(initial.numpy()).value, equilibrium.evaluate(initial.numpy()).value, atol=1e-11)
     q = initial.clone().requires_grad_()
     torch.testing.assert_close(single_loss(q), loss(p), atol=1e-9, rtol=1e-9)
     torch.testing.assert_close(torch.autograd.grad(single_loss(q), q)[0], gradient, atol=1e-8, rtol=1e-7)

@@ -132,10 +132,7 @@ def main():
         parameter_map = dof.ConstantDofMap(topology, len(p))
         reference = Force[KEY](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), parameter_map, mapping, geometry, u, fixed)
         actual = Force[KEY](NumpyNeoHookean(), parameter_map, mapping, geometry, u, fixed)
-        print(
-            f"{Force.__name__}: value_error={np.abs(actual.eval_value(p) - reference.eval_value(p)).max():.2e}, "
-            f"jacobian_error={abs(actual.eval_jacobian(p) - reference.eval_jacobian(p)).max():.2e}"
-        )
+        print(f'{Force.__name__}: value_error={np.abs(actual.evaluate(p).value - reference.evaluate(p).value).max():.2e}, jacobian_error={abs(actual.evaluate(p).jacobian() - reference.evaluate(p).jacobian()).max():.2e}')
 
     reference = corner_pull(native, rest)
     actual = corner_pull(numpy, rest)

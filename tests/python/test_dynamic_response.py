@@ -22,11 +22,11 @@ class Piecewise(energy.DynamicPatternResponse):
 
 def test_pattern_growth_shrinkage_and_newton():
     r = Piecewise()
-    np.testing.assert_array_equal(r.eval_value(np.ones(2)), [0., 0.])
-    assert r.eval_jacobian(np.ones(2)).nnz == 3
-    assert r.eval_jacobian(np.ones(2)).nnz == 3
+    np.testing.assert_array_equal(r.evaluate(np.ones(2)).value, [0.0, 0.0])
+    assert r.evaluate(np.ones(2)).jacobian().nnz == 3
+    assert r.evaluate(np.ones(2)).jacobian().nnz == 3
     # Ordinary evaluation automatically shrinks the structure at the new point.
-    J = r.eval_jacobian(-np.ones(2))
+    J = r.evaluate(-np.ones(2)).jacobian()
     assert J.nnz == 2 and J[1, 0] == 0
     result = solver.gauss_newton_solve(r, -np.ones(2), solver.GaussNewtonOptions(gradient_tolerance=1e-9))
     assert result.status == solver.GaussNewtonStatus.Converged
@@ -38,22 +38,22 @@ def test_pattern_growth_shrinkage_and_newton():
 def test_required_overrides_and_invalid_pattern():
     base = energy.DynamicPatternResponse(2, 2)
     with pytest.raises(RuntimeError, match="jacobian_pattern_at"):
-        base.eval_jacobian(np.ones(2))
+        base.evaluate(np.ones(2)).jacobian()
     with pytest.raises(RuntimeError, match="eval_impl"):
-        base.eval_value(np.ones(2))
+        base.evaluate(np.ones(2)).value
 
     class WrongShape(Piecewise):
         def jacobian_pattern_at(self, x):
             return sp.eye(3)
     r = WrongShape()
     with pytest.raises(ValueError, match="pattern dimensions"):
-        r.eval_jacobian(np.ones(2))
+        r.evaluate(np.ones(2)).jacobian()
 
     class Broken(Piecewise):
         def jacobian_pattern_at(self, x):
             raise KeyError("pattern bug")
     with pytest.raises(KeyError, match="pattern bug"):
-        Broken().eval_jacobian(np.ones(2))
+        Broken().evaluate(np.ones(2)).jacobian()
 
 
 @pytest.mark.parametrize("kind", ["response", "energy"])
@@ -78,7 +78,7 @@ def test_sparse_column_merge_retains_zero_slots_and_rejects_outside_entries(kind
             return 0., np.zeros(7) if want_gradient else None, derivative() if hessian_kind is not None else None
 
     obj = SparseResponse(pattern) if kind == "response" else SparseEnergy(pattern)
-    evaluate = obj.eval_jacobian if kind == "response" else obj.eval_hessian
+    evaluate = (lambda x: obj.evaluate(x).jacobian()) if kind == "response" else obj.eval_hessian
     x = np.zeros(shape[1])
     actual = evaluate(x)
     np.testing.assert_array_equal(actual.indices, pattern.indices)
@@ -96,8 +96,8 @@ def test_products_prepare_dynamic_jacobian_without_explicit_update():
     for sign in [1., -1., 1.]:
         x = np.array([sign, .4])
         J = np.array([[1., 0.], [2 * max(0., sign), 1.]])
-        np.testing.assert_allclose(r.eval_jvp(x, np.ones(2)), J @ np.ones(2))
-        np.testing.assert_allclose(r.eval_vjp(x, weights=np.ones(2)), J.T @ np.ones(2))
+        np.testing.assert_allclose(r.evaluate(x).jvp(np.ones(2)), J @ np.ones(2))
+        np.testing.assert_allclose(r.evaluate(x).vjp(weights=np.ones(2)), J.T @ np.ones(2))
 
 
 def test_value_and_direct_products_do_not_prepare_patterns():
@@ -105,17 +105,17 @@ def test_value_and_direct_products_do_not_prepare_patterns():
         def jacobian_pattern_at(self, x):
             raise AssertionError("unneeded pattern preparation")
 
-        def eval_jvp_impl(self, x, dx):
+        def jvp_at(self, x, dx):
             return np.array([dx[0], 2 * max(0., x[0]) * dx[0] + dx[1]])
 
-        def eval_vjp_impl(self, x, weights):
+        def vjp_at(self, x, weights):
             return np.array([weights[0] + 2 * max(0., x[0]) * weights[1], weights[1]])
 
     r = Direct()
     x = np.ones(2)
-    np.testing.assert_allclose(r.eval_value(x), [0, 0])
-    np.testing.assert_allclose(r.eval_jvp(x, x), [1, 3])
-    np.testing.assert_allclose(r.eval_vjp(x, x), [3, 1])
+    np.testing.assert_allclose(r.evaluate(x).value, [0, 0])
+    np.testing.assert_allclose(r.evaluate(x).jvp(x), [1, 3])
+    np.testing.assert_allclose(r.evaluate(x).vjp(x), [3, 1])
 
 
 def test_pattern_hook_can_call_value_without_shared_state():
@@ -124,11 +124,13 @@ def test_pattern_hook_can_call_value_without_shared_state():
 
         def jacobian_pattern_at(self, x):
             if self.reenter:
-                self.eval_value(x)
+                self.evaluate(x).value
             return super().jacobian_pattern_at(x)
 
     r = Reentrant()
-    r.eval_jacobian(np.ones(2))
-    value, J = r.eval_value_and_jacobian(np.ones(2))
+    r.evaluate(np.ones(2)).jacobian()
+    r_evaluation = r.evaluate(np.ones(2))
+    J = r_evaluation.jacobian()
+    value = r_evaluation.value
     np.testing.assert_allclose(value, [0, 0])
     np.testing.assert_allclose(J.toarray(), [[1, 0], [2, 1]])

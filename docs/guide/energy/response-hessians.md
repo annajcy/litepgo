@@ -23,12 +23,12 @@ response = energy.ExpResponse(2)
 x = np.array([0.1, -0.2])
 weights = np.array([2.0, -3.0])
 assert response.has_hessian
-H = response.eval_hessian(x, weights=weights)  # scipy.sparse.csc_matrix, (2, 2)
+H = response.evaluate(x).hessian(weights=weights)  # scipy.sparse.csc_matrix, (2, 2)
 np.testing.assert_allclose(H.toarray(), np.diag(weights * np.exp(x)))
 ```
 
 C++ uses `has_hessian()` and
-`eval_hessian(x, weights)` returning `SpMat`. Both languages return the **full
+`evaluate(x)->hessian(weights)` returning `SpMat`. Both languages return the **full
 symmetric matrix**, including both off-diagonal entries. Inputs and weights must
 be finite and have the declared dimensions. Unsupported second derivatives raise
 `std::logic_error` / Python `RuntimeError`, even when weights are zero.

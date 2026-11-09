@@ -11,12 +11,14 @@ TEST(InterpolatedResponse, CubicHermiteSpatialDerivatives) {
     InterpolatedResponse<CubicHermiteBasis> r(C);
     C.setZero();
     Vec x = Vec::Constant(1, .5), w = Vec::Constant(1, -2);
-    auto [value, J] = r.eval_value_and_jacobian(x);
+    auto evaluation_0 = r.evaluate(x);
+    auto jacobian_0 = evaluation_0->jacobian();
+    auto [value, J] = std::pair{litepgo::Vec(evaluation_0->value()), std::move(jacobian_0)};
     EXPECT_NEAR(value[0], .125, 1e-14);
     EXPECT_NEAR(J.coeff(0, 0), .75, 1e-14);
-    EXPECT_NEAR(r.eval_hessian(x, w).coeff(0, 0), -6, 1e-14);
-    EXPECT_NEAR(r.eval_jvp(x, w)[0], -1.5, 1e-14);
-    EXPECT_NEAR(r.eval_vjp(x, w)[0], -1.5, 1e-14);
+    EXPECT_NEAR(r.evaluate(x)->hessian(w).coeff(0, 0), -6, 1e-14);
+    EXPECT_NEAR(r.evaluate(x)->jvp(w)[0], -1.5, 1e-14);
+    EXPECT_NEAR(r.evaluate(x)->vjp(w)[0], -1.5, 1e-14);
 }
 TEST(InterpolatedResponse, MixedHessianIsFullAndUnscaled) {
     Eigen::MatrixXd C(8, 2);
@@ -31,10 +33,10 @@ TEST(InterpolatedResponse, MixedHessianIsFullAndUnscaled) {
     w << 2, -3;
     Eigen::Matrix3d expected;
     expected << 0, 2, 0, 2, 0, -3, 0, -3, 0;
-    const auto H = r.eval_hessian(x, w);
+    const auto H = r.evaluate(x)->hessian(w);
     EXPECT_TRUE(Eigen::MatrixXd(H).isApprox(expected, 1e-14));
-    EXPECT_EQ(r.eval_hessian(x, Vec::Zero(2)).nonZeros(), H.nonZeros());
-    EXPECT_THROW(r.eval_value(Vec::Zero(2)), std::invalid_argument);
+    EXPECT_EQ(r.evaluate(x)->hessian(Vec::Zero(2)).nonZeros(), H.nonZeros());
+    EXPECT_THROW(r.evaluate(Vec::Zero(2))->value(), std::invalid_argument);
     C(0, 0) = std::numeric_limits<double>::infinity();
     EXPECT_THROW((InterpolatedResponse<HexQ1Basis>(C)), std::invalid_argument);
     EXPECT_THROW((InterpolatedResponse<HexQ1Basis>(Eigen::MatrixXd(8, 0))), std::invalid_argument);

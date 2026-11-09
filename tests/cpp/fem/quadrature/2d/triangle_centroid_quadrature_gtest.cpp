@@ -41,10 +41,10 @@ TEST(TriangleCentroidQuadrature, IntegratesAffineFieldsOnEmbeddedTrianglesUsingR
         double area = 0, integral = 0;
         for (int q = 0; q < TriangleCentroidQuadrature::num_points; ++q) {
             const Eigen::Vector2d xi = TriangleCentroidQuadrature::points().row(q).transpose();
-            const Eigen::Matrix<double, 3, 2> J = X_field->eval_jacobian(xi);
+            const Eigen::Matrix<double, 3, 2> J = X_field->evaluate(xi)->jacobian();
             const double weight = TriangleCentroidQuadrature::weights()[q] * J.col(0).cross(J.col(1)).norm();
             area += weight;
-            integral += weight * scalar_field->eval_value(xi)[0];
+            integral += weight * scalar_field->evaluate(xi)->value()[0];
         }
         EXPECT_NEAR(area, 5, 1e-14);
         EXPECT_NEAR(integral, 5 * nodal_values.mean(), 1e-14);

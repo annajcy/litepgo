@@ -34,8 +34,8 @@ def main():
     x = np.array([0.7, 1.2])
     # Products can be evaluated without constructing a global Jacobian.
     v, w = np.array([0.3, -0.8]), np.array([0.2, -0.5, 0.7])
-    response.eval_jvp(x, v)
-    response.eval_vjp(x, w)
+    response.evaluate(x).jvp(v)
+    response.evaluate(x).vjp(w)
     result = solver.gauss_newton_solve(
         response, x, solver.GaussNewtonOptions(gradient_tolerance=1e-10)
     )

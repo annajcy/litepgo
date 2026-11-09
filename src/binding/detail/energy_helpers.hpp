@@ -74,10 +74,10 @@ template <class Base> class PyResponse : public Base {
         : Base(pattern.matrix, hessian_pattern ? std::optional<SpMat>(hessian_pattern->matrix) : std::nullopt) {}
     PyResponse(int num_inputs, int num_outputs) : Base(num_inputs, num_outputs) {}
     Vec default_jvp(const ConstVecRef& x, const ConstVecRef& dx) {
-        return Base::eval_jvp_impl(x, dx);
+        return Base::jvp_at(x, dx);
     }
     Vec default_vjp(const ConstVecRef& x, const ConstVecRef& gy) {
-        return Base::eval_vjp_impl(x, gy);
+        return Base::vjp_at(x, gy);
     }
 
   private:
@@ -92,18 +92,18 @@ template <class Base> class PyResponse : public Base {
         const SpMat source = nb::cast<linalg::binding::SparseArgument>(result).matrix;
         copy_derivative_values(source, H, "Response: invalid Hessian", "Response: Hessian outside pattern");
     }
-    Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& dx) override {
+    Vec jvp_at(const ConstVecRef& x, const ConstVecRef& dx) override {
         nb::gil_scoped_acquire gil;
         // The bound base method selects the fallback; Python overrides may reenter normally.
-        nb::object result = this->nb_trampoline.base().attr("eval_jvp_impl")(nb::cast(Vec(x)), nb::cast(Vec(dx)));
+        nb::object result = this->nb_trampoline.base().attr("jvp_at")(nb::cast(Vec(x)), nb::cast(Vec(dx)));
         if (result.is_none())
             throw std::domain_error("Response is infeasible");
         return nb::cast<Vec>(result);
     }
-    Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& gy) override {
+    Vec vjp_at(const ConstVecRef& x, const ConstVecRef& gy) override {
         nb::gil_scoped_acquire gil;
         // The bound base method selects the fallback; Python overrides may reenter normally.
-        nb::object result = this->nb_trampoline.base().attr("eval_vjp_impl")(nb::cast(Vec(x)), nb::cast(Vec(gy)));
+        nb::object result = this->nb_trampoline.base().attr("vjp_at")(nb::cast(Vec(x)), nb::cast(Vec(gy)));
         if (result.is_none())
             throw std::domain_error("Response is infeasible");
         return nb::cast<Vec>(result);

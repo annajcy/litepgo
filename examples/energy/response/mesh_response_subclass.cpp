@@ -48,8 +48,8 @@ int main() {
     LinearResidual response(inputs, outputs, A, observed);
     const Vec x = Eigen::Vector2d(.7, 1.2);
     const Vec v = Eigen::Vector2d(.3, -.8), w = Eigen::Vector3d(.2, -.5, .7);
-    response.eval_jvp(x, v);
-    response.eval_vjp(x, w);
+    response.evaluate(x)->jvp(v);
+    response.evaluate(x)->vjp(w);
     solver::GaussNewtonOptions options;
     options.gradient_tolerance = 1e-10;
     const auto result = solver::gauss_newton_solve(response, x, options);

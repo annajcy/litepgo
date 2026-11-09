@@ -106,12 +106,12 @@ def test_plastic_equilibrium_derivatives_and_boundary_conditions(plastic_experim
                 make_energy,
                 make_response,
             )
-            displacement = equilibrium.eval_value(p)
+            displacement = equilibrium.evaluate(p).value
             gradient = make_energy(p).eval_gradient(displacement)
             np.testing.assert_array_equal(displacement[fixed_ids], initial[fixed_ids])
             assert np.max(np.abs(gradient[free_ids])) < 2e-11
             np.testing.assert_allclose(
-                make_response(displacement).eval_value(p), gradient, atol=1e-12
+                make_response(displacement).evaluate(p).value, gradient, atol=1e-12
             )
             observed, no_jacobian = measurement(p, load=load)
             assert no_jacobian is None
@@ -133,10 +133,10 @@ def test_plastic_equilibrium_fit_is_identifiable(plastic_experiment):
     )
     assert result.status == solver.GaussNewtonStatus.Converged
     for p in (np.zeros(len(truth)), np.log(truth), result.x):
-        singular = np.linalg.svd(residual.eval_jacobian(p).toarray(), compute_uv=False)
+        singular = np.linalg.svd(residual.evaluate(p).jacobian().toarray(), compute_uv=False)
         assert singular[-1] / singular[0] > 1e-6
     assert np.linalg.norm(np.exp(result.x) - truth) / np.linalg.norm(truth) < 1e-6
-    assert np.linalg.norm(residual.eval_value(result.x)) < 1e-8
+    assert np.linalg.norm(residual.evaluate(result.x).value) < 1e-8
     held_out, _ = measurement(np.log(truth), load=0.6)
     prediction, _ = measurement(result.x, load=0.6)
     assert np.linalg.norm((prediction - held_out) / scales) < 1e-8

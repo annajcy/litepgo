@@ -34,14 +34,14 @@ class MaterialResidual final : public energy::FixedPatternResponse {
             throw std::domain_error("Require mu > 0 and lambda_ps + mu > 0");
         Vec value;
         if (J) {
-            auto evaluated = force_->eval_value_and_jacobian(theta);
-            value = std::move(evaluated.first);
-            const SpMat& derivative = evaluated.second;
+            auto evaluation = force_->evaluate(theta);
+            const SpMat& derivative = evaluation->jacobian();
+            value = evaluation->value();
             for (int c = 0; c < J->outerSize(); ++c)
                 for (SpMat::InnerIterator it(*J, c); it; ++it)
                     it.valueRef() = derivative.coeff(it.row(), c);
         } else {
-            value = force_->eval_value(theta);
+            value = force_->evaluate(theta)->value();
         }
         if (J)
             *J /= scale_;
@@ -93,7 +93,7 @@ Problem make_problem() {
         std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(), dof::ConstantDofMap(topology, 2), map,
         rest, u, thickness);
     // Fixed pose and original face areas are cached; only the parameter vector varies.
-    if (!force->eval_value(truth).isApprox(target, 1e-11))
+    if (!force->evaluate(truth)->value().isApprox(target, 1e-11))
         throw std::runtime_error("Fixed-pose response differs from the energy gradient");
     return {std::make_shared<MaterialResidual>(force, target, scale), truth, initial, scale};
 }
@@ -111,7 +111,7 @@ int main() {
         // Fit the measured response using its analytic parameter Jacobian.
         const auto result = solver::gauss_newton_solve(residual, initial, options);
         const double parameter_error = (result.x - truth).norm() / truth.norm();
-        const double force_residual = scale * residual.eval_value(result.x).norm();
+        const double force_residual = scale * residual.evaluate(result.x)->value().norm();
         const bool converged = result.status == solver::GaussNewtonStatus::Converged;
         std::cout << std::setprecision(12) << "truth=" << truth.transpose() << ", initial=" << initial.transpose()
                   << ", fitted=" << result.x.transpose() << ", converged=" << converged

@@ -26,7 +26,7 @@ template <Quadrature3D Q> class VolumetricElement3D final {
             throw std::invalid_argument("VolumetricElement3D: invalid reference components or quadrature");
         for (int q = 0; q < Q::num_points; ++q) {
             const Eigen::Vector3d xi = Q::points().row(q).transpose();
-            const Eigen::MatrixXd derivative = geometry.eval_jacobian(xi);
+            const Eigen::MatrixXd derivative = geometry.evaluate(xi)->jacobian();
             if (derivative.rows() != 3 || !derivative.allFinite())
                 throw std::invalid_argument("VolumetricElement3D: invalid reference Jacobian");
             const Eigen::Matrix3d J_X = derivative;

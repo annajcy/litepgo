@@ -325,9 +325,7 @@ def equilibrium_errors(model):
             for e, X in enumerate(geometry):
                 field = Field(mapping.gather(e, a.x))
                 F = (
-                    fem.DeformationGradientResponse(field, X)
-                    .eval_value(np.full(3, 0.25))
-                    .reshape(3, 3, order="F")
+                    fem.DeformationGradientResponse(field, X).evaluate(np.full(3, 0.25)).value.reshape(3, 3, order='F')
                 )
                 stretches.extend(
                     np.linalg.svd(F @ np.linalg.inv(plastic), compute_uv=False)

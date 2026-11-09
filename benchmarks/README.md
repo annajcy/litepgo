@@ -32,3 +32,11 @@ and spatial deformation-gradient queries. It uses one TBB thread, batches 1/256,
 30 samples of 10 calls, and checks products against explicit Jacobians before
 timing. Run before and after with the same Release build settings, without
 concurrent builds or tests. Output is JSON Lines with all raw samples.
+
+Response evaluation / equilibrium benchmark: `python benchmarks/equilibrium_evaluation.py --samples 7`.
+It covers TetP1, HexHermite, shell material and shell Fp with fixed 1/4-thread
+runs, Exact/Projected Newton, standalone VJP and Torch/composed forward/backward.
+Each timing starts with a fresh evaluation/graph. It checks residuals and small-case
+finite differences, records solve counts and gradients, and also measures tiny
+pure-value responses. See `docs/benchmarks/response-evaluation.md` for the paired
+baseline comparison and its small-mesh limitations.

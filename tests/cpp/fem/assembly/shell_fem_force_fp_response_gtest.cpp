@@ -61,9 +61,9 @@ TEST(ShellFemForceFpResponse, OriginalAreaAssemblyAndFullJacobianForSharedAndPer
                      dof::ConstantDofMap(p.topology, 9), p.map, p.rest, p.u, p.thickness, p.theta, batch);
         Force element(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(),
                       dof::ElementDofMap(p.topology, 9), p.map, p.rest, p.u, p.thickness, p.theta, batch);
-        EXPECT_TRUE(shared.eval_value(shared_P).isApprox(p.force(shared_P), 1e-11));
-        EXPECT_TRUE(element.eval_value(per).isApprox(p.force(per), 1e-11));
-        const Eigen::MatrixXd J = shared.eval_jacobian(shared_P), E = element.eval_jacobian(per);
+        EXPECT_TRUE(shared.evaluate(shared_P)->value().isApprox(p.force(shared_P), 1e-11));
+        EXPECT_TRUE(element.evaluate(per)->value().isApprox(p.force(per), 1e-11));
+        const Eigen::MatrixXd J = shared.evaluate(shared_P)->jacobian(), E = element.evaluate(per)->jacobian();
         if (previous.size())
             EXPECT_EQ((J - previous).norm(), 0);
         previous = J;
@@ -71,7 +71,7 @@ TEST(ShellFemForceFpResponse, OriginalAreaAssemblyAndFullJacobianForSharedAndPer
             Vec plus = per, minus = per;
             plus[j] += 1e-6;
             minus[j] -= 1e-6;
-            EXPECT_LT((E.col(j) - (element.eval_value(plus) - element.eval_value(minus)) / 2e-6).norm(), 2e-7);
+            EXPECT_LT((E.col(j) - (element.evaluate(plus)->value() - element.evaluate(minus)->value()) / 2e-6).norm(), 2e-7);
         }
         for (int j = 0; j < 9; ++j) {
             Vec plus = shared_P, minus = shared_P;
@@ -82,13 +82,13 @@ TEST(ShellFemForceFpResponse, OriginalAreaAssemblyAndFullJacobianForSharedAndPer
         Vec repeated(36);
         for (int e = 0; e < 4; ++e)
             repeated.segment<9>(9 * e) = shared_P;
-        const Eigen::MatrixXd blocks = element.eval_jacobian(repeated);
+        const Eigen::MatrixXd blocks = element.evaluate(repeated)->jacobian();
         Eigen::MatrixXd sum = Eigen::MatrixXd::Zero(18, 9);
         for (int e = 0; e < 4; ++e)
             sum += blocks.middleCols(9 * e, 9);
         EXPECT_TRUE(sum.isApprox(J, 1e-12));
-        EXPECT_THROW(shared.eval_value(Vec::Zero(9)), std::domain_error);
-        EXPECT_TRUE(shared.eval_value(shared_P).isApprox(p.force(shared_P), 1e-11));
+        EXPECT_THROW(shared.evaluate(Vec::Zero(9))->value(), std::domain_error);
+        EXPECT_TRUE(shared.evaluate(shared_P)->value().isApprox(p.force(shared_P), 1e-11));
     }
 }
 TEST(ShellFemForceFpResponse, FixedInputSnapshotsValidationAndEmptyMesh) {
@@ -97,7 +97,7 @@ TEST(ShellFemForceFpResponse, FixedInputSnapshotsValidationAndEmptyMesh) {
     Force response(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), params, p.map, p.rest, p.u,
                    p.thickness, p.theta);
     const Vec identity = Eigen::Matrix3d::Identity().reshaped();
-    const auto expected = response.eval_value(identity);
+    const auto expected = response.evaluate(identity)->value();
     EXPECT_THROW((Force(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), params, p.map, {}, p.u,
                         p.thickness, p.theta)),
                  std::invalid_argument);
@@ -120,12 +120,12 @@ TEST(ShellFemForceFpResponse, FixedInputSnapshotsValidationAndEmptyMesh) {
     p.rest.clear();
     p.u.setZero();
     p.thickness[0] = 100;
-    EXPECT_EQ((response.eval_value(identity) - expected).norm(), 0);
+    EXPECT_EQ((response.evaluate(identity)->value() - expected).norm(), 0);
     const mesh::TriangleTopology empty(0, {});
     Force zero(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), dof::ConstantDofMap(empty, 9),
                dof::StencilDofMap(0, {}, 3), {}, Vec(0), {}, {});
-    EXPECT_EQ(zero.eval_value(identity).size(), 0);
-    EXPECT_EQ(zero.eval_jacobian(identity).cols(), 9);
+    EXPECT_EQ(zero.evaluate(identity)->value().size(), 0);
+    EXPECT_EQ(zero.evaluate(identity)->jacobian().cols(), 9);
 }
 } // namespace
 } // namespace litepgo::fem::test

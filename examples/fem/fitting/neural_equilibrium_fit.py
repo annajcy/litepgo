@@ -91,9 +91,9 @@ def make_equilibrium(material, batch_size=256):
 def make_fit(batch_size=256):
     material, _, _, reference = make_material()
     equilibrium, free, _, _ = make_equilibrium(material, batch_size)
-    target = torch.from_numpy(equilibrium.eval_value(reference.numpy()).copy())
+    target = torch.from_numpy(equilibrium.evaluate(reference.numpy()).value.copy())
     initial = reference + reference.new_tensor([0.15, -0.12])
-    initial_u = torch.from_numpy(equilibrium.eval_value(initial.numpy()).copy())
+    initial_u = torch.from_numpy(equilibrium.evaluate(initial.numpy()).value.copy())
     # A fixed observation scale makes the small network-induced displacement visible.
     scale = (initial_u[free] - target[free]).square().mean().sqrt().item()
     if not np.isfinite(scale) or scale <= 1e-10:

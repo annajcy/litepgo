@@ -45,8 +45,8 @@ def test_batch_workers_gil_exception_and_recovery():
             (lambda: E.eval_gradient(x)[0], 64),
             (lambda: E.eval_hessian(x)[0, 0], 64),
             (lambda: E.max_feasible_step(x, x), .5),
-            (lambda: R.eval_value(x)[0], 64),
-            (lambda: R.eval_jacobian(x)[0, 0], 64),
+            (lambda: R.evaluate(x).value[0], 64),
+            (lambda: R.evaluate(x).jacobian()[0, 0], 64),
         ]:
             workers.clear()
             assert operation() == expected

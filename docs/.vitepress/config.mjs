@@ -190,7 +190,8 @@ export default defineConfig({
         { text: 'C++ reference', link: '/reference/cpp/index.html', target: '_self' },
         { text: 'Python reference', link: '/reference/python/index.html', target: '_self' },
         { text: 'Benchmarks', link: '/benchmarks/', items: [
-          { text: 'Torch material performance', link: '/benchmarks/torch-material' }
+          { text: 'Torch material performance', link: '/benchmarks/torch-material' },
+          { text: 'Response evaluation performance', link: '/benchmarks/response-evaluation' }
         ] },
         { text: 'Development', link: '/development' }
       ] }

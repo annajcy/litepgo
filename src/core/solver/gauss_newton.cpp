@@ -27,11 +27,11 @@ GaussNewtonResult gauss_newton_solve(energy::Response& residual, const ConstVecR
         ++result.evaluations;
         Vec r;
         if (derivatives) {
-            auto evaluated = residual.eval_value_and_jacobian(x);
-            r = std::move(evaluated.first);
-            J = std::move(evaluated.second);
+            auto evaluation = residual.evaluate(x);
+            J = evaluation->jacobian();
+            r = evaluation->value();
         } else {
-            r = residual.eval_value(x);
+            r = residual.evaluate(x)->value();
         }
         if (!std::isfinite(r.squaredNorm()))
             throw std::logic_error("Gauss-Newton: residual norm overflow");

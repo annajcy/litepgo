@@ -1,59 +1,78 @@
 #include "litepgo/energy/response/elementwise_response.hpp"
 namespace litepgo::energy {
-ElementwiseResponse::ElementwiseResponse(dof::ResponseAssembler assembler, std::shared_ptr<Response> child)
-    : FixedPatternResponse(assembler.jacobian_pattern()), assembler_(std::move(assembler)),
-      transform_(std::move(child)) {}
-Vec ElementwiseResponse::gather(int e, const ConstVecRef& x) const {
-    const auto ids = assembler_.input_indices(e);
+namespace {
+Vec gather(const dof::ResponseAssembler& assembler, int e, const ConstVecRef& x) {
+    const auto ids = assembler.input_indices(e);
     Vec q(ids.size());
     for (std::size_t i = 0; i < ids.size(); ++i)
         q[i] = x[ids[i]];
     return q;
 }
-Vec ElementwiseResponse::eval_impl(const ConstVecRef& x, SpMat* J) {
-    auto& local = *transform_;
-    const int count = assembler_.num_elements();
-    std::vector<Vec> values(count);
-    std::vector<Eigen::MatrixXd> jacobians(J ? count : 0);
-    std::vector<dof::ResponseAssembler::ElementView> views;
-    views.reserve(count);
-    // shortcut: local Response calls are serial because children may own shared workspaces; batch transforms if
-    // profiling warrants it.
-    for (int e = 0; e < count; ++e) {
-        const Vec q = gather(e, x);
-        if (J) {
-            auto [value, derivative] = local.eval_value_and_jacobian(q);
-            values[e] = std::move(value);
-            jacobians[e] = derivative;
-            views.emplace_back(values[e], jacobians[e]);
-        } else {
-            values[e] = local.eval_value(q);
-            views.emplace_back(values[e]);
+class ElementwiseEvaluation final : public ResponseEvaluation {
+  public:
+    ElementwiseEvaluation(const dof::ResponseAssembler& assembler, Response& transform, const ConstVecRef& x)
+        : ResponseEvaluation(assembler.jacobian_pattern().cols(), assembler.jacobian_pattern().rows()),
+          assembler_(assembler) {
+        children_.reserve(assembler.num_elements());
+        for (int e = 0; e < assembler.num_elements(); ++e)
+            children_.push_back(transform.evaluate(gather(assembler, e, x)));
+    }
+
+  private:
+    Vec assemble(SpMat* J) {
+        const int count = assembler_.num_elements();
+        std::vector<Vec> values(count);
+        std::vector<Eigen::MatrixXd> jacobians(J ? count : 0);
+        std::vector<dof::ResponseAssembler::ElementView> views;
+        views.reserve(count);
+        // Child calls stay serial because the shared transform may own workspaces.
+        for (int e = 0; e < count; ++e) {
+            if (J)
+                jacobians[e] = children_[e]->jacobian();
+            values[e] = children_[e]->value();
+            if (J)
+                views.emplace_back(values[e], jacobians[e]);
+            else
+                views.emplace_back(values[e]);
         }
+        Vec result(num_outputs());
+        assembler_.assemble(views, result, J);
+        return result;
     }
-    Vec value(num_outputs());
-    assembler_.assemble(views, value, J);
-    return value;
-}
-Vec ElementwiseResponse::eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& v) {
-    auto& local = *transform_;
-    Vec result(num_outputs());
-    for (int e = 0; e < assembler_.num_elements(); ++e) {
-        const Vec q = gather(e, x);
-        result.segment(e * local.num_outputs(), local.num_outputs()) = local.eval_jvp(q, gather(e, v));
+    Vec value_impl() override {
+        return assemble(nullptr);
     }
-    return result;
-}
-Vec ElementwiseResponse::eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& w) {
-    auto& local = *transform_;
-    Vec result = Vec::Zero(num_inputs());
-    for (int e = 0; e < assembler_.num_elements(); ++e) {
-        const Vec q = gather(e, x);
-        const Vec product = local.eval_vjp(q, w.segment(e * local.num_outputs(), local.num_outputs()));
-        const auto ids = assembler_.input_indices(e);
-        for (std::size_t i = 0; i < ids.size(); ++i)
-            result[ids[i]] += product[i];
+    SpMat jacobian_impl() override {
+        SpMat J = assembler_.jacobian_pattern();
+        save_value(assemble(&J));
+        return J;
     }
-    return result;
+    Vec jvp_impl(const ConstVecRef& v) override {
+        Vec result(num_outputs());
+        for (int e = 0; e < assembler_.num_elements(); ++e) {
+            const int width = children_[e]->num_outputs();
+            result.segment(e * width, width) = children_[e]->jvp(gather(assembler_, e, v));
+        }
+        return result;
+    }
+    Vec vjp_impl(const ConstVecRef& w) override {
+        Vec result = Vec::Zero(num_inputs());
+        for (int e = 0; e < assembler_.num_elements(); ++e) {
+            const int width = children_[e]->num_outputs();
+            const Vec product = children_[e]->vjp(w.segment(e * width, width));
+            const auto ids = assembler_.input_indices(e);
+            for (std::size_t i = 0; i < ids.size(); ++i)
+                result[ids[i]] += product[i];
+        }
+        return result;
+    }
+    const dof::ResponseAssembler& assembler_;
+    std::vector<std::shared_ptr<ResponseEvaluation>> children_;
+};
+} // namespace
+ElementwiseResponse::ElementwiseResponse(dof::ResponseAssembler assembler, std::shared_ptr<Response> child)
+    : assembler_(std::move(assembler)), transform_(std::move(child)) {}
+std::shared_ptr<ResponseEvaluation> ElementwiseResponse::make_evaluation(const ConstVecRef& x) {
+    return std::make_shared<ElementwiseEvaluation>(assembler_, *transform_, x);
 }
 } // namespace litepgo::energy

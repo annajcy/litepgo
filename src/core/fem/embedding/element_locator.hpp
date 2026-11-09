@@ -34,7 +34,7 @@ class ElementLocator {
                     "ElementLocator: expected three-component InterpolatedResponse of geometry basis");
             Eigen::MatrixXd coefficients(B::num_basis_functions, 3);
             for (int a = 0; a < B::num_basis_functions; ++a)
-                coefficients.row(a) = response->eval_value(B::coefficient_info(a).point).transpose();
+                coefficients.row(a) = response->evaluate(B::coefficient_info(a).point)->value().transpose();
             result.push_back(std::make_shared<InterpolatedResponse<B>>(coefficients));
         }
         return result;
@@ -44,9 +44,9 @@ class ElementLocator {
         for (const auto& field : geometry_) {
             if (field->num_outputs() != 3)
                 throw std::invalid_argument("ElementLocator: X fields must have three components");
-            Eigen::Vector3d lo = field->eval_value(B::coefficient_info(0).point), hi = lo;
+            Eigen::Vector3d lo = field->evaluate(B::coefficient_info(0).point)->value(), hi = lo;
             for (int i = 1; i < B::num_basis_functions; ++i) {
-                const Eigen::Vector3d p = field->eval_value(B::coefficient_info(i).point);
+                const Eigen::Vector3d p = field->evaluate(B::coefficient_info(i).point)->value();
                 lo = lo.cwiseMin(p);
                 hi = hi.cwiseMax(p);
             }
@@ -72,8 +72,8 @@ class ElementLocator {
         const auto& field = geometry_[e];
         xi.setConstant(std::is_same_v<B, TetP1Basis> ? 0.25 : 0.5);
         for (int iteration = 0; iteration < 40; ++iteration) {
-            const Eigen::Vector3d residual = field->eval_value(xi) - p;
-            const Eigen::Matrix3d J = field->eval_jacobian(xi);
+            const Eigen::Vector3d residual = field->evaluate(xi)->value() - p;
+            const Eigen::Matrix3d J = field->evaluate(xi)->jacobian();
             Eigen::FullPivLU<Eigen::Matrix3d> lu(J);
             if (!J.allFinite() || !lu.isInvertible())
                 return false;
@@ -87,7 +87,7 @@ class ElementLocator {
                 const Eigen::Vector3d next = xi - alpha * step;
                 if (!next.allFinite())
                     continue;
-                const Eigen::Vector3d next_residual = field->eval_value(next) - p;
+                const Eigen::Vector3d next_residual = field->evaluate(next)->value() - p;
                 if (next_residual.norm() < residual.norm()) {
                     xi = next;
                     accepted = true;

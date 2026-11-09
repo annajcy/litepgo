@@ -115,17 +115,15 @@ def test_response_example_independent_analytic_values(api_modules, x, value, J):
 
     obj = api_modules[1].NonlinearResidual()
     x = np.array(x)
-    np.testing.assert_array_equal(obj.eval_value(x), value)
-    actual, jacobian = obj.eval_value_and_jacobian(x)
+    np.testing.assert_array_equal(obj.evaluate(x).value, value)
+    obj_evaluation = obj.evaluate(x)
+    jacobian = obj_evaluation.jacobian()
+    actual = obj_evaluation.value
     np.testing.assert_array_equal(actual, value)
     np.testing.assert_array_equal(jacobian.toarray(), J)
     fixed = api_modules[1].LinearResidual()
-    np.testing.assert_array_equal(
-        fixed.eval_jacobian(x).toarray(), [[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]
-    )
-    np.testing.assert_array_equal(
-        fixed.eval_value(x), [x[0] - 1, x[1] - 2, x[0] + x[1] - 3]
-    )
+    np.testing.assert_array_equal(fixed.evaluate(x).jacobian().toarray(), [[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
+    np.testing.assert_array_equal(fixed.evaluate(x).value, [x[0] - 1, x[1] - 2, x[0] + x[1] - 3])
 
 
 def test_example_pattern_errors_and_zeroing(api_modules):
@@ -143,7 +141,7 @@ def test_example_pattern_errors_and_zeroing(api_modules):
     response = api_modules[1].NonlinearResidual()
     for x in (np.ones(2), -np.ones(2), np.zeros(2), np.ones(2)):
         expected = np.array([[1., 0.], [2 * max(0., x[0]), 1.]])
-        np.testing.assert_array_equal(response.eval_jacobian(x).toarray(), expected)
+        np.testing.assert_array_equal(response.evaluate(x).jacobian().toarray(), expected)
 
 
 def test_custom_response_example_fit(api_modules):

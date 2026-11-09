@@ -34,13 +34,15 @@ class ForceResidual final : public energy::FixedPatternResponse {
   private:
     Vec eval_impl(const ConstVecRef& theta, SpMat* J) override {
         return (J ? ([&] {
-                   auto [value, derivative] = force_.eval_value_and_jacobian(theta);
+                   auto evaluation = force_.evaluate(theta);
+                   const auto derivative = evaluation->jacobian();
+                   const Vec value = evaluation->value();
                    for (int c = 0; c < J->outerSize(); ++c)
                        for (SpMat::InnerIterator it(*J, c); it; ++it)
                            it.valueRef() = derivative.coeff(it.row(), c);
                    return value;
                }())
-                  : force_.eval_value(theta)) -
+                  : force_.evaluate(theta)->value()) -
                observed_;
     }
     energy::Response& force_;
@@ -99,9 +101,9 @@ int main(int argc, char** argv) {
             topology.num_cells(),
             std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((truth).size(), 3), truth)));
     const Vec observed = energy.eval_gradient(displacement);
-    const Eigen::MatrixXd J = single.eval_jacobian(truth);
-    if (!single.eval_value(truth).isApprox(observed) || !batched.eval_value(truth).isApprox(observed) ||
-        !Eigen::MatrixXd(batched.eval_jacobian(truth)).isApprox(J) || J.topRows(15).fullPivLu().rank() != 2)
+    const Eigen::MatrixXd J = single.evaluate(truth)->jacobian();
+    if (!single.evaluate(truth)->value().isApprox(observed) || !batched.evaluate(truth)->value().isApprox(observed) ||
+        !Eigen::MatrixXd(batched.evaluate(truth)->jacobian()).isApprox(J) || J.topRows(15).fullPivLu().rank() != 2)
         throw std::runtime_error("Force, assembly or identifiability check failed");
     solver::GaussNewtonOptions options;
     options.gradient_tolerance = 1e-10;
@@ -123,22 +125,19 @@ int main(int argc, char** argv) {
             for (energy::Response* force :
                  {static_cast<energy::Response*>(&single), static_cast<energy::Response*>(&batched)}) {
                 SpMat jacobian = Eigen::MatrixXd::Ones(force->num_outputs(), force->num_inputs()).sparseView();
-                for (int i = 0; i < 3; ++i)
-                    (need ? ([&] {
-                        auto result = force->eval_value_and_jacobian(truth);
-                        jacobian = std::move(result.second);
-                        return std::move(result.first);
-                    }())
-                          : force->eval_value(truth));
+                for (int i = 0; i < 3; ++i) {
+                    auto evaluation = force->evaluate(truth);
+                    if (need)
+                        jacobian = evaluation->jacobian();
+                    evaluation->value();
+                }
                 std::vector<double> samples;
                 for (int i = 0; i < repeats; ++i) {
                     const auto start = std::chrono::steady_clock::now();
-                    (need ? ([&] {
-                        auto result = force->eval_value_and_jacobian(truth);
-                        jacobian = std::move(result.second);
-                        return std::move(result.first);
-                    }())
-                          : force->eval_value(truth));
+                    auto evaluation = force->evaluate(truth);
+                    if (need)
+                        jacobian = evaluation->jacobian();
+                    evaluation->value();
                     samples.push_back(
                         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
                 }

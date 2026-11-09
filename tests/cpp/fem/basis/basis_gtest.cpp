@@ -201,26 +201,26 @@ template <class B, int Dim> void check_evaluation_counts() {
         EXPECT_EQ(Counted::calls, expected);
     };
     InterpolatedResponse<Counted> response(Eigen::MatrixXd::Ones(B::num_basis_functions, 3));
-    check([&] { return response.eval_value(xi); }, {1, 0, 0});
-    check([&] { return Eigen::MatrixXd(response.eval_jacobian(xi)); }, {1, 1, 0});
-    check([&] { return Eigen::MatrixXd(response.eval_hessian(xi, Vec::Ones(3))); }, {0, 0, 1});
+    check([&] { return response.evaluate(xi)->value(); }, {1, 0, 0});
+    check([&] { return Eigen::MatrixXd(response.evaluate(xi)->jacobian()); }, {1, 1, 0});
+    check([&] { return Eigen::MatrixXd(response.evaluate(xi)->hessian(Vec::Ones(3))); }, {0, 0, 1});
     const Eigen::MatrixXd points = xi.transpose();
     check(
         [&] {
             auto r = value_sampling_response<Counted>(points, 3);
-            return r.eval_value(Vec::Ones(3 * B::num_basis_functions));
+            return r.evaluate(Vec::Ones(3 * B::num_basis_functions))->value();
         },
         {1, 0, 0});
     check(
         [&] {
             auto r = gradient_sampling_response<Counted>(points, 3);
-            return r.eval_value(Vec::Ones(3 * B::num_basis_functions));
+            return r.evaluate(Vec::Ones(3 * B::num_basis_functions))->value();
         },
         {0, 1, 0});
     check(
         [&] {
             auto r = hessian_sampling_response<Counted>(points, 3);
-            return r.eval_value(Vec::Ones(3 * B::num_basis_functions));
+            return r.evaluate(Vec::Ones(3 * B::num_basis_functions))->value();
         },
         {0, 0, 1});
 }

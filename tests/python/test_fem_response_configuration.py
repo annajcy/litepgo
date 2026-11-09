@@ -19,18 +19,18 @@ def test_spatial_deformation_jacobian_and_coefficient_snapshots(basis):
     response = fem.DeformationGradientResponse(displacement, geometry)
     xi = np.array([.2, .25, .3])
     expected = np.eye(3) + (c.T @ basis.eval_dN_dxi(xi)) @ np.linalg.inv(nodes.T @ G.eval_dN_dxi(xi))
-    np.testing.assert_allclose(response.eval_value(xi), expected.ravel(order="F"))
+    np.testing.assert_allclose(response.evaluate(xi).value, expected.ravel(order='F'))
     c[:] = 0
     nodes[:] = 0
     h = 1e-6
-    fd = np.column_stack([(response.eval_value(xi+h*d)-response.eval_value(xi-h*d))/(2*h) for d in np.eye(3)])
-    np.testing.assert_allclose(response.eval_jacobian(xi).toarray(), fd, atol=2e-10)
+    fd = np.column_stack([(response.evaluate(xi + h * d).value - response.evaluate(xi - h * d).value) / (2 * h) for d in np.eye(3)])
+    np.testing.assert_allclose(response.evaluate(xi).jacobian().toarray(), fd, atol=2e-10)
     assert not response.has_hessian
     with pytest.raises(RuntimeError):
-        response.eval_hessian(xi, np.ones(9))
+        response.evaluate(xi).hessian(np.ones(9))
     del geometry, displacement
     gc.collect()
-    np.testing.assert_allclose(response.eval_value(xi), expected.ravel(order="F"))
+    np.testing.assert_allclose(response.evaluate(xi).value, expected.ravel(order='F'))
 
 
 class SpatialConstant(energy.FixedPatternResponse):
@@ -69,7 +69,7 @@ def test_fem_snapshots_material_responses_and_releases_owners():
     del geometry, plastic, material
     gc.collect()
     assert all(ref() is None for ref in owners)
-    np.testing.assert_allclose(force.eval_value(np.array([2., 3.])), g)
+    np.testing.assert_allclose(force.evaluate(np.array([2.0, 3.0])).value, g)
     np.testing.assert_allclose(elastic.eval_hessian(u).toarray(), H.toarray())
     with pytest.raises((TypeError, ValueError)):
         cls(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, [None], [], [])
@@ -84,10 +84,10 @@ def test_spatial_deformation_requires_valid_geometry_and_child_capabilities():
     for matrix in [np.zeros((3, 3)), np.diag([-1., 1., 1.])]:
         r = fem.DeformationGradientResponse(zero, energy.AffineResponse(matrix))
         with pytest.raises(ValueError):
-            r.eval_value(np.zeros(3))
+            r.evaluate(np.zeros(3)).value
     r = fem.DeformationGradientResponse(zero, identity)
-    np.testing.assert_array_equal(r.eval_value(np.zeros(3)), np.eye(3).ravel())
-    np.testing.assert_array_equal(r.eval_jacobian(np.zeros(3)).toarray(), np.zeros((9, 3)))
+    np.testing.assert_array_equal(r.evaluate(np.zeros(3)).value, np.eye(3).ravel())
+    np.testing.assert_array_equal(r.evaluate(np.zeros(3)).jacobian().toarray(), np.zeros((9, 3)))
     with pytest.raises(ValueError):
         fem.DeformationGradientResponse(r, identity)
 

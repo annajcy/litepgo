@@ -133,15 +133,16 @@ TEST(VertexDofMap, ThreeGatheredFieldsReproduceAffineValuesAndPhysicalGradients)
         for (const Eigen::Vector3d xi : {Eigen::Vector3d(0.2, 0.3, 0.4), Eigen::Vector3d(0.76, 0.11, 0.64)}) {
             const Eigen::Vector3d position =
                 Eigen::Vector3d(1.2, -0.7, 2.1) + reference_jacobian() * (xi + Eigen::Vector3d(e, 0, 0));
-            const auto u_sample_value = u->eval_value(xi);
+            const auto u_sample_value = u->evaluate(xi)->value();
             const auto u_sample_gradient =
-                (u->eval_jacobian(xi) * Eigen::MatrixXd(X_field->eval_jacobian(xi)).inverse()).eval();
-            const auto up_sample_value = up->eval_value(xi);
+                (u->evaluate(xi)->jacobian() * Eigen::MatrixXd(X_field->evaluate(xi)->jacobian()).inverse()).eval();
+            const auto up_sample_value = up->evaluate(xi)->value();
             const auto up_sample_gradient =
-                (up->eval_jacobian(xi) * Eigen::MatrixXd(X_field->eval_jacobian(xi)).inverse()).eval();
-            const auto theta_sample_value = parameters->eval_value(xi);
+                (up->evaluate(xi)->jacobian() * Eigen::MatrixXd(X_field->evaluate(xi)->jacobian()).inverse()).eval();
+            const auto theta_sample_value = parameters->evaluate(xi)->value();
             const auto theta_sample_gradient =
-                (parameters->eval_jacobian(xi) * Eigen::MatrixXd(X_field->eval_jacobian(xi)).inverse()).eval();
+                (parameters->evaluate(xi)->jacobian() * Eigen::MatrixXd(X_field->evaluate(xi)->jacobian()).inverse())
+                    .eval();
             EXPECT_TRUE(u_sample_value.isApprox(A * position + a_offset, 1e-13));
             EXPECT_TRUE(u_sample_gradient.isApprox(A, 1e-13));
             EXPECT_TRUE(up_sample_value.isApprox(P * position + b_offset, 1e-13));

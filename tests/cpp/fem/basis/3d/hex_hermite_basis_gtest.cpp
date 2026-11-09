@@ -107,9 +107,9 @@ TEST(HexHermiteBasis, ReproducesAffineVectorFieldsWith192Dofs) {
     auto interpolation = std::make_shared<litepgo::fem::InterpolatedResponse<HexHermiteBasis>>(coefficients);
     EXPECT_EQ(interpolation->num_inputs(), 3);
     for (const auto& xi : samples) {
-        EXPECT_TRUE(interpolation->eval_value(xi).isApprox(A * xi + b, 1e-13));
-        EXPECT_TRUE(Eigen::MatrixXd(interpolation->eval_jacobian(xi)).isApprox(A, 1e-13));
-        EXPECT_TRUE(Eigen::MatrixXd(interpolation->eval_hessian(xi, Vec::Ones(3))).isZero(1e-13));
+        EXPECT_TRUE(interpolation->evaluate(xi)->value().isApprox(A * xi + b, 1e-13));
+        EXPECT_TRUE(Eigen::MatrixXd(interpolation->evaluate(xi)->jacobian()).isApprox(A, 1e-13));
+        EXPECT_TRUE(Eigen::MatrixXd(interpolation->evaluate(xi)->hessian(Vec::Ones(3))).isZero(1e-13));
     }
 }
 

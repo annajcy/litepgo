@@ -147,16 +147,16 @@ TEST(Response, PatternAndInputContracts) {
             J->coeffRef(0, 0) = 2;
         return (Vec(2) << 2 * x[0], 0).finished();
     });
-    EXPECT_THROW(r.eval_value(Vec::Zero(2)), std::invalid_argument);
+    EXPECT_THROW(r.evaluate(Vec::Zero(2))->value(), std::invalid_argument);
     SpMat wrong(2, 1);
-    EXPECT_EQ(r.eval_jacobian(Vec::Zero(1)).coeff(0, 0), 2);
+    EXPECT_EQ(r.evaluate(Vec::Zero(1))->jacobian().coeff(0, 0), 2);
     TestResponse broken(pattern, [](const ConstVecRef&, SpMat* J) -> Vec {
         if (J)
             J->coeffRef(1, 0) = 1;
         return Vec::Zero(2);
     });
 #ifndef NDEBUG
-    EXPECT_THROW(broken.eval_jacobian(Vec::Zero(1)), std::logic_error);
+    EXPECT_THROW(broken.evaluate(Vec::Zero(1))->jacobian(), std::logic_error);
 #endif
 }
 
@@ -245,7 +245,7 @@ TEST(GaussNewton, PatternChangesDuringSolve) {
     auto result = gauss_newton_solve(residual, Vec::Constant(2, -1), options);
     EXPECT_EQ(result.status, GaussNewtonStatus::Converged);
     EXPECT_LT((result.x - Vec::Ones(2)).norm(), 1e-8);
-    EXPECT_EQ(residual.eval_jacobian(result.x).nonZeros(), 3);
+    EXPECT_EQ(residual.evaluate(result.x)->jacobian().nonZeros(), 3);
     EXPECT_GT(residual.changes, 2);
 }
 

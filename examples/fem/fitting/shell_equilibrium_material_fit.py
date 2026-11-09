@@ -91,14 +91,16 @@ def measure(problem, make_energy, make_response, p, load=1.0, need_jacobian=Fals
         make_energy,
         make_response,
     )
-    displacement, state_jacobian = (equilibrium.eval_value_and_jacobian(p) if need_jacobian else (equilibrium.eval_value(p), None))
+    evaluation = equilibrium.evaluate(p)
+    state_jacobian = evaluation.jacobian() if need_jacobian else None
+    displacement = evaluation.value
 
     # 2. Compute force and its total derivative along the equilibrium branch.
     elastic = make_energy(p)
     force = elastic.eval_gradient(displacement)
     reaction_jacobian = None
     if need_jacobian:
-        force_parameter_jacobian = make_response(displacement).eval_jacobian(p)
+        force_parameter_jacobian = make_response(displacement).evaluate(p).jacobian()
         stiffness = elastic.eval_hessian(displacement)
         reaction_jacobian = force_parameter_jacobian + stiffness @ state_jacobian
 
@@ -153,7 +155,7 @@ def main():
     )
     converged = result.status == solver.GaussNewtonStatus.Converged
     parameter_error = np.linalg.norm(result.x - truth) / np.linalg.norm(truth)
-    relative_residual = np.linalg.norm(residual.eval_value(result.x))
+    relative_residual = np.linalg.norm(residual.evaluate(result.x).value)
     held_out = measurement(truth, load=0.6).reaction
     prediction = measurement(result.x, load=0.6).reaction
     held_out_error = np.linalg.norm(prediction - held_out) / np.linalg.norm(held_out)

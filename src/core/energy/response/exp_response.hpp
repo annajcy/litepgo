@@ -31,10 +31,10 @@ class ExpResponse final : public FixedPatternResponse {
     void eval_hessian_impl(const ConstVecRef& x, const ConstVecRef& weights, SpMat& H) override {
         H.coeffs() = values(x).cwiseProduct(weights);
     }
-    Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& v) override {
+    Vec jvp_at(const ConstVecRef& x, const ConstVecRef& v) override {
         return values(x).cwiseProduct(v);
     }
-    Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& w) override {
+    Vec vjp_at(const ConstVecRef& x, const ConstVecRef& w) override {
         return values(x).cwiseProduct(w);
     }
 };

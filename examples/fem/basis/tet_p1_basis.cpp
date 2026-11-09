@@ -35,7 +35,7 @@ int main() {
     const std::array<Eigen::Vector3d, 3> points{Eigen::Vector3d(0.25, 0.25, 0.25), Eigen::Vector3d(0.2, 0.3, 0.1),
                                                 Eigen::Vector3d(0.1, 0.1, 0.2)};
     for (const auto& point : points)
-        if (std::abs(field.eval_value(point)[0] - target(point)) > 1e-12)
+        if (std::abs(field.evaluate(point)->value()[0] - target(point)) > 1e-12)
             throw std::runtime_error("Tet P1 field does not reconstruct the target");
     std::cout << "TetP1 field: samples=" << points.size() << ", verified=1\n";
 }

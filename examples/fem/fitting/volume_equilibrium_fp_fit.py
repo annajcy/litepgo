@@ -75,7 +75,7 @@ def make_factories(problem):
     )
 
     def make_energy(p):
-        packed = plastic.eval_value(p).reshape(-1, 9)
+        packed = plastic.evaluate(p).value.reshape(-1, 9)
         fields = [AffineResponse(np.zeros((9, 3)), row) for row in packed]
         return ElasticEnergy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](),
             problem.displacement_map, problem.geometry, fields, problem.theta
@@ -104,14 +104,16 @@ def measure(problem, make_energy, make_response, p, load=1.0, need_jacobian=Fals
         make_energy,
         make_response,
     )
-    displacement, state_jacobian = (equilibrium.eval_value_and_jacobian(p) if need_jacobian else (equilibrium.eval_value(p), None))
+    evaluation = equilibrium.evaluate(p)
+    state_jacobian = evaluation.jacobian() if need_jacobian else None
+    displacement = evaluation.value
 
     # 2. Compute force and its total derivative along the equilibrium branch.
     elastic = make_energy(p)
     force = elastic.eval_gradient(displacement)
     reaction_jacobian = None
     if need_jacobian:
-        force_parameter_jacobian = make_response(displacement).eval_jacobian(p)
+        force_parameter_jacobian = make_response(displacement).evaluate(p).jacobian()
         stiffness = elastic.eval_hessian(displacement)
         reaction_jacobian = force_parameter_jacobian + stiffness @ state_jacobian
 
@@ -164,7 +166,7 @@ def main():
     converged = result.status == solver.GaussNewtonStatus.Converged
     fitted = np.exp(result.x)
     parameter_error = np.linalg.norm(fitted - truth) / np.linalg.norm(truth)
-    relative_residual = np.linalg.norm(residual.eval_value(result.x))
+    relative_residual = np.linalg.norm(residual.evaluate(result.x).value)
 
     # Predict a load that was not used for fitting.
     held_out, _ = measurement(np.log(truth), load=0.6)

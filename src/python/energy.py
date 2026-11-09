@@ -11,7 +11,8 @@ zero Hessians, and evaluate JVPs and VJPs directly.
 
 ComposedResponse(outer, inner) evaluates outer(inner(x)) with chained products.
 ElementwiseResponse(input_map, transform) concatenates per-element transformed
-values and sums shared-DOF VJP contributions. ExpResponse(size) maps log parameters
+values and sums shared-DOF VJP contributions. Each evaluation retains its per-element
+child states across value and derivative calls. ExpResponse(size) maps log parameters
 to positive coefficients. See guide/energy/parameter-transforms.
 
 Energy evaluates E(x), its gradient (n,), and full symmetric Hessian (n,n).
@@ -45,13 +46,14 @@ The same contract applies to contact and FEM dependencies.
 
 Vector responses and analytic sparse derivatives.
 
-Ordinary eval_value(x), eval_jacobian(x), eval_value_and_jacobian(x),
-eval_jvp(x, dx), eval_vjp(x, weights), and eval_hessian(x, weights) evaluate at
-the supplied input, preparing required patterns automatically. Joint evaluation
-returns (value, Jacobian). Direct products need no pattern preparation; their
-defaults prepare and multiply the explicit Jacobian.
+Response.evaluate(x) returns an independent ResponseEvaluation bound to a copy of x.
+Its value property, jacobian(), jvp(direction), vjp(weights), and hessian(weights)
+prepare results on demand. Values are retained; equilibrium evaluations also retain
+the converged state and prepare exact stiffness once for subsequent products.
+Python results own their data. Do not mutate model/callback configuration while an
+evaluation is in use. Each evaluation is used by one caller at a time.
 
-Response.eval_hessian returns the exact Hessian of weights @ R(x), holding
+ResponseEvaluation.hessian returns the exact Hessian of weights @ R(x), holding
 weights fixed, as a full symmetric (num_inputs, num_inputs) sparse matrix.
 Check has_hessian first; unsupported calls raise RuntimeError. AffineResponse,
 IdentityResponse, ConstantResponse, ExpResponse, and compositions with two
@@ -85,11 +87,11 @@ eval_feasible_step_batch(ids, x, dx). MeshResponse may override
 eval_jvp_batch(ids, x, dx) and eval_vjp_batch(ids, x, gy) to return batch products.
 Product hooks may return None for an infeasible state, just like value hooks.
 Their defaults multiply local explicit Jacobians; shared/repeated indices sum.
-All Response instances expose eval_jvp(x, dx) and eval_vjp(x, weights). Custom
+Response evaluations expose jvp(dx) and vjp(weights). Custom
 FixedPatternResponse/DynamicPatternResponse subclasses may override
- eval_jvp_impl(x, dx) and eval_vjp_impl(x, weights).
+ jvp_at(x, dx) and vjp_at(x, weights).
 Ordinary products prepare patterns only when the implementation needs them. Direct
-products do not remove the stored Jacobian pattern. No automatic linearization cache is kept.
+products do not remove the stored Jacobian pattern. Evaluation state belongs to a single copied input.
 """
 
 from litepgo._core import energy as _native
@@ -105,9 +107,9 @@ AffineMappedEnergy = _native.AffineMappedEnergy
 
 __all__ = ["FixedPatternEnergy", "DynamicPatternEnergy", "HessianKind", "Energy", "QuadraticEnergy", "VertexPullingEnergy", "WeightedSumEnergy", "AffineMappedEnergy"]
 
-from litepgo._core.energy import Response, FixedPatternResponse, DynamicPatternResponse
+from litepgo._core.energy import Response, ResponseEvaluation, FixedPatternResponse, DynamicPatternResponse
 
-__all__ += ["Response", "FixedPatternResponse", "DynamicPatternResponse"]
+__all__ += ["Response", "ResponseEvaluation", "FixedPatternResponse", "DynamicPatternResponse"]
 
 MeshEnergy = _native.MeshEnergy
 MeshResponse = _native.MeshResponse

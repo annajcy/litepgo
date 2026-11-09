@@ -25,7 +25,7 @@ SampledBoundary sample_boundary<HexQ1Basis>(const mesh::HexTopology& topology,
             throw std::invalid_argument("sample_boundary: X fields need three components");
         const auto& cell = topology.cell_vertices(e);
         for (int v = 0; v < 8; ++v) {
-            Eigen::Vector3d p = fields[e]->eval_value(HexQ1Basis::coefficient_info(v).point);
+            Eigen::Vector3d p = fields[e]->evaluate(HexQ1Basis::coefficient_info(v).point)->value();
             auto [it, inserted] = corners.emplace(cell[v], p);
             if (!inserted && !(it->second.array() == p.array()).all())
                 throw std::invalid_argument("sample_boundary: shared vertex has inconsistent rest positions");
@@ -81,7 +81,7 @@ SampledBoundary sample_boundary<HexQ1Basis>(const mesh::HexTopology& topology,
                         throw std::length_error("sample_boundary: vertex count exceeds coordinate index range");
                     const int id = static_cast<int>(samples.size());
                     Eigen::Vector3d xi = a + (double(i) / n) * (b - a) + (double(j) / n) * (d - a);
-                    Eigen::Vector3d position = fields[f.element]->eval_value(xi);
+                    Eigen::Vector3d position = fields[f.element]->evaluate(xi)->value();
                     samples.push_back({f.element, xi, position, key});
                     it = ids.emplace(std::move(key), id).first;
                 }

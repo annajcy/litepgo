@@ -130,13 +130,12 @@ def test_volumetric_force_responses_match_native(case, material):
             p = base if Map is dof.ConstantDofMap else np.concatenate([base * (1 + 0.01 * e) for e in range(count)])
             native = Force[key](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), parameter_map, mapping, X, u, fixed)
             python = Force[key](material(), parameter_map, mapping, X, u, fixed)
-            np.testing.assert_allclose(python.eval_value(p), native.eval_value(p), rtol=1e-11, atol=1e-13)
-            np.testing.assert_allclose(python.eval_jacobian(p).toarray(), native.eval_jacobian(p).toarray(),
-                                       rtol=1e-10, atol=1e-12)
+            np.testing.assert_allclose(python.evaluate(p).value, native.evaluate(p).value, rtol=1e-11, atol=1e-13)
+            np.testing.assert_allclose(python.evaluate(p).jacobian().toarray(), native.evaluate(p).jacobian().toarray(), rtol=1e-10, atol=1e-12)
             v = np.linspace(0.1, 0.4, len(p))
             w = np.linspace(-1, 1, mapping.num_dofs)
-            np.testing.assert_allclose(python.eval_jvp(p, v), native.eval_jvp(p, v), rtol=1e-10, atol=1e-12)
-            np.testing.assert_allclose(python.eval_vjp(p, w), native.eval_vjp(p, w), rtol=1e-10, atol=1e-12)
+            np.testing.assert_allclose(python.evaluate(p).jvp(v), native.evaluate(p).jvp(v), rtol=1e-10, atol=1e-12)
+            np.testing.assert_allclose(python.evaluate(p).vjp(w), native.evaluate(p).vjp(w), rtol=1e-10, atol=1e-12)
 
 
 def test_one_call_per_batch_with_requested_outputs():
@@ -152,11 +151,11 @@ def test_one_call_per_batch_with_requested_outputs():
     python.eval_gradient(u)
     response = fem.VolumetricFemForceMaterialResponse[key](PointwiseNeoHookean(),
         dof.ConstantDofMap(topology, 2), mapping, X, u, Fp)
-    response.eval_value(np.array([2.0, 3.0]))
-    response.eval_jacobian(np.array([2.0, 3.0]))
+    response.evaluate(np.array([2.0, 3.0])).value
+    response.evaluate(np.array([2.0, 3.0])).jacobian()
     fp = fem.VolumetricFemForceFpResponse[key](PointwiseNeoHookean(),
         dof.ConstantDofMap(topology, 9), mapping, X, u, theta, 256)
-    fp.eval_jacobian(np.eye(3).ravel())
+    fp.evaluate(np.eye(3).ravel()).jacobian()
     requested = [outputs for _, outputs in PointwiseNeoHookean.calls]
     assert requested == [("W",), ("W",), ("W", "dW_dF"), ("W", "dW_dF"), ("dW_dF",),
                          ("dW_dF", "d2W_dF_dtheta"), ("dW_dF", "d2W_dF_dFp")]
@@ -341,7 +340,7 @@ def test_torch_constant_and_linear_densities_have_zero_derivatives():
     assert abs(hessian).max() == 0
     response = fem.VolumetricFemForceMaterialResponse[key](Linear(),
         dof.ConstantDofMap(topology, 2), mapping, X, u, Fp)
-    assert abs(response.eval_jacobian(np.array([2.0, 3.0]))).max() == 0
+    assert abs(response.evaluate(np.array([2.0, 3.0])).jacobian()).max() == 0
 
     class WrongShape(TorchVolumetricMaterial):
         num_parameters = 2
@@ -436,16 +435,14 @@ def test_shell_energy_and_forces_match_native(material):
         p = np.array([2.5, 1.5]) if Map is dof.ConstantDofMap else np.concatenate(theta)
         native = fem.ShellFemForceMaterialResponse(fem.PointwiseShellAdapter[fem.KoiterStVK](), Map(topology, 2), mapping, rest, u, thickness)
         python = fem.ShellFemForceMaterialResponse(material(), Map(topology, 2), mapping, rest, u, thickness)
-        np.testing.assert_allclose(python.eval_value(p), native.eval_value(p), rtol=1e-11, atol=1e-13)
-        np.testing.assert_allclose(python.eval_jacobian(p).toarray(), native.eval_jacobian(p).toarray(),
-                                   rtol=1e-10, atol=1e-12)
+        np.testing.assert_allclose(python.evaluate(p).value, native.evaluate(p).value, rtol=1e-11, atol=1e-13)
+        np.testing.assert_allclose(python.evaluate(p).jacobian().toarray(), native.evaluate(p).jacobian().toarray(), rtol=1e-10, atol=1e-12)
         P = np.array([[1.12, .07, -.02], [.03, .94, .06], [.01, -.03, 1.08]]).ravel(order="F")
         p = P if Map is dof.ConstantDofMap else np.concatenate([P * (1 + .02 * e) for e in range(4)])
         native = fem.ShellFemForceFpResponse(fem.PointwiseShellAdapter[fem.KoiterStVK](), Map(topology, 9), mapping, rest, u, thickness, theta)
         python = fem.ShellFemForceFpResponse(material(), Map(topology, 9), mapping, rest, u, thickness, theta)
-        np.testing.assert_allclose(python.eval_value(p), native.eval_value(p), rtol=1e-11, atol=1e-13)
-        np.testing.assert_allclose(python.eval_jacobian(p).toarray(), native.eval_jacobian(p).toarray(),
-                                   rtol=1e-10, atol=1e-12)
+        np.testing.assert_allclose(python.evaluate(p).value, native.evaluate(p).value, rtol=1e-11, atol=1e-13)
+        np.testing.assert_allclose(python.evaluate(p).jacobian().toarray(), native.evaluate(p).jacobian().toarray(), rtol=1e-10, atol=1e-12)
 
 
 def test_shell_material_validates_at_construction():

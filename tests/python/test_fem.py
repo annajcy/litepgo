@@ -168,11 +168,11 @@ def test_fields():
     coeffs = np.array([fem.HexQ1Basis.coefficient_info(v).point for v in range(8)]) * [2.0, 1.0, 3.0]
     X = fem.InterpolatedResponse[fem.HexQ1Basis](coeffs)
     xi = np.array([0.2, 0.5, 0.9])
-    np.testing.assert_allclose(X.eval_value(xi), [0.4, 0.5, 2.7])
-    np.testing.assert_allclose(X.eval_jacobian(xi).toarray(), np.diag([2.0, 1.0, 3.0]), atol=1e-15)
+    np.testing.assert_allclose(X.evaluate(xi).value, [0.4, 0.5, 2.7])
+    np.testing.assert_allclose(X.evaluate(xi).jacobian().toarray(), np.diag([2.0, 1.0, 3.0]), atol=1e-15)
     assert (X.num_outputs, X.num_inputs) == (3, 3)
     constant = AffineResponse(np.zeros((np.asarray(np.array([1.0, 2.0])).size, 3)), np.array([1.0, 2.0]))
-    np.testing.assert_array_equal(constant.eval_value(xi), [1.0, 2.0])
+    np.testing.assert_array_equal(constant.evaluate(xi).value, [1.0, 2.0])
     with pytest.raises(ValueError):
         fem.InterpolatedResponse[fem.HexQ1Basis](coeffs[:7])
 
@@ -186,7 +186,7 @@ def test_deformation_gradient_keeps_its_fields_alive():
 
     F = make()
     gc.collect()
-    np.testing.assert_allclose(F.eval_value(np.full(3, 0.25)), (1.1 * np.eye(3)).ravel(order="F"))
+    np.testing.assert_allclose(F.evaluate(np.full(3, 0.25)).value, (1.1 * np.eye(3)).ravel(order='F'))
 
 
 def test_materials_pointwise():
@@ -481,7 +481,7 @@ def test_basis_dof_transform_maps_physical_hermite_dofs():
     u_field = fem.InterpolatedResponse[fem.HexHermiteBasis](transform.to_coefficients(local))
     F = fem.DeformationGradientResponse(u_field, X_field)
     for xi in ([0.2, 0.7, 0.4], [0.9, 0.1, 0.5]):
-        np.testing.assert_allclose(F.eval_value(np.array(xi)), (np.eye(3) + A).ravel(order="F"), atol=1e-13)
+        np.testing.assert_allclose(F.evaluate(np.array(xi)).value, (np.eye(3) + A).ravel(order='F'), atol=1e-13)
     # Pullback scales each coefficient by its slot's element lengths: 1, hx, hy, hz, hx hy, hx hz, hy hz, hx hy hz.
     gradient, hessian = transform.pullback(gradient=np.ones(192))
     assert hessian is None

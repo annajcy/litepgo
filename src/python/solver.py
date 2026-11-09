@@ -16,9 +16,10 @@ at fixed u. Callers guarantee that both describe the same total potential.
 The response keeps both callbacks alive and exposes them to Python's cyclic
 garbage collector.
 Fixed DOFs and values must be parameter-independent.
-Each call starts from initial; sensitivities use the exact unshifted Hessian.
-eval_jvp and eval_vjp use directional and adjoint solves without forming the
-state Jacobian. Parameter products delegate to the returned Response; only its
+Each evaluate(p) returns independent state; first value/product use solves from
+initial. Its jvp and vjp use directional and adjoint solves without forming the
+state Jacobian. The converged state and exact unshifted stiffness factorization
+are reused by subsequent derivatives of that evaluation. Parameter products delegate to the returned Response; only its
 default product implementations require an explicit parameter Jacobian.
 Nonconverged equilibria raise ValueError. See examples/fem/fitting/volume_equilibrium_material_fit.py.
 

@@ -42,7 +42,7 @@ first-derivative slots, and fill mixed derivative slots with zero.
 
 For a scalar field, reshape the coefficient vector into one column:
 `(16,1)` for Quad Hermite or `(64,1)` for Hex Hermite. Construct
-`fem.InterpolatedResponse[B](coefficients)` and call `field.eval_value(query)[0]`.
+`fem.InterpolatedResponse[B](coefficients)` and call `field.evaluate(query).value[0]`.
 The C++ example uses the corresponding `InterpolatedResponse<B>`.
 The response owns the sampled coefficients and performs the basis-weighted sum.
 

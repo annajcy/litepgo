@@ -51,8 +51,10 @@ for an infeasible point. Native `eval_impl(x, SpMat* J)` uses a nullable
 Jacobian pointer and overwrites its prepared numerical entries.
 
 ```python
-value = response.eval_value(x)
-value, J = response.eval_value_and_jacobian(x)  # J has shape (m, n)
+value = response.evaluate(x).value
+evaluation = response.evaluate(x)
+J = evaluation.jacobian()
+value = evaluation.value
 ```
 
 Ordinary calls prepare their required structure in local storage. No explicit

@@ -38,12 +38,14 @@ def test_maps_and_batch_sizes(input_kind, output_kind, batch_size):
     del t, i, o
     gc.collect()
     global_x = np.arange(obj.num_inputs, dtype=float)
-    value, J = obj.eval_value_and_jacobian(global_x)
+    obj_evaluation = obj.evaluate(global_x)
+    J = obj_evaluation.jacobian()
+    value = obj_evaluation.value
     assert sorted(seen) == [0, 1, 2]
     np.testing.assert_array_equal(value, expected @ global_x)
     np.testing.assert_array_equal(J.toarray(), expected)
     global_x = -global_x
-    np.testing.assert_array_equal(obj.eval_value(global_x), expected @ global_x)
+    np.testing.assert_array_equal(obj.evaluate(global_x).value, expected @ global_x)
     for x, copy in saved:
         np.testing.assert_array_equal(x, copy)
 
@@ -64,21 +66,21 @@ def test_zeroing_empty_errors_and_recovery():
         if mode == "nan": y[0, 0] = np.nan
         return (y, J) if need else y
     obj = BatchResponseFixture(i, o, batch, 1)
-    nonzero = obj.eval_jacobian(np.ones(2))
-    zero = obj.eval_jacobian(np.zeros(2))
+    nonzero = obj.evaluate(np.ones(2)).jacobian()
+    zero = obj.evaluate(np.zeros(2)).jacobian()
     assert nonzero.nnz == zero.nnz == 10
     assert not zero.data.any()
     for mode in ("bad_y", "bad_j", "nan"):
         with pytest.raises(RuntimeError, match="invalid batch outputs"):
-            obj.eval_jacobian(np.ones(2))
+            obj.evaluate(np.ones(2)).jacobian()
     mode = "none"
     with pytest.raises(ValueError, match="infeasible"):
-        obj.eval_value(np.ones(2))
+        obj.evaluate(np.ones(2)).value
     mode = "raise"
     with pytest.raises(KeyError, match="callback error"):
-        obj.eval_value(np.ones(2))
+        obj.evaluate(np.ones(2)).value
     mode = "good"
-    np.testing.assert_array_equal(obj.eval_jacobian(np.ones(2)).toarray(), nonzero.toarray())
+    np.testing.assert_array_equal(obj.evaluate(np.ones(2)).jacobian().toarray(), nonzero.toarray())
     for size in (0, -1):
         with pytest.raises(ValueError, match="batch size"):
             BatchResponseFixture(i, o, batch, size)
@@ -86,8 +88,8 @@ def test_zeroing_empty_errors_and_recovery():
     def unreachable(*args):
         raise AssertionError("empty mesh callback")
     obj = BatchResponseFixture(empty, empty, unreachable)
-    assert obj.eval_value(np.empty(0)).size == 0
-    assert obj.eval_jacobian(np.empty(0)).shape == (0, 0)
+    assert obj.evaluate(np.empty(0)).value.size == 0
+    assert obj.evaluate(np.empty(0)).jacobian().shape == (0, 0)
 
 
 @pytest.mark.parametrize("batch_size", [1, 32])
@@ -104,10 +106,12 @@ def test_grouping_preserves_original_element_sum_order(batch_size):
         return (values, J) if need else values
 
     obj = BatchResponseFixture(inputs, outputs, batch, batch_size)
-    value, J = obj.eval_value_and_jacobian(np.ones(2))
+    obj_evaluation = obj.evaluate(np.ones(2))
+    J = obj_evaluation.jacobian()
+    value = obj_evaluation.value
     # Grouping evaluates elements 0,2 before 1; assembly must still sum 0,1,2.
     np.testing.assert_array_equal(value, [1.])
     np.testing.assert_array_equal(J.toarray(), [[1., 0.]])
-    np.testing.assert_array_equal(obj.eval_jvp(np.ones(2), np.ones(2)), [1.])
-    np.testing.assert_array_equal(obj.eval_vjp(np.ones(2), np.ones(1)), [1., 0.])
-    np.testing.assert_array_equal(obj.eval_jacobian(np.ones(2)).toarray(), J.toarray())
+    np.testing.assert_array_equal(obj.evaluate(np.ones(2)).jvp(np.ones(2)), [1.0])
+    np.testing.assert_array_equal(obj.evaluate(np.ones(2)).vjp(np.ones(1)), [1.0, 0.0])
+    np.testing.assert_array_equal(obj.evaluate(np.ones(2)).jacobian().toarray(), J.toarray())

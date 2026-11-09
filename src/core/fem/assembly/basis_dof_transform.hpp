@@ -67,7 +67,7 @@ template <> class BasisDofTransform<HexHermiteBasis> {
         if ((X.num_inputs() != 3 || X.num_outputs() != 3))
             throw std::invalid_argument("Hermite DOFs require three reference components");
         for (int v = 0; v < 8; ++v) {
-            const auto position = X.eval_value(HexQ1Basis::coefficient_info(v).point);
+            const auto position = X.evaluate(HexQ1Basis::coefficient_info(v).point)->value();
             if (position.size() != 3 || !position.allFinite())
                 throw std::invalid_argument("Hermite DOFs require finite three-component reference values");
             nodes.row(v) = position.transpose();

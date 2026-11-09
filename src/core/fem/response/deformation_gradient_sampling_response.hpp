@@ -22,7 +22,7 @@ energy::AffineResponse deformation_gradient_sampling_response(energy::Response& 
     std::vector<Triplet> entries;
     Vec offset = Vec::Zero(9 * points.rows());
     for (Eigen::Index q = 0; q < points.rows(); ++q) {
-        const Eigen::Matrix3d J = geometry.eval_jacobian(points.row(q).transpose());
+        const Eigen::Matrix3d J = geometry.evaluate(points.row(q).transpose())->jacobian();
         const double determinant = J.determinant();
         if (!std::isfinite(determinant) || determinant <= 0)
             throw std::invalid_argument("Deformation gradient sampling: positive geometry determinant required");

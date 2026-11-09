@@ -35,11 +35,13 @@ TEST(MeshResponse, SharedParametersAndOutputsAccumulate) {
     const Vec x = Eigen::Vector2d(2, 3);
     EXPECT_EQ(r.num_inputs(), 2);
     EXPECT_EQ(r.num_outputs(), 5);
-    EXPECT_TRUE(r.eval_value(x).isApprox(expected * x));
+    EXPECT_TRUE(r.evaluate(x)->value().isApprox(expected * x));
     EXPECT_EQ(derivatives, 0);
     SpMat J;
     EXPECT_TRUE(([&] {
-                    auto result = r.eval_value_and_jacobian(x);
+                    auto evaluation_0 = r.evaluate(x);
+                    auto jacobian_0 = evaluation_0->jacobian();
+                    auto result = std::pair{litepgo::Vec(evaluation_0->value()), std::move(jacobian_0)};
                     J = std::move(result.second);
                     return std::move(result.first);
                 }())
@@ -47,7 +49,9 @@ TEST(MeshResponse, SharedParametersAndOutputsAccumulate) {
     EXPECT_TRUE(Eigen::MatrixXd(J).isApprox(expected));
     EXPECT_EQ(derivatives, 2);
     EXPECT_TRUE(([&] {
-                    auto result = r.eval_value_and_jacobian(-x);
+                    auto evaluation_1 = r.evaluate(-x);
+                    auto jacobian_1 = evaluation_1->jacobian();
+                    auto result = std::pair{litepgo::Vec(evaluation_1->value()), std::move(jacobian_1)};
                     J = std::move(result.second);
                     return std::move(result.first);
                 }())
@@ -66,8 +70,8 @@ TEST(MeshResponse, IndependentParameterBlocks) {
     expected << 1, 2, 0, 0, 3, 4, 1, 2, 5, 6, 3, 4, 7, 8, 5, 6, 0, 0, 7, 8;
     Vec x(4);
     x << 1, 2, 3, 4;
-    EXPECT_TRUE(Eigen::MatrixXd(r.eval_jacobian(x)).isApprox(expected));
-    EXPECT_TRUE(r.eval_value(x).isApprox(expected * x));
+    EXPECT_TRUE(Eigen::MatrixXd(r.evaluate(x)->jacobian()).isApprox(expected));
+    EXPECT_TRUE(r.evaluate(x)->value().isApprox(expected * x));
 }
 TEST(MeshResponse, MatrixGatherPreservesRowMajorSlotsAndZeros) {
     auto r = formula_response(dof::VertexDofMap(topology, 2), dof::ElementDofMap(topology, 1),
@@ -83,7 +87,9 @@ TEST(MeshResponse, MatrixGatherPreservesRowMajorSlotsAndZeros) {
     const Vec x = Vec::LinSpaced(10, 1, 10);
     SpMat J;
     EXPECT_EQ(([&] {
-                  auto result = r.eval_value_and_jacobian(x);
+                  auto evaluation_2 = r.evaluate(x);
+                  auto jacobian_2 = evaluation_2->jacobian();
+                  auto result = std::pair{litepgo::Vec(evaluation_2->value()), std::move(jacobian_2)};
                   J = std::move(result.second);
                   return std::move(result.first);
               }())[0],
@@ -91,7 +97,9 @@ TEST(MeshResponse, MatrixGatherPreservesRowMajorSlotsAndZeros) {
     EXPECT_EQ(J.coeff(0, 3), 8);
     EXPECT_EQ(J.coeff(1, 5), 12);
     ([&] {
-        auto result = r.eval_value_and_jacobian(Vec::Zero(10));
+        auto evaluation_3 = r.evaluate(Vec::Zero(10));
+        auto jacobian_3 = evaluation_3->jacobian();
+        auto result = std::pair{litepgo::Vec(evaluation_3->value()), std::move(jacobian_3)};
         J = std::move(result.second);
         return std::move(result.first);
     }());
@@ -102,13 +110,13 @@ TEST(MeshResponse, RejectsInvalidLocalResultsAndCountMismatch) {
     const dof::ConstantDofMap input(topology, 2);
     const dof::VertexDofMap output(topology, 1);
     auto wrong = formula_response(input, output, [](int, const Vec&, Eigen::MatrixXd*) { return Vec::Zero(3).eval(); });
-    EXPECT_THROW(wrong.eval_value(Vec::Zero(2)), std::logic_error);
+    EXPECT_THROW(wrong.evaluate(Vec::Zero(2))->value(), std::logic_error);
     auto bad_j = formula_response(input, output, [](int, const Vec&, Eigen::MatrixXd* J) {
         if (J)
             J->setZero(2, 4);
         return Vec::Zero(4).eval();
     });
-    EXPECT_THROW(bad_j.eval_jacobian(Vec::Zero(2)), std::logic_error);
+    EXPECT_THROW(bad_j.evaluate(Vec::Zero(2))->jacobian(), std::logic_error);
     const mesh::TetTopology single(4, {{0, 1, 2, 3}});
     EXPECT_THROW((formula_response(input, dof::VertexDofMap(single, 1),
                                    [](int, const Vec&, Eigen::MatrixXd*) { return Vec::Zero(4).eval(); })),
@@ -119,12 +127,12 @@ TEST(MeshResponse, EmptyMeshAndAssemblyOverflow) {
     auto zero =
         formula_response(dof::ConstantDofMap(empty, 2), dof::ElementDofMap(empty, 1),
                          [](int, const Vec&, Eigen::MatrixXd*) -> Vec { throw std::logic_error("Must not evaluate"); });
-    EXPECT_EQ(zero.eval_value(Vec::Zero(2)).size(), 0);
-    EXPECT_EQ(zero.eval_jacobian(Vec::Zero(2)).cols(), 2);
+    EXPECT_EQ(zero.evaluate(Vec::Zero(2))->value().size(), 0);
+    EXPECT_EQ(zero.evaluate(Vec::Zero(2))->jacobian().cols(), 2);
     auto huge = formula_response(
         dof::ConstantDofMap(topology, 2), dof::ConstantDofMap(topology, 1),
         [](int, const Vec&, Eigen::MatrixXd*) { return Vec::Constant(1, std::numeric_limits<double>::max()).eval(); });
-    EXPECT_THROW(huge.eval_value(Vec::Zero(2)), std::domain_error);
+    EXPECT_THROW(huge.evaluate(Vec::Zero(2))->value(), std::domain_error);
 }
 
 TEST(MeshResponse, RejectsBadIndicesBeforeEvaluation) {
@@ -177,14 +185,16 @@ TEST(MeshResponse, SharedAssemblyAndPartialBatch) {
         const Vec x = Eigen::Vector2d(2, 3);
         SpMat J;
         EXPECT_TRUE(([&] {
-                        auto result = batch.eval_value_and_jacobian(x);
+                        auto evaluation_4 = batch.evaluate(x);
+                        auto jacobian_4 = evaluation_4->jacobian();
+                        auto result = std::pair{litepgo::Vec(evaluation_4->value()), std::move(jacobian_4)};
                         J = std::move(result.second);
                         return std::move(result.first);
                     }())
-                        .isApprox(regular.eval_value(x)));
-        EXPECT_TRUE(Eigen::MatrixXd(J).isApprox(Eigen::MatrixXd(regular.eval_jacobian(x))));
+                        .isApprox(regular.evaluate(x)->value()));
+        EXPECT_TRUE(Eigen::MatrixXd(J).isApprox(Eigen::MatrixXd(regular.evaluate(x)->jacobian())));
         EXPECT_EQ(calls.load(), (3 + size - 1) / size);
-        EXPECT_TRUE(batch.eval_value(-x).isApprox(-regular.eval_value(x)));
+        EXPECT_TRUE(batch.evaluate(-x)->value().isApprox(-regular.evaluate(x)->value()));
     }
 }
 
@@ -196,8 +206,8 @@ TEST(MeshResponse, ValidatesBatchSizeAndResults) {
     };
     EXPECT_THROW((::litepgo::testing::BatchResponseFixture(input, output, bad, 0)), std::invalid_argument);
     ::litepgo::testing::BatchResponseFixture batch(input, output, bad);
-    EXPECT_THROW(batch.eval_value(Vec::Zero(2)), std::logic_error);
-    EXPECT_THROW(batch.eval_jacobian(Vec::Zero(2)), std::logic_error);
+    EXPECT_THROW(batch.evaluate(Vec::Zero(2))->value(), std::logic_error);
+    EXPECT_THROW(batch.evaluate(Vec::Zero(2))->jacobian(), std::logic_error);
 }
 
 TEST(MeshResponse, ReusedBuffersDetectIncompleteWritesAndRecover) {
@@ -211,21 +221,21 @@ TEST(MeshResponse, ReusedBuffersDetectIncompleteWritesAndRecover) {
             return energy::BatchMatrix::Constant(ids.size(), 4, x.row(0).sum()).eval();
         });
     const Vec x = Vec::Ones(2);
-    const SpMat expected = batch.eval_jacobian(x);
+    const SpMat expected = batch.evaluate(x)->jacobian();
     omit = true;
-    EXPECT_THROW(batch.eval_jacobian(x), std::logic_error);
+    EXPECT_THROW(batch.evaluate(x)->jacobian(), std::logic_error);
     omit = false;
-    EXPECT_TRUE(Eigen::MatrixXd(batch.eval_jacobian(x)).isApprox(Eigen::MatrixXd(expected)));
+    EXPECT_TRUE(Eigen::MatrixXd(batch.evaluate(x)->jacobian()).isApprox(Eigen::MatrixXd(expected)));
     auto regular = formula_response(input, output, [&](int, const Vec& local, Eigen::MatrixXd* J) -> Vec {
         if (J && !omit)
             J->setOnes(4, 2);
         return Vec::Constant(4, local.sum());
     });
-    EXPECT_TRUE(Eigen::MatrixXd(regular.eval_jacobian(x)).isApprox(Eigen::MatrixXd(expected)));
+    EXPECT_TRUE(Eigen::MatrixXd(regular.evaluate(x)->jacobian()).isApprox(Eigen::MatrixXd(expected)));
     omit = true;
-    EXPECT_THROW(regular.eval_jacobian(x), std::logic_error);
+    EXPECT_THROW(regular.evaluate(x)->jacobian(), std::logic_error);
     omit = false;
-    EXPECT_TRUE(Eigen::MatrixXd(regular.eval_jacobian(x)).isApprox(Eigen::MatrixXd(expected)));
+    EXPECT_TRUE(Eigen::MatrixXd(regular.evaluate(x)->jacobian()).isApprox(Eigen::MatrixXd(expected)));
 }
 
 TEST(MeshResponse, EmptyLocalInputsAndOutputsRetainBatchDimensions) {
@@ -240,8 +250,8 @@ TEST(MeshResponse, EmptyLocalInputsAndOutputsRetainBatchDimensions) {
             return energy::BatchMatrix(ids.size(), 0);
         },
         1);
-    EXPECT_TRUE(obj.eval_value(Vec::Zero(1)).isZero());
-    EXPECT_EQ(obj.eval_jacobian(Vec::Zero(1)).nonZeros(), 0);
+    EXPECT_TRUE(obj.evaluate(Vec::Zero(1))->value().isZero());
+    EXPECT_EQ(obj.evaluate(Vec::Zero(1))->jacobian().nonZeros(), 0);
 }
 
 TEST(MeshResponse, DuplicateIndicesGatherAndScatterAcrossBatches) {
@@ -270,10 +280,10 @@ TEST(MeshResponse, DuplicateIndicesGatherAndScatterAcrossBatches) {
             },
             size);
         for (double x : {2.0, -3.0}) {
-            EXPECT_DOUBLE_EQ(obj.eval_value(Vec::Constant(1, x))[0], 12 * x);
-            EXPECT_DOUBLE_EQ(obj.eval_jacobian(Vec::Constant(1, x)).coeff(0, 0), 12);
-            EXPECT_DOUBLE_EQ(obj.eval_jvp(Vec::Constant(1, x), Vec::Constant(1, 2))[0], 24);
-            EXPECT_DOUBLE_EQ(obj.eval_vjp(Vec::Constant(1, x), Vec::Constant(1, 3))[0], 36);
+            EXPECT_DOUBLE_EQ(obj.evaluate(Vec::Constant(1, x))->value()[0], 12 * x);
+            EXPECT_DOUBLE_EQ(obj.evaluate(Vec::Constant(1, x))->jacobian().coeff(0, 0), 12);
+            EXPECT_DOUBLE_EQ(obj.evaluate(Vec::Constant(1, x))->jvp(Vec::Constant(1, 2))[0], 24);
+            EXPECT_DOUBLE_EQ(obj.evaluate(Vec::Constant(1, x))->vjp(Vec::Constant(1, 3))[0], 36);
         }
     }
 }
@@ -329,15 +339,15 @@ TEST(MeshResponse, ProductsAndDirectOverrides) {
     x << .1, .2;
     dx << .3, -.7;
     gy << .2, .4, -.9;
-    const SpMat J = fallback.eval_jacobian(x);
-    EXPECT_TRUE(fallback.eval_jvp(x, dx).isApprox(J * dx));
-    EXPECT_TRUE(fallback.eval_vjp(x, gy).isApprox(J.transpose() * gy));
-    EXPECT_TRUE(direct.eval_jvp(x, dx).isApprox(J * dx));
-    EXPECT_TRUE(direct.eval_vjp(x, gy).isApprox(J.transpose() * gy));
-    EXPECT_NEAR(gy.dot(direct.eval_jvp(x, dx)), dx.dot(direct.eval_vjp(x, gy)), 1e-14);
-    EXPECT_THROW(direct.eval_jvp(x, Vec::Zero(3)), std::invalid_argument);
+    const SpMat J = fallback.evaluate(x)->jacobian();
+    EXPECT_TRUE(fallback.evaluate(x)->jvp(dx).isApprox(J * dx));
+    EXPECT_TRUE(fallback.evaluate(x)->vjp(gy).isApprox(J.transpose() * gy));
+    EXPECT_TRUE(direct.evaluate(x)->jvp(dx).isApprox(J * dx));
+    EXPECT_TRUE(direct.evaluate(x)->vjp(gy).isApprox(J.transpose() * gy));
+    EXPECT_NEAR(gy.dot(direct.evaluate(x)->jvp(dx)), dx.dot(direct.evaluate(x)->vjp(gy)), 1e-14);
+    EXPECT_THROW(direct.evaluate(x)->jvp(Vec::Zero(3)), std::invalid_argument);
     direct.fail = true;
-    EXPECT_THROW(direct.eval_jvp(x, dx), std::domain_error);
+    EXPECT_THROW(direct.evaluate(x)->jvp(dx), std::domain_error);
     direct.fail = false;
-    EXPECT_TRUE(direct.eval_jvp(x, dx).isApprox(J * dx));
+    EXPECT_TRUE(direct.evaluate(x)->jvp(dx).isApprox(J * dx));
 }

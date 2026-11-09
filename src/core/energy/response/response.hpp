@@ -1,11 +1,51 @@
 #pragma once
 #include "litepgo/common/types.hpp"
+#include <memory>
+#include <optional>
 #include <utility>
 
 namespace litepgo::energy {
-// Mathematical map with fixed dimensions. No pattern cache or shared execution state.
-// Implementations with shared workspaces are responsible for protecting them.
-class Response {
+class Response;
+// One input point. Values and derivatives are prepared on demand. Not concurrently callable.
+class ResponseEvaluation {
+  public:
+    virtual ~ResponseEvaluation() = default;
+    const Vec& value();
+    SpMat jacobian();
+    SpMat hessian(const ConstVecRef& weights);
+    Vec jvp(const ConstVecRef& direction);
+    Vec vjp(const ConstVecRef& weights);
+    int num_inputs() const noexcept {
+        return inputs_;
+    }
+    int num_outputs() const noexcept {
+        return outputs_;
+    }
+    virtual bool has_hessian() const {
+        return hessian_;
+    }
+
+  protected:
+    ResponseEvaluation(int inputs, int outputs, bool hessian = false)
+        : inputs_(inputs), outputs_(outputs), hessian_(hessian) {}
+    virtual Vec value_impl() = 0;
+    virtual SpMat jacobian_impl() = 0;
+    virtual SpMat hessian_impl(const ConstVecRef& weights);
+    virtual Vec jvp_impl(const ConstVecRef& direction);
+    virtual Vec vjp_impl(const ConstVecRef& weights);
+    void save_value(Vec value);
+
+  private:
+    friend class Response;
+    int inputs_, outputs_;
+    bool hessian_;
+    std::optional<Vec> value_;
+    std::shared_ptr<Response> owner_;
+};
+
+// Shared responses are retained by their evaluations. A stack response must outlive its evaluations.
+// Inputs are copied; the response and any external callback state must remain unchanged while in use.
+class Response : public std::enable_shared_from_this<Response> {
   public:
     virtual ~Response() = default;
     Response(const Response&) = delete;
@@ -15,25 +55,18 @@ class Response {
     virtual bool has_hessian() const {
         return false;
     }
-    Vec eval_value(const ConstVecRef& x);
-    SpMat eval_jacobian(const ConstVecRef& x);
-    std::pair<Vec, SpMat> eval_value_and_jacobian(const ConstVecRef& x);
-    Vec eval_jvp(const ConstVecRef& x, const ConstVecRef& dx);
-    Vec eval_vjp(const ConstVecRef& x, const ConstVecRef& weights);
-    // Exact full symmetric Hessian of weights.dot(R(x)), holding weights fixed.
-    SpMat eval_hessian(const ConstVecRef& x, const ConstVecRef& weights);
+    std::shared_ptr<ResponseEvaluation> evaluate(const ConstVecRef& x);
 
   protected:
     Response() = default;
-    virtual Vec eval_value_impl(const ConstVecRef& x) = 0;
-    virtual std::pair<Vec, SpMat> eval_value_and_jacobian_impl(const ConstVecRef& x) = 0;
-    virtual SpMat eval_weighted_hessian_impl(const ConstVecRef& x, const ConstVecRef& weights);
-    virtual Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& dx);
-    virtual Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& weights);
+    virtual std::shared_ptr<ResponseEvaluation> make_evaluation(const ConstVecRef& x);
+    virtual Vec value_at(const ConstVecRef& x);
+    virtual std::pair<Vec, SpMat> value_jacobian_at(const ConstVecRef& x);
+    virtual SpMat hessian_at(const ConstVecRef& x, const ConstVecRef& weights);
+    virtual Vec jvp_at(const ConstVecRef& x, const ConstVecRef& direction);
+    virtual Vec vjp_at(const ConstVecRef& x, const ConstVecRef& weights);
 
   private:
-    void check_input(const ConstVecRef& x) const;
-    void check_weights(const ConstVecRef& weights) const;
-    void check_value(const Vec& value) const;
+    friend class PointEvaluation;
 };
 } // namespace litepgo::energy

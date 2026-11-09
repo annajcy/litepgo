@@ -502,3 +502,8 @@ Baseline: `afc84bb`, captured before editing. Both versions use the same Release
 Products now contract along the derivative chain without forming local force Jacobians. Material batches, required mixed derivatives, stress/force validation, original shell area weights and Hermite DOF scaling are retained. Spatial queries contract child Hessians directly; the child Hessians themselves are still evaluated. No material API or native/Python dispatch changes were needed.
 
 Validation: 505/505 CTest entries; Python 637 passed, 81 skipped (one existing Torch deprecation warning). Added product checks cover shared and per-element parameters, all three volume bases, multiple batch sizes, shell Fp/theta and spatial queries. Raw samples and environment: [before](/benchmark-data/force-products/before.jsonl.txt), [after](/benchmark-data/force-products/after.jsonl.txt), [repeat](/benchmark-data/force-products/after-repeat.jsonl.txt), [environment](/benchmark-data/force-products/environment.json).
+
+
+The subsequent [Response evaluation-state comparison](response-evaluation.md)
+measures end-to-end equilibrium differentiation after removing repeated nonlinear
+solves from Torch and composed backward calls.

@@ -25,13 +25,14 @@ TEST(ResponseComposition, SharedAndRepeatedDofsAccumulate) {
     ComposedResponse response(outer, element);
     const Vec x = Eigen::Vector2d(-.3, .2), v = Eigen::Vector2d(.4, -.7);
     const Vec w = Vec::LinSpaced(4, -.2, .8);
-    const SpMat J = response.eval_jacobian(x);
-    EXPECT_LT((response.eval_jvp(x, v) - J * v).norm(), 1e-12);
-    EXPECT_LT((response.eval_vjp(x, w) - J.transpose() * w).norm(), 1e-12);
-    EXPECT_LT((response.eval_jvp(x, v) - (response.eval_value(x + 1e-6 * v) - response.eval_value(x - 1e-6 * v)) / 2e-6)
+    const SpMat J = response.evaluate(x)->jacobian();
+    EXPECT_LT((response.evaluate(x)->jvp(v) - J * v).norm(), 1e-12);
+    EXPECT_LT((response.evaluate(x)->vjp(w) - J.transpose() * w).norm(), 1e-12);
+    EXPECT_LT((response.evaluate(x)->jvp(v) -
+               (response.evaluate(x + 1e-6 * v)->value() - response.evaluate(x - 1e-6 * v)->value()) / 2e-6)
                   .norm(),
               1e-8);
-    const Vec sum = element->eval_vjp(x, Vec::Ones(4));
+    const Vec sum = element->evaluate(x)->vjp(Vec::Ones(4));
     EXPECT_NEAR(sum[0], 3 * std::exp(x[0]), 1e-12);
     EXPECT_NEAR(sum[1], std::exp(x[1]), 1e-12);
     EXPECT_THROW(ComposedResponse(nullptr, element), std::invalid_argument);
@@ -50,10 +51,10 @@ TEST(ResponseComposition, ProductsNeverRequestExplicitLocalJacobians) {
                 throw std::logic_error("explicit Jacobian requested");
             return x.array().square();
         }
-        Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& v) override {
+        Vec jvp_at(const ConstVecRef& x, const ConstVecRef& v) override {
             return 2 * x.cwiseProduct(v);
         }
-        Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& w) override {
+        Vec vjp_at(const ConstVecRef& x, const ConstVecRef& w) override {
             return 2 * x.cwiseProduct(w);
         }
     };
@@ -62,23 +63,23 @@ TEST(ResponseComposition, ProductsNeverRequestExplicitLocalJacobians) {
     auto composed = std::make_shared<ComposedResponse>(direct, direct);
     ElementwiseResponse response(dof::ConstantDofMap(topology, 2), composed);
     const Vec x = Eigen::Vector2d(.3, -.4);
-    EXPECT_TRUE(response.eval_vjp(x, Vec::Ones(4)).isApprox(8 * x.array().cube().matrix()));
-    EXPECT_THROW(response.eval_jacobian(x), std::logic_error);
-    EXPECT_TRUE(response.eval_vjp(x, Vec::Ones(4)).isApprox(8 * x.array().cube().matrix()));
+    EXPECT_TRUE(response.evaluate(x)->vjp(Vec::Ones(4)).isApprox(8 * x.array().cube().matrix()));
+    EXPECT_THROW(response.evaluate(x)->jacobian(), std::logic_error);
+    EXPECT_TRUE(response.evaluate(x)->vjp(Vec::Ones(4)).isApprox(8 * x.array().cube().matrix()));
 }
 TEST(ResponseComposition, PlasticTransformAndDomainValidation) {
     for (int n : {2, 3}) {
         fem::LogDiagonalFpResponse response(n);
         const Vec x = Vec::LinSpaced(n, -.2, .3);
-        const Vec value = response.eval_value(x);
-        const SpMat J = response.eval_jacobian(x);
-        EXPECT_TRUE(response.eval_jvp(x, x).isApprox(J * x));
-        EXPECT_TRUE(response.eval_vjp(x, value).isApprox(J.transpose() * value));
-        EXPECT_THROW(response.eval_value(Vec::Constant(n, -1000)), std::domain_error);
-        EXPECT_THROW(response.eval_value(Vec::Constant(n, 1000)), std::domain_error);
+        const Vec value = response.evaluate(x)->value();
+        const SpMat J = response.evaluate(x)->jacobian();
+        EXPECT_TRUE(response.evaluate(x)->jvp(x).isApprox(J * x));
+        EXPECT_TRUE(response.evaluate(x)->vjp(value).isApprox(J.transpose() * value));
+        EXPECT_THROW(response.evaluate(Vec::Constant(n, -1000))->value(), std::domain_error);
+        EXPECT_THROW(response.evaluate(Vec::Constant(n, 1000))->value(), std::domain_error);
         if (n == 2)
             EXPECT_DOUBLE_EQ(value[8], 1.);
-        EXPECT_THROW(response.eval_value(Vec::Zero(n + 1)), std::invalid_argument);
+        EXPECT_THROW(response.evaluate(Vec::Zero(n + 1))->value(), std::invalid_argument);
     }
     EXPECT_THROW(fem::LogDiagonalFpResponse(1), std::invalid_argument);
     EXPECT_THROW(ExpResponse(0), std::invalid_argument);

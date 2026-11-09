@@ -50,13 +50,13 @@ void bind_dynamic_pattern_response(nb::module_& m) {
             },
             "x"_a)
         .def(
-            "eval_jvp_impl",
+            "jvp_at",
             [](DynamicPatternResponse& r, const ConstVecRef& x, const ConstVecRef& d) {
                 return dynamic_cast<PyResponse<DynamicPatternResponse>&>(r).default_jvp(x, d);
             },
             "x"_a, "dx"_a)
         .def(
-            "eval_vjp_impl",
+            "vjp_at",
             [](DynamicPatternResponse& r, const ConstVecRef& x, const ConstVecRef& d) {
                 return dynamic_cast<PyResponse<DynamicPatternResponse>&>(r).default_vjp(x, d);
             },

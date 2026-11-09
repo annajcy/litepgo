@@ -62,23 +62,23 @@ Python overrides can call `super().eval_feasible_step_batch(ids, x, dx)`.
 
 ## Jacobian products
 
-Every `Response` supports `eval_jvp(x, dx)` = `J(x) @ dx` and
-`eval_vjp(x, gy)` = `J(x).T @ gy`. Inputs and results are finite dense vectors.
+Every `Response` supports `evaluate(x).jvp(dx)` = `J(x) @ dx` and
+`evaluate(x).vjp(gy)` = `J(x).T @ gy`. Inputs and results are finite dense vectors.
 The base default evaluates the explicit Jacobian on each call. C++ subclasses
 and Python `FixedPatternResponse`/`DynamicPatternResponse` subclasses can override
-`eval_jvp_impl(x, dx)` and `eval_vjp_impl(x, gy)` to compute products directly.
-Python overrides can call `super().eval_jvp_impl(x, dx)` or
-`super().eval_vjp_impl(x, gy)` to fall back to the explicit Jacobian.
-Use the public `eval_jvp` / `eval_vjp` entry points for evaluation; they retain
+`jvp_at(x, dx)` and `vjp_at(x, gy)` to compute products directly.
+Python overrides can call `super().jvp_at(x, dx)` or
+`super().vjp_at(x, gy)` to fall back to the explicit Jacobian.
+Use the evaluation `jvp` / `vjp` entry points for evaluation; they retain
 validation and any implementation-specific workspace protection. Hooks are subclass implementation
 methods, not independent evaluation entry points.
 Ordinary products prepare required patterns automatically when using the explicit Jacobian fallback.
 
 ```python
-y = R.eval_value(x)
-J = R.eval_jacobian(x)
-dy = R.eval_jvp(x, dx)
-gx = R.eval_vjp(x, gy)
+y = R.evaluate(x).value
+J = R.evaluate(x).jacobian()
+dy = R.evaluate(x).jvp(dx)
+gx = R.evaluate(x).vjp(gy)
 ```
 
 Fixed sparse subclasses retain their declared patterns even when direct product

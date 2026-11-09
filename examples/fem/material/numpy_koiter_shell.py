@@ -117,10 +117,7 @@ def main():
         parameter_map = dof.ConstantDofMap(topology, len(p))
         reference = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), parameter_map, mapping, rest, *fixed)
         actual = Force(NumpyKoiter(), parameter_map, mapping, rest, *fixed)
-        print(
-            f"{Force.__name__}: value_error={np.abs(actual.eval_value(p) - reference.eval_value(p)).max():.2e}, "
-            f"jacobian_error={abs(actual.eval_jacobian(p) - reference.eval_jacobian(p)).max():.2e}"
-        )
+        print(f'{Force.__name__}: value_error={np.abs(actual.evaluate(p).value - reference.evaluate(p).value).max():.2e}, jacobian_error={abs(actual.evaluate(p).jacobian() - reference.evaluate(p).jacobian()).max():.2e}')
 
     fixed = dof.DofReduction(27, [i for i in range(27) if i // 3 != 4])
     options = solver.NewtonOptions(gradient_tolerance=1e-12, max_iterations=100)

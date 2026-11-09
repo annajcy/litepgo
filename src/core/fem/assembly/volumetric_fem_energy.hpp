@@ -52,14 +52,14 @@ template <Basis3D UBasis, Quadrature3D Q> class VolumetricFemEnergy final : publ
             transforms_.emplace_back(*rest_positions[e]);
             deformation_jacobians_.emplace_back();
             auto sampling = deformation_gradient_sampling_response<UBasis>(*rest_positions[e], Q::points());
-            const Eigen::MatrixXd A = sampling.eval_jacobian(Vec::Zero(3 * UBasis::num_basis_functions));
+            const Eigen::MatrixXd A = sampling.evaluate(Vec::Zero(3 * UBasis::num_basis_functions))->jacobian();
             for (int q = 0; q < Q::num_points; ++q)
                 deformation_jacobians_.back()[q] = A.middleRows(9 * q, 9);
             for (int q = 0; q < Q::num_points; ++q) {
                 const Eigen::Vector3d xi = Q::points().row(q).transpose();
-                const Vec plastic = Fp[e]->eval_value(xi);
+                const Vec plastic = Fp[e]->evaluate(xi)->value();
                 Fp_[e][q] = plastic.reshaped(3, 3);
-                theta_[e][q] = theta[e]->eval_value(xi);
+                theta_[e][q] = theta[e]->evaluate(xi)->value();
             }
         }
     }

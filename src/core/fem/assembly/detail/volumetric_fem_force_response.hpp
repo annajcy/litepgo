@@ -62,17 +62,17 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
             transforms_.emplace_back(*rest_position_fields[e]);
             deformation_jacobians_.emplace_back();
             auto sampling = deformation_gradient_sampling_response<UBasis>(*rest_position_fields[e], Q::points());
-            const Eigen::MatrixXd A = sampling.eval_jacobian(Vec::Zero(output_size));
+            const Eigen::MatrixXd A = sampling.evaluate(Vec::Zero(output_size))->jacobian();
             for (int q = 0; q < Q::num_points; ++q)
                 deformation_jacobians_.back()[q] = A.middleRows(9 * q, 9);
             integration_.emplace_back(*rest_position_fields[e]);
             const Eigen::MatrixXd coefficients =
                 transforms_.back().to_coefficients(displacement_map.gather(e, displacement));
             const Vec flattened = coefficients.reshaped<Eigen::RowMajor>();
-            const Vec values = sampling.eval_value(flattened);
+            const Vec values = sampling.evaluate(flattened)->value();
             for (int q = 0; q < Q::num_points; ++q) {
                 deformation_[e][q] = values.segment<9>(9 * q).reshaped(3, 3);
-                fixed_[e][q] = fixed_fields[e]->eval_value(Q::points().row(q).transpose());
+                fixed_[e][q] = fixed_fields[e]->evaluate(Q::points().row(q).transpose())->value();
             }
         }
     }
@@ -81,20 +81,20 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
     energy::BatchMatrix eval_jvp_batch(std::span<const int> ids, const energy::BatchMatrix& x,
                                        const energy::BatchMatrix& d) const override {
         check_batch_product(ids, x, d, false);
-        return evaluate(ids, x, nullptr, &d, false);
+        return evaluate_batch(ids, x, nullptr, &d, false);
     }
     energy::BatchMatrix eval_vjp_batch(std::span<const int> ids, const energy::BatchMatrix& x,
                                        const energy::BatchMatrix& d) const override {
         check_batch_product(ids, x, d, true);
-        return evaluate(ids, x, nullptr, &d, true);
+        return evaluate_batch(ids, x, nullptr, &d, true);
     }
     energy::BatchMatrix eval_batch(std::span<const int> ids, const energy::BatchMatrix& coefficients,
                                    energy::BatchMatrix* jacobian) const override {
-        return evaluate(ids, coefficients, jacobian);
+        return evaluate_batch(ids, coefficients, jacobian);
     }
-    energy::BatchMatrix evaluate(std::span<const int> ids, const energy::BatchMatrix& coefficients,
-                                 energy::BatchMatrix* jacobian, const energy::BatchMatrix* direction = nullptr,
-                                 bool transpose = false) const {
+    energy::BatchMatrix evaluate_batch(std::span<const int> ids, const energy::BatchMatrix& coefficients,
+                                       energy::BatchMatrix* jacobian, const energy::BatchMatrix* direction = nullptr,
+                                       bool transpose = false) const {
         energy::BatchMatrix values(ids.size(), output_size);
         energy::BatchMatrix product =
             energy::BatchMatrix::Zero(direction ? ids.size() : 0, transpose ? input_size_ : output_size);

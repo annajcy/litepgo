@@ -41,7 +41,9 @@ from litepgo import solver
 
 equilibrium = solver.StaticEquilibriumResponse(
     num_parameters, fixed, initial, options, make_energy, make_response)
-u, du_dp = equilibrium.eval_value_and_jacobian(p)
+evaluation = equilibrium.evaluate(p)
+du_dp = evaluation.jacobian()
+u = evaluation.value
 ```
 
 C++ uses the same argument order. `MakeEnergy` returns `shared_ptr<Energy>` and
@@ -51,7 +53,7 @@ factory is called at the solved state only when derivatives on free DOFs are nee
 Its evaluation prepares any needed dynamic structure at the current parameters.
 
 Callers must ensure
-`make_response(u).eval_value(p) == make_energy(p).eval_gradient(u)` and that the
+`make_response(u).evaluate(p).value == make_energy(p).eval_gradient(u)` and that the
 response derivatives match that value. This is not checked automatically. Keep
 captured configuration fixed, copy the supplied state if retaining it, and check
 analytic derivatives against finite differences in tests.
@@ -69,20 +71,20 @@ indefinite nonsingular stiffness. Callbacks and captured data must be determinis
 
 ## Directional and adjoint derivatives
 
-`StaticEquilibriumResponse.eval_jvp(p, v)` solves
+`StaticEquilibriumResponse.evaluate(p).jvp(v)` solves
 `K du = -B v` on the free DOFs and returns the full displacement direction,
-with zeros at fixed DOFs. `eval_vjp(p, w)` solves the adjoint equation
+with zeros at fixed DOFs. `evaluate(p).vjp(w)` solves the adjoint equation
 `K^T lambda = w_free` and returns `-B^T lambda_full`, extending the
 adjoint with zeros at fixed DOFs. Here `K` is the exact equilibrium Hessian
-and `B = make_response(u).eval_jacobian(p)`. Since the energy Hessian is symmetric, both paths
+and `B = make_response(u).evaluate(p).jacobian()`. Since the energy Hessian is symmetric, both paths
 use the existing direct stiffness solver.
 
-Each product evaluates equilibrium from the configured initial state and uses
-one derivative right-hand-side solve, without forming the numerical state
-Jacobian. Calls do not cache equilibrium states or factorizations. JVP/VJP call the force response products, so direct overrides avoid assembling `B`.
-Without overrides, the response falls back to explicit Jacobian multiplication.
-The declared state-Jacobian sparsity pattern remains allocated.
-The explicit Jacobian interface and Gauss–Newton behavior are unchanged.
+Each evaluation solves from the configured initial state once and retains the
+converged displacement. Products use one directional or adjoint right-hand-side
+solve and reuse the exact stiffness factorization, without forming the state
+Jacobian. Force response direct products also avoid assembling `B`.
+The full state-Jacobian structure is allocated only for `evaluation.jacobian()`.
+Gauss–Newton can request that explicit matrix through the same evaluation.
 
 ## Reactions and combined measurements
 
@@ -104,3 +106,20 @@ $$
 They fix $s_u,s_R$ from training observations, with a small floor, so the two
 physical quantities have comparable influence. The scales are not recomputed
 from each trial prediction.
+
+## Reusing an equilibrium
+
+`state = equilibrium.evaluate(p)` binds an independent state to a copy of `p`.
+`state.value` solves from the configured initial displacement once. The first
+`state.jvp(v)`, `state.vjp(w)` or `state.jacobian()` prepares the force response
+and exact reduced stiffness; later derivatives reuse the factorization. Exact
+Newton runs reuse the converged Hessian. Projected runs compute the exact Hessian
+for derivatives. Symbolic analysis is reused only when the reduced pattern matches.
+No previous-iterate or shifted numeric factorization is used for derivatives.
+
+Torch saves the evaluation in each autograd context. Composed responses retain
+child evaluations, so neither route repeats the nonlinear solve in backward.
+Multiple forwards followed by backwards in any order use their own states.
+Retained evaluations keep the potential and factorization alive; release them when
+finished to release this memory. Explicit Jacobian storage is created only when
+requested, including for large parameter fields.
