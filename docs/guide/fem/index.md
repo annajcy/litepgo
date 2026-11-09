@@ -14,11 +14,11 @@ interfaces consumed by solvers.
 ```mermaid
 flowchart TB
   accTitle: FEM module evaluation architecture
-  accDescr: Fixed spatial responses are sampled at construction. Physical displacement DOFs pass through basis transforms and affine deformation-gradient sampling blocks, or shell stencil kinematics, into material formulas (native pointwise or one batch call, such as a Python material) and global assembly.
+  accDescr: Fixed spatial responses are sampled at construction. Physical displacement DOFs pass through basis transforms and affine deformation-gradient sampling blocks, or shell stencil kinematics, into the batch material interface (with a native pointwise adapter or a Python implementation) and global assembly.
   inputs["Rest geometry, DOF maps and state"] --> solid["Solid: DOF transform and cached sampling blocks"]
   inputs --> shell["Shell: triangle stencils and forms"]
-  solid --> solidLocal["Volumetric material: pointwise C++ or one batch call"]
-  shell --> shellLocal["Shell material: pointwise C++ or one batch call"]
+  solid --> solidLocal["VolumetricBatchMaterial: one batch call"]
+  shell --> shellLocal["ShellBatchMaterial: one batch call"]
   solidLocal --> volume["Volume quadrature and rest measure"]
   shellLocal --> area["Face density and original area"]
   volume --> assembly["MeshEnergy / MeshResponse assembly"]
@@ -79,7 +79,7 @@ The old include paths have no compatibility forwarding headers. Headers under
 | Interpolation and integration | Sampling maps, material formulas, quadrature, `VolumetricElement3D` | [Spatial responses and coefficient maps](fields.md) |
 | Solid elasticity | `deformation_gradient_sampling_response`, `NeoHookean`, `VolumetricFemEnergy` | [Volumetric elasticity](volume.md) |
 | Shell elasticity | Mid-edge stencils/forms, `KoiterStVK`, `ShellFemEnergy` | [Shells and natural geometry](shell.md) |
-| Materials in Python | `PyVolumetricMaterial`, `PyShellMaterial`, Torch subclasses | [Materials written in Python](python-materials.md) |
+| Batch materials | `VolumetricBatchMaterial`, `ShellBatchMaterial`, pointwise adapters, Python and Torch subclasses | [Materials written in Python](python-materials.md) |
 | Physical derivative DOFs | `BasisDofTransform[HexHermiteBasis]` | [Hex Hermite](hermite.md) |
 | Geometry queries and sampling | `ElementLocator`, `PointEmbedding`, displacement maps, `sample_boundary` | [Embedding and boundary sampling](embedding.md) |
 | Fixed-pose parameter derivatives | Volumetric/shell material-force and plastic-force responses | [Force responses](force-responses.md) |

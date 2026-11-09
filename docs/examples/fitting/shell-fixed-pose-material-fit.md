@@ -16,8 +16,8 @@ $(f(\theta)-f_{\rm obs})/\|f_{\rm obs}\|$, starting at $(0.7,1.2)$.
 These parameters are optimized directly, without a log transform.
 
 **API walkthrough.** Build stencils, `TriangleMidEdgeRestData`, and a
-`ShellFemEnergy[KoiterStVK]` to generate targets. A
-`ShellFemForceMaterialResponse[KoiterStVK]` with `ConstantDofMap(topology,2)`
+`ShellFemEnergy` to generate targets. A
+`ShellFemForceMaterialResponse` with `ConstantDofMap(topology,2)`
 provides predictions/Jacobians. The example checks its prediction at the true
 parameters against the energy gradient. Its per-face cache snapshots the fixed
 pose, natural forms, thickness and original area; only parameters vary during fitting.
@@ -54,3 +54,6 @@ PYTHONPATH=build/release/python uv run --no-sync python examples/fem/fitting/she
 <<< ../../../examples/fem/fitting/shell_fixed_pose_material_fit.cpp
 
 :::
+
+Construct the native material with `fem.PointwiseShellAdapter[fem.KoiterStVK]()`
+and pass it as the first argument to the FEM energy or force response.

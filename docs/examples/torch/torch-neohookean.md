@@ -3,7 +3,7 @@
 [Back to PyTorch examples](./index.md)
 
 Write the density $W(F,F_p,\theta)$ in PyTorch as a `TorchVolumetricMaterial`
-subclass and put the class in the Material slot of `fem.VolumetricFemEnergy`.
+subclass and pass an instance as the first argument to `fem.VolumetricFemEnergy`.
 This example compares the same Neo-Hookean density with the native implementation;
 Torch supplies material derivatives while C++ computes deformation gradients,
 integrates, assembles and solves.
@@ -12,7 +12,7 @@ The first model has two tetrahedra sharing a face, distinct material parameters,
 and non-diagonal positive-determinant plastic matrices. This exercises matrix
 packing, reference-volume weights, and shared-node assembly. The second uses the
 bundled hexahedral box with Q1 displacement and 2×2×2 Gauss points: the same
-material class works with every compiled basis and quadrature. The density is
+material instance works with every compiled basis and quadrature. The density is
 
 $$
 F_e=FF_p^{-1},\quad

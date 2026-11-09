@@ -25,7 +25,7 @@ kinematic derivatives.
 
 **API walkthrough.** Build triangle mid-edge stencils, a width-3
 `StencilDofMap`, and `TriangleMidEdgeRestData` per face.
-`ShellFemEnergy[KoiterStVK]` supplies elastic terms and geometric step bounds.
+`ShellFemEnergy` supplies elastic terms and geometric step bounds.
 Add corner springs and solve with the same empty hard-constraint set.
 
 **Expected result.** A saddle-shaped equilibrium OBJ, converged free residual,
@@ -62,3 +62,6 @@ PYTHONPATH=build/release/python uv run --no-sync python examples/fem/equilibrium
 <<< ../../../examples/fem/equilibrium/shell_saddle_pull.cpp
 
 :::
+
+Construct the native material with `fem.PointwiseShellAdapter[fem.KoiterStVK]()`
+and pass it as the first argument to the FEM energy or force response.

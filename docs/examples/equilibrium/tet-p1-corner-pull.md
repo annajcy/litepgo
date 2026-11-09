@@ -17,7 +17,7 @@ integrates this density exactly for each fixed material element.
 `VertexDofMap(topology,3)` gathers coordinate and displacement data.
 `InterpolatedResponse[TetP1Basis]` constructs rest fields;
 a constant `AffineResponse` supplies $F_p=I$ and $\theta=(2,3)$.
-Instantiate `VolumetricFemEnergy[NeoHookean,TetP1Basis,TetCentroidQuadrature]`,
+Instantiate `VolumetricFemEnergy[TetP1Basis,TetCentroidQuadrature]`,
 add `VertexPullingEnergy`, and call `newton_solve` on their sum.
 
 **Expected result.** A converged expanded shape, residual within tolerance,
@@ -44,3 +44,6 @@ PYTHONPATH=build/release/python uv run --no-sync python examples/fem/equilibrium
 <<< ../../../examples/fem/equilibrium/tet_p1_corner_pull.cpp
 
 :::
+
+Construct the native material with `fem.PointwiseVolumetricAdapter[fem.NeoHookean]()`
+and pass it as the first argument to the FEM energy or force response.

@@ -14,7 +14,7 @@ Targets come from `ShellFemEnergy` with fixed per-face plastic matrices,
 keeping current positions and **original** area weights unchanged. The example
 checks the fixed-pose force Response against that energy gradient before fitting. The residual is normalized by the target force norm.
 
-**API walkthrough.** `ShellFemForceFpResponse[KoiterStVK]` exposes nine plastic
+**API walkthrough.** `ShellFemForceFpResponse` exposes nine plastic
 columns through a width-9 constant parameter map. Compose it with
 `LogDiagonalFpResponse(2)` to obtain the two-column log-parameter Jacobian.
 `Residual` only subtracts the target and divides by its norm.
@@ -51,3 +51,6 @@ PYTHONPATH=build/release/python uv run --no-sync python examples/fem/fitting/she
 <<< ../../../examples/fem/fitting/shell_fixed_pose_fp_fit.cpp
 
 :::
+
+Construct the native material with `fem.PointwiseShellAdapter[fem.KoiterStVK]()`
+and pass it as the first argument to the FEM energy or force response.

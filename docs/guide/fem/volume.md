@@ -75,9 +75,8 @@ XField = fem.InterpolatedResponse[fem.TetP1Basis]
 geometry = [XField(mapping.gather(0, X.ravel()))]
 plastic = [energy.AffineResponse(np.zeros((9, 3)), np.eye(3).ravel(order="F"))]
 material = [energy.AffineResponse(np.zeros((2, 3)), np.array([2., 3.]))]
-Energy = fem.VolumetricFemEnergy[fem.NeoHookean, fem.TetP1Basis,
-                                  fem.TetCentroidQuadrature]
-elastic = Energy(mapping, geometry, plastic, material)
+Energy = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature]
+elastic = Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, plastic, material)
 u = np.zeros(mapping.num_dofs)
 value, gradient, hessian = elastic.eval(u, gradient=True,
                                        hessian=energy.HessianKind.Exact)
@@ -99,10 +98,12 @@ and displacement may use different bases.
 | Hex Q1 | 3 | Hex Q1 | Gauss–Legendre 2 or 4 per axis |
 | Hex Hermite | 24 | Axis-aligned affine Hex Q1 boxes | Gauss–Legendre 2 or 4 per axis |
 
-C++ and Python both have three template arguments: Material, DisplacementBasis and Quadrature.
-Python `.instances` lists compiled combinations. The Material slot also accepts a
-[material written in Python](python-materials.md), a `PyVolumetricMaterial` subclass,
-for every listed basis and quadrature. See [Hex Hermite](hermite.md) before constructing a 24-DOF map.
+C++ and Python both select DisplacementBasis and Quadrature as template arguments.
+Python `.instances` lists compiled pairs. Pass a `VolumetricBatchMaterial` instance
+as the first constructor argument, using `PointwiseVolumetricAdapter[NeoHookean]()`
+for the native formula or an instance of a
+[Python material](python-materials.md). See [Hex Hermite](hermite.md) before
+constructing a 24-DOF map.
 
 The global energy is
 

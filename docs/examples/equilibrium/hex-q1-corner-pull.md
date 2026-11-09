@@ -7,7 +7,7 @@
 `GaussLegendre3D[2]`, eight points per element.
 
 **API walkthrough.** Use `VertexDofMap(topology,3)` and Q1 rest fields, then
-`VolumetricFemEnergy[NeoHookean,HexQ1Basis,GaussLegendre3D[2]]`.
+`VolumetricFemEnergy[HexQ1Basis,GaussLegendre3D[2]]`.
 The spring composition, empty hard-constraint set, and Newton call match the tet
 case. Keep geometry fields in element connectivity order.
 
@@ -35,3 +35,6 @@ PYTHONPATH=build/release/python uv run --no-sync python examples/fem/equilibrium
 <<< ../../../examples/fem/equilibrium/hex_q1_corner_pull.cpp
 
 :::
+
+Construct the native material with `fem.PointwiseVolumetricAdapter[fem.NeoHookean]()`
+and pass it as the first argument to the FEM energy or force response.

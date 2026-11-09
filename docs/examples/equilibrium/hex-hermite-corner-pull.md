@@ -8,7 +8,7 @@ DOFs per vertex, and `GaussLegendre3D[4]` gives 64 integration points per elemen
 
 **API walkthrough.** Coordinate data uses a width-3 vertex map. Displacement
 uses `VertexDofMap(topology,24)` and
-`VolumetricFemEnergy[NeoHookean,HexHermiteBasis,GaussLegendre3D[4]]`.
+`VolumetricFemEnergy[HexHermiteBasis,GaussLegendre3D[4]]`.
 The energy transforms physical derivative slots to reference coefficients and
 pulls derivatives back. Spring DOFs are `24*v + {0,1,2}`; all derivative slots
 remain free. Read [the physical-DOF convention](../../guide/fem/hermite.md) before
@@ -38,3 +38,6 @@ PYTHONPATH=build/release/python uv run --no-sync python examples/fem/equilibrium
 <<< ../../../examples/fem/equilibrium/hex_hermite_corner_pull.cpp
 
 :::
+
+Construct the native material with `fem.PointwiseVolumetricAdapter[fem.NeoHookean]()`
+and pass it as the first argument to the FEM energy or force response.

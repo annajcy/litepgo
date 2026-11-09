@@ -18,7 +18,7 @@ weights. Thickness is 0.2 and $(\lambda_{ps},\mu)=(2,3)$. There is no volume
 $\det F_p$ factor or plastic-thickness update in this convention.
 
 **API walkthrough.** Build generated topology, mid-edge stencils, the stencil
-map, and rest data. Pass per-face `Fp` as the final `ShellFemEnergy[KoiterStVK]`
+map, and rest data. Pass per-face `Fp` as the final `ShellFemEnergy`
 argument. Reconstruct the energy for each prescribed field, check the identity
 state, and warm-start four growth increments. Only displacement is solved.
 
@@ -60,3 +60,6 @@ PYTHONPATH=build/release/python uv run --no-sync python examples/fem/plasticity/
 <<< ../../../examples/fem/plasticity/shell_plastic_field.cpp
 
 :::
+
+Construct the native material with `fem.PointwiseShellAdapter[fem.KoiterStVK]()`
+and pass it as the first argument to the FEM energy or force response.

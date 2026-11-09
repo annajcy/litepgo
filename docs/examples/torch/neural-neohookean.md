@@ -117,9 +117,9 @@ material = InvariantMaterial()
 checkpoint = torch.load("output/neural_neohookean/material.pt", weights_only=True)
 material.load_state_dict(checkpoint["state_dict"])
 material.eval().requires_grad_(False)
-# fem_material(material) is a TorchVolumetricMaterial class for the Material slot,
-# e.g. fem.VolumetricFemEnergy[fem_material(material), fem.TetP1Basis,
-# fem.TetCentroidQuadrature], with theta fields (2, 3).
+# fem_material(material) returns a batch material instance.
+# Pass it first to fem.VolumetricFemEnergy[fem.TetP1Basis,
+# fem.TetCentroidQuadrature](...), with theta fields (2, 3).
 ```
 
 ## Directional tangent supervision comparison

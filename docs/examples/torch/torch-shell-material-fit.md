@@ -3,11 +3,11 @@
 [Back to PyTorch examples](./index.md)
 
 The Koiter shell density is written in PyTorch as a `TorchShellMaterial` and fills
-the Material slot of `fem.ShellFemEnergy` and `fem.ShellFemForceMaterialResponse`.
+the first constructor argument of `fem.ShellFemEnergy` and `fem.ShellFemForceMaterialResponse`.
 The flat patch, prescribed boundary motion, reaction measurements and
 Gauss–Newton fit are imported unchanged from the native
 [shell equilibrium material fit](../fitting/shell-equilibrium-material-fit.md);
-its `make_factories(problem, material)` takes the material class as an argument.
+its `make_factories(problem, material)` takes a batch material instance as an argument.
 Keep both files together.
 
 With natural forms $\bar a,\bar b$, thickness $t$ and

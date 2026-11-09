@@ -72,7 +72,7 @@ Native FEM constructs this sampling Response at quadrature points and extracts i
 
 ## Fixed configuration is sampled once
 
-`VolumetricFemEnergy<Material,Basis,Quadrature>` accepts a displacement map and three lists of spatial responses: geometry, plastic matrices, and material parameters, in element order. Their input dimension is three and output dimensions are respectively three, nine and `Material::num_parameters`. C++ lists use `std::vector<std::shared_ptr<energy::Response>>`; Python accepts lists of response objects.
+`VolumetricFemEnergy<Basis,Quadrature>` accepts a batch material instance, a displacement map, and three lists of spatial responses for geometry, plastic matrices, and material parameters, in element order. Their input dimension is three and output dimensions are respectively three, nine and `material->num_parameters()`. C++ lists use `std::vector<std::shared_ptr<energy::Response>>`; Python accepts lists of response objects.
 
 Construction caches integration weights, physical DOF transforms, `B_q`, and the material values at quadrature points. It retains no configuration responses. Force-response constructors likewise snapshot their fixed displacement and fixed material input. Rebuild the FEM object after changing configuration. Construction may call Python response hooks; numerical assembly subsequently uses the cached native data.
 

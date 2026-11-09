@@ -21,10 +21,10 @@ $u_0$ fixed. No displacement solve or equilibrium sensitivity appears here.
 
 | Response template | Constructor fixed inputs | Parameter block |
 | --- | --- | --- |
-| `VolumetricFemForceMaterialResponse[M,B,Q]` | parameter map, displacement map, rest fields, displacement, Fp fields, batch size | Material parameters |
-| `VolumetricFemForceFpResponse[M,B,Q]` | parameter map, displacement map, rest fields, displacement, theta fields, batch size | Nine column-packed Fp entries |
-| `ShellFemForceMaterialResponse[M]` | parameter map, stencil map, rest data, displacement, thickness, batch size | Material parameters (two for `KoiterStVK`) |
-| `ShellFemForceFpResponse[M]` | parameter map, stencil map, rest data, displacement, thickness, theta, batch size | Nine column-packed Fp entries |
+| `VolumetricFemForceMaterialResponse[B,Q]` | batch material, parameter map, displacement map, rest fields, displacement, Fp fields, batch size | Material parameters |
+| `VolumetricFemForceFpResponse[B,Q]` | batch material, parameter map, displacement map, rest fields, displacement, theta fields, batch size | Nine column-packed Fp entries |
+| `ShellFemForceMaterialResponse` | batch material, parameter map, stencil map, rest data, displacement, thickness, batch size | Material parameters (two for `KoiterStVK`) |
+| `ShellFemForceFpResponse` | batch material, parameter map, stencil map, rest data, displacement, thickness, theta, batch size | Nine column-packed Fp entries |
 
 `M` may be a native material or a [material written in Python](python-materials.md);
 a Python material then also supplies the mixed second derivative requested by
@@ -40,9 +40,8 @@ For example, after constructing the fixed geometry as in the
 [solid guide](volume.md):
 
 ```python
-Force = fem.VolumetricFemForceMaterialResponse[
-    fem.NeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature]
-force = Force(dof.ConstantDofMap(topology, 2), mapping, geometry, u0, plastic)
+Force = fem.VolumetricFemForceMaterialResponse[fem.TetP1Basis, fem.TetCentroidQuadrature]
+force = Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 2), mapping, geometry, u0, plastic)
 value, B = force.eval_value_and_jacobian(theta)
 ```
 

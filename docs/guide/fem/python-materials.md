@@ -12,17 +12,28 @@ from litepgo import fem
 class MyMaterial(fem.PyVolumetricMaterial):
     num_parameters = 2
 
-    @staticmethod
-    def eval(F, Fp, theta, *, outputs):
+    def eval(self, F, Fp, theta, *, outputs):
         ...  # return {"W": ..., "dW_dF": ..., ...} for the requested names
 
-potential = fem.VolumetricFemEnergy[MyMaterial, fem.HexQ1Basis, fem.GaussLegendre3D[2]](
+potential = fem.VolumetricFemEnergy[fem.HexQ1Basis, fem.GaussLegendre3D[2]](MyMaterial(),
     displacement_map, rest_position_fields, Fp, theta)
 ```
 
-The material class takes the Material slot, exactly like `fem.NeoHookean`. The
-constructors, results and solver use are those of the
-[native volumetric](volume.md) and [shell](shell.md) templates.
+FEM takes a batch material instance as its first constructor argument. The
+volumetric template selects only displacement basis and quadrature. Shell FEM
+uses ordinary classes. Python and C++ expose the same material hierarchy.
+
+```python
+native = fem.PointwiseVolumetricAdapter[fem.NeoHookean]()
+shell = fem.PointwiseShellAdapter[fem.KoiterStVK]()
+assert isinstance(native, fem.VolumetricBatchMaterial)
+assert isinstance(shell, fem.ShellBatchMaterial)
+```
+
+`PointwiseVolumetricAdapter` and `PointwiseShellAdapter` evaluate the existing
+pointwise C++ formulas through the batch interface. `PyVolumetricMaterial` and
+`PyShellMaterial` implement that interface through a Python callback. Energy and
+force responses can share one material instance.
 
 ## Evaluation path
 
@@ -41,13 +52,13 @@ flowchart LR
 A batch holds up to `batch_size` elements (default 256) of one DOF-stencil size,
 so a volumetric call receives `elements × quadrature points` rows. Each row is
 independent. Native and Python materials share the integration and pullback code;
-for a static C++ material such as `NeoHookean` the per-point formula is called
-inline instead.
+a pointwise adapter evaluates its C++ formula for each point inside that batch.
 
 ## Volumetric materials
 
 Subclass `fem.PyVolumetricMaterial`, set `num_parameters` (the width $k$ of
-`theta`) and define `eval` as a static or class method:
+`theta`) and define an instance method `eval(self, F, Fp, theta, *, outputs)`. Call
+`super().__init__()` in a custom constructor. Stateless formulas can also use static methods.
 
 | Input | Shape | Meaning |
 | --- | --- | --- |
@@ -82,15 +93,25 @@ Each operation requests only what it needs:
 | `VolumetricFemForceMaterialResponse` value / Jacobian | `("dW_dF",)`, `("dW_dF","d2W_dF_dtheta")` |
 | `VolumetricFemForceFpResponse` value / Jacobian | `("dW_dF",)`, `("dW_dF","d2W_dF_dFp")` |
 
-A material used only for equilibrium solves therefore needs `W`, `dW_dF` and
-`d2W_dF2`; the mixed derivatives matter only for the
-[force responses](force-responses.md). Compute shared intermediate values (for
-example $F_p^{-1}$, $\log\det F_e$ or a Torch graph) once per call.
+Every material must support all listed outputs, including mixed derivatives.
+Each call computes only its requested outputs: equilibrium uses energy, stress
+and stiffness; [force responses](force-responses.md) also use mixed derivatives.
+C++ pointwise adapters require the methods at compile time. Python callbacks
+are checked at evaluation time for missing outputs, shapes and finite values.
+Test Python materials with requests for every output before using them in a solve.
+Compute shared intermediate values (for example $F_p^{-1}$, $\log\det F_e$ or a
+Torch graph) once per call.
 
-The optional `eval_feasible_step(F, Fp, theta, dF)` returns an $(N,)$ bound in
-$[0,1]$ keeping each point feasible along $F+t\,dF$. Without it, the bound keeps
-$\det F>0$ with the native determinant-step routine, which also suffices for
-$\det F_e>0$ because $F_p$ is fixed during a solve.
+The inherited `eval_feasible_step(F, Fp, theta, dF)` is directly callable and
+returns an $(N,)$ bound in $[0,1]$ keeping $\det F>0$ along $F+t\,dF$ using the
+native determinant-step routine. For fixed $F_p$ with positive determinant this
+also keeps $\det F_e>0$. Override it when the material needs a stricter bound;
+`super().eval_feasible_step(...)` calls the default without re-entering the override.
+Do not set the method to `None`.
+
+```python
+bounds = material.eval_feasible_step(F, Fp, theta, dF)
+```
 
 ## Shell materials
 
@@ -112,6 +133,7 @@ Subclass `fem.PyShellMaterial` and define
 | `d2W_dab_dtheta` | $(N,6,k)$ | $\partial^2 W/\partial ab_r\partial\theta_a$ |
 | `d2W_dab_dabarbbar` | $(N,6,6)$ | $\partial^2 W/\partial ab_r\partial \bar{ab}_s$ |
 
+Shell materials must also support every listed output, including both mixed derivatives.
 The packed entries are independent variables and the mixed entries are not
 scaled, matching `KoiterStVK`. A formula written on the packed vectors (or
 autograd through them) therefore produces the expected derivatives; symmetric
@@ -122,29 +144,31 @@ chains the natural forms to $F_p$ natively. Shell line searches use the
 geometric mid-edge bound only, so the density must stay finite wherever the
 current metric remains positive definite.
 
-## Materials are classes
+## Material instances and ownership
 
-As for `NeoHookean`, a material is a class with static or class methods, not an
-instance. Fixed state, such as network weights, lives in class attributes:
+FEM retains the material instance for its lifetime. Store fixed state, including
+network modules, on that instance. Separate instances can carry different state
+while sharing the same compiled FEM type.
 
 ```python
-def fem_material(model):
-    class Learned(TorchVolumetricMaterial):
-        num_parameters = 2
-        module = model
+class Learned(TorchVolumetricMaterial):
+    num_parameters = 2
 
-        @classmethod
-        def W(cls, F, Fp, theta):
-            return cls.module(F, Fp, theta)
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
 
-    return Learned
+    def W(self, F, Fp, theta):
+        return self.model(F, Fp, theta)
+
+material = Learned(model)
+potential = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature](
+    material, displacement_map, rest_position_fields, Fp, theta)
 ```
 
-Indexing a template with a subclass returns a generated Python subclass of the
-compiled `[PyVolumetricMaterial, Basis, Quadrature]` instantiation, cached on the
-material class; it is collected with the class. `isinstance` and
-`Template.instances` keep working. Keep the class and the state it captures
-unchanged while FEM objects using it are alive.
+Keep material state fixed during evaluation and solve operations. Batch callbacks
+may overlap, so shared mutable state requires synchronization. Use weak references
+for material back-references to owning FEM objects.
 
 ## PyTorch materials
 
@@ -190,11 +214,20 @@ weights are constants for FEM; to differentiate a loss with respect to physical
 
 ## From C++
 
-The same assembly accepts a C++ material instance satisfying
-`VolumetricBatchMaterial` (`volumetric_material_batch.hpp`) or
-`ShellBatchMaterial` (`shell_material_batch.hpp`), passed as the constructor's
-last argument. Batch inputs and outputs hold one point per column, using native
-column-major packing. The Python adapters are such materials.
+C++ defines abstract `VolumetricBatchMaterial` and `ShellBatchMaterial` bases.
+FEM constructors accept `std::shared_ptr<const VolumetricBatchMaterial>` or the
+shell equivalent as their first argument. Native batch implementations derive
+from the appropriate base and implement `num_parameters()` and `eval(inputs,
+outputs)`. Volumetric implementations also provide `eval_feasible_step(inputs,
+dF)`. Non-null output pointers request results, which the material resizes and
+writes. Columns hold independent points in native column-major packing.
+
+```cpp
+#include "litepgo/fem/material/volumetric/pointwise_volumetric_adapter.hpp"
+auto material = std::make_shared<fem::PointwiseVolumetricAdapter<fem::NeoHookean>>();
+fem::VolumetricFemEnergy<fem::TetP1Basis, fem::TetCentroidQuadrature> potential(
+    material, displacement_map, rest_position_fields, Fp, theta);
+```
 
 See the [NumPy Neo-Hookean](../../examples/fem/numpy-neohookean.md),
 [NumPy Koiter shell](../../examples/fem/numpy-koiter-shell.md),

@@ -40,8 +40,8 @@ mapping = dof.StencilDofMap(topology.num_vertices, stencils.vertices, 3)
 rest = [fem.TriangleMidEdgeRestData(
             mapping.gather(e, nodes.ravel()), stencils.opposite[e])
         for e in range(mapping.num_elements)]
-Energy = fem.ShellFemEnergy[fem.KoiterStVK]
-elastic = Energy(mapping, rest, [0.1] * mapping.num_elements,
+Energy = fem.ShellFemEnergy
+elastic = Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, [0.1] * mapping.num_elements,
                  [np.array([2.0, 3.0])] * mapping.num_elements)
 ```
 
@@ -210,7 +210,8 @@ current geometry because displacement is not their active input. Rebuild them
 after changing the pose or any other fixed configuration.
 
 All three accept a [shell material written in Python](python-materials.md#shell-materials),
-a `PyShellMaterial` subclass, in place of `KoiterStVK`. It receives the packed
+a `PyShellMaterial` instance, as their first constructor argument. Native Koiter
+uses `PointwiseShellAdapter[KoiterStVK]()`. The material receives the packed
 forms $s$ of a whole batch of faces in one call; the geometric parts above stay native.
 
 The paired [material fitting](../../examples/fitting/shell-fixed-pose-material-fit.md)

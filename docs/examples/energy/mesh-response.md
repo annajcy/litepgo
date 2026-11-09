@@ -20,7 +20,7 @@ Jacobian is a fixed-pose partial derivative, not an equilibrium sensitivity.
 The [solid density](../../guide/fem/volume.md) defines $E$.
 
 **API walkthrough.** `ConstantDofMap(topology,2)` shares material parameters.
-`VolumetricFemForceMaterialResponse[NeoHookean,TetP1Basis,TetCentroidQuadrature]`
+`VolumetricFemForceMaterialResponse[TetP1Basis,TetCentroidQuadrature]`
 returns integrated positive forces and their sparse Jacobian. `ForceResidual`
 subtracts observations generated independently by
 `VolumetricFemEnergy.eval_gradient`. Gauss–Newton starts at $(0.7,1.2)$.
@@ -55,3 +55,6 @@ PYTHONPATH=build/release/python uv run --no-sync python examples/energy/response
 <<< ../../../examples/energy/response/mesh_response.cpp
 
 :::
+
+Construct the native material with `fem.PointwiseVolumetricAdapter[fem.NeoHookean]()`
+and pass it as the first argument to the FEM energy or force response.

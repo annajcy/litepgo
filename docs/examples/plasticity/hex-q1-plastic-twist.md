@@ -9,7 +9,7 @@ its two solves.
 
 **API walkthrough.** Use width-3 vertex maps and Q1 coordinate/plastic fields.
 The composed $F_p$ is supplied to
-`VolumetricFemEnergy[NeoHookean,HexQ1Basis,GaussLegendre3D[2]]`.
+`VolumetricFemEnergy[HexQ1Basis,GaussLegendre3D[2]]`.
 `DofReduction` fixes bottom xyz entries, then bottom and top xyz entries for the
 second solve. The same material snapshot is used for both.
 
@@ -37,3 +37,6 @@ PYTHONPATH=build/release/python uv run --no-sync python examples/fem/plasticity/
 <<< ../../../examples/fem/plasticity/hex_q1_plastic_twist.cpp
 
 :::
+
+Construct the native material with `fem.PointwiseVolumetricAdapter[fem.NeoHookean]()`
+and pass it as the first argument to the FEM energy or force response.

@@ -116,17 +116,17 @@ class TorchNeoHookean(TorchVolumetricMaterial):
         psi = 0.5 * mu * (Fe.square().sum((-2, -1)) - 3) - mu * log_J + 0.5 * lam * log_J.square()
         return torch.linalg.det(Fp) * psi
 
-Energy = fem.VolumetricFemEnergy[TorchNeoHookean, fem.HexHermiteBasis, fem.GaussLegendre3D[4]]
-potential = Energy(displacement_map, rest_position_fields, Fp, theta)
+Energy = fem.VolumetricFemEnergy[fem.HexHermiteBasis, fem.GaussLegendre3D[4]]
+potential = Energy(TorchNeoHookean(), displacement_map, rest_position_fields, Fp, theta)
 E, force, stiffness = potential.eval(u, gradient=True, hessian=energy.HessianKind.Exact)
 ```
 
 Native code computes the deformation gradients of a whole batch, calls the
 material once, then integrates, pulls back, projects (`Projected`) and assembles.
-Every basis and quadrature rule compiled for `NeoHookean` is available. Rows
+Every compiled basis and quadrature pair is available. Rows
 must be independent and `W` twice differentiable in the inputs whose
-derivatives are requested. The class owns the multiplicative split and any
-`det(Fp)` factor. Network weights captured as class attributes are constants:
+derivatives are requested. The material owns the multiplicative split and any
+`det(Fp)` factor. Network weights stored on the material instance are constants:
 the native solver does not populate their `.grad`, does not call `.eval()`, and
 does not change dtype or device. Batch-coupled operations such as training-mode
 batch normalization are outside this contract.
@@ -144,15 +144,16 @@ response supplies their derivatives. Captured module parameters remain fixed.
 
 ## Force responses of a Torch material
 
-The same class works in the fixed-pose force responses, which return the
+The same material instance works in the fixed-pose force responses, which return the
 **positive energy gradient** `g(u,p) = dE(u,p)/du` and its Jacobian with respect
 to physical `theta` or column-major `vec(Fp)`:
 
 ```python
-key = (TorchNeoHookean, fem.TetP1Basis, fem.TetCentroidQuadrature)
-material_force = fem.VolumetricFemForceMaterialResponse[key](
+material = TorchNeoHookean()
+key = (fem.TetP1Basis, fem.TetCentroidQuadrature)
+material_force = fem.VolumetricFemForceMaterialResponse[key](material,
     parameter_map, displacement_map, rest_position_fields, u, Fp)
-plastic_force = fem.VolumetricFemForceFpResponse[key](
+plastic_force = fem.VolumetricFemForceFpResponse[key](material,
     parameter_map, displacement_map, rest_position_fields, u, theta)
 force, J = material_force.eval_value_and_jacobian(p)
 ```
@@ -168,10 +169,10 @@ For equilibrium differentiation, pass both objects through the usual factories:
 ```python
 def make_energy(p):
     active_theta = [energy.AffineResponse(np.zeros((len(p), 3)), p)] * displacement_map.num_elements
-    return fem.VolumetricFemEnergy[key](displacement_map, rest_position_fields, Fp, active_theta)
+    return fem.VolumetricFemEnergy[key](material, displacement_map, rest_position_fields, Fp, active_theta)
 
 def make_response(u):
-    return fem.VolumetricFemForceMaterialResponse[key](
+    return fem.VolumetricFemForceMaterialResponse[key](material,
         parameter_map, displacement_map, rest_position_fields, u, Fp)
 
 equilibrium = solver.StaticEquilibriumResponse(
