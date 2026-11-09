@@ -9,7 +9,6 @@
 #include "litepgo/fem/assembly/dof_derivatives.hpp"
 #include "litepgo/fem/integration/volumetric_element.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_batch.hpp"
-#include "litepgo/fem/material/volumetric/volumetric_material_inputs.hpp"
 #include "litepgo/fem/response/deformation_gradient_sampling_response.hpp"
 #include <memory>
 #include <stdexcept>
@@ -100,14 +99,18 @@ template <Basis3D UBasis, Quadrature3D Q> class VolumetricFemEnergy final : publ
         VolumetricMaterialBatchOutputs out{&W, gradients ? &P : nullptr, hessians ? &A : nullptr};
         material_->eval(batch, out);
         detail::check_volumetric_batch_outputs(out, batch.size(), material_->num_parameters());
-        tbb::parallel_for(Eigen::Index(0), count, [&](Eigen::Index b) {
+        auto integrate_row = [&](Eigen::Index b) {
             integrate(b, [&](int q, bool need_gradient, bool need_hessian) {
                 const Eigen::Index point = b * Q::num_points + q;
                 return std::tuple{
                     W[point], Eigen::Map<const Eigen::Matrix3d>(need_gradient ? P.col(point).data() : nullptr),
                     Eigen::Map<const Eigen::Matrix<double, 9, 9>>(need_hessian ? A.col(point).data() : nullptr)};
             });
-        });
+        };
+        if (count == 1)
+            integrate_row(0);
+        else
+            tbb::parallel_for(Eigen::Index(0), count, integrate_row);
 
         return values;
     }
@@ -123,28 +126,32 @@ template <Basis3D UBasis, Quadrature3D Q> class VolumetricFemEnergy final : publ
         batch.theta.resize(material_->num_parameters(), count * Q::num_points);
         if (dF)
             dF->resize(9, count * Q::num_points);
-        // An outer batch failure must not cancel initialization of inputs consumed below.
-        tbb::task_group_context context(tbb::task_group_context::isolated);
-        tbb::parallel_for(
-            Eigen::Index(0), count,
-            [&](Eigen::Index b) {
-                const auto e = static_cast<std::size_t>(ids[b]);
-                const Vec c = local_coefficients(e, inputs.row(b));
-                const Vec dc = deltas ? local_coefficients(e, deltas->row(b)) : Vec();
-                for (int q = 0; q < Q::num_points; ++q) {
-                    const Eigen::Index point = b * Q::num_points + q;
-                    const auto input = material_inputs(e, q, c);
-                    batch.F.col(point) = input.F.reshaped();
-                    batch.Fp.col(point) = input.Fp.reshaped();
-                    batch.theta.col(point) = input.theta;
-                    if (dF) {
-                        dF->col(point) = deformation_jacobians_[e][q] * dc;
-                        if (!dF->col(point).allFinite())
-                            throw std::domain_error("VolumetricFemEnergy: non-finite input increment");
-                    }
+        auto gather_row = [&](Eigen::Index b) {
+            const auto e = static_cast<std::size_t>(ids[b]);
+            const Vec c = local_coefficients(e, inputs.row(b));
+            const Vec dc = deltas ? local_coefficients(e, deltas->row(b)) : Vec();
+            for (int q = 0; q < Q::num_points; ++q) {
+                const Eigen::Index point = b * Q::num_points + q;
+                batch.F.col(point).noalias() = deformation_jacobians_[e][q] * c;
+                batch.F.col(point).reshaped(3, 3).diagonal().array() += 1;
+                if (!batch.F.col(point).allFinite())
+                    throw std::domain_error("VolumetricFemEnergy: non-finite deformation gradient");
+                batch.Fp.col(point) = Fp_[e][q].reshaped();
+                batch.theta.col(point) = theta_[e][q];
+                if (dF) {
+                    dF->col(point).noalias() = deformation_jacobians_[e][q] * dc;
+                    if (!dF->col(point).allFinite())
+                        throw std::domain_error("VolumetricFemEnergy: non-finite input increment");
                 }
-            },
-            context);
+            }
+        };
+        if (count == 1) {
+            gather_row(0);
+        } else {
+            // Outer batch failure must not cancel initialization of inputs consumed below.
+            tbb::task_group_context context(tbb::task_group_context::isolated);
+            tbb::parallel_for(Eigen::Index(0), count, gather_row, context);
+        }
         return batch;
     }
 
@@ -163,14 +170,6 @@ template <Basis3D UBasis, Quadrature3D Q> class VolumetricFemEnergy final : publ
 
         return steps;
     }
-    VolumetricMaterialInputs material_inputs(std::size_t e, int q, const Vec& coefficients) const {
-        const Vec increment = deformation_jacobians_[e][q] * coefficients;
-        const Eigen::Matrix3d F = Eigen::Matrix3d::Identity() + increment.reshaped(3, 3);
-        if (!F.allFinite())
-            throw std::domain_error("VolumetricFemEnergy: non-finite deformation gradient");
-        return {F, Fp_[e][q], theta_[e][q]};
-    }
-
     // point_material(q, need_gradient, need_hessian) -> (W, dW/dF, d2W/dF2); unrequested entries are unused.
     template <class PointMaterial>
     double eval_element(std::size_t e, int num_dofs, StridedVecRef* gradient, StridedMatRef* hessian,

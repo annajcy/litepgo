@@ -136,6 +136,68 @@ the historical measurements. The current batched implementation below eliminates
 module replacement and the lock entirely. Invalid exploratory
 results are excluded from the recorded baseline.
 
+## Native batch-path optimization
+
+On 2026-11-10, the migrated code was committed before optimization as `915bb9d`
+(the implementation is in `0bba835`). macOS `sample` captured the native
+1,296-element, batch-size-1 workload. The value call stack showed nested TBB
+execution inside the outer MeshEnergy batch dispatch, plus allocation/free work.
+Release symbols are partially stripped, so the samples do not establish exact
+per-source-line costs or a percentage attributable to virtual dispatch.
+
+Two changes preserve the runtime batch-material interface:
+
+- For a one-element batch, run the gather and integration loops directly instead
+  of creating nested TBB tasks. Multi-element gathering retains its isolated task
+  context, preserving initialization when a sibling batch throws.
+- Write deformation gradients, fixed Fp and theta directly into batch buffers.
+  This removes the intermediate owning material-input object and its theta copy,
+  plus the temporary dynamic deformation vector. Finite-value checks remain.
+
+The optimized full scan completed **42 cases / 152 validated measurements**.
+All **505 CTest entries passed**. Six native cases were then run in
+legacy/unoptimized/optimized/optimized/unoptimized/legacy order, ten samples per
+operation per process. Legacy is `2b524da`; the unoptimized binary was saved before
+rebuilding. All versions used the same Python dependencies and benchmark settings.
+No compilation or test suite ran during benchmark timing.
+
+[Full samples](/benchmark-data/torch-material-optimized/results.jsonl.txt),
+[environment](/benchmark-data/torch-material-optimized/environment.json),
+[three-version comparison](/benchmark-data/torch-material-optimized/comparison.csv),
+[alternating raw samples](/benchmark-data/torch-material-optimized/rechecks.jsonl.txt),
+[before profile](/benchmark-data/torch-material-optimized/before-sample.txt),
+[after profile](/benchmark-data/torch-material-optimized/after-sample.txt).
+Profiles are qualitative call-stack evidence, not normalized before/after timing;
+the faster process can reach a different operation within the sampling window.
+
+Selected single-thread medians (milliseconds, 20 samples per version):
+
+| Workload | Batch | Legacy | Unified, unoptimized | Optimized |
+| --- | ---: | ---: | ---: | ---: |
+| FEM value, 1,296 elements | 1 | 0.499 | 0.812 | 0.373 |
+| FEM gradient, 1,296 elements | 1 | 0.678 | 0.995 | 0.579 |
+| FEM Hessian, 1,296 elements | 1 | 1.851 | 2.334 | 1.879 |
+| FEM parameter VJP, 1,296 elements | 1 | 0.564 | 0.739 | 0.750 |
+| FEM value, 1,296 elements | 256 | 0.298 | 0.319 | 0.257 |
+| FEM gradient, 1,296 elements | 256 | 0.463 | 0.496 | 0.446 |
+| FEM Hessian, 10,368 elements | 256 | 13.827 | 14.557 | 13.807 |
+| Equilibrium backward, 48 elements | 256 | 2.590 | 2.744 | 2.593 |
+
+The one-element-batch energy regression is largely removed: value and gradient
+are faster than legacy in these samples; Hessian is about 1.5% above legacy.
+The force-response parameter VJP path was not changed and still costs about 33%
+more than legacy at batch 1, and about 6–8% more at default batch in these rechecks.
+This optimization does not eliminate every migration cost.
+
+The initial four-thread recheck was noisy, including a large apparent VJP
+regression in unchanged code. A separate alternating run with 50 samples per
+process (100 per version) gave legacy/unoptimized/optimized medians of
+0.160/0.241/0.135 ms for value, 0.235/0.377/0.205 ms for gradient,
+0.672/0.835/0.753 ms for Hessian and 0.283/0.226/0.264 ms for VJP.
+[All four-thread follow-up samples](/benchmark-data/torch-material-optimized/threads-recheck.jsonl.txt)
+are retained. Four-thread Hessian therefore still exceeds legacy by about 12%;
+these observations are not confidence intervals. Shell performance was not measured.
+
 ## Full migration comparison
 
 Recorded on 2026-11-09 on the same Apple M1 Pro, using baseline commit

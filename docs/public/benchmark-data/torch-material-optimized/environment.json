@@ -1,0 +1,39 @@
+{
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "machine": "arm64",
+  "cpu_count": 8,
+  "started_utc": "2026-11-09T16:07:41.778371+00:00",
+  "python": "3.12.13 (main, Apr  7 2026, 21:09:58) [Clang 22.1.1 ]",
+  "executable": "/Users/jinceyang/Desktop/litepgo/.venv/bin/python",
+  "profile": "full",
+  "repeats": 5,
+  "timeout": 120.0,
+  "command": [
+    "benchmarks/torch_material.py",
+    "--profile",
+    "full",
+    "--repeats",
+    "5",
+    "--timeout",
+    "120",
+    "--output",
+    "output/material_optimized/full"
+  ],
+  "thread_environment": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "git_head": "915bb9d7efc28a836d9e71d637df3357f313bc0f",
+  "git_status": " M src/core/fem/assembly/volumetric_fem_energy.hpp\n",
+  "source_sha256": {
+    "benchmarks/torch_material.py": "8d73f075945744c793971d995610d09a8089348277486bf38e2a0e413253b896",
+    "benchmarks/contact_scaling.py": "c4fe19cf71ea4c7f3ebbc8a7aa9fef546d8a8d3d44912978afb74a8a9aeafbca",
+    "src/python/torch.py": "f7751686bfcfba2d57e9494547c7f49f03846e0d9eb2c1c1c67108b580d1fd08",
+    "examples/fem/fitting/neural_neohookean.py": "dbe9bd20d22a0e2df3d02701218f1460ff32eefed139b71128c4cc3341432f00",
+    "examples/fem/fitting/neural_equilibrium_fit.py": "67812003a5107972739a47d79c2dcad76f24814d54f1357cac1250a2a459296a",
+    "examples/fem/fitting/torch_neohookean.py": "5c2ab377a20c25b0b3a3bcbfaf02aec125809e65a67b4a04a8bffb6fcabf46a1"
+  },
+  "cpu": "Apple M1 Pro"
+}
