@@ -58,7 +58,7 @@ IDs, unsquared distances, merged area/group weights and mollifiers.
 Python arrays are read-only and `types` is a tuple; C++ returns an owned value.
 Queries do not update the Hessian pattern. Mollified EE keeps all four support
 vertices, including when its closest feature is VV or VE or its mollifier is
-zero. Weights exclude stiffness and mollifiers. Records have no persistent row
+zero. Weights exclude stiffness, physical normalization and mollifiers. Records have no persistent row
 IDs and need not share ordering across backends. See the
 [snapshot example and plot](../../examples/contact/contact-snapshot.md) for
 field shapes, full export and visualization. This diagnostic is not a

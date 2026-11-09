@@ -33,6 +33,12 @@ IPCTKContactOptions checked_options(const IPCTKContactOptions& options) {
     if (!std::isfinite(options.ccd_tolerance) || options.ccd_tolerance <= 0.0 || options.ccd_max_iterations <= 0) {
         throw std::invalid_argument("IPCTKContactEnergy requires a finite positive CCD tolerance and iteration budget");
     }
+    const double threshold = options.dhat * (options.dhat + 2 * options.min_distance);
+    if (options.use_physical_barrier) {
+        const double scale = options.dhat / (threshold * threshold);
+        if (!std::isfinite(scale) || scale <= 0)
+            throw std::invalid_argument("IPCTKContactEnergy requires a representable physical barrier normalization");
+    }
     return options;
 }
 
@@ -104,8 +110,8 @@ struct IPCTKContactEnergy::Impl {
 
     Impl(const mesh::TriangleMesh& surface, IPCTKContactOptions o, std::optional<ContactPairWeights> weights)
         : mesh(vertex_rows(surface.positions), unique_edges(surface.topology), face_rows(surface.topology)),
-          barrier(o.dhat, 1.0), ccd(o.ccd_tolerance, o.ccd_max_iterations), dhat(o.dhat), min_distance(o.min_distance),
-          use_area_weighting(o.use_area_weighting),
+          barrier(o.dhat, 1.0, o.use_physical_barrier), ccd(o.ccd_tolerance, o.ccd_max_iterations), dhat(o.dhat),
+          min_distance(o.min_distance), use_area_weighting(o.use_area_weighting),
           pair_weights(std::move(weights), mesh.num_vertices(), mesh.edges().rows(), mesh.faces().rows()) {}
 
     double multiplier(const ipc::VertexVertexCandidate& p) const {

@@ -31,7 +31,9 @@ template <class ContactEnergy, class Options> void bind_backend(nb::module_& m, 
                 return energy.rest_positions().template reshaped<Eigen::RowMajor>(energy.num_vertices(), 3);
             },
             "The surface's rest positions, one row per vertex (a copy).")
-        .def_prop_ro("options", &ContactEnergy::options)
+        .def_prop_ro(
+            "options", [](const ContactEnergy& energy) { return Options(energy.options()); },
+            "A copy of the options used to construct this energy.")
         .def("num_active_pairs", &ContactEnergy::num_active_pairs, "x"_a, nb::call_guard<nb::gil_scoped_release>())
         .def("min_active_distance", &ContactEnergy::min_active_distance, "x"_a,
              nb::call_guard<nb::gil_scoped_release>(), "Smallest distance among the active pairs; inf if none.")

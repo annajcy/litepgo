@@ -18,7 +18,7 @@ struct ContactSnapshot {
     std::vector<std::string> types; ///< M record types: VV, VE, VF or EE; rows are not persistent contact IDs.
     VertexIds vertex_ids;           ///< M x 4: vertex/vertex, vertex/edge, vertex/face or edge/edge; pad with -1.
     Vec distances;                  ///< M unsquared distances, without subtracting min_distance.
-    Vec weights;                    ///< M sums of candidate area weights (or one) times optional group multipliers.
+    Vec weights;                    ///< M sums of area/group weights, excluding stiffness and barrier normalization.
     Vec mollifiers;                 ///< M EE mollifiers (including zero); one for other types. Weights exclude these.
 };
 

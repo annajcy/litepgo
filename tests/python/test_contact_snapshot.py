@@ -18,8 +18,8 @@ def make_barrier(request):
     if request.param == "toolkit" and not hasattr(contact, "IPCTKContactEnergy"):
         pytest.skip("toolkit backend disabled")
 
-    def make(surface, weighted=True):
-        kwargs = dict(dhat=.7, min_distance=.05, use_area_weighting=weighted)
+    def make(surface, weighted=True, physical=False):
+        kwargs = dict(dhat=.7, min_distance=.05, use_area_weighting=weighted, use_physical_barrier=physical)
         if request.param == "native":
             return contact.IPCContactEnergy(surface, contact.IPCContactOptions(**kwargs), contact.SpatialHash())
         return contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(**kwargs))
@@ -27,9 +27,10 @@ def make_barrier(request):
 
 
 @pytest.mark.parametrize("weighted", [False, True])
-def test_snapshot_contains_complete_assembly_records(make_barrier, weighted):
+@pytest.mark.parametrize("physical", [False, True])
+def test_snapshot_contains_complete_assembly_records(make_barrier, weighted, physical):
     surface = example.contact_scene()
-    barrier = make_barrier(surface, weighted)
+    barrier = make_barrier(surface, weighted, physical)
     x = surface.positions.copy().reshape(5, 6, 3)
     x[:, 3:, 2] -= .05
     x = x.ravel()
@@ -54,10 +55,12 @@ def test_snapshot_contains_complete_assembly_records(make_barrier, weighted):
         assert len(set(ids[:n])) == n
         if kind != "EE":
             assert mollifier == 1
-    # Raw barrier, with minimum separation, reconstructs the actual unscaled energy.
+    # Snapshot weights contain geometry and group factors, independently of normalization.
     s = snapshot.distances**2 - .05**2
     h = .7 * (.7 + 2 * .05)
     reconstructed = np.sum(snapshot.weights * snapshot.mollifiers * -(s - h)**2 * np.log(s / h))
+    if physical:
+        reconstructed *= .7 / h**2
     assert reconstructed == pytest.approx(before, rel=1e-12)
     assert barrier.eval_value(x) == before
     pattern = barrier.eval_hessian(x)

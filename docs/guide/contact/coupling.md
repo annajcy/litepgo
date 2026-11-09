@@ -41,7 +41,9 @@ $$
 g_c=\kappa W^T\nabla_p C,\qquad H_c=\kappa W^T\nabla_p^2C\,W.
 $$
 
-Set stiffness $\kappa$ through the energy weight. Contact Hessian sparsity
+Set stiffness $\kappa$ through the energy weight. Its units follow the selected
+[raw or physical barrier normalization](barrier.md#raw-and-physical-normalization).
+Contact Hessian sparsity
 changes with active candidates; standalone calls must update the pattern.
 Newton handles updates for the composed potential.
 

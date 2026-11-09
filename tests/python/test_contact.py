@@ -32,6 +32,7 @@ def test_build_info_reports_ipc_toolkit():
     assert hasattr(contact, "IPCTKContactEnergy") == bool(litepgo.build_info()["ipc_toolkit_version"])
     if hasattr(contact, "IPCTKContactOptions"):
         assert contact.IPCTKContactOptions(dhat=1.0).use_area_weighting is True
+        assert contact.IPCTKContactOptions(dhat=1.0).use_physical_barrier is False
 
 
 def test_barrier_mirrors_cpp():
@@ -42,6 +43,7 @@ def test_barrier_mirrors_cpp():
     np.testing.assert_array_equal(barrier.rest_positions, surface.positions)
     assert barrier.options.dhat == 1.0 and barrier.options.min_distance == 0.0
     assert barrier.options.use_area_weighting is True
+    assert barrier.options.use_physical_barrier is False
 
     x = surface.positions.ravel()
     assert barrier.num_active_pairs(x) == 1
@@ -60,6 +62,69 @@ def test_barrier_rejects_infeasible_states():
     thick = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=1.0, min_distance=0.6), contact.SpatialHash())
     with pytest.raises(ValueError, match="min_distance"):
         thick.eval_value(surface.positions.ravel())
+
+
+@pytest.mark.parametrize("backend", ["native", "toolkit"])
+@pytest.mark.parametrize("minimum", [0.0, 0.2])
+@pytest.mark.parametrize("area", [False, True])
+def test_physical_barrier_scale_derivatives_and_distance_semantics(backend, minimum, area):
+    if backend == "toolkit" and not hasattr(contact, "IPCTKContactEnergy"):
+        pytest.skip("toolkit backend disabled")
+    surface = two_triangles(0.5)
+    options_type = contact.IPCContactOptions if backend == "native" else contact.IPCTKContactOptions
+    energy_type = contact.IPCContactEnergy if backend == "native" else contact.IPCTKContactEnergy
+    arguments = [contact.SpatialHash()] if backend == "native" else []
+    options = options_type(dhat=.7, min_distance=minimum, use_area_weighting=area)
+    raw = energy_type(surface, options, *arguments)
+    options.use_physical_barrier = True
+    physical = energy_type(surface, options, *arguments)
+    options.use_physical_barrier = False
+    assert raw.options.use_physical_barrier is False
+    assert physical.options.use_physical_barrier is True
+    copied = physical.options
+    copied.dhat = 9.9
+    copied.use_physical_barrier = False
+    assert physical.options.dhat == .7
+    assert physical.options.use_physical_barrier is True
+    x = surface.positions.ravel()
+    h = .7 * (.7 + 2 * minimum)
+    scale = .7 / h**2
+    snapshot = physical.contact_snapshot(x)
+    assert snapshot.types == ("VF",)
+    np.testing.assert_array_equal(snapshot.weights, raw.contact_snapshot(x).weights)
+    assert physical.min_active_distance(x) == raw.min_active_distance(x) == .5
+    assert physical.eval_value(x) == pytest.approx(scale * raw.eval_value(x), rel=1e-13)
+    np.testing.assert_allclose(physical.eval_gradient(x), scale * raw.eval_gradient(x), rtol=1e-12, atol=1e-12)
+    for kind in [energy.HessianKind.Exact, energy.HessianKind.Projected]:
+        np.testing.assert_allclose(physical.eval_hessian(x, kind).toarray(),
+                                   scale * raw.eval_hessian(x, kind).toarray(), rtol=1e-10, atol=1e-10)
+    np.testing.assert_allclose(physical.eval_gradient(x), central_gradient(physical.eval_value, x), atol=1e-6)
+    stiffness = 4.5
+    weighted = energy.WeightedSumEnergy([(physical, stiffness)])
+    s = .5**2 - minimum**2
+    expected = stiffness * snapshot.weights.sum() * scale * -(s-h)**2 * np.log(s/h)
+    assert weighted.eval_value(x) == pytest.approx(expected, rel=1e-13)
+    direction = np.zeros(18)
+    direction[11] = -2
+    assert physical.max_feasible_step(x, direction) == raw.max_feasible_step(x, direction)
+    boundary = x.reshape(-1, 3).copy()
+    boundary[3:, 2] += minimum + .7 - .5
+    assert physical.eval_value(boundary.ravel()) == pytest.approx(0, abs=1e-14)
+
+
+@pytest.mark.parametrize("backend", ["native", "toolkit"])
+@pytest.mark.parametrize("dhat", [1e-100, 1e100])
+def test_physical_barrier_rejects_unrepresentable_normalization(backend, dhat):
+    if backend == "toolkit" and not hasattr(contact, "IPCTKContactEnergy"):
+        pytest.skip("toolkit backend disabled")
+    surface = two_triangles(.5)
+    if backend == "native":
+        with pytest.raises(ValueError, match="physical barrier normalization"):
+            contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=dhat, use_physical_barrier=True),
+                                     contact.SpatialHash())
+    else:
+        with pytest.raises(ValueError, match="physical barrier normalization"):
+            contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(dhat=dhat, use_physical_barrier=True))
 
 
 @pytest.mark.parametrize("positive_side, active_dof", [(True, 0), (False, 6)])
@@ -134,14 +199,16 @@ def test_python_box_stack_matches_cpp(tmp_path):
 
 @pytest.mark.skipif(not hasattr(contact, "IPCTKContactEnergy"), reason="toolkit backend disabled")
 @pytest.mark.parametrize("use_area_weighting", [False, True])
-def test_independent_native_matches_toolkit_original_sum(use_area_weighting):
+@pytest.mark.parametrize("physical", [False, True])
+def test_independent_native_matches_toolkit_original_sum(use_area_weighting, physical):
     # Compare independent implementations at generic closest features, including
     # repeated lower-dimensional features. Projected Hessians need not match.
     surface = two_triangles(0.5)
     native = contact.IPCContactEnergy(surface, contact.IPCContactOptions(
-        dhat=3, min_distance=0.1, use_area_weighting=use_area_weighting), contact.SpatialHash())
+        dhat=3, min_distance=0.1, use_area_weighting=use_area_weighting,
+        use_physical_barrier=physical), contact.SpatialHash())
     toolkit = contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(
-        dhat=3, min_distance=0.1, use_area_weighting=use_area_weighting))
+        dhat=3, min_distance=0.1, use_area_weighting=use_area_weighting, use_physical_barrier=physical))
     x = surface.positions.ravel().copy()
     x[12:15] += [0.3, -0.2, 0.1]
     assert native.eval_value(x) == pytest.approx(toolkit.eval_value(x), rel=1e-12)
@@ -195,6 +262,7 @@ def test_native_broad_phase_injection_and_lifetime(backend_factory):
 
 @pytest.mark.skipif(not hasattr(contact, "IPCTKContactEnergy"), reason="toolkit backend disabled")
 @pytest.mark.parametrize("use_area_weighting", [False, True])
+@pytest.mark.parametrize("physical", [False, True])
 @pytest.mark.parametrize("positions", [
     [[0, 0, 0], [2, 0, 0], [0, 2, 0], [-0.2, -0.3, 0.4], [-1, -2, 1], [-2, -1, 1]],
     [[0, 0, 0], [2, 0, 0], [0, 2, 0], [0.7, -0.2, 0.4], [2, -2, 1], [-2, -1, 1]],
@@ -202,12 +270,13 @@ def test_native_broad_phase_injection_and_lifetime(backend_factory):
     [[-1, 0, 0], [1, 0, 0], [0, -4, -2], [-0.7, -0.004, 0.2], [0.8, 0.008, 0.2], [0, 4, 2]],
     [[-1, 0, 0], [1, 0, 0], [0, -4, -2], [-0.7, 0, 0.2], [0.8, 0, 0.2], [0, 4, 2]],
 ])
-def test_analytic_features_and_mollifier_match_toolkit(positions, use_area_weighting):
+def test_analytic_features_and_mollifier_match_toolkit(positions, use_area_weighting, physical):
     surface = mesh.TriangleMesh(np.array(positions, dtype=float), np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32))
     native = contact.IPCContactEnergy(surface, contact.IPCContactOptions(
-        dhat=0.7, min_distance=0.05, use_area_weighting=use_area_weighting), contact.SpatialHash())
+        dhat=0.7, min_distance=0.05, use_area_weighting=use_area_weighting,
+        use_physical_barrier=physical), contact.SpatialHash())
     toolkit = contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(
-        dhat=0.7, min_distance=0.05, use_area_weighting=use_area_weighting))
+        dhat=0.7, min_distance=0.05, use_area_weighting=use_area_weighting, use_physical_barrier=physical))
     x = surface.positions.ravel()
     assert native.eval_value(x) == pytest.approx(toolkit.eval_value(x), rel=1e-11, abs=1e-12)
     np.testing.assert_allclose(native.eval_gradient(x), toolkit.eval_gradient(x), rtol=1e-8, atol=1e-9)

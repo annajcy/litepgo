@@ -18,6 +18,8 @@ namespace litepgo::contact {
 // positions in vertex-major xyz order. The stiffness is 1: scale the energy by its
 // weight in a WeightedSumEnergy.
 // use_area_weighting enables fixed reference-area collision weights.
+// use_physical_barrier selects IPC Toolkit's physical normalization, with
+// pressure units for the external stiffness when area weighting is enabled.
 // Optional group multipliers act before closest-feature merging. Zero excludes
 // candidates from the active set and CCD, while initial whole-surface intersection
 // validation remains unconditional. Configuration is owned by value.

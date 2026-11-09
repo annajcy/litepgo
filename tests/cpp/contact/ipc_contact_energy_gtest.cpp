@@ -289,6 +289,40 @@ TEST(IPCContactEnergy, OriginalSquaredBarrierAndThickness) {
     }
 }
 
+TEST(IPCContactEnergy, PhysicalBarrierMatchesToolkitNormalization) {
+    const auto surface = two_triangles(.5);
+    for (double minimum : {0.0, .2}) {
+        for (bool area : {false, true}) {
+            auto config = options(.7, minimum);
+            config.use_area_weighting = area;
+            EXPECT_FALSE(config.use_physical_barrier);
+            IPCContactEnergy raw(surface, config, std::make_shared<SpatialHash>());
+            config.use_physical_barrier = true;
+            IPCContactEnergy physical(surface, config, std::make_shared<SpatialHash>());
+            const double h = .7 * (.7 + 2 * minimum), scale = .7 / (h * h);
+            EXPECT_NEAR(physical.eval_value(surface.positions), scale * raw.eval_value(surface.positions), 1e-12);
+            EXPECT_TRUE(physical.eval_gradient(surface.positions)
+                            .isApprox(scale * raw.eval_gradient(surface.positions), 1e-12));
+            for (auto kind : {energy::HessianKind::Exact, energy::HessianKind::Projected})
+                EXPECT_TRUE(Eigen::MatrixXd(physical.eval_hessian(surface.positions, kind))
+                                .isApprox(scale * Eigen::MatrixXd(raw.eval_hessian(surface.positions, kind)), 1e-10));
+            energy::test::expect_derivatives_match(physical, surface.positions, 1e-5);
+            const Vec direction = translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -2));
+            EXPECT_EQ(physical.max_feasible_step(surface.positions, direction),
+                      raw.max_feasible_step(surface.positions, direction));
+        }
+    }
+}
+
+TEST(IPCContactEnergy, RejectsUnrepresentablePhysicalNormalization) {
+    for (double dhat : {1e-100, 1e100}) {
+        auto config = options(dhat);
+        config.use_physical_barrier = true;
+        EXPECT_THROW(IPCContactEnergy(two_triangles(.5), config, std::make_shared<SpatialHash>()),
+                     std::invalid_argument);
+    }
+}
+
 TEST(IPCContactEnergy, RejectsDegenerateDuplicateAndUnusedGeometry) {
     auto surface = two_triangles(0.5);
     surface.positions.segment<3>(3) = surface.positions.segment<3>(0);

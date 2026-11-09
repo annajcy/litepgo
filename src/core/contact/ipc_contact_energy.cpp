@@ -54,6 +54,11 @@ IPCContactOptions checked_options(IPCContactOptions o) {
         !std::isfinite(o.ccd_tolerance) || o.ccd_tolerance <= 0 || o.ccd_max_iterations <= 0)
         throw std::invalid_argument("IPCContactEnergy requires finite positive dhat, CCD tolerance/budget and "
                                     "nonnegative min_distance with representable squared thresholds");
+    if (o.use_physical_barrier) {
+        const double scale = o.dhat / (threshold * threshold);
+        if (!std::isfinite(scale) || scale <= 0)
+            throw std::invalid_argument("IPCContactEnergy requires a representable physical barrier normalization");
+    }
     return o;
 }
 void check_x(const ConstVecRef& x, int n) {
@@ -226,19 +231,20 @@ struct IPCContactEnergy::Impl {
         if (d >= h)
             return 0;
         const double log_d = std::log(d / h), delta = d - h;
-        const double b = -delta * delta * log_d;
+        const double scale = options.use_physical_barrier ? options.dhat / (h * h) : 1.0;
+        const double b = -delta * delta * log_d * scale;
         const double z = pair.mollifier_ratio(p), m = z < 1 ? z * (2 - z) : 1;
         if (gradient || hessian) {
             LocalGradient gd;
             LocalHessian Hd;
             distance_derivatives(p, pair.feature, gd, hessian ? &Hd : nullptr);
-            const double first = -2 * delta * log_d - delta * delta / d;
+            const double first = (-2 * delta * log_d - delta * delta / d) * scale;
             const LocalGradient gb = first * gd;
             if (gradient)
                 *gradient = m * gb;
             if (hessian) {
                 const double ratio = h / d;
-                const double second = (ratio + 2) * ratio - 2 * log_d - 3;
+                const double second = ((ratio + 2) * ratio - 2 * log_d - 3) * scale;
                 *hessian = m * (first * Hd + second * gd * gd.transpose());
             }
             if (z < 1) {

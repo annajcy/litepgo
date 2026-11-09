@@ -19,6 +19,8 @@ namespace litepgo::contact {
 // with multiplicity preserved (the original VF + mollified EE candidate sum).
 // Optional reference-area weighting multiplies VF terms by A_vertex/4 and EE
 // terms by (A_edge0 + A_edge1)/4 before closest-feature merging.
+// use_physical_barrier multiplies by dhat / [dhat * (dhat + 2 min_distance)]²,
+// matching IPC Toolkit. With area weighting, the external stiffness has pressure units.
 // Optional group multipliers act on original VF/EE candidates before merging;
 // zero excludes a candidate from the active set and CCD. Initial whole-surface
 // intersection validation remains unconditional. Configuration is owned by value.

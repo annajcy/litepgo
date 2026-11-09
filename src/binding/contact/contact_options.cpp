@@ -25,17 +25,21 @@ template <class Options> void bind_contact_options(nb::module_& m, const char* o
         .def(
             "__init__",
             [](Options* self, double dhat, double min_distance, double ccd_tolerance, long ccd_max_iterations,
-               bool use_area_weighting) {
-                new (self) Options{dhat, min_distance, ccd_tolerance, ccd_max_iterations, use_area_weighting};
+               bool use_area_weighting, bool use_physical_barrier) {
+                new (self) Options{
+                    dhat, min_distance, ccd_tolerance, ccd_max_iterations, use_area_weighting, use_physical_barrier};
             },
             "dhat"_a = std::numeric_limits<double>::quiet_NaN(), "min_distance"_a = 0.0,
             "ccd_tolerance"_a = Options{}.ccd_tolerance, "ccd_max_iterations"_a = Options{}.ccd_max_iterations,
-            "use_area_weighting"_a = Options{}.use_area_weighting)
-        .def_rw("dhat", &Options::dhat)
-        .def_rw("min_distance", &Options::min_distance)
+            "use_area_weighting"_a = Options{}.use_area_weighting,
+            "use_physical_barrier"_a = Options{}.use_physical_barrier)
+        .def_rw("dhat", &Options::dhat, "Physical activation width above min_distance, matching IPC Toolkit.")
+        .def_rw("min_distance", &Options::min_distance, "Minimum physical separation, matching IPC Toolkit's dmin.")
         .def_rw("ccd_tolerance", &Options::ccd_tolerance)
         .def_rw("ccd_max_iterations", &Options::ccd_max_iterations)
-        .def_rw("use_area_weighting", &Options::use_area_weighting);
+        .def_rw("use_area_weighting", &Options::use_area_weighting)
+        .def_rw("use_physical_barrier", &Options::use_physical_barrier,
+                "IPC Toolkit physical normalization. With area weights the external stiffness has pressure units.");
 }
 } // namespace
 
@@ -105,8 +109,8 @@ void bind_contact_contact_options(nb::module_& m) {
         .def_prop_ro(
             "weights", [](const ContactSnapshot& s) { return readonly_view(s.weights); },
             nb::rv_policy::reference_internal,
-            "M sums of candidate area weights (or one) times optional group multipliers. Excludes kappa and "
-            "mollifiers.")
+            "M sums of candidate area weights (or one) times optional group multipliers. Excludes kappa, "
+            "barrier normalization and mollifiers.")
         .def_prop_ro(
             "mollifiers", [](const ContactSnapshot& s) { return readonly_view(s.mollifiers); },
             nb::rv_policy::reference_internal, "M EE mollifiers, including zero; one for other record types.");

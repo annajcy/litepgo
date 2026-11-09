@@ -8,6 +8,11 @@ require an explicit broad_phase=SpatialHash() and retain shared
 ownership of that backend. Custom backends are implemented in C++, not Python.
 Both options types default to fixed reference-area weights; set
 use_area_weighting=False for the original unweighted candidate sum.
+Both options types match IPC Toolkit's use_physical_barrier=False default.
+Set it to True for physical normalization and pressure units for the external
+stiffness when reference-area weighting is enabled. dhat is the physical
+activation width above min_distance, which corresponds to Toolkit's dmin.
+The options property returns an independent copy of construction settings.
 ContactPairWeights supplies fixed primitive groups and a symmetric multiplier
 table, applied before feature merging. Zero excludes a candidate from the active
 set and CCD; whole-surface initial-intersection validation remains independent.

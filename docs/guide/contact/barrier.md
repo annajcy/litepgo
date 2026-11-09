@@ -8,6 +8,9 @@ The energy retains its broad phase. A Python broad-phase subclass must not store
 a strong reference back to the energy; use `weakref.ref(energy)` if needed. See
 the [ownership contract](../concepts.md#python-ownership-must-remain-acyclic).
 
+The Python `options` property returns a copy of the construction settings.
+Construct a new contact energy to use different options.
+
 ## Barrier formulation
 
 For candidate distance $d$, minimum separation $d_{\min}$, and activation
@@ -20,6 +23,63 @@ $$
 $$
 b(s,h)=\begin{cases}-(s-h)^2\log(s/h),&0<s<h,\\0,&s\ge h.\end{cases}
 $$
+
+`dhat` and `min_distance` are physical lengths, with the same units as the
+surface positions. `min_distance` corresponds to IPC Toolkit's `dmin`.
+Activation starts at $d<d_{\min}+\hat d$, and feasibility requires
+$d>d_{\min}$. Snapshot distances are unsquared $d$. The arguments $s,h$ of
+the scalar barrier above are squared-length quantities.
+
+### Raw and physical normalization
+
+Both `IPCContactOptions` and `IPCTKContactOptions` expose
+`use_physical_barrier`, defaulting to `false`, as in IPC Toolkit v1.6.1.
+The unit-stiffness energy for either backend is
+
+$$
+C(x)=\sum_q A_q W_q m_q\,\gamma\,b(s_q,h),\qquad
+\gamma=\begin{cases}
+1,&\texttt{use\_physical\_barrier=false},\\
+\hat d/h^2,&\texttt{use\_physical\_barrier=true}.
+\end{cases}
+$$
+
+$A_q$ is the candidate reference-area weight or one, $W_q$ is its optional
+group multiplier, and $m_q$ is the edge mollifier or one. The same constant
+$\gamma$ multiplies the value, gradient and exact/projected Hessians.
+
+Set stiffness $\kappa$ through `WeightedSumEnergy` to obtain $E=\kappa C$.
+This has the same stiffness semantics as IPC Toolkit's `BarrierPotential`.
+With reference-area weighting, physical mode gives $\kappa$ pressure units.
+Raw mode gives energy/length$^6$ units. With $d_{\min}=0$,
+
+$$
+\gamma=1/\hat d^3,\qquad
+\kappa_{\mathrm{physical}}=\kappa_{\mathrm{raw}}\hat d^3.
+$$
+
+For example, raw `dhat=0.001, kappa=1e16` and physical
+`dhat=0.001, kappa=1e7` define the same energy with the same candidate weights.
+Physical pressure units require area weighting. Unweighted mode retains a
+candidate sum with different coefficient units.
+
+```python
+from litepgo import contact, energy
+
+options = contact.IPCContactOptions(
+    dhat=0.001, min_distance=0.0,
+    use_area_weighting=True, use_physical_barrier=True,
+)
+barrier = contact.IPCContactEnergy(surface, options, contact.SpatialHash())
+potential = energy.WeightedSumEnergy([(barrier, 1e7)])
+```
+
+In C++, set `options.use_physical_barrier = true` before constructing the
+energy. The optional Toolkit backend accepts the same fields through
+`IPCTKContactOptions`. Physical normalization follows the
+[Toolkit potential implementation](https://github.com/ipc-sim/ipc-toolkit/blob/v1.6.1/src/ipc/potentials/barrier_potential.cpp)
+and its
+[stiffness units](https://github.com/ipc-sim/ipc-toolkit/blob/v1.6.1/src/ipc/potentials/barrier_potential.hpp).
 
 The native energy sums nonincident vertex–triangle and unordered edge–edge
 candidates. Closest-feature reduction uses point–point, point–edge,
@@ -52,10 +112,11 @@ lower-dimensional features. Areas stay fixed when the current positions change.
 Area weighting does not change the activation distance, minimum separation or CCD.
 It alone does not implement the full convergent IPC formulation or add friction.
 
-The raw barrier formula above is unchanged by area weighting. Set its coefficient
-directly through `WeightedSumEnergy`; no normalization conversion is applied.
-Calibrate the coefficient for the barrier definition, area weighting and length
-unit being used.
+Choose the normalization explicitly and set its coefficient directly through
+`WeightedSumEnergy`. Calibrate it together with area weighting and the length
+unit. `use_physical_barrier` affects energy scaling and derivatives. Activation,
+closest-feature selection, reference-area weights and CCD use the same distances
+in both modes. Snapshot weights exclude stiffness, normalization and mollifiers.
 
 The [area-weighting example](../../examples/contact/area-weighting.md) compares
 energy and normal force on fixed parallel sheets as the grid is refined.
