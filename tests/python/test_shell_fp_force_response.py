@@ -50,6 +50,12 @@ def test_shared_and_element_fp_jacobians_and_original_area(batch_size):
             minus[j] -= 1e-6
             fd = (response.eval_value(plus)-response.eval_value(minus))/2e-6
             np.testing.assert_allclose(derivative.toarray()[:, j], fd, atol=2e-7, rtol=1e-6)
+    for response, point in [(shared, packed), (element, per)]:
+        derivative = response.eval_jacobian(point)
+        d = np.sin(np.arange(response.num_inputs))
+        w = np.cos(np.arange(response.num_outputs))
+        np.testing.assert_allclose(response.eval_jvp(point, d), derivative @ d, rtol=1e-10, atol=1e-11)
+        np.testing.assert_allclose(response.eval_vjp(point, w), derivative.T @ w, rtol=1e-10, atol=1e-11)
     repeated_J = element.eval_jacobian(np.tile(packed, 4)).toarray()
     np.testing.assert_allclose(J.toarray(), sum(repeated_J[:, 9*e:9*e+9] for e in range(4)), atol=1e-12)
     identity = np.eye(3).ravel(order="F")

@@ -43,6 +43,12 @@ def test_shared_and_element_parameters_match_energy(batch_size):
     np.testing.assert_allclose(per_force, observed(data, independent), rtol=1e-12, atol=1e-13)
     np.testing.assert_allclose(J.toarray(), E[:, :2].toarray() + E[:, 2:].toarray(), rtol=1e-12, atol=1e-13)
     np.testing.assert_allclose(E @ independent, per_force, rtol=1e-12, atol=1e-13)
+    for response, point in [(shared, theta), (element, independent)]:
+        derivative = response.eval_jacobian(point)
+        d = np.sin(np.arange(response.num_inputs))
+        w = np.cos(np.arange(response.num_outputs))
+        np.testing.assert_allclose(response.eval_jvp(point, d), derivative @ d, rtol=1e-10, atol=1e-11)
+        np.testing.assert_allclose(response.eval_vjp(point, w), derivative.T @ w, rtol=1e-10, atol=1e-11)
     with pytest.raises(ValueError):
         shared.eval_value(np.array([2., 0.]))
     np.testing.assert_allclose(shared.eval_value(theta), force)

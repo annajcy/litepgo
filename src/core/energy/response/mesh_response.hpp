@@ -22,11 +22,12 @@ class MeshResponse : public FixedPatternResponse {
     virtual BatchMatrix eval_jvp_batch(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& dx) const;
     virtual BatchMatrix eval_vjp_batch(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& gy) const;
 
+    void check_batch_product(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& d,
+                             bool transpose) const;
+
   private:
     Vec eval_jvp_impl(const ConstVecRef& x, const ConstVecRef& dx) override;
     Vec eval_vjp_impl(const ConstVecRef& x, const ConstVecRef& gy) override;
-    void check_batch_product(std::span<const int> ids, const BatchMatrix& x, const BatchMatrix& d,
-                             bool transpose) const;
     BatchMatrix eval_batch_jacobian(std::span<const int> ids, const BatchMatrix& x) const;
     void gather(const std::vector<int>& ids, const ConstVecRef& x, BatchMatrix& result, bool output) const;
     Vec product(const ConstVecRef& x, const ConstVecRef& direction, bool transpose) const;

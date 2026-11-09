@@ -16,6 +16,11 @@ def test_coefficient_map_matches_spatial_query_and_finite_differences(B):
     sampling = fem.deformation_gradient_sampling_response[B](geometry, points)
     assert type(sampling) is energy.AffineResponse
     spatial = fem.DeformationGradientResponse(fem.InterpolatedResponse[B](C), geometry)
+    for xi in points:
+        J_spatial = spatial.eval_jacobian(xi)
+        d, w = np.array([.2, -.3, .4]), np.linspace(-.5, .7, 9)
+        np.testing.assert_allclose(spatial.eval_jvp(xi, d), J_spatial @ d, atol=1e-13)
+        np.testing.assert_allclose(spatial.eval_vjp(xi, w), J_spatial.T @ w, atol=1e-13)
     expected = np.concatenate([spatial.eval_value(xi) for xi in points])
     np.testing.assert_allclose(sampling.eval_value(c), expected, atol=1e-14)
     J = sampling.eval_jacobian(c).toarray()

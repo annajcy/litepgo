@@ -51,10 +51,26 @@ class ShellFemForceFpResponse final : public energy::MeshResponse {
     }
 
   private:
+    energy::BatchMatrix eval_jvp_batch(std::span<const int> ids, const energy::BatchMatrix& x,
+                                       const energy::BatchMatrix& d) const override {
+        check_batch_product(ids, x, d, false);
+        return evaluate(ids, x, nullptr, &d, false);
+    }
+    energy::BatchMatrix eval_vjp_batch(std::span<const int> ids, const energy::BatchMatrix& x,
+                                       const energy::BatchMatrix& d) const override {
+        check_batch_product(ids, x, d, true);
+        return evaluate(ids, x, nullptr, &d, true);
+    }
     energy::BatchMatrix eval_batch(std::span<const int> ids, const energy::BatchMatrix& plastic,
                                    energy::BatchMatrix* jacobian) const override {
+        return evaluate(ids, plastic, jacobian);
+    }
+    energy::BatchMatrix evaluate(std::span<const int> ids, const energy::BatchMatrix& plastic,
+                                 energy::BatchMatrix* jacobian, const energy::BatchMatrix* direction = nullptr,
+                                 bool transpose = false) const {
         const Eigen::Index n = ids.empty() ? 0 : faces_[ids[0]].current.dab_du.cols();
         energy::BatchMatrix values(ids.size(), n);
+        energy::BatchMatrix product(direction ? ids.size() : 0, transpose ? 9 : n);
         if (jacobian)
             jacobian->resize(ids.size() * n, 9);
 
@@ -67,24 +83,38 @@ class ShellFemForceFpResponse final : public energy::MeshResponse {
             const Vec packed = plastic.row(b).transpose();
             auto J = detail::batch_matrix_view(jacobian, b, n);
             detail::check_shell_fp_input(face, packed, k, n, J ? &*J : nullptr);
-            natural.push_back(detail::shell_fp_natural(face, packed, jacobian != nullptr));
+            natural.push_back(detail::shell_fp_natural(face, packed, jacobian != nullptr || direction != nullptr));
             detail::set_shell_point(batch, static_cast<Eigen::Index>(b), natural.back().inputs);
         }
         Eigen::Matrix<double, 6, Eigen::Dynamic> stress;
         Eigen::Matrix<double, 36, Eigen::Dynamic> mixed;
         ShellMaterialBatchOutputs out{nullptr, &stress};
-        if (jacobian)
+        if (jacobian || direction)
             out.d2W_dab_dabarbbar = &mixed;
         material_->eval(batch, out);
         detail::check_shell_batch_outputs(out, batch.size(), k);
         for (std::size_t b = 0; b < ids.size(); ++b) {
             const auto& face = faces_[ids[b]];
             detail::shell_force_value(face.current, stress.col(b), StridedVecRef(values.row(b).transpose()));
+            if (direction) {
+                const auto M = mixed.col(b).reshaped(6, 6);
+                const auto& N = natural[b].natural_derivative;
+                const auto& P = face.dy_dFp;
+                const auto& A = face.current.dab_du;
+                const Vec d = direction->row(b).transpose();
+                if (transpose) {
+                    const Vec a = A * d, m = M.transpose() * a, n = N.transpose() * m;
+                    product.row(b) = (face.current.area * (P.transpose() * n)).transpose();
+                } else {
+                    const Vec p = P * d, n = N * p, m = M * n;
+                    product.row(b) = (face.current.area * (A.transpose() * m)).transpose();
+                }
+            }
             if (auto J = detail::batch_matrix_view(jacobian, b, n))
                 detail::shell_fp_force_jacobian(face, natural[b], mixed.col(b).reshaped(6, 6), *J);
         }
 
-        return values;
+        return direction ? product : values;
     }
     std::shared_ptr<const ShellBatchMaterial> material_;
     std::vector<detail::ShellFpForceData> faces_;

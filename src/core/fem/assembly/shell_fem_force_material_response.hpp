@@ -47,11 +47,27 @@ class ShellFemForceMaterialResponse final : public energy::MeshResponse {
     }
 
   private:
+    energy::BatchMatrix eval_jvp_batch(std::span<const int> ids, const energy::BatchMatrix& x,
+                                       const energy::BatchMatrix& d) const override {
+        check_batch_product(ids, x, d, false);
+        return evaluate(ids, x, nullptr, &d, false);
+    }
+    energy::BatchMatrix eval_vjp_batch(std::span<const int> ids, const energy::BatchMatrix& x,
+                                       const energy::BatchMatrix& d) const override {
+        check_batch_product(ids, x, d, true);
+        return evaluate(ids, x, nullptr, &d, true);
+    }
     energy::BatchMatrix eval_batch(std::span<const int> ids, const energy::BatchMatrix& theta,
                                    energy::BatchMatrix* jacobian) const override {
+        return evaluate(ids, theta, jacobian);
+    }
+    energy::BatchMatrix evaluate(std::span<const int> ids, const energy::BatchMatrix& theta,
+                                 energy::BatchMatrix* jacobian, const energy::BatchMatrix* direction = nullptr,
+                                 bool transpose = false) const {
         const Eigen::Index n = ids.empty() ? 0 : faces_[ids[0]].dab_du.cols();
         const int k = material_->num_parameters();
         energy::BatchMatrix values(ids.size(), n);
+        energy::BatchMatrix product(direction ? ids.size() : 0, transpose ? material_->num_parameters() : n);
         if (jacobian)
             jacobian->resize(ids.size() * n, k);
 
@@ -66,18 +82,29 @@ class ShellFemForceMaterialResponse final : public energy::MeshResponse {
         Eigen::Matrix<double, 6, Eigen::Dynamic> stress;
         Eigen::MatrixXd mixed;
         ShellMaterialBatchOutputs out{nullptr, &stress};
-        if (jacobian)
+        if (jacobian || direction)
             out.d2W_dab_dtheta = &mixed;
         material_->eval(batch, out);
         detail::check_shell_batch_outputs(out, batch.size(), k);
         for (std::size_t b = 0; b < ids.size(); ++b) {
             const auto& face = faces_[ids[b]];
             detail::shell_force_value(face, stress.col(b), StridedVecRef(values.row(b).transpose()));
+            if (direction) {
+                const auto M = mixed.col(b).reshaped(6, k);
+                const Vec d = direction->row(b).transpose();
+                if (transpose) {
+                    const Vec a = face.dab_du * d;
+                    product.row(b) = (face.area * (M.transpose() * a)).transpose();
+                } else {
+                    const Vec m = M * d;
+                    product.row(b) = (face.area * (face.dab_du.transpose() * m)).transpose();
+                }
+            }
             if (auto J = detail::batch_matrix_view(jacobian, b, n))
                 detail::shell_material_force_jacobian(face, mixed.col(b).reshaped(6, k), k, *J);
         }
 
-        return values;
+        return direction ? product : values;
     }
     std::shared_ptr<const ShellBatchMaterial> material_;
     std::vector<detail::ShellForceData> faces_;

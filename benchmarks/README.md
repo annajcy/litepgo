@@ -25,3 +25,10 @@ loading cannot diverge from the example. Its CMake target and executable path di
 not change. Output directories remain under `output/`, ignored by Git. Each run
 replaces files in the selected output directory; choose a new directory to retain
 an earlier run. The Torch suite's peak-RSS collector requires macOS or Linux.
+
+Native force-product benchmark: `python benchmarks/force_products.py` measures
+JVP/VJP for HexQ1 and HexHermite material/Fp forces, shell material/Fp forces,
+and spatial deformation-gradient queries. It uses one TBB thread, batches 1/256,
+30 samples of 10 calls, and checks products against explicit Jacobians before
+timing. Run before and after with the same Release build settings, without
+concurrent builds or tests. Output is JSON Lines with all raw samples.

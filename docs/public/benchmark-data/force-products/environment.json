@@ -1,0 +1,15 @@
+{
+  "baseline": "afc84bb57c0c89101508015000e9c9893a53053b",
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "build": "Release -O3 -DNDEBUG; same build/release toolchain",
+  "threads": 1,
+  "batches": [
+    1,
+    256
+  ],
+  "samples_before": 30,
+  "samples_after": 60,
+  "calls_per_sample": 10,
+  "volume_elements": 64,
+  "shell_faces": 288
+}

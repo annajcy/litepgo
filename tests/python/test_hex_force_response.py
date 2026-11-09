@@ -50,6 +50,12 @@ def test_hex_force_responses_match_energy_and_physical_derivatives(basis, width,
     PJ = pe.eval_jacobian(np.tile(p, 2)).toarray()
     np.testing.assert_allclose(M.toarray(), MJ[:, :2]+MJ[:, 2:], atol=1e-13)
     np.testing.assert_allclose(P.toarray(), PJ[:, :9]+PJ[:, 9:], atol=1e-13)
+    for response, point in [(material, theta), (fp, p), (me, np.tile(theta, 2)), (pe, np.tile(p, 2))]:
+        derivative = response.eval_jacobian(point)
+        d = np.sin(np.arange(response.num_inputs))
+        w = np.cos(np.arange(response.num_outputs))
+        np.testing.assert_allclose(response.eval_jvp(point, d), derivative @ d, rtol=1e-10, atol=1e-11)
+        np.testing.assert_allclose(response.eval_vjp(point, w), derivative.T @ w, rtol=1e-10, atol=1e-11)
     with pytest.raises(ValueError):
         fp.eval_value(np.zeros(9))
     np.testing.assert_allclose(fp.eval_value(p), expected, atol=1e-12)

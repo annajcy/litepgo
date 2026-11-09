@@ -28,6 +28,12 @@ def test_fp_force_energy_jacobian_and_recovery(batch_size):
     repeated = np.tile(p[:9], 2)
     element_J = obj.eval_jacobian(repeated).toarray()
     np.testing.assert_allclose(shared.eval_jacobian(p[:9]).toarray(), element_J[:, :9]+element_J[:, 9:], atol=1e-13)
+    for response, point in [(shared, p[:9]), (obj, p)]:
+        derivative = response.eval_jacobian(point)
+        d = np.sin(np.arange(response.num_inputs))
+        w = np.cos(np.arange(response.num_outputs))
+        np.testing.assert_allclose(response.eval_jvp(point, d), derivative @ d, rtol=1e-10, atol=1e-11)
+        np.testing.assert_allclose(response.eval_vjp(point, w), derivative.T @ w, rtol=1e-10, atol=1e-11)
     with pytest.raises(ValueError):
         obj.eval_value(np.zeros(18))
     np.testing.assert_array_equal(obj.eval_jacobian(p).indices, J.indices)

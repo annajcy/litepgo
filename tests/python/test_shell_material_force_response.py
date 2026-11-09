@@ -42,6 +42,12 @@ def test_shared_and_per_face_parameters_match_energy(batch_size):
     np.testing.assert_allclose(value, observed(data, theta), atol=1e-13, rtol=1e-12)
     np.testing.assert_allclose(per_value, observed(data, per), atol=1e-13, rtol=1e-12)
     np.testing.assert_allclose(J.toarray(), sum(E[:, 2*e:2*e+2].toarray() for e in range(4)), atol=1e-13)
+    for response, point in [(shared, theta), (element, per)]:
+        derivative = response.eval_jacobian(point)
+        d = np.sin(np.arange(response.num_inputs))
+        w = np.cos(np.arange(response.num_outputs))
+        np.testing.assert_allclose(response.eval_jvp(point, d), derivative @ d, rtol=1e-10, atol=1e-11)
+        np.testing.assert_allclose(response.eval_vjp(point, w), derivative.T @ w, rtol=1e-10, atol=1e-11)
     np.testing.assert_allclose(shared.eval_value(theta), value)
     with pytest.raises(ValueError):
         shared.eval_value(np.array([1., 0.]))

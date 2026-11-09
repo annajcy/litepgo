@@ -21,6 +21,42 @@ class DeformationGradientResponse final : public energy::FixedPatternResponse {
     }
 
   private:
+    Vec eval_jvp_impl(const ConstVecRef& xi, const ConstVecRef& v) override {
+        return product(xi, v, false);
+    }
+    Vec eval_vjp_impl(const ConstVecRef& xi, const ConstVecRef& v) override {
+        return product(xi, v, true);
+    }
+    Vec product(const ConstVecRef& xi, const ConstVecRef& v, bool transpose) {
+        const Eigen::Matrix3d U = displacement_->eval_jacobian(xi);
+        const Eigen::Matrix3d X = geometry_->eval_jacobian(xi);
+        const double determinant = X.determinant();
+        if (!std::isfinite(determinant) || determinant <= 0)
+            throw std::domain_error("DeformationGradientResponse: positive geometry determinant required");
+        const Eigen::Matrix3d inverse = X.inverse(), gradient = U * inverse;
+        Eigen::Matrix3d dU, dX;
+        Eigen::Vector3d result = Eigen::Vector3d::Zero();
+        Eigen::Matrix3d adjoint, geometry_adjoint;
+        if (transpose) {
+            adjoint = v.reshaped(3, 3) * inverse.transpose();
+            geometry_adjoint = -gradient.transpose() * adjoint;
+        }
+        for (int component = 0; component < 3; ++component) {
+            const Vec w = Vec::Unit(3, component);
+            const Eigen::Matrix3d Hu = displacement_->eval_hessian(xi, w);
+            const Eigen::Matrix3d Hx = geometry_->eval_hessian(xi, w);
+            if (transpose) {
+                result += Hu * adjoint.row(component).transpose() + Hx * geometry_adjoint.row(component).transpose();
+            } else {
+                dU.row(component) = (Hu * v).transpose();
+                dX.row(component) = (Hx * v).transpose();
+            }
+        }
+        if (transpose)
+            return result;
+        const Eigen::Matrix3d derivative = (dU - gradient * dX) * inverse;
+        return derivative.reshaped();
+    }
     Vec eval_impl(const ConstVecRef& xi, SpMat* J) override {
         const Eigen::Matrix3d U = displacement_->eval_jacobian(xi);
         const Eigen::Matrix3d X = geometry_->eval_jacobian(xi);

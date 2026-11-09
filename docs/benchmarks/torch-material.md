@@ -460,3 +460,45 @@ autograd engine. It recorded 266 gradient calls: 256 reference-slope evaluations
 inside the pointwise network, plus one stress and nine Hessian-row evaluations.
 This supports reducing the size and fragmentation of the differentiated graph;
 it does not support blaming the whole cost on Python call overhead or data copies.
+
+
+## Direct force-response products
+
+The native benchmark `benchmarks/force_products.py` measures material and plastic force JVP/VJP on 64 hexahedra and 288 curved shell faces, plus spatial deformation-gradient queries. HexHermite uses non-unit box dimensions and nonzero derivative DOFs. Each case checks both products against an explicit Jacobian before timing.
+
+Baseline: `afc84bb`, captured before editing. Both versions use the same Release toolchain, one TBB thread and batch sizes 1/256. Baseline has 30 samples of ten calls; optimized results pool two subsequent runs (60 samples). Builds and tests were finished before the retained optimized runs. These are sequential microbenchmarks, not interleaved trials or equilibrium-backward timings; small changes may be noise.
+
+| Case | Product | Before ms | After ms | Change |
+|---|---|---:|---:|---:|
+| HexQ1Basis/Material/1 | jvp | 0.1763 | 0.1352 | -23.3% |
+| HexQ1Basis/Material/1 | vjp | 0.1764 | 0.1320 | -25.2% |
+| HexQ1Basis/Fp/1 | jvp | 0.4348 | 0.3491 | -19.7% |
+| HexQ1Basis/Fp/1 | vjp | 0.4339 | 0.3632 | -16.3% |
+| HexQ1Basis/Material/256 | jvp | 0.1638 | 0.1225 | -25.2% |
+| HexQ1Basis/Material/256 | vjp | 0.1639 | 0.1219 | -25.6% |
+| HexQ1Basis/Fp/256 | jvp | 0.4397 | 0.3352 | -23.8% |
+| HexQ1Basis/Fp/256 | vjp | 0.4387 | 0.3507 | -20.1% |
+| spatial/HexQ1Basis | jvp | 0.0030 | 0.0028 | -6.6% |
+| spatial/HexQ1Basis | vjp | 0.0030 | 0.0028 | -6.8% |
+| HexHermiteBasis/Material/1 | jvp | 0.7869 | 0.3911 | -50.3% |
+| HexHermiteBasis/Material/1 | vjp | 0.7729 | 0.3876 | -49.8% |
+| HexHermiteBasis/Fp/1 | jvp | 1.5241 | 0.6092 | -60.0% |
+| HexHermiteBasis/Fp/1 | vjp | 1.4199 | 0.6196 | -56.4% |
+| HexHermiteBasis/Material/256 | jvp | 0.7298 | 0.3782 | -48.2% |
+| HexHermiteBasis/Material/256 | vjp | 0.7251 | 0.3798 | -47.6% |
+| HexHermiteBasis/Fp/256 | jvp | 1.4137 | 0.5922 | -58.1% |
+| HexHermiteBasis/Fp/256 | vjp | 1.4151 | 0.6083 | -57.0% |
+| spatial/HexHermiteBasis | jvp | 0.0043 | 0.0041 | -4.0% |
+| spatial/HexHermiteBasis | vjp | 0.0042 | 0.0041 | -2.8% |
+| shell/Material/1 | jvp | 0.2008 | 0.1769 | -11.9% |
+| shell/Material/1 | vjp | 0.1993 | 0.1762 | -11.6% |
+| shell/Fp/1 | jvp | 0.5335 | 0.3184 | -40.3% |
+| shell/Fp/1 | vjp | 0.5322 | 0.3245 | -39.0% |
+| shell/Material/256 | jvp | 0.1347 | 0.1110 | -17.6% |
+| shell/Material/256 | vjp | 0.1329 | 0.1095 | -17.6% |
+| shell/Fp/256 | jvp | 0.4455 | 0.2466 | -44.7% |
+| shell/Fp/256 | vjp | 0.4447 | 0.2495 | -43.9% |
+
+Products now contract along the derivative chain without forming local force Jacobians. Material batches, required mixed derivatives, stress/force validation, original shell area weights and Hermite DOF scaling are retained. Spatial queries contract child Hessians directly; the child Hessians themselves are still evaluated. No material API or native/Python dispatch changes were needed.
+
+Validation: 505/505 CTest entries; Python 637 passed, 81 skipped (one existing Torch deprecation warning). Added product checks cover shared and per-element parameters, all three volume bases, multiple batch sizes, shell Fp/theta and spatial queries. Raw samples and environment: [before](/benchmark-data/force-products/before.jsonl.txt), [after](/benchmark-data/force-products/after.jsonl.txt), [repeat](/benchmark-data/force-products/after-repeat.jsonl.txt), [environment](/benchmark-data/force-products/environment.json).

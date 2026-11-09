@@ -78,9 +78,26 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
     }
 
   private:
+    energy::BatchMatrix eval_jvp_batch(std::span<const int> ids, const energy::BatchMatrix& x,
+                                       const energy::BatchMatrix& d) const override {
+        check_batch_product(ids, x, d, false);
+        return evaluate(ids, x, nullptr, &d, false);
+    }
+    energy::BatchMatrix eval_vjp_batch(std::span<const int> ids, const energy::BatchMatrix& x,
+                                       const energy::BatchMatrix& d) const override {
+        check_batch_product(ids, x, d, true);
+        return evaluate(ids, x, nullptr, &d, true);
+    }
     energy::BatchMatrix eval_batch(std::span<const int> ids, const energy::BatchMatrix& coefficients,
                                    energy::BatchMatrix* jacobian) const override {
+        return evaluate(ids, coefficients, jacobian);
+    }
+    energy::BatchMatrix evaluate(std::span<const int> ids, const energy::BatchMatrix& coefficients,
+                                 energy::BatchMatrix* jacobian, const energy::BatchMatrix* direction = nullptr,
+                                 bool transpose = false) const {
         energy::BatchMatrix values(ids.size(), output_size);
+        energy::BatchMatrix product =
+            energy::BatchMatrix::Zero(direction ? ids.size() : 0, transpose ? input_size_ : output_size);
         if (jacobian)
             jacobian->resize(output_size * ids.size(), input_size_);
 
@@ -106,7 +123,7 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
         Eigen::MatrixXd dP_dtheta;
         Eigen::Matrix<double, 81, Eigen::Dynamic> dP_dFp;
         VolumetricMaterialBatchOutputs out{nullptr, &P};
-        if (jacobian) {
+        if (jacobian || direction) {
             if constexpr (Input == ForceInput::Plastic)
                 out.d2W_dF_dFp = &dP_dFp;
             else
@@ -117,14 +134,44 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
         for (std::size_t b = 0; b < ids.size(); ++b)
             eval_row(values, jacobian, b, ids[b], [&](int q) {
                 const Eigen::Index point = static_cast<Eigen::Index>(b) * Q::num_points + q;
-                const double* mixed = !jacobian                      ? nullptr
+                const double* mixed = !(jacobian || direction)       ? nullptr
                                       : Input == ForceInput::Plastic ? dP_dFp.col(point).data()
                                                                      : dP_dtheta.col(point).data();
                 return std::pair{Eigen::Map<const Eigen::Matrix3d>(P.col(point).data()),
                                  Eigen::Map<const Eigen::MatrixXd>(mixed, 9, mixed ? input_size_ : 0)};
             });
 
-        return values;
+        if (direction) {
+            if (!values.allFinite())
+                throw std::domain_error("VolumetricFemForceResponse: non-finite force");
+            for (std::size_t b = 0; b < ids.size(); ++b) {
+                const int e = ids[b];
+                Vec d = direction->row(b).transpose();
+                // All supported DOF transforms are diagonal, so T and T^T coincide.
+                if (transpose)
+                    transforms_[e].pullback_response_into(StridedVecRef(d), nullptr);
+                Vec result = Vec::Zero(transpose ? input_size_ : output_size);
+                for (int q = 0; q < Q::num_points; ++q) {
+                    const auto point = b * Q::num_points + q;
+                    const double* ptr =
+                        Input == ForceInput::Plastic ? dP_dFp.col(point).data() : dP_dtheta.col(point).data();
+                    const Eigen::Map<const Eigen::MatrixXd> M(ptr, 9, input_size_);
+                    const auto& B = deformation_jacobians_[e][q];
+                    const double w = integration_[e].point(q).w_dV;
+                    if (transpose) {
+                        const Vec a = B * d;
+                        result.noalias() += w * M.transpose() * a;
+                    } else {
+                        const Vec a = M * d;
+                        result.noalias() += w * B.transpose() * a;
+                    }
+                }
+                if (!transpose)
+                    transforms_[e].pullback_response_into(StridedVecRef(result), nullptr);
+                product.row(b) = result.transpose();
+            }
+        }
+        return direction ? product : values;
     }
 
     // point_material(q) -> (dW/dF, d vec(dW/dF)/d active); the second is read only for Jacobians.
