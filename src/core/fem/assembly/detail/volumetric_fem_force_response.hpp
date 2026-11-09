@@ -7,7 +7,6 @@
 #include "litepgo/fem/assembly/detail/batch_views.hpp"
 #include "litepgo/fem/integration/volumetric_element.hpp"
 #include "litepgo/fem/material/volumetric/volumetric_material_batch.hpp"
-#include "litepgo/fem/material/volumetric/volumetric_material_inputs.hpp"
 #include "litepgo/fem/response/deformation_gradient_sampling_response.hpp"
 #include <array>
 #include <concepts>
@@ -91,13 +90,16 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
         batch.Fp.resize(9, points);
         batch.theta.resize(material_->num_parameters(), points);
         for (std::size_t b = 0; b < ids.size(); ++b) {
-            const Vec active = coefficients.row(b).transpose();
             for (int q = 0; q < Q::num_points; ++q) {
-                const auto inputs = material_inputs(ids[b], q, active);
                 const Eigen::Index point = static_cast<Eigen::Index>(b) * Q::num_points + q;
-                batch.F.col(point) = inputs.F.reshaped();
-                batch.Fp.col(point) = inputs.Fp.reshaped();
-                batch.theta.col(point) = inputs.theta;
+                batch.F.col(point) = deformation_[ids[b]][q].reshaped();
+                if constexpr (Input == ForceInput::Plastic) {
+                    batch.Fp.col(point) = coefficients.row(b).transpose();
+                    batch.theta.col(point) = fixed_[ids[b]][q];
+                } else {
+                    batch.Fp.col(point) = fixed_[ids[b]][q];
+                    batch.theta.col(point) = coefficients.row(b).transpose();
+                }
             }
         }
         Eigen::Matrix<double, 9, Eigen::Dynamic> P;
@@ -123,19 +125,6 @@ class VolumetricFemForceResponse final : public energy::MeshResponse {
             });
 
         return values;
-    }
-
-    VolumetricMaterialInputs material_inputs(int e, int q, const Vec& active) const {
-        VolumetricMaterialInputs inputs;
-        inputs.F = deformation_[e][q];
-        if constexpr (Input == ForceInput::Plastic) {
-            inputs.Fp = active.reshaped(3, 3);
-            inputs.theta = fixed_[e][q];
-        } else {
-            inputs.Fp = fixed_[e][q].reshaped(3, 3);
-            inputs.theta = active;
-        }
-        return inputs;
     }
 
     // point_material(q) -> (dW/dF, d vec(dW/dF)/d active); the second is read only for Jacobians.
