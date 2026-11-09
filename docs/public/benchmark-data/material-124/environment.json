@@ -1,0 +1,18 @@
+{
+  "baseline": "cfa5721",
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "order": [
+    "before",
+    "after",
+    "after",
+    "before"
+  ],
+  "samples_per_process": 20,
+  "shell_faces": 800,
+  "volume_elements": 1296,
+  "notes": "Same Release build, Python environment and native material laws. Timings exclude construction; no concurrent builds or tests. Changes 1, 2 and 4 measured together.",
+  "binary_sha256": {
+    "before": "bb5003d4bf4df092db3fd641baa30a9e2bfd880aa31af443920759dc65a72559",
+    "after": "e2efecf63bc1a4f75f48f768ff6eb534c2e6fbb2a2109a008cf01e8352eaedef"
+  }
+}

@@ -6,6 +6,7 @@ and recorded results are in [the benchmark documentation](../docs/benchmarks/ind
 | Driver | Purpose |
 | --- | --- |
 | `torch_material.py` | CPU float64 material, assembled FEM, and equilibrium backward; isolated cases, correctness checks, timings, and peak RSS |
+| `shell_batch_benchmark.py` | Native shell value/gradient/Hessian batch/thread sweep with numerical consistency checks |
 | `mesh_batch_benchmark.py` | Native FEM batch/thread sweep; CSV on stdout |
 | `contact_benchmark.py` | Native/IPCTK contact comparison; builds the C++ driver unless `--skip-build` |
 | `contact_scaling.py` | Validated structured mesh generation and contact mesh/thread scaling |

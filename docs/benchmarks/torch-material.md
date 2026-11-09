@@ -136,6 +136,49 @@ the historical measurements. The current batched implementation below eliminates
 module replacement and the lock entirely. Invalid exploratory
 results are excluded from the recorded baseline.
 
+## Force packing, adapter reuse and shell optimization
+
+Measured on 2026-11-10 against `cfa5721`, after first recording an unmodified
+shell baseline. The new `benchmarks/shell_batch_benchmark.py` constructs a curved
+800-triangle patch and checks value, gradient and Hessian consistency across
+batch sizes 1/256 and TBB limits 1/4. Each case warms up before 20 timed calls.
+The volume comparison uses the existing native TetP1 benchmark at 1,296 elements,
+one thread and batch sizes 1/256.
+
+Changes: volume force responses fill batch inputs directly; both pointwise
+adapters reuse a call-local input object's parameter storage across points;
+shell singleton batches skip nested scheduling and integration reads material
+stress/tangent through views. Public interfaces, material checks and multi-element
+cancellation isolation are preserved. No shared scratch buffer was introduced.
+
+The saved baseline binary and rebuilt binary ran in before/after/after/before
+order, with 40 samples per version and operation. The combined changes passed
+**505/505 CTest entries**. This targeted comparison did not rerun the full scan
+and does not isolate individual changes' contributions.
+
+[Original shell baseline](/benchmark-data/material-124/shell-before.jsonl.txt),
+[all alternating samples](/benchmark-data/material-124/paired.jsonl.txt),
+[complete comparison CSV](/benchmark-data/material-124/comparison.csv),
+[environment and binary hashes](/benchmark-data/material-124/environment.json).
+
+Selected single-thread medians in milliseconds; negative change means faster:
+
+| Workload | Batch | Before | After | Change |
+| --- | ---: | ---: | ---: | ---: |
+| shell value | 1 | 0.634 | 0.372 | -41.3% |
+| shell gradient | 1 | 0.919 | 0.657 | -28.5% |
+| shell hessian | 1 | 3.602 | 3.186 | -11.6% |
+| shell value | 256 | 0.266 | 0.252 | -5.4% |
+| shell gradient | 256 | 0.563 | 0.527 | -6.4% |
+| shell hessian | 256 | 3.288 | 3.162 | -3.8% |
+| volume parameter_vjp | 1 | 0.727 | 0.678 | -6.7% |
+| volume parameter_vjp | 256 | 0.480 | 0.406 | -15.4% |
+
+Four-thread shell timings improved by 25–58% at batch 1 and 11–18% at batch 256
+in this run. Desktop variability still applies. The volume VJP improvement does
+not prove all regression relative to the original pre-migration interface is gone;
+the baseline here already includes the previous energy optimization.
+
 ## Native batch-path optimization
 
 On 2026-11-10, the migrated code was committed before optimization as `915bb9d`

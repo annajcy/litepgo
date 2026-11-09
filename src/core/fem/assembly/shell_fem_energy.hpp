@@ -79,14 +79,19 @@ class ShellFemEnergy final : public energy::MeshEnergy {
         ShellMaterialBatchOutputs out{&W, (gradients || hessians) ? &dW : nullptr, hessians ? &d2W : nullptr};
         material_->eval(batch, out);
         detail::check_shell_batch_outputs(out, count, material_->num_parameters());
-        tbb::parallel_for(Eigen::Index(0), count, [&](Eigen::Index b) {
+        auto integrate_row = [&](Eigen::Index b) {
             auto g = detail::batch_vector_view(gradients, b);
             auto H = detail::batch_matrix_view(hessians, b, n);
             values[b] = detail::finish_shell_element(
-                states[b], W[b], out.dW_dab ? Eigen::VectorXd(dW.col(b)) : Eigen::VectorXd(),
-                hessians ? Eigen::MatrixXd(d2W.col(b).reshaped(6, 6)) : Eigen::MatrixXd(), g ? &*g : nullptr,
-                H ? &*H : nullptr);
-        });
+                states[b], W[b], Eigen::Map<const Vec>(out.dW_dab ? dW.col(b).data() : nullptr, out.dW_dab ? 6 : 0),
+                Eigen::Map<const Eigen::MatrixXd>(hessians ? d2W.col(b).data() : nullptr, hessians ? 6 : 0,
+                                                  hessians ? 6 : 0),
+                g ? &*g : nullptr, H ? &*H : nullptr);
+        };
+        if (count == 1)
+            integrate_row(0);
+        else
+            tbb::parallel_for(Eigen::Index(0), count, integrate_row);
 
         return values;
     }
@@ -94,19 +99,21 @@ class ShellFemEnergy final : public energy::MeshEnergy {
                                                   bool need_gradient, bool need_hessian) const {
         std::vector<detail::ShellElementState> result(ids.size());
         const Eigen::Index n = inputs.cols();
-        // An outer batch failure must not cancel initialization of inputs consumed below.
-        tbb::task_group_context context(tbb::task_group_context::isolated);
-        tbb::parallel_for(
-            std::size_t(0), ids.size(),
-            [&](std::size_t b) {
-                const auto index = static_cast<std::size_t>(ids[b]);
-                const auto& rest = rest_data_[index];
-                const Eigen::MatrixXd u = n == 0 ? Eigen::MatrixXd::Zero(rest.X_local.rows(), 3)
-                                                 : Eigen::MatrixXd(inputs.row(b).reshaped<Eigen::RowMajor>(n / 3, 3));
-                result[b] = detail::shell_element_state(rest, u, thickness_[index], theta_[index],
-                                                        material_->num_parameters(), need_gradient, need_hessian);
-            },
-            context);
+        auto gather_row = [&](std::size_t b) {
+            const auto index = static_cast<std::size_t>(ids[b]);
+            const auto& rest = rest_data_[index];
+            const Eigen::MatrixXd u = n == 0 ? Eigen::MatrixXd::Zero(rest.X_local.rows(), 3)
+                                             : Eigen::MatrixXd(inputs.row(b).reshaped<Eigen::RowMajor>(n / 3, 3));
+            result[b] = detail::shell_element_state(rest, u, thickness_[index], theta_[index],
+                                                    material_->num_parameters(), need_gradient, need_hessian);
+        };
+        if (ids.size() == 1) {
+            gather_row(0);
+        } else {
+            // Outer cancellation must not leave partially initialized states.
+            tbb::task_group_context context(tbb::task_group_context::isolated);
+            tbb::parallel_for(std::size_t(0), ids.size(), gather_row, context);
+        }
         return result;
     }
     // Throws when the material rejects these displacements (zero columns mean the rest pose).
