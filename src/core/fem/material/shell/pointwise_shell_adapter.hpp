@@ -22,13 +22,15 @@ template <class Material> class PointwiseShellAdapter final : public ShellBatchM
             out.d2W_dab_dtheta->resize(6 * num_parameters(), n);
         if (out.d2W_dab_dabarbbar)
             out.d2W_dab_dabarbbar->resize(36, n);
+        ShellMaterialInputs input;
+        input.theta.resize(num_parameters());
         for (Eigen::Index p = 0; p < n; ++p) {
-            const ShellMaterialInputs input{unpack(in.ab.col(p).head<3>()),
-                                            unpack(in.ab.col(p).tail<3>()),
-                                            unpack(in.ab_bar.col(p).head<3>()),
-                                            unpack(in.ab_bar.col(p).tail<3>()),
-                                            in.thickness[p],
-                                            in.theta.col(p)};
+            input.a = unpack(in.ab.col(p).head<3>());
+            input.b = unpack(in.ab.col(p).tail<3>());
+            input.a_bar = unpack(in.ab_bar.col(p).head<3>());
+            input.b_bar = unpack(in.ab_bar.col(p).tail<3>());
+            input.thickness = in.thickness[p];
+            input.theta = in.theta.col(p);
             if (out.W)
                 (*out.W)[p] = Material::eval_W(input);
             if (out.dW_dab)

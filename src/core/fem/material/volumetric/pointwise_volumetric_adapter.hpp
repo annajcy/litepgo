@@ -23,8 +23,12 @@ template <class Material> class PointwiseVolumetricAdapter final : public Volume
             out.d2W_dF_dtheta->resize(9 * num_parameters(), n);
         if (out.d2W_dF_dFp)
             out.d2W_dF_dFp->resize(81, n);
+        VolumetricMaterialInputs input;
+        input.theta.resize(num_parameters());
         for (Eigen::Index p = 0; p < n; ++p) {
-            const VolumetricMaterialInputs input = point(in, p);
+            input.F = in.F.col(p).reshaped(3, 3);
+            input.Fp = in.Fp.col(p).reshaped(3, 3);
+            input.theta = in.theta.col(p);
             if (out.W)
                 (*out.W)[p] = Material::eval_W(input);
             if (out.dW_dF)
