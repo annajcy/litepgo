@@ -50,12 +50,14 @@ class EquilibriumEvaluation final : public energy::ResponseEvaluation {
         if (!force || force->num_inputs() != num_inputs() || force->num_outputs() != num_outputs())
             throw std::invalid_argument("StaticEquilibriumResponse: incompatible force response");
         const SpMat& exact = energy::detail::EvaluationAccess::hessian(*potential_evaluation_);
-        const SpMat& previous_hessian =
-            options_.project_hessian ? energy::detail::EvaluationAccess::projected_hessian(*potential_evaluation_)
-                                     : exact;
-        const dof::ReducedMatrix reduced(fixed_, exact), previous(fixed_, previous_hessian);
+        const dof::ReducedMatrix reduced(fixed_, exact);
         K_ = reduced.matrix();
-        const bool same = linalg::same_pattern(K_, previous.matrix());
+        bool same = true;
+        if (options_.project_hessian) {
+            const auto& projected = energy::detail::EvaluationAccess::projected_hessian(*potential_evaluation_);
+            const dof::ReducedMatrix previous(fixed_, projected);
+            same = linalg::same_pattern(K_, previous.matrix());
+        }
         // Retry safely after failures: numeric factorization may have changed solver state.
         if ((!same && !solver_.analyze(K_)) || !solver_.factorize(K_))
             throw std::domain_error("StaticEquilibriumResponse: singular equilibrium stiffness");

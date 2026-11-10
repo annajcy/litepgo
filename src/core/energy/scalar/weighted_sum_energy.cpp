@@ -76,6 +76,7 @@ class WeightedSumEnergy::Evaluation final : public EnergyEvaluation {
   public:
     Evaluation(const WeightedSumEnergy& model, const ConstVecRef& x, bool borrow_input)
         : EnergyEvaluation(model, x, borrow_input), model_(model) {
+        children_.reserve(model_.terms_.size());
         for (const auto& term : model_.terms_)
             children_.push_back(detail::EvaluationAccess::evaluate_child(*term.energy, *this));
     }

@@ -142,3 +142,34 @@ def test_elementwise_retains_each_equilibrium_evaluation():
     np.testing.assert_allclose(state.value, np.tile(J @ p, 2))
     np.testing.assert_allclose(state.vjp(np.ones(6)), 2 * J.T @ np.ones(3))
     assert calls == dict(energy=2, force=2)
+
+
+@pytest.mark.parametrize('project', [False, True])
+def test_equilibrium_backward_handles_different_projected_pattern(project):
+    K = np.array([[2., .5], [.5, 3.]])
+
+    class Potential(energy.FixedPatternEnergy):
+        def __init__(self, p):
+            super().__init__(sp.csc_matrix(K))
+            self.p = p.copy()
+
+        def eval_values(self, x, gradient, hessian):
+            return (.5 * x @ K @ x - self.p @ x,
+                    K @ x - self.p if gradient else None,
+                    K if hessian else None)
+
+        def eval_projected_values(self, x, gradient, hessian):
+            value, g, _ = self.eval_values(x, gradient, False)
+            return value, g, sp.eye(2, format='csc') if hessian else None
+
+    eq = solver.StaticEquilibriumResponse(
+        2, dof.DofReduction(2, []), np.zeros(2),
+        solver.NewtonOptions(gradient_tolerance=1e-12, project_hessian=project),
+        Potential, lambda u: energy.AffineResponse(-sp.eye(2, format='csc'), K @ u))
+    state = eq.evaluate(np.zeros(2))
+    np.testing.assert_allclose(state.value, np.zeros(2))
+    direction = np.array([1., 2.])
+    expected = np.linalg.solve(K, direction)
+    np.testing.assert_allclose(state.jvp(direction), expected)
+    np.testing.assert_allclose(state.vjp(direction), expected)
+    np.testing.assert_allclose(state.jacobian().toarray(), np.linalg.inv(K))
