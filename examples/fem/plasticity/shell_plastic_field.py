@@ -3,6 +3,7 @@
 Run from the repository root after building litepgo:
     uv run --no-sync python examples/fem/plasticity/shell_plastic_field.py
 """
+from litepgo.solver import AbsoluteConvergence
 
 import argparse
 from pathlib import Path
@@ -48,7 +49,6 @@ def main():
     fixed = dof.DofReduction(mapping.num_dofs, fixed_dofs)
     u = np.zeros(mapping.num_dofs)
     options = solver.NewtonOptions()
-    options.gradient_tolerance = 1e-9
     options.max_iterations = 100
     args.output.mkdir(parents=True, exist_ok=True)
     mesh.write_obj(args.output / "rest.obj", mesh.TriangleMesh(nodes, topology))
@@ -62,7 +62,8 @@ def main():
             mapping, rest, thickness, theta, plastic
         )
         result = solver.newton_solve(
-            elastic, fixed, u, options, linalg.AutoSparseSolver()
+            elastic, fixed, u, options, linalg.AutoSparseSolver(),
+            convergence=AbsoluteConvergence(1e-9),
         )
         if result.status != solver.NewtonStatus.Converged:
             raise RuntimeError(f"Static equilibrium failed at step {step}")

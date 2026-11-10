@@ -1,3 +1,4 @@
+from litepgo.solver import AbsoluteConvergence
 import gc
 import weakref
 import numpy as np
@@ -19,7 +20,7 @@ def problem(kind=False):
         calls['force'] += 1
         return energy.AffineResponse(-A, K @ u)
     eq = solver.StaticEquilibriumResponse(2, dof.DofReduction(3, []), np.zeros(3),
-        solver.NewtonOptions(gradient_tolerance=1e-12, project_hessian=kind), make_energy, make_force)
+        solver.NewtonOptions(project_hessian=kind), make_energy, make_force, convergence=AbsoluteConvergence(1e-12))
     return eq, calls, np.linalg.solve(K.toarray(), A)
 
 
@@ -79,7 +80,7 @@ def test_evaluation_dimensions_and_finite_values():
             with pytest.raises(ValueError): product(w)
 
 @pytest.mark.parametrize('kind', [False, True])
-def test_converged_hessian_is_reused_only_when_exact(kind):
+def test_final_hessian_is_deferred_until_sensitivity(kind):
     requests = []
     class Potential(energy.FixedPatternEnergy):
         def __init__(self, p):
@@ -96,13 +97,13 @@ def test_converged_hessian_is_reused_only_when_exact(kind):
                     x - self.p if gradient else None,
                     sp.eye(2, format='csc') if need_hessian else None)
     eq = solver.StaticEquilibriumResponse(2, dof.DofReduction(2, []), np.zeros(2),
-        solver.NewtonOptions(gradient_tolerance=1e-12, project_hessian=kind), Potential,
-        lambda u: energy.AffineResponse(-sp.eye(2, format='csc'), u))
+        solver.NewtonOptions(project_hessian=kind), Potential,
+        lambda u: energy.AffineResponse(-sp.eye(2, format='csc'), u), convergence=AbsoluteConvergence(1e-12))
     state = eq.evaluate(np.array([.3, .4]))
     np.testing.assert_allclose(state.value, [.3, .4])
-    assert requests == ["projected" if kind else "exact"] * 2
+    assert requests == ["projected" if kind else "exact"]
     state.vjp(np.ones(2))
-    expected = ["projected" if kind else "exact"] * 2 + (["exact"] if kind else [])
+    expected = ["projected" if kind else "exact"] + ["exact"]
     assert requests == expected
     state.jvp(np.ones(2)); state.jacobian()
     assert requests == expected
@@ -164,8 +165,8 @@ def test_equilibrium_backward_handles_different_projected_pattern(project):
 
     eq = solver.StaticEquilibriumResponse(
         2, dof.DofReduction(2, []), np.zeros(2),
-        solver.NewtonOptions(gradient_tolerance=1e-12, project_hessian=project),
-        Potential, lambda u: energy.AffineResponse(-sp.eye(2, format='csc'), K @ u))
+        solver.NewtonOptions(project_hessian=project),
+        Potential, lambda u: energy.AffineResponse(-sp.eye(2, format='csc'), K @ u), convergence=AbsoluteConvergence(1e-12))
     state = eq.evaluate(np.zeros(2))
     np.testing.assert_allclose(state.value, np.zeros(2))
     direction = np.array([1., 2.])

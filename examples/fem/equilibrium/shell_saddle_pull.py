@@ -3,6 +3,7 @@
 Run from the repository root after building litepgo:
     uv run --no-sync python examples/fem/equilibrium/shell_saddle_pull.py
 """
+from litepgo.solver import AbsoluteConvergence
 
 import argparse
 import sys
@@ -92,10 +93,10 @@ def main():
     unconstrained = dof.DofReduction(elastic.num_dofs, [])
     initial = np.zeros(elastic.num_dofs)
     options = solver.NewtonOptions()
-    options.gradient_tolerance = 1e-8
     sparse_solver = linalg.AutoSparseSolver()
     result = solver.newton_solve(
-        potential, unconstrained, initial, options, sparse_solver
+        potential, unconstrained, initial, options, sparse_solver,
+        convergence=AbsoluteConvergence(1e-8),
     )
     converged = result.status == solver.NewtonStatus.Converged
     corner_gap = np.linalg.norm(

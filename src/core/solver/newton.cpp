@@ -10,6 +10,11 @@
 
 namespace litepgo::solver {
 
+AbsoluteConvergence::AbsoluteConvergence(double tolerance) : tolerance_(tolerance) {
+    if (!(tolerance >= 0.0) || !std::isfinite(tolerance))
+        throw std::invalid_argument("AbsoluteConvergence: tolerance must be finite and non-negative");
+}
+
 namespace {
 
 constexpr int max_diagonal_shifts = 10;
@@ -19,23 +24,18 @@ void check_arguments(const energy::Energy& energy, const dof::DofReduction& fixe
     if (fixed.num_dofs() != energy.num_dofs() || x0.size() != energy.num_dofs()) {
         throw std::invalid_argument("newton_solve: energy, fixed DOFs, and x0 must have the same DOF count");
     }
-    if (!(options.gradient_tolerance >= 0.0) || !std::isfinite(options.gradient_tolerance)) {
-        throw std::invalid_argument("newton_solve: gradient_tolerance must be set to a finite non-negative value");
-    }
     if (options.max_iterations < 0 || options.max_line_search_steps < 1) {
         throw std::invalid_argument("newton_solve: max_iterations must be >= 0 and max_line_search_steps >= 1");
     }
     if (!(options.line_search_shrink > 0.0 && options.line_search_shrink < 1.0)) {
         throw std::invalid_argument("newton_solve: line_search_shrink must lie in (0, 1)");
     }
+    if (!(options.precision_coordinate_scale > 0.0) || !std::isfinite(options.precision_coordinate_scale)) {
+        throw std::invalid_argument("newton_solve: precision_coordinate_scale must be finite and positive");
+    }
     if (!(options.max_coordinate_step > 0.0)) {
         throw std::invalid_argument("newton_solve: max_coordinate_step must be positive or infinity");
     }
-}
-
-// Termination: the free gradient's max-norm is within the tolerance.
-bool is_converged(const NewtonStep& step, const NewtonOptions& options) {
-    return step.gradient_norm <= options.gradient_tolerance;
 }
 
 // The linear system of a solve: the free block of the Hessian with its whole
@@ -76,6 +76,15 @@ class LinearSystem {
             matrix_->add_to_diagonal(shift);
             shift *= 10.0;
         }
+    }
+
+    double backward_error(const Vec& gradient, const Vec& direction) const {
+        const auto& H = matrix_->matrix();
+        const double norm = (H.cwiseAbs() * Vec::Ones(H.cols())).maxCoeff();
+        const double scale = norm * direction.cwiseAbs().maxCoeff() + gradient.cwiseAbs().maxCoeff();
+        if (!(scale > 0.0) || !std::isfinite(scale))
+            return std::numeric_limits<double>::infinity();
+        return (H * direction + gradient).cwiseAbs().maxCoeff() / scale;
     }
 
   private:
@@ -123,17 +132,21 @@ std::optional<double> line_search(const energy::Energy& energy, const Vec& x, co
 
 NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed, const ConstVecRef& x0,
                           const NewtonOptions& options, linalg::SparseSolver& solver,
+                          const ConvergenceCheck& convergence,
                           const std::function<void(const NewtonStep&)>& on_iteration,
                           std::shared_ptr<energy::EnergyEvaluation>* converged_evaluation) {
+    if (!convergence)
+        throw std::invalid_argument("newton_solve: convergence must be provided");
     check_arguments(energy, fixed, x0, options);
     NewtonResult result;
     result.x = x0;
     auto evaluation = energy.evaluate(result.x);
     evaluation->max_feasible_step(Vec::Zero(result.x.size()));
     if (fixed.num_free() == 0) {
-        result.status = NewtonStatus::Converged;
         result.energy = evaluation->value();
-        if (converged_evaluation)
+        const NewtonConvergenceState state{0, result.energy, 0.0, options.project_hessian};
+        result.status = convergence(state) ? NewtonStatus::Converged : NewtonStatus::NoDescentDirection;
+        if (converged_evaluation && result.status == NewtonStatus::Converged)
             *converged_evaluation = evaluation;
         return result;
     }
@@ -149,6 +162,9 @@ NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed
         result.energy = step.energy;
         result.gradient_norm = step.gradient_norm;
         result.iterations = step.iteration;
+        result.scaled_direction_norm = step.scaled_direction_norm;
+        result.linear_backward_error = step.linear_backward_error;
+        result.precision_stagnation_steps = step.precision_stagnation_steps;
         return result;
     };
 
@@ -158,22 +174,20 @@ NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed
     Vec direction = Vec::Zero(x.size()); // fixed entries stay zero
     Vec trial(x.size());
     LinearSystem system(fixed, solver);
+    int tiny_steps = 0;
+    double best_tiny_residual = std::numeric_limits<double>::infinity();
+    double previous_energy = std::numeric_limits<double>::quiet_NaN();
 
     for (int iteration = 0;; ++iteration) {
         NewtonStep step;
         step.iteration = iteration;
 
-        const SpMat& hessian = options.project_hessian
-                                   ? energy::detail::EvaluationAccess::projected_hessian(*evaluation)
-                                   : energy::detail::EvaluationAccess::hessian(*evaluation);
-        step.pattern_changed = !system.has_pattern(hessian);
-        if (step.pattern_changed)
-            system.rebuild(hessian);
-        step.energy = evaluation->value();
         gradient_free = fixed.reduce(energy::detail::EvaluationAccess::gradient(*evaluation));
+        step.energy = evaluation->value();
         step.gradient_norm = gradient_free.cwiseAbs().maxCoeff();
 
-        if (is_converged(step, options)) {
+        NewtonConvergenceState state{iteration, step.energy, step.gradient_norm, options.project_hessian};
+        if (convergence(state)) {
             if (converged_evaluation)
                 *converged_evaluation = evaluation;
             return finish(NewtonStatus::Converged, step);
@@ -182,6 +196,15 @@ NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed
             return finish(NewtonStatus::MaxIterations, step);
         }
 
+        if (step.gradient_norm == 0.0) {
+            return finish(NewtonStatus::NoDescentDirection, step);
+        }
+        const SpMat& hessian = options.project_hessian
+                                   ? energy::detail::EvaluationAccess::projected_hessian(*evaluation)
+                                   : energy::detail::EvaluationAccess::hessian(*evaluation);
+        step.pattern_changed = !system.has_pattern(hessian);
+        if (step.pattern_changed)
+            system.rebuild(hessian);
         const std::optional<int> shifts = system.descent_direction(hessian, gradient_free, direction_free);
         step.diagonal_shifts = shifts.value_or(max_diagonal_shifts);
         if (!shifts) {
@@ -189,12 +212,49 @@ NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed
         }
         fixed.expand(direction_free, direction);
 
+        state.newton_correction_norm = direction_free.cwiseAbs().maxCoeff();
+        state.diagonal_shifts = *shifts;
+        state.linear_backward_error = system.backward_error(gradient_free, direction_free);
+        step.linear_backward_error = *state.linear_backward_error;
+        if (convergence(state)) {
+            if (converged_evaluation)
+                *converged_evaluation = evaluation;
+            return finish(NewtonStatus::Converged, step);
+        }
+        bool reliable_tiny_direction = false;
+        if (options.detect_precision_stagnation && !options.project_hessian && *shifts == 0) {
+            step.scaled_direction_norm =
+                (direction.array().abs() / x.array().abs().max(options.precision_coordinate_scale)).maxCoeff();
+            reliable_tiny_direction = step.scaled_direction_norm <= 128 * std::numeric_limits<double>::epsilon() &&
+                                      step.linear_backward_error <= 1e-12;
+        }
+
         std::shared_ptr<energy::EnergyEvaluation> accepted;
         const std::optional<double> alpha =
             line_search(energy, x, direction, options, trial, step, evaluation, accepted);
         if (!alpha) {
+            // A full feasible correction cannot move any coordinate; shrinking must not trigger this case.
+            if (reliable_tiny_direction && step.feasible_step == 1.0 && Vec(x + direction) == x) {
+                step.precision_stagnation_steps = tiny_steps + 1;
+                return finish(NewtonStatus::PrecisionStagnation, step);
+            }
             return finish(NewtonStatus::StepTooSmall, step);
         }
+        const double energy_noise = 16 * std::numeric_limits<double>::epsilon() * std::max(1.0, std::abs(step.energy));
+        if (reliable_tiny_direction && *alpha == 1.0 && std::abs(step.energy - previous_energy) <= energy_noise) {
+            // Any new best residual restarts the window; steadily improving tiny steps must continue.
+            if (step.gradient_norm < best_tiny_residual) {
+                tiny_steps = 0;
+                best_tiny_residual = step.gradient_norm;
+            }
+            step.precision_stagnation_steps = ++tiny_steps;
+            if (tiny_steps >= 3)
+                return finish(NewtonStatus::PrecisionStagnation, step);
+        } else {
+            tiny_steps = 0;
+            best_tiny_residual = std::numeric_limits<double>::infinity();
+        }
+        previous_energy = step.energy;
         step.step = *alpha;
         report(step);
         x = trial;

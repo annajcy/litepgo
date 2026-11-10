@@ -3,6 +3,7 @@
 Run from the repository root after building litepgo:
     uv run --no-sync python examples/fem/plasticity/hex_hermite_plastic_twist.py
 """
+from litepgo.solver import AbsoluteConvergence
 
 from litepgo.energy import AffineResponse
 import argparse
@@ -126,10 +127,9 @@ def main():
         fixed = dof.DofReduction(elastic.num_dofs, fixed_dofs)
         initial = np.zeros(elastic.num_dofs)
         options = solver.NewtonOptions()
-        options.gradient_tolerance = 1e-8
         options.max_iterations = 200
         sparse_solver = linalg.AutoSparseSolver()
-        result = solver.newton_solve(elastic, fixed, initial, options, sparse_solver)
+        result = solver.newton_solve(elastic, fixed, initial, options, sparse_solver, convergence=AbsoluteConvergence(1e-8))
         converged = converged and result.status == solver.NewtonStatus.Converged
         # The top face's twist about the axis, from its vertices' summed in-plane rotation.
         r_top = (rest_nodes[top] - center)[:, :2]

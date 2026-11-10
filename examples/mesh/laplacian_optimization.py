@@ -3,6 +3,7 @@
 Run from the repository root after building litepgo:
     uv run --no-sync python examples/mesh/laplacian_optimization.py
 """
+from litepgo.solver import AbsoluteConvergence
 
 import argparse
 from pathlib import Path
@@ -143,7 +144,7 @@ def main():
         for i in range(1, n - 1):
             for j in range(1, n - 1):
                 noisy[i * n + j, 2] = 0.15 * np.sin(0.7 * i) * np.sin(1.1 * j)
-    options = solver.NewtonOptions(gradient_tolerance=1e-10)
+    options = solver.NewtonOptions()
     smooth_energy = EdgeSmoothingEnergy(edge_map, rest_edge_vectors)
     boundary_dofs = (3 * np.array(boundary)[:, None] + np.arange(3)).ravel()
     # Solve only the free coordinates; prescribed coordinates retain their initial values.
@@ -152,6 +153,7 @@ def main():
         dof.DofReduction(rest.size, boundary_dofs.tolist()),
         noisy.ravel(),
         options,
+        convergence=AbsoluteConvergence(1e-10),
     )
     assert smooth.status == solver.NewtonStatus.Converged
     np.testing.assert_allclose(smooth.x, rest.ravel(), atol=1e-9, rtol=0)
@@ -175,6 +177,7 @@ def main():
         dof.DofReduction(rest.size, handle_dofs.tolist()),
         initial.ravel(),
         options,
+        convergence=AbsoluteConvergence(1e-10),
     )
     assert edited.status == solver.NewtonStatus.Converged
     np.testing.assert_array_equal(edited.x[handle_dofs], initial.ravel()[handle_dofs])

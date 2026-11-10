@@ -1,3 +1,4 @@
+from litepgo.solver import AbsoluteConvergence
 import runpy
 from pathlib import Path
 import numpy as np
@@ -57,7 +58,8 @@ def test_mesh_energy_subclass_assembly_and_solution():
         potential,
         dof.DofReduction(4, [0, 3]),
         initial,
-        solver.NewtonOptions(gradient_tolerance=1e-10),
+        solver.NewtonOptions(),
+        convergence=AbsoluteConvergence(1e-10),
     )
     assert result.status == solver.NewtonStatus.Converged
     # Springs in series have equal tension; extension is distributed as force/k.

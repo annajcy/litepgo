@@ -131,11 +131,11 @@ int main(int argc, char** argv) {
     for (int i = 1; i < n - 1; ++i)
         for (int j = 1; j < n - 1; ++j)
             noisy[3 * (i * n + j) + 2] = 0.15 * std::sin(0.7 * i) * std::sin(1.1 * j);
-    const solver::NewtonOptions options{.gradient_tolerance = 1e-10};
+    const solver::NewtonOptions options;
     linalg::AutoSparseSolver linear_solver;
     // Solve only the free coordinates; prescribed coordinates retain their initial values.
     const auto smooth = solver::newton_solve(smooth_energy, dof::DofReduction(3 * vertices, boundary_dofs), noisy,
-                                             options, linear_solver);
+                                             options, linear_solver, litepgo::solver::AbsoluteConvergence(1e-10));
     if (smooth.status != solver::NewtonStatus::Converged || (smooth.x - rest).lpNorm<Eigen::Infinity>() > 1e-9 ||
         !(smooth.energy < smooth_energy.evaluate(noisy)->value()))
         throw std::runtime_error("Smoothing check failed");
@@ -148,7 +148,7 @@ int main(int argc, char** argv) {
     for (int i = 0; i < n; ++i)
         initial[3 * (i * n + n - 1) + 2] = 0.5;
     const auto edited = solver::newton_solve(edit_energy, dof::DofReduction(3 * vertices, handle_dofs), initial,
-                                             options, linear_solver);
+                                             options, linear_solver, litepgo::solver::AbsoluteConvergence(1e-10));
     const double before = std::sqrt(2. * edit_energy.evaluate(initial)->value()),
                  after = std::sqrt(2. * edit_energy.evaluate(edited.x)->value());
     if (edited.status != solver::NewtonStatus::Converged || !(after < before) ||

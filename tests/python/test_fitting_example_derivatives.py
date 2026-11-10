@@ -1,4 +1,5 @@
 """Numerical self-checks live here, keeping the runnable examples focused on fitting."""
+from litepgo.solver import AbsoluteConvergence
 
 from functools import partial
 from pathlib import Path
@@ -88,9 +89,10 @@ def test_volume_material_reaction_scaling_and_derivatives():
             2,
             problem.fixed,
             initial,
-            solver.NewtonOptions(gradient_tolerance=1e-10, max_iterations=100),
+            solver.NewtonOptions(max_iterations=100),
             problem.make_energy,
             problem.make_response,
+            convergence=AbsoluteConvergence(1e-10),
         )
         u = equilibrium.evaluate(truth).value
         np.testing.assert_array_equal(

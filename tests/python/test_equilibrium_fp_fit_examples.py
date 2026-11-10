@@ -1,3 +1,4 @@
+from litepgo.solver import AbsoluteConvergence
 import subprocess
 import sys
 from pathlib import Path
@@ -99,12 +100,10 @@ def test_plastic_equilibrium_derivatives_and_boundary_conditions(plastic_experim
                 len(truth),
                 problem.fixed,
                 initial,
-                solver.NewtonOptions(
-                    gradient_tolerance=1e-11 if len(truth) == 3 else 1e-13,
-                    max_iterations=100,
-                ),
+                solver.NewtonOptions(max_iterations=100),
                 make_energy,
                 make_response,
+                convergence=AbsoluteConvergence(1e-11 if len(truth) == 3 else 1e-13),
             )
             displacement = equilibrium.evaluate(p).value
             gradient = make_energy(p).evaluate(displacement).gradient()

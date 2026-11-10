@@ -3,6 +3,7 @@
 Run: uv run --no-sync python examples/fem/fitting/torch_equilibrium_response.py
 The adjacent torch_neohookean.py supplies the density and two-tet problem.
 """
+from litepgo.solver import AbsoluteConvergence
 
 from litepgo.energy import AffineResponse
 import numpy as np
@@ -48,9 +49,10 @@ def make_equilibrium(kind, use_torch=True):
         len(parameters),
         fixed,
         initial,
-        solver.NewtonOptions(gradient_tolerance=1e-12, max_iterations=100),
+        solver.NewtonOptions(max_iterations=100),
         make_energy,
         make_response,
+        convergence=AbsoluteConvergence(1e-12),
     )
     return equilibrium, parameters
 

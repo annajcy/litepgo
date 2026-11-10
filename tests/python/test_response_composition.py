@@ -1,3 +1,4 @@
+from litepgo.solver import AbsoluteConvergence
 from litepgo.energy import AffineResponse
 import gc
 import weakref
@@ -205,9 +206,10 @@ def test_fem_parameterizations_match_energy_and_equilibrium(plastic, shared):
         parameter_map.num_dofs,
         dof.DofReduction(len(u), list(range(12))),
         u,
-        solver.NewtonOptions(gradient_tolerance=1e-10, max_iterations=100),
+        solver.NewtonOptions(max_iterations=100),
         make_energy,
         make_response,
+        convergence=AbsoluteConvergence(1e-10),
     )
     check_products(eq, p)
 

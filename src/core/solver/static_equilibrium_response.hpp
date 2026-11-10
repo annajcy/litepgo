@@ -17,7 +17,7 @@ class StaticEquilibriumResponse : public energy::Response {
     using MakeEnergy = std::function<std::shared_ptr<energy::Energy>(const Vec&)>;
     using MakeResponse = std::function<std::shared_ptr<energy::Response>(const Vec&)>;
     StaticEquilibriumResponse(int num_parameters, dof::DofReduction fixed, Vec initial, NewtonOptions options,
-                              MakeEnergy make_energy, MakeResponse make_response);
+                              MakeEnergy make_energy, MakeResponse make_response, ConvergenceCheck convergence);
 
     int num_inputs() const noexcept override {
         return parameters_;
@@ -32,6 +32,7 @@ class StaticEquilibriumResponse : public energy::Response {
     dof::DofReduction fixed_;
     Vec initial_;
     NewtonOptions options_;
+    ConvergenceCheck convergence_;
     MakeEnergy make_energy_;
     MakeResponse make_response_;
 };

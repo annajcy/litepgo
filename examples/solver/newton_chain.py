@@ -3,6 +3,7 @@
 Run from the repository root after building litepgo:
     uv run --no-sync python examples/solver/newton_chain.py
 """
+from litepgo.solver import AbsoluteConvergence
 
 import numpy as np
 import scipy.sparse as sp
@@ -32,8 +33,9 @@ def main():
         energy,
         fixed,
         initial,
-        NewtonOptions(gradient_tolerance=1e-10),
+        NewtonOptions(),
         on_iteration=report,
+        convergence=AbsoluteConvergence(1e-10),
     )
     assert result.status == NewtonStatus.Converged
     np.testing.assert_array_equal(result.x[[0, -1]], initial[[0, -1]])

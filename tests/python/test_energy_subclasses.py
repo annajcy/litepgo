@@ -1,3 +1,4 @@
+from litepgo.solver import AbsoluteConvergence
 import gc
 import weakref
 import numpy as np
@@ -49,7 +50,7 @@ def test_fixed_subclass_derivatives_newton_and_lifetime():
     q.evaluate(np.zeros(2)).projected_hessian()
     assert q.calls[-1][3] == True
     result = solver.newton_solve(q, dof.DofReduction(2, []), np.zeros(2),
-                                 solver.NewtonOptions(gradient_tolerance=1e-10))
+                                 solver.NewtonOptions(), convergence=AbsoluteConvergence(1e-10))
     assert result.status == solver.NewtonStatus.Converged and q.steps > 0
     np.testing.assert_allclose(result.x, [1., 2.], atol=1e-10)
     for x, snapshot, _, _ in q.calls:
@@ -73,7 +74,7 @@ def test_dynamic_pattern_and_newton():
 
     assert q.evaluate(-np.ones(2)).hessian().nnz == 2
     result = solver.newton_solve(q, dof.DofReduction(2, []), -np.ones(2),
-                                 solver.NewtonOptions(gradient_tolerance=1e-9))
+                                 solver.NewtonOptions(), convergence=AbsoluteConvergence(1e-9))
     assert result.status == solver.NewtonStatus.Converged
     assert np.linalg.norm(q.evaluate(result.x).gradient(), np.inf) < 1e-9
     assert q.evaluate(result.x).hessian().nnz == 4 and q.pattern_calls > 3

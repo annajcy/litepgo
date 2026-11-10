@@ -162,9 +162,10 @@ TEST(TetP1FemEnergy, NewtonRelaxesTheFreeVerticesWithFeasibleSteps) {
     const double initial = energy.evaluate(u)->value();
     const dof::DofReduction fixed(15, {0, 1, 2, 3, 4, 5, 6, 7, 8});
     solver::NewtonOptions options;
-    options.gradient_tolerance = 1e-9;
+
     linalg::EigenLDLT solver;
-    const auto result = solver::newton_solve(energy, fixed, u, options, solver);
+    const auto result =
+        solver::newton_solve(energy, fixed, u, options, solver, litepgo::solver::AbsoluteConvergence(1e-9));
     EXPECT_EQ(result.status, solver::NewtonStatus::Converged);
     EXPECT_GT(result.iterations, 0);
     EXPECT_LT(result.energy, initial);

@@ -43,8 +43,8 @@ int main() {
     Vec initial(4);
     initial << 0, 0, 0, 7;
     linalg::AutoSparseSolver linear_solver;
-    const auto result = solver::newton_solve(potential, dof::DofReduction(4, {0, 3}), initial,
-                                             {.gradient_tolerance = 1e-10}, linear_solver);
+    const auto result = solver::newton_solve(potential, dof::DofReduction(4, {0, 3}), initial, {}, linear_solver,
+                                             litepgo::solver::AbsoluteConvergence(1e-10));
     if (result.status != solver::NewtonStatus::Converged)
         throw std::runtime_error("Fixed-end equilibrium failed");
     std::cout << "mesh energy subclass: 3 springs, shared-node assembly and fixed-end equilibrium\n";

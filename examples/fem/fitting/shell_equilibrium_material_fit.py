@@ -3,6 +3,7 @@
 Geometry, thickness, and boundary displacements are fixed.
 Run: uv run --no-sync python examples/fem/fitting/shell_equilibrium_material_fit.py
 """
+from litepgo.solver import AbsoluteConvergence
 
 from dataclasses import dataclass
 from functools import partial
@@ -87,9 +88,10 @@ def measure(problem, make_energy, make_response, p, load=1.0, need_jacobian=Fals
         2,
         problem.fixed,
         load * problem.prescribed,
-        solver.NewtonOptions(gradient_tolerance=1e-12, max_iterations=100),
+        solver.NewtonOptions(max_iterations=100),
         make_energy,
         make_response,
+        convergence=AbsoluteConvergence(1e-12),
     )
     evaluation = equilibrium.evaluate(p)
     state_jacobian = evaluation.jacobian() if need_jacobian else None

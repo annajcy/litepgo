@@ -1,7 +1,6 @@
 #include "litepgo/solver/static_equilibrium_response.hpp"
 #include "litepgo/dof/reduced_matrix.hpp"
 #include "litepgo/energy/scalar/detail/evaluation_access.hpp"
-#include "litepgo/linalg/sparse_pattern.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include <cmath>
 #include <stdexcept>
@@ -9,12 +8,12 @@
 namespace litepgo::solver {
 StaticEquilibriumResponse::StaticEquilibriumResponse(int num_parameters, dof::DofReduction fixed, Vec initial,
                                                      NewtonOptions options, MakeEnergy make_energy,
-                                                     MakeResponse make_response)
+                                                     MakeResponse make_response, ConvergenceCheck convergence)
     : parameters_(num_parameters), fixed_(std::move(fixed)), initial_(std::move(initial)), options_(options),
-      make_energy_(std::move(make_energy)), make_response_(std::move(make_response)) {
+      convergence_(std::move(convergence)), make_energy_(std::move(make_energy)),
+      make_response_(std::move(make_response)) {
     if (num_parameters <= 0 || initial_.size() != fixed_.num_dofs() || !initial_.allFinite() || !make_energy_ ||
-        !make_response_ || !std::isfinite(options_.gradient_tolerance) || options_.gradient_tolerance < 0 ||
-        options_.max_iterations < 0 || options_.max_line_search_steps < 1 ||
+        !make_response_ || !convergence_ || options_.max_iterations < 0 || options_.max_line_search_steps < 1 ||
         !(options_.line_search_shrink > 0 && options_.line_search_shrink < 1))
         throw std::invalid_argument("StaticEquilibriumResponse: invalid initial state, options or callbacks");
 }
@@ -24,10 +23,10 @@ class EquilibriumEvaluation final : public energy::ResponseEvaluation {
   public:
     EquilibriumEvaluation(Vec p, dof::DofReduction fixed, Vec initial, NewtonOptions options,
                           StaticEquilibriumResponse::MakeEnergy make_energy,
-                          StaticEquilibriumResponse::MakeResponse make_response)
+                          StaticEquilibriumResponse::MakeResponse make_response, ConvergenceCheck convergence)
         : ResponseEvaluation(p.size(), initial.size()), parameters_(std::move(p)), fixed_(std::move(fixed)),
-          initial_(std::move(initial)), options_(options), make_energy_(std::move(make_energy)),
-          make_response_(std::move(make_response)) {}
+          initial_(std::move(initial)), options_(options), convergence_(std::move(convergence)),
+          make_energy_(std::move(make_energy)), make_response_(std::move(make_response)) {}
 
   private:
     Vec value_impl() override {
@@ -35,7 +34,8 @@ class EquilibriumEvaluation final : public energy::ResponseEvaluation {
         if (!potential || potential->num_dofs() != num_outputs())
             throw std::invalid_argument("StaticEquilibriumResponse: incompatible energy");
         std::shared_ptr<energy::EnergyEvaluation> final_evaluation;
-        const auto result = newton_solve(*potential, fixed_, initial_, options_, solver_, {}, &final_evaluation);
+        const auto result =
+            newton_solve(*potential, fixed_, initial_, options_, solver_, convergence_, {}, &final_evaluation);
         if (result.status != NewtonStatus::Converged)
             throw std::domain_error("StaticEquilibriumResponse: equilibrium did not converge");
         potential_ = std::move(potential);
@@ -52,14 +52,8 @@ class EquilibriumEvaluation final : public energy::ResponseEvaluation {
         const SpMat& exact = energy::detail::EvaluationAccess::hessian(*potential_evaluation_);
         const dof::ReducedMatrix reduced(fixed_, exact);
         K_ = reduced.matrix();
-        bool same = true;
-        if (options_.project_hessian) {
-            const auto& projected = energy::detail::EvaluationAccess::projected_hessian(*potential_evaluation_);
-            const dof::ReducedMatrix previous(fixed_, projected);
-            same = linalg::same_pattern(K_, previous.matrix());
-        }
-        // Retry safely after failures: numeric factorization may have changed solver state.
-        if ((!same && !solver_.analyze(K_)) || !solver_.factorize(K_))
+        // Phase-one convergence may return before any symbolic analysis.
+        if (!solver_.analyze(K_) || !solver_.factorize(K_))
             throw std::domain_error("StaticEquilibriumResponse: singular equilibrium stiffness");
         force_ = force->evaluate(parameters_);
         force_owner_ = std::move(force);
@@ -106,6 +100,7 @@ class EquilibriumEvaluation final : public energy::ResponseEvaluation {
     dof::DofReduction fixed_;
     Vec initial_;
     NewtonOptions options_;
+    ConvergenceCheck convergence_;
     StaticEquilibriumResponse::MakeEnergy make_energy_;
     StaticEquilibriumResponse::MakeResponse make_response_;
     std::shared_ptr<energy::Energy> potential_;
@@ -118,6 +113,7 @@ class EquilibriumEvaluation final : public energy::ResponseEvaluation {
 };
 } // namespace
 std::shared_ptr<energy::ResponseEvaluation> StaticEquilibriumResponse::make_evaluation(const ConstVecRef& p) {
-    return std::make_shared<EquilibriumEvaluation>(p, fixed_, initial_, options_, make_energy_, make_response_);
+    return std::make_shared<EquilibriumEvaluation>(p, fixed_, initial_, options_, make_energy_, make_response_,
+                                                   convergence_);
 }
 } // namespace litepgo::solver

@@ -5,6 +5,7 @@ vectorized derivatives, so it also drives both force responses. The script check
 it against the native NeoHookean and solves a corner-pull equilibrium with each.
 Run: uv run --no-sync python examples/fem/material/numpy_neohookean.py
 """
+from litepgo.solver import AbsoluteConvergence
 
 import argparse
 from pathlib import Path
@@ -100,9 +101,10 @@ def corner_pull(elastic, rest):
     pulled = (24 * corners[:, None] + np.arange(3)).astype(np.int32)
     pulling = energy.VertexPullingEnergy(elastic.num_dofs, pulled, 0.3 * (nodes[corners] - lower), 1.0)
     potential = energy.WeightedSumEnergy([(elastic, 1.0), (pulling, 1.0)])
-    options = solver.NewtonOptions(gradient_tolerance=1e-11)
+    options = solver.NewtonOptions()
     result = solver.newton_solve(
-        potential, dof.DofReduction(elastic.num_dofs, []), np.zeros(elastic.num_dofs), options
+        potential, dof.DofReduction(elastic.num_dofs, []), np.zeros(elastic.num_dofs), options,
+        convergence=AbsoluteConvergence(1e-11),
     )
     if result.status != solver.NewtonStatus.Converged:
         raise RuntimeError("Corner-pull equilibrium did not converge")

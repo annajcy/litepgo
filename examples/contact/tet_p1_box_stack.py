@@ -3,6 +3,7 @@
 Run from the repository root after building litepgo:
     uv run --no-sync python examples/contact/tet_p1_box_stack.py
 """
+from litepgo.solver import AbsoluteConvergence
 
 from litepgo.energy import AffineResponse
 import argparse
@@ -103,10 +104,9 @@ def main():
     fixed = dof.DofReduction(num_dofs, clamped)
     initial = np.zeros(num_dofs)
     options = solver.NewtonOptions()
-    options.gradient_tolerance = 1e-8
     options.max_iterations = 200
     sparse_solver = linalg.AutoSparseSolver()
-    result = solver.newton_solve(potential, fixed, initial, options, sparse_solver)
+    result = solver.newton_solve(potential, fixed, initial, options, sparse_solver, convergence=AbsoluteConvergence(1e-8))
     converged = result.status == solver.NewtonStatus.Converged
 
     # The boxes touch, within dhat, without crossing.

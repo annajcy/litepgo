@@ -44,9 +44,9 @@ SpMat spd_matrix(int n) {
     return A;
 }
 
-NewtonOptions options(double tolerance = 1e-10) {
+NewtonOptions options() {
     NewtonOptions result;
-    result.gradient_tolerance = tolerance;
+
     return result;
 }
 
@@ -54,7 +54,8 @@ NewtonResult solve(litepgo::energy::Energy& energy, const Vec& x0, std::vector<i
                    const NewtonOptions& opts = options(), std::vector<NewtonStep>* steps = nullptr) {
     litepgo::linalg::AutoIndefiniteSparseSolver solver;
     return litepgo::solver::newton_solve(energy, dof::DofReduction(energy.num_dofs(), std::move(fixed)), x0, opts,
-                                         solver, [&](const NewtonStep& step) {
+                                         solver, litepgo::solver::AbsoluteConvergence(1e-10),
+                                         [&](const NewtonStep& step) {
                                              if (steps != nullptr) {
                                                  steps->push_back(step);
                                              }
@@ -159,6 +160,7 @@ TEST(Newton, PropagatesNeoHookeanTrialOverflowWithoutRetrying) {
     std::vector<NewtonStep> steps;
     trial_evaluations = 0;
     EXPECT_THROW(newton_solve(energy, dof::DofReduction(9, {1, 2, 3, 4, 5, 6, 7, 8}), x0, opts, solver,
+                              litepgo::solver::AbsoluteConvergence(1e-10),
                               [&](const NewtonStep& step) { steps.push_back(step); }),
                  std::domain_error);
     EXPECT_EQ(trial_evaluations, 1);
@@ -226,7 +228,7 @@ TEST(Newton, KeepsFixedDofsAtTheirInitialValues) {
 TEST(Newton, ConvergesOnANonlinearEnergyFromFarAway) {
     for (const bool kind : {true, false}) {
         DoubleWellChain energy(6);
-        NewtonOptions opts = options(1e-9);
+        NewtonOptions opts = options();
         opts.project_hessian = kind;
         const NewtonResult result = solve(energy, Vec::LinSpaced(6, 3.0, 4.0), {}, opts);
         EXPECT_EQ(result.status, NewtonStatus::Converged);
@@ -237,7 +239,7 @@ TEST(Newton, ConvergesOnANonlinearEnergyFromFarAway) {
 TEST(Newton, ShiftsTheDiagonalForAnIndefiniteExactHessian) {
     // At x = 0.1 the double wells are concave: the exact Hessian is indefinite.
     DoubleWellChain energy(4);
-    NewtonOptions opts = options(1e-9);
+    NewtonOptions opts = options();
     opts.project_hessian = false;
     std::vector<NewtonStep> steps;
     const NewtonResult result = solve(energy, Vec::Constant(4, 0.1), {}, opts, &steps);
@@ -254,7 +256,7 @@ TEST(Newton, StaysFeasibleAgainstABarrier) {
     auto energy = litepgo::energy::WeightedSumEnergy({{std::make_shared<litepgo::energy::QuadraticEnergy>(A, b), 1.0},
                                                       {std::make_shared<HalfSpaceBarrier>(3, 0), 1.0}});
     std::vector<NewtonStep> steps;
-    const NewtonResult result = solve(energy, Vec::Zero(3), {}, options(1e-9), &steps);
+    const NewtonResult result = solve(energy, Vec::Zero(3), {}, options(), &steps);
     ASSERT_EQ(result.status, NewtonStatus::Converged);
     EXPECT_LT(result.x[0], 1.0);
     // Minimizer of x^2/2 - 3x - log(1 - x): x^2 - 4x + 2 = 0, x = 2 - sqrt(2).
@@ -271,8 +273,7 @@ TEST(Newton, RejectsAnInfeasibleStart) {
 TEST(Newton, FollowsAChangingPattern) {
     SwitchingEnergy energy(5);
     std::vector<NewtonStep> steps;
-    const NewtonResult result =
-        solve(energy, (Vec(5) << 1.0, 1.0, -2.0, 3.0, 0.5).finished(), {}, options(1e-10), &steps);
+    const NewtonResult result = solve(energy, (Vec(5) << 1.0, 1.0, -2.0, 3.0, 0.5).finished(), {}, options(), &steps);
     EXPECT_EQ(result.status, NewtonStatus::Converged);
     EXPECT_LE(result.x.cwiseAbs().maxCoeff(), 1e-9);
     ASSERT_FALSE(steps.empty());
@@ -313,13 +314,16 @@ TEST(Newton, WithEveryDofFixedJustEvaluates) {
 TEST(Newton, ChecksItsArguments) {
     litepgo::energy::QuadraticEnergy energy(spd_matrix(3));
     litepgo::linalg::AutoSparseSolver solver;
-    EXPECT_THROW(litepgo::solver::newton_solve(energy, dof::DofReduction(3, {}), Vec::Zero(3), NewtonOptions(), solver),
-                 std::invalid_argument); // no gradient tolerance
-    EXPECT_THROW(litepgo::solver::newton_solve(energy, dof::DofReduction(4, {}), Vec::Zero(3), options(), solver),
+    EXPECT_THROW(
+        litepgo::solver::newton_solve(energy, dof::DofReduction(3, {}), Vec::Zero(3), NewtonOptions(), solver, {}),
+        std::invalid_argument); // no convergence policy
+    EXPECT_THROW(litepgo::solver::newton_solve(energy, dof::DofReduction(4, {}), Vec::Zero(3), options(), solver,
+                                               litepgo::solver::AbsoluteConvergence(1e-10)),
                  std::invalid_argument);
     NewtonOptions bad_shrink = options();
     bad_shrink.line_search_shrink = 1.0;
-    EXPECT_THROW(litepgo::solver::newton_solve(energy, dof::DofReduction(3, {}), Vec::Zero(3), bad_shrink, solver),
+    EXPECT_THROW(litepgo::solver::newton_solve(energy, dof::DofReduction(3, {}), Vec::Zero(3), bad_shrink, solver,
+                                               litepgo::solver::AbsoluteConvergence(1e-10)),
                  std::invalid_argument);
 }
 
@@ -343,9 +347,10 @@ TEST(Newton, ReusesSymbolicAnalysisForUnchangedReturnedStructure) {
     } linear;
     energy::test::DoubleWellChain energy(3);
     solver::NewtonOptions options;
-    options.gradient_tolerance = 1e-8;
+
     std::vector<solver::NewtonStep> steps;
     const auto result = solver::newton_solve(energy, dof::DofReduction(3, {}), Vec::Constant(3, 2.), options, linear,
+                                             litepgo::solver::AbsoluteConvergence(1e-8),
                                              [&](const auto& step) { steps.push_back(step); });
     EXPECT_EQ(result.status, solver::NewtonStatus::Converged);
     ASSERT_GT(steps.size(), 2);
@@ -380,19 +385,20 @@ TEST(Newton, LimitsCoordinateMovementBeforeFeasibilityQuery) {
         }
     } energy;
     solver::NewtonOptions options;
-    options.gradient_tolerance = 1e-10;
+
     options.max_iterations = 1;
     options.max_coordinate_step = 0.1;
     linalg::AutoSparseSolver linear_solver;
     std::vector<solver::NewtonStep> steps;
     const auto result = solver::newton_solve(energy, dof::DofReduction(2, {}), Vec::Zero(2), options, linear_solver,
+                                             litepgo::solver::AbsoluteConvergence(1e-10),
                                              [&](const auto& step) { steps.push_back(step); });
     ASSERT_EQ(energy.directions.size(), 2);
     EXPECT_EQ(energy.directions[0], Vec::Zero(2));
     EXPECT_NEAR(energy.directions[1].cwiseAbs().maxCoeff(), 0.1, 1e-15);
     EXPECT_LT((result.x - Eigen::Vector2d(0.05, -0.02)).norm(), 1e-15);
     EXPECT_DOUBLE_EQ(steps.front().step, 0.05);
-    EXPECT_EQ(energy.hessians, result.iterations + 1);
+    EXPECT_EQ(energy.hessians, result.iterations);
 }
 
 TEST(Newton, ChecksInitialFeasibilityBeforeStationaryOrFixedReturn) {
@@ -411,10 +417,11 @@ TEST(Newton, ChecksInitialFeasibilityBeforeStationaryOrFixedReturn) {
         }
     } energy;
     solver::NewtonOptions options;
-    options.gradient_tolerance = 1e-10;
+
     linalg::AutoSparseSolver linear_solver;
     for (const auto& fixed : {std::vector<int>{}, std::vector<int>{0, 1}}) {
-        EXPECT_THROW(solver::newton_solve(energy, dof::DofReduction(2, fixed), Vec::Zero(2), options, linear_solver),
+        EXPECT_THROW(solver::newton_solve(energy, dof::DofReduction(2, fixed), Vec::Zero(2), options, linear_solver,
+                                          litepgo::solver::AbsoluteConvergence(1e-10)),
                      std::domain_error);
     }
 }
@@ -425,11 +432,12 @@ TEST(Newton, RejectsInvalidCoordinateStepLimits) {
     identity.setIdentity();
     energy::QuadraticEnergy energy(identity);
     solver::NewtonOptions options;
-    options.gradient_tolerance = 1e-10;
+
     linalg::AutoSparseSolver linear_solver;
     for (double limit : {0.0, -1.0, -std::numeric_limits<double>::infinity(), std::nan("")}) {
         options.max_coordinate_step = limit;
-        EXPECT_THROW(solver::newton_solve(energy, dof::DofReduction(2, {}), Vec::Ones(2), options, linear_solver),
+        EXPECT_THROW(solver::newton_solve(energy, dof::DofReduction(2, {}), Vec::Ones(2), options, linear_solver,
+                                          litepgo::solver::AbsoluteConvergence(1e-10)),
                      std::invalid_argument);
     }
 }

@@ -3,6 +3,7 @@
 Run from the repository root after building litepgo:
     uv run --no-sync python examples/fem/plasticity/tet_p1_plastic_twist.py
 """
+from litepgo.solver import AbsoluteConvergence
 
 from litepgo.energy import AffineResponse
 import argparse
@@ -68,7 +69,6 @@ def main():
         fixed = dof.DofReduction(rest_positions.size, fixed_dofs)
         initial = np.zeros(rest_positions.size)
         options = solver.NewtonOptions()
-        options.gradient_tolerance = 1e-8
         options.max_iterations = 200
         sparse_solver = linalg.AutoSparseSolver()
         iterations = 0
@@ -108,7 +108,8 @@ def main():
             )
 
             result = solver.newton_solve(
-                elastic, fixed, initial, options, sparse_solver
+                elastic, fixed, initial, options, sparse_solver,
+                convergence=AbsoluteConvergence(1e-8),
             )
             if result.status != solver.NewtonStatus.Converged:
                 raise RuntimeError("Plastic twist did not reach equilibrium")

@@ -1,3 +1,4 @@
+from litepgo.solver import AbsoluteConvergence
 import numpy as np
 import pytest
 import scipy.sparse as sp
@@ -30,7 +31,7 @@ def spd(n):
 
 def test_quadratic_converges_in_one_step():
     A, b = spd(6), np.linspace(-1.0, 2.0, 6)
-    result = newton_solve(QuadraticEnergy(A, b), free(6), np.zeros(6), NewtonOptions(gradient_tolerance=1e-10))
+    result = newton_solve(QuadraticEnergy(A, b), free(6), np.zeros(6), NewtonOptions(), convergence=AbsoluteConvergence(1e-10))
     assert result.status == NewtonStatus.Converged and result.iterations == 1
     np.testing.assert_allclose(result.x, np.linalg.solve(A.toarray(), -b), atol=1e-12)
 
@@ -39,7 +40,7 @@ def test_fixed_dofs_keep_their_initial_values():
     A, b = spd(5), np.linspace(-1.0, 1.0, 5)
     x0 = np.zeros(5)
     x0[[1, 3]] = [0.5, -2.0]
-    result = newton_solve(QuadraticEnergy(A, b), DofReduction(5, [3, 1]), x0, NewtonOptions(gradient_tolerance=1e-12))
+    result = newton_solve(QuadraticEnergy(A, b), DofReduction(5, [3, 1]), x0, NewtonOptions(), convergence=AbsoluteConvergence(1e-12))
     assert result.status == NewtonStatus.Converged
     np.testing.assert_array_equal(result.x[[1, 3]], [0.5, -2.0])
     free = [0, 2, 4]
@@ -52,7 +53,7 @@ def test_solves_through_composites():
     first, second = QuadraticEnergy(spd(4), np.ones(4)), QuadraticEnergy(sp.identity(4, format="csc"))
     T = sp.csc_matrix(np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 0.0], [0.0, -1.0]]))
     energy = AffineMappedEnergy(WeightedSumEnergy([(first, 1.0), (second, 0.5)]), T)
-    result = newton_solve(energy, free(2), np.zeros(2), NewtonOptions(gradient_tolerance=1e-12), EigenLDLT())
+    result = newton_solve(energy, free(2), np.zeros(2), NewtonOptions(), EigenLDLT(), convergence=AbsoluteConvergence(1e-12))
     H = T.T @ (spd(4) + 0.5 * sp.identity(4)) @ T
     np.testing.assert_allclose(result.x, np.linalg.solve(H.toarray(), -(T.T @ np.ones(4))), atol=1e-12)
 
@@ -61,18 +62,18 @@ def test_exact_hessian_with_an_indefinite_solver():
     # An indefinite quadratic: Newton must shift its way to a descent direction
     # and then be stopped by the iteration limit, as the energy is unbounded below.
     A = sp.csc_matrix(np.diag([1.0, -1.0]))
-    options = NewtonOptions(gradient_tolerance=1e-12, project_hessian=False, max_iterations=3)
+    options = NewtonOptions(project_hessian=False, max_iterations=3)
     steps = []
     result = newton_solve(QuadraticEnergy(A, np.array([1.0, 1.0])), free(2), np.zeros(2), options,
-                          AutoIndefiniteSparseSolver(), on_iteration=steps.append)
+                          AutoIndefiniteSparseSolver(), on_iteration=steps.append, convergence=AbsoluteConvergence(1e-12))
     assert result.status == NewtonStatus.MaxIterations
     assert steps[0].diagonal_shifts > 0
 
 
 def test_callback_steps_outlive_the_solve():
     steps = []
-    newton_solve(QuadraticEnergy(spd(3), np.ones(3)), free(3), np.zeros(3), NewtonOptions(gradient_tolerance=1e-12),
-                 on_iteration=steps.append)
+    newton_solve(QuadraticEnergy(spd(3), np.ones(3)), free(3), np.zeros(3), NewtonOptions(),
+                 on_iteration=steps.append, convergence=AbsoluteConvergence(1e-12))
     assert [step.iteration for step in steps] == [0, 1]
     assert steps[0].step == 1.0 and steps[0].line_search_evaluations == 1
     assert steps[-1].gradient_norm <= 1e-12
@@ -83,21 +84,19 @@ def test_callback_exceptions_propagate():
         raise KeyError("stop")
 
     with pytest.raises(KeyError):
-        newton_solve(QuadraticEnergy(spd(3), np.ones(3)), free(3), np.zeros(3), NewtonOptions(gradient_tolerance=1e-12),
-                     on_iteration=fail)
+        newton_solve(QuadraticEnergy(spd(3), np.ones(3)), free(3), np.zeros(3), NewtonOptions(),
+                     on_iteration=fail, convergence=AbsoluteConvergence(1e-12))
 
 
 def test_options():
-    options = NewtonOptions(gradient_tolerance=1e-6)
+    options = NewtonOptions()
     assert options.max_iterations == 50 and options.project_hessian is True
     options.max_iterations = 5
     assert options.max_iterations == 5
-    # Like the C++ aggregate, the tolerance defaults to NaN and must be set before solving.
+    # A convergence policy is required separately from algorithm options.
     defaults = NewtonOptions()
-    assert np.isnan(defaults.gradient_tolerance)
-    defaults.gradient_tolerance = 1e-8
-    assert defaults.gradient_tolerance == 1e-8
-    with pytest.raises(ValueError):
+    assert not hasattr(defaults, "gradient_tolerance")
+    with pytest.raises(TypeError):
         newton_solve(QuadraticEnergy(spd(3)), free(3), np.ones(3), NewtonOptions())
 
 
@@ -208,21 +207,21 @@ def test_newton_coordinate_limit_precedes_ccd_without_extra_hessian(maximum, ccd
 
     potential = CountingQuadratic()
     steps = []
-    options = NewtonOptions(gradient_tolerance=1e-12, max_iterations=1, max_coordinate_step=maximum)
-    result = newton_solve(potential, free(2), np.zeros(2), options, on_iteration=steps.append)
+    options = NewtonOptions(max_iterations=1, max_coordinate_step=maximum)
+    result = newton_solve(potential, free(2), np.zeros(2), options, on_iteration=steps.append, convergence=AbsoluteConvergence(1e-12))
     scale = min(1., maximum)
     np.testing.assert_array_equal(potential.feasibility_queries[0][1], np.zeros(2))
     np.testing.assert_allclose(potential.feasibility_queries[1][1], scale*np.array([1., -.4]))
     np.testing.assert_allclose(result.x, ccd_bound*scale*np.array([1., -.4]))
     assert steps[0].feasible_step == steps[0].step == ccd_bound*scale
-    assert potential.hessians == result.iterations + 1
+    assert potential.hessians == result.iterations
 
 
 @pytest.mark.parametrize('maximum', [0., -1., -np.inf, np.nan])
 def test_newton_rejects_invalid_coordinate_limit(maximum):
     with pytest.raises(ValueError, match='max_coordinate_step'):
         newton_solve(QuadraticEnergy(sp.eye(2, format='csc')), free(2), np.ones(2),
-                     NewtonOptions(gradient_tolerance=1e-10, max_coordinate_step=maximum))
+                     NewtonOptions(max_coordinate_step=maximum), convergence=AbsoluteConvergence(1e-10))
 
 
 @pytest.mark.parametrize('fixed', [[], [0, 1]])
@@ -242,4 +241,4 @@ def test_newton_checks_feasibility_before_stationary_or_fixed_return(fixed):
 
     with pytest.raises(ValueError, match='invalid initial geometry'):
         newton_solve(InvalidStationaryState(), DofReduction(2, fixed), np.zeros(2),
-                     NewtonOptions(gradient_tolerance=1e-10))
+                     NewtonOptions(), convergence=AbsoluteConvergence(1e-10))

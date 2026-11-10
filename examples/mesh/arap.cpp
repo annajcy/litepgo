@@ -149,7 +149,8 @@ int main(int argc, char** argv) {
     for (; iterations < 1000;) {
         // Rotations stay fixed throughout this global solve.
         ArapGlobalEnergy global(edge_map, edge_stencils, rest, rotation, B);
-        auto result = solver::newton_solve(global, fixed, x, {.gradient_tolerance = 1e-10}, linear_solver);
+        auto result =
+            solver::newton_solve(global, fixed, x, {}, linear_solver, litepgo::solver::AbsoluteConvergence(1e-10));
         if (result.status != solver::NewtonStatus::Converged)
             throw std::runtime_error("ARAP global solve failed");
         // Local step: refit rotations before measuring the full ARAP energy.

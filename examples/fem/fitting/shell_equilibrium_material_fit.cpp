@@ -90,10 +90,11 @@ Observation measure(const Problem& problem, const Factories& factories, const Ve
                     bool need_jacobian = false) {
     // 1. Solve equilibrium, starting from the prescribed displacement every time.
     solver::NewtonOptions options;
-    options.gradient_tolerance = 1e-12;
+
     options.max_iterations = 100;
     solver::StaticEquilibriumResponse equilibrium(2, problem.fixed, load * problem.prescribed, options,
-                                                  factories.make_energy, factories.make_response);
+                                                  factories.make_energy, factories.make_response,
+                                                  litepgo::solver::AbsoluteConvergence(1e-12));
     SpMat state_jacobian = SpMat();
     const Vec displacement = (need_jacobian ? ([&] {
         auto evaluation = equilibrium.evaluate(p);

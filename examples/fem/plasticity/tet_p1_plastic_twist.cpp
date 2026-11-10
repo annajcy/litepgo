@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
         const dof::DofReduction fixed(3 * topology.num_vertices(), fixed_dofs);
         Vec initial = Vec::Zero(rest_positions.size());
         solver::NewtonOptions options;
-        options.gradient_tolerance = 1e-8;
+
         options.max_iterations = 200;
         linalg::AutoSparseSolver solver;
         solver::NewtonResult result;
@@ -108,7 +108,8 @@ int main(int argc, char** argv) {
                 rest_position_fields, std::move(Fp_fields),
                 std::vector<std::shared_ptr<litepgo::energy::Response>>(topology.num_cells(), theta_field));
 
-            result = solver::newton_solve(elastic, fixed, initial, options, solver);
+            result = solver::newton_solve(elastic, fixed, initial, options, solver,
+                                          litepgo::solver::AbsoluteConvergence(1e-8));
             if (result.status != solver::NewtonStatus::Converged)
                 throw std::runtime_error("Plastic twist did not reach equilibrium");
             for (int i : fixed_dofs)

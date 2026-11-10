@@ -2,6 +2,7 @@
 
 Run: uv run --no-sync python examples/energy/scalar/mesh_energy_subclass.py
 """
+from litepgo.solver import AbsoluteConvergence
 
 import numpy as np
 from litepgo import dof, energy, solver
@@ -37,7 +38,8 @@ def main():
         potential,
         dof.DofReduction(4, [0, 3]),
         initial,
-        solver.NewtonOptions(gradient_tolerance=1e-10),
+        solver.NewtonOptions(),
+        convergence=AbsoluteConvergence(1e-10),
     )
     if result.status != solver.NewtonStatus.Converged:
         raise RuntimeError("Fixed-end equilibrium failed")

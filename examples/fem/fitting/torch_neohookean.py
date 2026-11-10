@@ -2,6 +2,7 @@
 
 Run: uv run --no-sync python examples/fem/fitting/torch_neohookean.py
 """
+from litepgo.solver import AbsoluteConvergence
 
 from pathlib import Path
 
@@ -114,9 +115,9 @@ def main():
     fixed = dof.DofReduction(15, [*range(9), 12, 13, 14])
     initial = np.zeros(15)
     initial[12:] = [0.04, -0.02, 0.06]
-    options = solver.NewtonOptions(gradient_tolerance=1e-10, max_iterations=100)
-    reference = solver.newton_solve(native, fixed, initial, options)
-    actual = solver.newton_solve(autodiff, fixed, initial, options)
+    options = solver.NewtonOptions(max_iterations=100)
+    reference = solver.newton_solve(native, fixed, initial, options, convergence=AbsoluteConvergence(1e-10))
+    actual = solver.newton_solve(autodiff, fixed, initial, options, convergence=AbsoluteConvergence(1e-10))
     if any(
         result.status != solver.NewtonStatus.Converged for result in (reference, actual)
     ):

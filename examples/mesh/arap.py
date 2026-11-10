@@ -3,6 +3,7 @@
 Run from the repository root after building litepgo:
     uv run --no-sync python examples/mesh/arap.py
 """
+from litepgo.solver import AbsoluteConvergence
 
 from pathlib import Path
 import argparse
@@ -127,11 +128,11 @@ def main():
     initial = x.copy()
     rotation = rotations(x, rest, edges)
     first = previous = objective(x, rest, edges, rotation)
-    options = solver.NewtonOptions(gradient_tolerance=1e-10)
+    options = solver.NewtonOptions()
     for iteration in range(1000):
         # Rotations stay fixed throughout this global solve.
         global_energy = ArapGlobalEnergy(edge_map, edge_vertices, rest, rotation)
-        result = solver.newton_solve(global_energy, fixed, x.ravel(), options)
+        result = solver.newton_solve(global_energy, fixed, x.ravel(), options, convergence=AbsoluteConvergence(1e-10))
         assert result.status == solver.NewtonStatus.Converged
         updated = result.x.reshape(-1, 3)
         # Local step: refit rotations at the new positions.

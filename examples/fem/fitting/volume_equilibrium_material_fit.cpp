@@ -82,7 +82,7 @@ double reaction(const Problem& problem, const Eigen::Vector2d& theta, int axis, 
     for (int v : top_vertices)
         initial[3 * v + axis] = strain * height;
     solver::NewtonOptions options;
-    options.gradient_tolerance = 1e-10;
+
     options.max_iterations = 100;
     // Partial force derivative at fixed displacement; equilibrium supplies du/dp separately.
     const auto make_response = [&](const Vec& displacement) {
@@ -108,7 +108,7 @@ double reaction(const Problem& problem, const Eigen::Vector2d& theta, int axis, 
                     geometry.size(), std::make_shared<litepgo::energy::AffineResponse>(
                                          litepgo::SpMat((parameters).size(), 3), parameters)));
         },
-        make_response);
+        make_response, litepgo::solver::AbsoluteConvergence(1e-10));
     auto evaluation = equilibrium.evaluate(theta);
     SpMat J;
     if (derivative)

@@ -1,3 +1,4 @@
+from litepgo.solver import AbsoluteConvergence
 from equilibrium_fixtures import FormulaForce
 import numpy as np
 from scipy import sparse
@@ -19,9 +20,10 @@ def test_direct_sensitivity_callbacks_and_fixed_values():
         2,
         dof.DofReduction(2, [0]),
         np.array([0.4, 0.0]),
-        solver.NewtonOptions(gradient_tolerance=1e-12),
+        solver.NewtonOptions(),
         make_energy,
         lambda u: FormulaForce(2, u, make_energy, partial),
+        convergence=AbsoluteConvergence(1e-12),
     )
     p = np.array([2.0, 3.0])
     response_evaluation = response.evaluate(p)
@@ -48,9 +50,10 @@ def test_bound_callbacks_are_kept_alive_without_an_owner_cycle():
                 2,
                 dof.DofReduction(2, []),
                 np.zeros(2),
-                solver.NewtonOptions(gradient_tolerance=1e-12),
+                solver.NewtonOptions(),
                 self.make_energy,
                 lambda u: FormulaForce(2, u, self.make_energy, self.partial),
+                convergence=AbsoluteConvergence(1e-12),
             )
             self.response = weakref.ref(response)
             return response
@@ -99,9 +102,10 @@ def test_global_callback_cycle_is_collected():
             1,
             dof.DofReduction(1, []),
             np.zeros(1),
-            solver.NewtonOptions(gradient_tolerance=1e-12),
+            solver.NewtonOptions(),
             scope["make_energy"],
             scope["make_response"],
+            convergence=AbsoluteConvergence(1e-12),
         )
         scope["equilibrium"] = equilibrium
         gc.collect()
@@ -125,9 +129,10 @@ def test_invalid_initial_state_is_rejected():
             2,
             dof.DofReduction(2, []),
             np.zeros(3),
-            solver.NewtonOptions(gradient_tolerance=1e-12),
+            solver.NewtonOptions(),
             lambda p: None,
             lambda u: FormulaForce(2, u, lambda p: None, lambda p, u: None),
+            convergence=AbsoluteConvergence(1e-12),
         )
 
 
@@ -151,7 +156,7 @@ def test_fast_products_rectangular_fixed_dofs_and_recovery():
         2,
         dof.DofReduction(3, [1]),
         np.array([0.0, 0.8, 0.0]),
-        solver.NewtonOptions(gradient_tolerance=1e-12),
+        solver.NewtonOptions(),
         lambda p: energy.QuadraticEnergy(sparse.csc_matrix(K), -A @ p),
         lambda u: FormulaForce(
             2,
@@ -159,6 +164,7 @@ def test_fast_products_rectangular_fixed_dofs_and_recovery():
             lambda p: energy.QuadraticEnergy(sparse.csc_matrix(K), -A @ p),
             partial,
         ),
+        convergence=AbsoluteConvergence(1e-12),
     )
     p = np.array([0.6, -1.1])
     v, w = np.array([0.3, -0.7]), np.array([0.4, 10.0, -0.8])
@@ -196,7 +202,7 @@ def test_fully_fixed_products_do_not_request_partials():
         2,
         dof.DofReduction(3, [0, 1, 2]),
         np.array([0.2, -0.4, 0.7]),
-        solver.NewtonOptions(gradient_tolerance=1e-12),
+        solver.NewtonOptions(),
         lambda p: energy.QuadraticEnergy(sparse.eye(3, format="csc")),
         lambda u: FormulaForce(
             2,
@@ -204,6 +210,7 @@ def test_fully_fixed_products_do_not_request_partials():
             lambda p: energy.QuadraticEnergy(sparse.eye(3, format="csc")),
             forbidden,
         ),
+        convergence=AbsoluteConvergence(1e-12),
     )
     p = np.ones(2)
     np.testing.assert_array_equal(response.evaluate(p).jvp(p), np.zeros(3))
@@ -216,7 +223,7 @@ def test_products_use_exact_indefinite_stiffness():
         2,
         dof.DofReduction(2, []),
         np.zeros(2),
-        solver.NewtonOptions(gradient_tolerance=1e-12),
+        solver.NewtonOptions(),
         lambda p: energy.QuadraticEnergy(K, -p),
         lambda u: FormulaForce(
             2,
@@ -224,6 +231,7 @@ def test_products_use_exact_indefinite_stiffness():
             lambda p: energy.QuadraticEnergy(K, -p),
             lambda p, u: -sparse.eye(2, format="csc"),
         ),
+        convergence=AbsoluteConvergence(1e-12),
     )
     # At this stationary point Newton need not move; derivatives must retain the negative curvature.
     p, direction = np.zeros(2), np.array([3.0, 2.0])
@@ -272,9 +280,10 @@ def test_response_factory_direct_products_and_invalid_results():
         2,
         dof.DofReduction(3, [1]),
         np.array([0.0, 0.8, 0.0]),
-        solver.NewtonOptions(gradient_tolerance=1e-12),
+        solver.NewtonOptions(),
         make_energy,
         make_response,
+        convergence=AbsoluteConvergence(1e-12),
     )
     p, v, w = np.array([0.6, -1.1]), np.array([0.3, -0.7]), np.array([0.4, 7.0, -0.8])
     u = eq.evaluate(p).value
@@ -336,11 +345,12 @@ def test_factory_response_dynamic_pattern_is_refreshed():
         2,
         dof.DofReduction(2, []),
         np.zeros(2),
-        solver.NewtonOptions(gradient_tolerance=1e-12),
+        solver.NewtonOptions(),
         lambda p: energy.QuadraticEnergy(
             sparse.eye(2, format="csc"), -np.array([p[0], p[1] + max(p[0], 0.0) ** 2])
         ),
         Force,
+        convergence=AbsoluteConvergence(1e-12),
     )
     for p in [np.array([0.3, 0.4]), np.array([-0.3, 0.4])]:
         J = np.array([[1.0, 0.0], [2 * max(p[0], 0.0), 1.0]])

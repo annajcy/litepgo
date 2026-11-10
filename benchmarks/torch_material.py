@@ -1,4 +1,5 @@
 """Layered CPU float64 benchmark. Each case runs in a fresh, timeout-limited process."""
+from litepgo.solver import AbsoluteConvergence
 
 import argparse
 import csv
@@ -166,12 +167,12 @@ def worker(case, repeats):
                 external = energy.QuadraticEnergy(sp.csc_matrix((len(u), len(u))), -load.ravel())
                 def total(parameters):
                     return energy.WeightedSumEnergy([(elastic(parameters), 1.), (external, 1.)])
-                options = solver.NewtonOptions(gradient_tolerance=1e-10, max_iterations=50)
+                options = solver.NewtonOptions(max_iterations=50)
                 initial = np.zeros_like(u)
-                eq = solver.StaticEquilibriumResponse(k, fixed, initial, options, total, forces)
+                eq = solver.StaticEquilibriumResponse(k, fixed, initial, options, total, forces, convergence=AbsoluteConvergence(1e-10))
                 # Separate diagnostic solve; the timed bridge uses the same settings.
                 diagnostic_start = time.perf_counter()
-                diagnostic = solver.newton_solve(total(p), fixed, initial, options)
+                diagnostic = solver.newton_solve(total(p), fixed, initial, options, convergence=AbsoluteConvergence(1e-10))
                 if diagnostic.status != solver.NewtonStatus.Converged:
                     raise ValueError(f"equilibrium failed: {diagnostic.status}")
                 metadata.update(newton_iterations=diagnostic.iterations, convergence=str(diagnostic.status),

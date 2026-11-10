@@ -48,10 +48,11 @@ TEST(StaticEquilibriumResponse, FemDisplacementAndReactionMatchResolveFiniteDiff
             ->jacobian();
     };
     solver::NewtonOptions options;
-    options.gradient_tolerance = 1e-12;
+
     options.max_iterations = 100;
     StaticEquilibriumResponse response(2, fixed, initial, options, make_energy,
-                                       testing::force_factory(2, make_energy, partial));
+                                       testing::force_factory(2, make_energy, partial),
+                                       litepgo::solver::AbsoluteConvergence(1e-12));
     const Vec p = Eigen::Vector2d(2, 3);
     auto evaluation_0 = response.evaluate(p);
     auto jacobian_0 = evaluation_0->jacobian();
@@ -96,7 +97,7 @@ TEST(StaticEquilibriumResponse, FemDisplacementAndReactionMatchResolveFiniteDiff
 
 TEST(StaticEquilibriumResponse, ValidationFailureAndFullyFixedStates) {
     solver::NewtonOptions options;
-    options.gradient_tolerance = 1e-12;
+
     const auto make_energy = [](const Vec& p) -> std::shared_ptr<energy::Energy> {
         return std::make_shared<energy::QuadraticEnergy>(Eigen::Matrix2d::Identity().sparseView(), -p);
     };
@@ -104,37 +105,45 @@ TEST(StaticEquilibriumResponse, ValidationFailureAndFullyFixedStates) {
     const Vec p = Eigen::Vector2d(2, 3), initial = Eigen::Vector2d(.3, .4);
     const dof::DofReduction free(2, {}), fixed(2, {0, 1});
     EXPECT_THROW(StaticEquilibriumResponse(0, free, initial, options, make_energy,
-                                           testing::force_factory(0, make_energy, partial)),
+                                           testing::force_factory(0, make_energy, partial),
+                                           litepgo::solver::AbsoluteConvergence(1e-12)),
                  std::invalid_argument);
     EXPECT_THROW(StaticEquilibriumResponse(2, free, Vec::Zero(3), options, make_energy,
-                                           testing::force_factory(2, make_energy, partial)),
+                                           testing::force_factory(2, make_energy, partial),
+                                           litepgo::solver::AbsoluteConvergence(1e-12)),
                  std::invalid_argument);
     StaticEquilibriumResponse all_fixed(2, fixed, initial, options, make_energy,
-                                        testing::force_factory(2, make_energy, partial));
+                                        testing::force_factory(2, make_energy, partial),
+                                        litepgo::solver::AbsoluteConvergence(1e-12));
     EXPECT_EQ(all_fixed.evaluate(p)->value(), initial);
     EXPECT_EQ(all_fixed.evaluate(p)->jacobian().nonZeros(), 0);
     EXPECT_TRUE(all_fixed.evaluate(p)->jvp(p).isZero());
     EXPECT_TRUE(all_fixed.evaluate(p)->vjp(p).isZero());
     StaticEquilibriumResponse valid(2, free, initial, options, make_energy,
-                                    testing::force_factory(2, make_energy, partial));
+                                    testing::force_factory(2, make_energy, partial),
+                                    litepgo::solver::AbsoluteConvergence(1e-12));
     EXPECT_TRUE(valid.evaluate(p)->value().isApprox(p, 1e-12));
     EXPECT_TRUE(Eigen::MatrixXd(valid.evaluate(p)->jacobian()).isApprox(Eigen::Matrix2d::Identity(), 1e-12));
     options.max_iterations = 0;
     StaticEquilibriumResponse unfinished(2, free, initial, options, make_energy,
-                                         testing::force_factory(2, make_energy, partial));
+                                         testing::force_factory(2, make_energy, partial),
+                                         litepgo::solver::AbsoluteConvergence(1e-12));
     EXPECT_THROW(unfinished.evaluate(p)->value(), std::domain_error);
     EXPECT_THROW(unfinished.evaluate(p)->jvp(p), std::domain_error);
     EXPECT_THROW(unfinished.evaluate(p)->vjp(p), std::domain_error);
     options.max_iterations = 50;
     StaticEquilibriumResponse bad_partial(
         2, free, initial, options, make_energy,
-        testing::force_factory(2, make_energy, [](const Vec&, const Vec&) { return SpMat(1, 2); }));
+        testing::force_factory(2, make_energy, [](const Vec&, const Vec&) { return SpMat(1, 2); }),
+        litepgo::solver::AbsoluteConvergence(1e-12));
     EXPECT_THROW(bad_partial.evaluate(p)->jacobian(), std::invalid_argument);
     EXPECT_THROW(bad_partial.evaluate(p)->jvp(p), std::invalid_argument);
     EXPECT_THROW(bad_partial.evaluate(p)->vjp(p), std::invalid_argument);
     StaticEquilibriumResponse null_energy(
         2, free, initial, options, [](const Vec&) { return std::shared_ptr<energy::Energy>{}; },
-        testing::force_factory(2, [](const Vec&) { return std::shared_ptr<energy::Energy>{}; }, partial));
+        testing::force_factory(
+            2, [](const Vec&) { return std::shared_ptr<energy::Energy>{}; }, partial),
+        litepgo::solver::AbsoluteConvergence(1e-12));
     EXPECT_THROW(null_energy.evaluate(p)->value(), std::invalid_argument);
     EXPECT_THROW(null_energy.evaluate(p)->jvp(p), std::invalid_argument);
     EXPECT_THROW(null_energy.evaluate(p)->vjp(p), std::invalid_argument);
@@ -150,7 +159,8 @@ TEST(StaticEquilibriumResponse, ValidationFailureAndFullyFixedStates) {
                 Eigen::Matrix2d K = Eigen::Vector2d(1, 0).asDiagonal();
                 return std::make_shared<energy::QuadraticEnergy>(K.sparseView());
             },
-            partial));
+            partial),
+        litepgo::solver::AbsoluteConvergence(1e-12));
     EXPECT_THROW(singular.evaluate(p)->jacobian(), std::exception);
     EXPECT_THROW(singular.evaluate(p)->jvp(p), std::exception);
     EXPECT_THROW(singular.evaluate(p)->vjp(p), std::exception);
@@ -163,7 +173,7 @@ TEST(StaticEquilibriumResponse, InterleavedFixedDofsMatchResolveFiniteDifference
     const dof::DofReduction fixed(3, {1});
     const Vec initial = Eigen::Vector3d(0, .8, 0);
     solver::NewtonOptions options;
-    options.gradient_tolerance = 1e-12;
+
     StaticEquilibriumResponse response(
         2, fixed, initial, options,
         [&](const Vec& p) -> std::shared_ptr<energy::Energy> {
@@ -174,7 +184,8 @@ TEST(StaticEquilibriumResponse, InterleavedFixedDofsMatchResolveFiniteDifference
             [&](const Vec& p) -> std::shared_ptr<energy::Energy> {
                 return std::make_shared<energy::QuadraticEnergy>(K.sparseView(), -A * p);
             },
-            [&](const Vec&, const Vec&) -> SpMat { return (-A).sparseView(); }));
+            [&](const Vec&, const Vec&) -> SpMat { return (-A).sparseView(); }),
+        litepgo::solver::AbsoluteConvergence(1e-12));
     const Vec p = Eigen::Vector2d(.6, -1.1);
     auto evaluation_1 = response.evaluate(p);
     auto jacobian_1 = evaluation_1->jacobian();
@@ -218,7 +229,7 @@ TEST(StaticEquilibriumResponse, ResponseProductsAvoidExplicitParameterJacobian) 
     bool invalid = false;
     int calls = 0;
     StaticEquilibriumResponse eq(
-        3, dof::DofReduction(2, {1}), Eigen::Vector2d(0, .4), {.gradient_tolerance = 1e-12},
+        3, dof::DofReduction(2, {1}), Eigen::Vector2d(0, .4), {},
         [force](const Vec& p) -> std::shared_ptr<energy::Energy> {
             return std::make_shared<energy::QuadraticEnergy>(Eigen::Matrix2d::Identity().sparseView(), -force->A * p);
         },
@@ -226,7 +237,8 @@ TEST(StaticEquilibriumResponse, ResponseProductsAvoidExplicitParameterJacobian) 
             ++calls;
             EXPECT_DOUBLE_EQ(u[1], .4);
             return invalid ? nullptr : force;
-        });
+        },
+        litepgo::solver::AbsoluteConvergence(1e-12));
     const Vec p = Eigen::Vector3d(.2, -.7, .4), w = Eigen::Vector2d(.3, .6);
     eq.evaluate(p)->value();
     EXPECT_EQ(calls, 0);
@@ -254,10 +266,11 @@ TEST(StaticEquilibriumResponse, EvaluationOwnsIndependentStateAndReusesFactories
         return std::make_shared<energy::AffineResponse>((-Eigen::Matrix2d::Identity()).sparseView(), u);
     };
     NewtonOptions options;
-    options.gradient_tolerance = 1e-12;
+
     options.project_hessian = false;
     auto response = std::make_shared<StaticEquilibriumResponse>(2, dof::DofReduction(2, std::vector<int>{}),
-                                                                Vec::Zero(2), options, make_energy, make_response);
+                                                                Vec::Zero(2), options, make_energy, make_response,
+                                                                litepgo::solver::AbsoluteConvergence(1e-12));
     std::weak_ptr<StaticEquilibriumResponse> weak = response;
     Vec p = Eigen::Vector2d(.3, .4);
     auto first = response->evaluate(p);

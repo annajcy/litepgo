@@ -1,4 +1,5 @@
 """Python materials (PyVolumetricMaterial, PyShellMaterial and Torch subclasses) in native FEM."""
+from litepgo.solver import AbsoluteConvergence
 
 import gc
 import weakref
@@ -324,11 +325,11 @@ def test_newton_rejects_nonfinite_trials_and_matches_native_equilibrium():
     fixed = dof.DofReduction(15, [*range(9), 12, 13, 14])
     initial = np.zeros(15)
     initial[12:] = [0.04, -0.02, 0.06]
-    options = solver.NewtonOptions(gradient_tolerance=1e-10, max_iterations=100)
+    options = solver.NewtonOptions(max_iterations=100)
     native = solver.newton_solve(fem.VolumetricFemEnergy[key](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, X, Fp, theta),
-                                 fixed, initial, options)
+                                 fixed, initial, options, convergence=AbsoluteConvergence(1e-10))
     python = solver.newton_solve(fem.VolumetricFemEnergy[key](Guarded(), mapping, X, Fp, theta),
-                                 fixed, initial, options)
+                                 fixed, initial, options, convergence=AbsoluteConvergence(1e-10))
     assert python.status == native.status == solver.NewtonStatus.Converged
     np.testing.assert_allclose(python.x, native.x, atol=1e-9)
 

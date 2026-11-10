@@ -1,4 +1,5 @@
 """End-to-end response timings; selected build is supplied through PYTHONPATH."""
+from litepgo.solver import AbsoluteConvergence
 import argparse
 import json
 import statistics
@@ -62,7 +63,7 @@ def problem(family, n, kind, counts):
     def make_energy(p):
         counts['solves']+=1
         return energy.WeightedSumEnergy([(elastic(p),1.),(foundation,1.)])
-    eq=solver.StaticEquilibriumResponse(len(theta),dof.DofReduction(len(initial),fixed_ids),initial,solver.NewtonOptions(gradient_tolerance=1e-9,max_iterations=100,project_hessian=kind),make_energy,force)
+    eq=solver.StaticEquilibriumResponse(len(theta),dof.DofReduction(len(initial),fixed_ids),initial,solver.NewtonOptions(max_iterations=100,project_hessian=kind),make_energy,force, convergence=AbsoluteConvergence(1e-9))
     return eq,theta,make_energy,np.setdiff1d(np.arange(len(initial)),fixed_ids)
 
 

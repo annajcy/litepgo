@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
         const dof::DofReduction fixed(map.num_dofs(), fixed_dofs);
         Vec u = Vec::Zero(map.num_dofs());
         solver::NewtonOptions options;
-        options.gradient_tolerance = 1e-9;
+
         options.max_iterations = 100;
         const std::filesystem::path output = argc > 1 ? argv[1] : LITEPGO_OUTPUT_DIR "/shell_plastic_field";
         std::filesystem::create_directories(output);
@@ -60,7 +60,8 @@ int main(int argc, char** argv) {
             fem::ShellFemEnergy elastic(std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(), map,
                                         rest, thickness, theta, plastic);
             linalg::AutoSparseSolver linear;
-            const auto result = solver::newton_solve(elastic, fixed, u, options, linear);
+            const auto result =
+                solver::newton_solve(elastic, fixed, u, options, linear, litepgo::solver::AbsoluteConvergence(1e-9));
             if (result.status != solver::NewtonStatus::Converged)
                 throw std::runtime_error("Static equilibrium failed at step " + std::to_string(step));
             u = result.x;

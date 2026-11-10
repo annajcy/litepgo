@@ -3,6 +3,7 @@
 Run: uv run --no-sync python examples/fem/fitting/neural_equilibrium_fit.py
 Keep neural_neohookean.py and torch_neohookean.py beside this file.
 """
+from litepgo.solver import AbsoluteConvergence
 
 import json
 
@@ -82,8 +83,9 @@ def make_equilibrium(material, batch_size=256):
 
     equilibrium = solver.StaticEquilibriumResponse(
         2, fixed, np.zeros(15),
-        solver.NewtonOptions(gradient_tolerance=1e-12, max_iterations=100),
+        solver.NewtonOptions(max_iterations=100),
         make_energy, make_response,
+        convergence=AbsoluteConvergence(1e-12),
     )
     return equilibrium, free, make_energy, make_response
 

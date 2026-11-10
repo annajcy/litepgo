@@ -99,10 +99,11 @@ int main(int argc, char** argv) {
         const dof::DofReduction fixed(elastic.num_dofs(), std::move(fixed_dofs));
         const Vec initial = Vec::Zero(elastic.num_dofs());
         solver::NewtonOptions options;
-        options.gradient_tolerance = 1e-8;
+
         options.max_iterations = 200;
         linalg::AutoSparseSolver solver;
-        const auto result = solver::newton_solve(elastic, fixed, initial, options, solver);
+        const auto result =
+            solver::newton_solve(elastic, fixed, initial, options, solver, litepgo::solver::AbsoluteConvergence(1e-8));
         converged = converged && result.status == solver::NewtonStatus::Converged;
         // The top face's twist about the axis, from its vertices' summed in-plane rotation.
         double cross = 0, dot = 0;

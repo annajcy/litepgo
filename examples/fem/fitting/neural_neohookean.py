@@ -3,6 +3,7 @@
 Run: uv run --no-sync python examples/fem/fitting/neural_neohookean.py
 Writes a checkpoint and independent evaluation report under output/neural_neohookean.
 """
+from litepgo.solver import AbsoluteConvergence
 
 from litepgo.energy import AffineResponse
 import argparse
@@ -307,9 +308,9 @@ def equilibrium_errors(model):
         for load in ([0.04, -0.02, 0.06], [-0.03, 0.02, -0.04], [0.1, 0.04, 0.08]):
             u = np.zeros(15)
             u[12:] = load
-            options = solver.NewtonOptions(gradient_tolerance=1e-10, max_iterations=100)
+            options = solver.NewtonOptions(max_iterations=100)
             a, b = [
-                solver.newton_solve(E, fixed, u, options) for E in (learned, native)
+                solver.newton_solve(E, fixed, u, options, convergence=AbsoluteConvergence(1e-10)) for E in (learned, native)
             ]
             converged = a.status == b.status == solver.NewtonStatus.Converged
             if not converged:

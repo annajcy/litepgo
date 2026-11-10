@@ -81,9 +81,10 @@ int main(int argc, char** argv) {
     const dof::DofReduction unconstrained(elastic->num_dofs(), {});
     const Vec initial = Vec::Zero(elastic->num_dofs());
     solver::NewtonOptions options;
-    options.gradient_tolerance = 1e-8;
+
     linalg::AutoSparseSolver solver;
-    const auto result = solver::newton_solve(potential, unconstrained, initial, options, solver);
+    const auto result = solver::newton_solve(potential, unconstrained, initial, options, solver,
+                                             litepgo::solver::AbsoluteConvergence(1e-8));
     const bool converged = result.status == solver::NewtonStatus::Converged;
     double corner_gap = 0;
     for (std::size_t i = 0; i < corners.size(); ++i)

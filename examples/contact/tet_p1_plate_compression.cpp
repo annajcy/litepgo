@@ -109,10 +109,11 @@ int main(int argc, char** argv) {
     const dof::DofReduction fixed(num_dofs, clamped);
     const Vec initial = Vec::Zero(num_dofs);
     solver::NewtonOptions options;
-    options.gradient_tolerance = 1e-8;
+
     options.max_iterations = 200;
     linalg::AutoSparseSolver solver;
-    const auto result = solver::newton_solve(potential, fixed, initial, options, solver);
+    const auto result =
+        solver::newton_solve(potential, fixed, initial, options, solver, litepgo::solver::AbsoluteConvergence(1e-8));
     const bool converged = result.status == solver::NewtonStatus::Converged;
 
     const Vec surface_positions = kinematics.positions(result.x);

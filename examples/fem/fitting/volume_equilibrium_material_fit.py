@@ -3,6 +3,7 @@
 Run from the repository root after building litepgo:
     uv run --no-sync python examples/fem/fitting/volume_equilibrium_material_fit.py
 """
+from litepgo.solver import AbsoluteConvergence
 
 from litepgo.energy import AffineResponse
 from pathlib import Path
@@ -85,9 +86,10 @@ def reaction(problem, theta, axis, strain, need_jacobian):
         2,
         problem.fixed,
         initial,
-        solver.NewtonOptions(gradient_tolerance=1e-10, max_iterations=100),
+        solver.NewtonOptions(max_iterations=100),
         problem.make_energy,
         problem.make_response,
+        convergence=AbsoluteConvergence(1e-10),
     )
     evaluation = equilibrium.evaluate(theta)
     J = evaluation.jacobian() if need_jacobian else None

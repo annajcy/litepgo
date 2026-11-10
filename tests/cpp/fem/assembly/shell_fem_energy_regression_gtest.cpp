@@ -135,14 +135,15 @@ TEST(ShellFemEnergyRegression, NewtonRelaxesBentPatchWhileKeepingCentralTriangle
     const double initial_energy = energy.evaluate(u0)->value();
     const dof::DofReduction fixed(18, {0, 1, 2, 3, 4, 5, 6, 7, 8});
     solver::NewtonOptions options;
-    options.gradient_tolerance = 1e-9;
+
     linalg::EigenLDLT solver;
-    const auto result = solver::newton_solve(energy, fixed, u0, options, solver);
+    const auto result =
+        solver::newton_solve(energy, fixed, u0, options, solver, litepgo::solver::AbsoluteConvergence(1e-9));
     ASSERT_EQ(result.status, solver::NewtonStatus::Converged);
     EXPECT_GT(result.iterations, 0);
     EXPECT_LT(result.energy, initial_energy);
     EXPECT_LT(result.energy, 1e-14);
-    EXPECT_LE(result.gradient_norm, options.gradient_tolerance);
+    EXPECT_LE(result.gradient_norm, 1e-9);
     EXPECT_EQ(result.x.head(9), u0.head(9));
     EXPECT_LT(result.x.tail(9).norm(), 1e-5);
 }

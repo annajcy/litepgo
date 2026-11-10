@@ -5,6 +5,7 @@ so each density term is a quadratic form in packed vectors. The script compares
 the material with the native KoiterStVK and solves a clamped-patch equilibrium.
 Run: uv run --no-sync python examples/fem/material/numpy_koiter_shell.py
 """
+from litepgo.solver import AbsoluteConvergence
 
 import numpy as np
 from litepgo import dof, energy, fem, mesh, solver
@@ -126,8 +127,8 @@ def main():
         print(f'{Force.__name__}: value_error={np.abs(actual.evaluate(p).value - reference.evaluate(p).value).max():.2e}, jacobian_error={abs(actual.evaluate(p).jacobian() - reference.evaluate(p).jacobian()).max():.2e}')
 
     fixed = dof.DofReduction(27, [i for i in range(27) if i // 3 != 4])
-    options = solver.NewtonOptions(gradient_tolerance=1e-12, max_iterations=100)
-    results = [solver.newton_solve(E, fixed, prescribed, options) for E in (native, numpy)]
+    options = solver.NewtonOptions(max_iterations=100)
+    results = [solver.newton_solve(E, fixed, prescribed, options, convergence=AbsoluteConvergence(1e-12)) for E in (native, numpy)]
     if any(r.status != solver.NewtonStatus.Converged for r in results):
         raise RuntimeError("Shell equilibrium did not converge")
     print(f"equilibrium: center_displacement_error={np.abs(results[0].x - results[1].x).max():.2e}")

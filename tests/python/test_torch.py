@@ -1,3 +1,4 @@
+from litepgo.solver import AbsoluteConvergence
 from equilibrium_fixtures import FormulaForce
 import numpy as np
 import pytest
@@ -45,7 +46,7 @@ def test_equilibrium_gradcheck_fixed_dofs_and_failure():
         2,
         dof.DofReduction(2, [0]),
         np.array([0.4, 0.0]),
-        solver.NewtonOptions(gradient_tolerance=1e-12),
+        solver.NewtonOptions(),
         lambda p: energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p),
         lambda u: FormulaForce(
             2,
@@ -53,6 +54,7 @@ def test_equilibrium_gradcheck_fixed_dofs_and_failure():
             lambda p: energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p),
             lambda p, u: -sparse.eye(2, format="csc"),
         ),
+        convergence=AbsoluteConvergence(1e-12),
     )
     p = torch.tensor([2.0, 3.0], dtype=torch.float64, requires_grad=True)
     assert torch.autograd.gradcheck(lambda p: bridge.response(model, p), (p,))
@@ -154,7 +156,7 @@ def test_equilibrium_forward_ad_and_product_errors():
         2,
         dof.DofReduction(2, [0]),
         np.array([0.4, 0.0]),
-        solver.NewtonOptions(gradient_tolerance=1e-12),
+        solver.NewtonOptions(),
         lambda p: energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p),
         lambda u: FormulaForce(
             2,
@@ -162,6 +164,7 @@ def test_equilibrium_forward_ad_and_product_errors():
             lambda p: energy.QuadraticEnergy(sparse.eye(2, format="csc"), -p),
             partial,
         ),
+        convergence=AbsoluteConvergence(1e-12),
     )
     x = torch.tensor([2.0, 3.0], dtype=torch.float64, requires_grad=True)
     y = bridge.response(model, x)

@@ -27,7 +27,8 @@ int main() {
     dof::DofReduction fixed(n, {0, n - 1});
     linalg::AutoSparseSolver linear_solver;
     const auto result = solver::newton_solve(
-        energy, fixed, initial, {.gradient_tolerance = 1e-10}, linear_solver, [](const solver::NewtonStep& step) {
+        energy, fixed, initial, {}, linear_solver, litepgo::solver::AbsoluteConvergence(1e-10),
+        [](const solver::NewtonStep& step) {
             std::cout << "iteration=" << step.iteration << ", energy=" << step.energy
                       << ", free_gradient=" << step.gradient_norm << ", step=" << step.step << '\n';
         });
