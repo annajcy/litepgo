@@ -41,6 +41,7 @@ last digits on every platform.
 | FEM | [`hermite_interpolation`](examples/fem/hermite-interpolation.md) | Value/derivative samples and Hermite Field reconstruction in 2D/3D |
 | FEM | [`quadrature_integration`](examples/fem/quadrature-integration.md) | Reference integration in 1D/2D/3D and simplex area/volume weights |
 | FEM | [`numpy_neohookean`](examples/fem/numpy-neohookean.md) | A volumetric material written in NumPy, assembled by native Hermite FEM |
+| FEM | [`shell_interpolated_fp`](examples/fem/shell-interpolated-fp.md) | Q1/Hermite plastic displacement interpolation and free shell relaxation |
 | FEM | [`shell_uniform_fp`](examples/fem/shell-uniform-fp.md) | Uniform Fp=diag(1,0.5,1), free shell contraction and affine target check |
 | FEM | [`shell_fp_free_relaxation`](examples/fem/shell-fp-free-relaxation.md) | Free Koiter–StVK shell relaxation under fixed nonuniform Fp |
 | FEM | [`numpy_koiter_shell`](examples/fem/numpy-koiter-shell.md) | A shell material written in NumPy, with force responses and equilibrium |

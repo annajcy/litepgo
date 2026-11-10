@@ -36,3 +36,5 @@ with coefficients and integrate local terms.
   and exported before/after geometry.
 - [Uniform plastic contraction](shell-uniform-fp.md). The same Fp=diag(1,0.5,1)
   on every face, checked against the compatible affine zero-energy shape.
+- [Shell plasticity from displacement interpolation](shell-interpolated-fp.md).
+  Sample Q1/Hermite plastic displacement gradients at face centroids and compare free relaxation.
