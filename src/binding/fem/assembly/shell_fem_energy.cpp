@@ -11,7 +11,6 @@ void bind_fem_shell_fem_energy(nb::module_& m) {
         .def(nb::init<std::shared_ptr<const ShellBatchMaterial>, const dof::StencilDofMap&,
                       std::vector<TriangleMidEdgeRestData>, std::vector<double>, std::vector<Vec>,
                       const std::vector<Eigen::Matrix3d>&, int>(),
-             "material"_a, "displacement_map"_a, "rest_data"_a, "thickness"_a, "theta"_a,
-             "Fp"_a = std::vector<Eigen::Matrix3d>{}, "batch_size"_a = 256);
+             "material"_a, "displacement_map"_a, "rest_data"_a, "thickness"_a, "theta"_a, "Fp"_a, "batch_size"_a = 256);
 }
 } // namespace litepgo::fem::binding

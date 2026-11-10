@@ -38,7 +38,7 @@ Volumetric material blocks follow the material parameter order; plastic blocks
 are column-major vec(Fp). These partial derivatives do not solve equilibrium.
 
 ShellFemEnergy and shell force responses snapshot rest stencils, thickness and
-fixed parameters. ShellFemEnergy accepts optional per-face plastic matrices;
+fixed parameters. ShellFemEnergy requires explicit per-face plastic matrices (identity for no plasticity);
 these change natural forms, preserving original area weights and thickness.
 Shell plastic force responses differentiate nine column-major Fp entries.
 

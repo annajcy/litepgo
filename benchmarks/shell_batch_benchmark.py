@@ -23,7 +23,7 @@ def main():
     for threads in (1,4):
         with tbb_thread_limit(threads):
             for batch in (1,256):
-                obj = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](),mapping,rest,[.1]*len(faces),[np.array([2.,3.])]*len(faces),batch_size=batch)
+                obj = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](),mapping,rest,[.1]*len(faces),[np.array([2.,3.])]*len(faces),batch_size=batch, Fp=[np.eye(3)] * len(faces))
                 for op in ('value','gradient','hessian'):
                     fn = (lambda x: obj.evaluate(x).value) if op == 'value' else (lambda x: getattr(obj.evaluate(x), op)())
                     value = fn(u)

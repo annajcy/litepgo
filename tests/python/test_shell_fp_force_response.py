@@ -63,7 +63,7 @@ def test_shared_and_element_fp_jacobians_and_original_area(batch_size):
     repeated_J = element.evaluate(np.tile(packed, 4)).jacobian().toarray()
     np.testing.assert_allclose(J.toarray(), sum(repeated_J[:, 9*e:9*e+9] for e in range(4)), atol=1e-12)
     identity = np.eye(3).ravel(order="F")
-    original = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta)
+    original = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta, Fp=[np.eye(3)] * len(thickness))
     np.testing.assert_allclose(shared.evaluate(identity).value, original.evaluate(u).gradient(), atol=1e-12)
     with pytest.raises(ValueError):
         shared.evaluate(np.zeros(9)).value
@@ -126,11 +126,15 @@ def test_shell_energy_fixed_fp_derivatives_and_validation():
     topology, mapping, rest, u, thickness = problem()
     theta = [np.array([2., 3.])] * len(rest)
     Energy = fem.ShellFemEnergy
+    args = (fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta)
+    with pytest.raises(TypeError):
+        Energy(*args)
+    with pytest.raises(TypeError):
+        Energy(*args, Fp=None)
+    with pytest.raises(ValueError):
+        Energy(*args, Fp=[])
     plastic = [P.copy() for _ in rest]
     elastic = Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta, Fp=plastic)
-    original = Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta)
-    identity = Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta, [np.eye(3)]*len(rest))
-    np.testing.assert_allclose(identity.evaluate(u).gradient(), original.evaluate(u).gradient(), atol=1e-12)
     response = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), dof.ConstantDofMap(topology, 9), mapping, rest, u, thickness, theta)
     np.testing.assert_allclose(elastic.evaluate(u).gradient(), response.evaluate(P.ravel(order='F')).value, atol=1e-12)
     expected = explicit_force((topology, mapping, rest, u, thickness), P.ravel(order="F"), theta)

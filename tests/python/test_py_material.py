@@ -467,7 +467,7 @@ def test_shell_material_validates_at_construction():
             return {"W": np.full(len(ab), np.inf)}
 
     with pytest.raises(ValueError, match="non-finite W"):
-        fem.ShellFemEnergy(Infinite(), mapping, rest, thickness, theta)
+        fem.ShellFemEnergy(Infinite(), mapping, rest, thickness, theta, Fp=[np.eye(3)] * len(thickness))
     with pytest.raises(TypeError):
         fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature](TorchKoiter(), *volume_problem(CASES[0])[1:5])
 

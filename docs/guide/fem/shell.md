@@ -13,9 +13,9 @@ original face area is applied after evaluating the density.
 ```mermaid
 flowchart TB
   accTitle: Shell current and natural geometry paths
-  accDescr: Current stencil positions produce metric and curvature. Rest stencils, optionally transformed by prescribed Fp, produce natural forms. Koiter density compares the two using thickness and material parameters, then original area and assembly produce the global energy.
+  accDescr: Current stencil positions produce metric and curvature. Rest stencils, transformed by explicitly prescribed Fp, produce natural forms. Koiter density compares the two using thickness and material parameters, then original area and assembly produce the global energy.
   current["Current stencil X plus u"] --> forms["Current metric a and curvature b"]
-  rest["Original rest stencil"] --> natural["Natural forms, optionally from Fp"]
+  rest["Original rest stencil"] --> natural["Natural forms from Fp"]
   forms --> material["KoiterStVK density"]
   natural --> material
   parameters["Thickness and material parameters"] --> material
@@ -42,7 +42,8 @@ rest = [fem.TriangleMidEdgeRestData(
         for e in range(mapping.num_elements)]
 Energy = fem.ShellFemEnergy
 elastic = Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, [0.1] * mapping.num_elements,
-                 [np.array([2.0, 3.0])] * mapping.num_elements)
+                 [np.array([2.0, 3.0])] * mapping.num_elements,
+                 Fp=[np.eye(3)] * mapping.num_elements)
 ```
 
 Here `nodes` is the `(n,3)` rest-position array and `topology` its triangle
@@ -134,7 +135,10 @@ triangle mid-edge kinematics and pointwise material functions above.
 
 ## Prescribed plastic natural geometry
 
-Optional `Fp` supplies one fixed $3\times3$ matrix per face. In a stencil
+Pass one identity matrix per face for no plasticity. Omitting `Fp`, passing
+`None`, or passing an empty list for a nonempty mesh is an error.
+
+Required `Fp` supplies one fixed $3\times3$ matrix per face. In a stencil
 centered at its first vertex, form
 
 $$

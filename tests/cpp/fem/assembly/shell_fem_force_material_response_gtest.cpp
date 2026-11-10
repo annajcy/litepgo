@@ -34,7 +34,7 @@ struct Patch {
         for (int e = 0; e < 4; ++e)
             params.push_back(theta.size() == 2 ? theta : Vec(theta.segment<2>(2 * e)));
         return ShellFemEnergy(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), map, rest, thickness,
-                              params)
+                              params, std::vector<Eigen::Matrix3d>(map.num_elements(), Eigen::Matrix3d::Identity()))
             .evaluate(u)
             ->gradient();
     }

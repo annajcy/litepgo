@@ -68,6 +68,7 @@ def make_factories(problem, material=None):
             problem.rest,
             problem.thickness,
             [theta] * problem.displacement_map.num_elements,
+            Fp=[np.eye(3)] * len(problem.thickness),
         )
 
     def make_response(u):

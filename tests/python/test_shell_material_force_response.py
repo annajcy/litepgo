@@ -24,7 +24,7 @@ def problem():
 def observed(data, theta):
     _, mapping, rest, u, thickness = data
     parameters = [theta if theta.size == 2 else theta[2*e:2*e+2] for e in range(4)]
-    return Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, parameters).evaluate(u).gradient()
+    return Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, parameters, Fp=[np.eye(3)] * len(thickness)).evaluate(u).gradient()
 
 
 @pytest.mark.parametrize("batch_size", [1, 3, 256])

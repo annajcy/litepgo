@@ -26,7 +26,7 @@ def test_native_energy_batch_size(batch_size):
     mapping = dof.StencilDofMap(3, stencils.vertices, 3)
     rest = fem.TriangleMidEdgeRestData(nodes[:3], stencils.opposite[0])
     cls = fem.ShellFemEnergy
-    args = (mapping, [rest], [.1], [np.array([2., 3.])])
+    args = (mapping, [rest], [.1], [np.array([2., 3.])], [np.eye(3)])
     with tbb_thread_limit(1):
         expected = cls(fem.PointwiseShellAdapter[fem.KoiterStVK](), *args).evaluate(x[:9]).hessian().toarray()
     with tbb_thread_limit(4):

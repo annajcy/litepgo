@@ -23,12 +23,11 @@ class ShellFemEnergy final : public energy::MeshEnergy {
 
   public:
     // Arrays and stencil rows must match the map's face and vertex order.
-    // Optional fixed Fp per face transforms natural forms only; empty means the supplied rest forms.
+    // Required fixed Fp per face transforms natural forms; use identity matrices for no plasticity.
     // Original positions, area weights and thickness remain unchanged.
     ShellFemEnergy(std::shared_ptr<const ShellBatchMaterial> material, const dof::StencilDofMap& displacement_map,
                    std::vector<TriangleMidEdgeRestData> rest_data, std::vector<double> thickness,
-                   std::vector<Eigen::VectorXd> theta, const std::vector<Eigen::Matrix3d>& Fp = {},
-                   int batch_size = 256)
+                   std::vector<Eigen::VectorXd> theta, const std::vector<Eigen::Matrix3d>& Fp, int batch_size = 256)
         : energy::MeshEnergy(displacement_map, batch_size), material_(std::move(material)),
           rest_data_(std::move(rest_data)), thickness_(std::move(thickness)), theta_(std::move(theta)) {
         if (!material_ || material_->num_parameters() < 0)
@@ -37,7 +36,7 @@ class ShellFemEnergy final : public energy::MeshEnergy {
         if (displacement_map.dofs_per_vertex() != 3 || rest_data_.size() != count || thickness_.size() != count ||
             theta_.size() != count)
             throw std::invalid_argument("ShellFemEnergy: incompatible map or face counts");
-        if (!Fp.empty() && Fp.size() != count)
+        if (Fp.size() != count)
             throw std::invalid_argument("ShellFemEnergy: require one Fp per face");
         for (int e = 0; e < displacement_map.num_elements(); ++e) {
             const auto index = static_cast<std::size_t>(e);
@@ -45,12 +44,10 @@ class ShellFemEnergy final : public energy::MeshEnergy {
             if (displacement_map.vertex_indices(e).size() != static_cast<std::size_t>(rest.X_local.rows()) ||
                 !std::isfinite(rest.sqrt_det_a_bar) || rest.sqrt_det_a_bar <= 0)
                 throw std::invalid_argument("ShellFemEnergy: incompatible reference stencil or area");
-            if (!Fp.empty()) {
-                const auto natural = detail::shell_plastic_geometry(rest.X_local, rest.opposite, Fp[index]);
-                // Preserve original positions and area: only the natural metric and curvature change.
-                rest.a_bar = natural.a;
-                rest.b_bar = natural.b;
-            }
+            const auto natural = detail::shell_plastic_geometry(rest.X_local, rest.opposite, Fp[index]);
+            // Preserve original positions and area: only the natural metric and curvature change.
+            rest.a_bar = natural.a;
+            rest.b_bar = natural.b;
         }
 
         std::vector<int> ids(count);

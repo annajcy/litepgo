@@ -62,7 +62,8 @@ def make_problem():
     ).ravel()
     truth, initial = np.array([2.0, 3.0]), np.array([0.7, 1.2])
     elastic = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](),
-        mapping, rest, thickness, [truth] * mapping.num_elements
+        mapping, rest, thickness, [truth] * mapping.num_elements,
+        Fp=[np.eye(3)] * len(thickness),
     )
     # Generate observations through the energy API, independently of the response path.
     target = elastic.evaluate(displacement).gradient()

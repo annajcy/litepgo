@@ -48,7 +48,8 @@ inline auto make_shell_energy(const Vec& X_nodes) {
     const Eigen::Vector2d theta(Y * nu / (1 - nu * nu), Y / (2 * (1 + nu)));
     return fem::ShellFemEnergy(std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(), map,
                                std::move(rest), std::vector<double>(map.num_elements(), thickness),
-                               std::vector<Eigen::VectorXd>(map.num_elements(), theta));
+                               std::vector<Eigen::VectorXd>(map.num_elements(), theta),
+                               std::vector<Eigen::Matrix3d>(map.num_elements(), Eigen::Matrix3d::Identity()));
 }
 
 namespace {

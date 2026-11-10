@@ -25,7 +25,7 @@ def problem(family, n, kind, counts):
         mapping=dof.StencilDofMap(len(nodes),st.vertices,3)
         rest=[fem.TriangleMidEdgeRestData(mapping.gather(e,nodes.ravel()),st.opposite[e]) for e in range(len(faces))]
         material=fem.PointwiseShellAdapter[fem.KoiterStVK]()
-        elastic=lambda p: fem.ShellFemEnergy(material,mapping,rest,[.1]*len(faces),[p]*len(faces))
+        elastic=lambda p: fem.ShellFemEnergy(material,mapping,rest,[.1]*len(faces),[p]*len(faces), Fp=[np.eye(3)] * len(faces))
         force=lambda u: fem.ShellFemForceMaterialResponse(material,dof.ConstantDofMap(topology,2),mapping,rest,u,[.1]*len(faces))
         if family=='shell_fp':
             theta=np.eye(3).ravel(order='F')

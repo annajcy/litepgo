@@ -56,6 +56,7 @@ def main():
         rest,
         [thickness] * stencil_map.num_elements,
         [theta] * stencil_map.num_elements,
+        Fp=[np.eye(3)] * stencil_map.num_elements,
     )
 
     # Pull the four corners of the flat xy-plane sheet outward in plane and alternately

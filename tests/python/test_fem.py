@@ -425,7 +425,7 @@ def test_shell_material_integration_matches_shell_energy():
     stencil_map = dof.StencilDofMap(3, stencils.vertices, 3)
     rest = fem.TriangleMidEdgeRestData(X, stencils.opposite[0])
     theta = np.array([1.0, 2.0])
-    whole = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](), stencil_map, [rest], [0.1], [theta])
+    whole = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](), stencil_map, [rest], [0.1], [theta], Fp=[np.eye(3)])
     u = 0.1 * np.cos(np.arange(9.0))
     current, J, second = fem.eval_triangle_mid_edge_kinematics(
         X + u.reshape(3, 3), rest.opposite, gradient=True, hessian=True
