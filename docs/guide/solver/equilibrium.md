@@ -25,7 +25,7 @@ K_{ff}\frac{\partial u_f^*}{\partial p}=-B_f,\qquad
 $$
 
 `StaticEquilibriumResponse(num_parameters, fixed, initial, options, make_energy,
-make_response)` implements this map from parameters to full displacement:
+make_response, *, convergence)` implements this map from parameters to full displacement:
 
 - `make_energy(p)` creates the **total** potential for those parameters.
 - `make_response(u)` returns a `Response` mapping parameters to the total potential's
@@ -40,14 +40,15 @@ make_response)` implements this map from parameters to full displacement:
 from litepgo import solver
 
 equilibrium = solver.StaticEquilibriumResponse(
-    num_parameters, fixed, initial, options, make_energy, make_response)
+    num_parameters, fixed, initial, options, make_energy, make_response,
+    convergence=solver.AbsoluteConvergence(1e-12))
 evaluation = equilibrium.evaluate(p)
 du_dp = evaluation.jacobian()
 u = evaluation.value
 ```
 
 C++ uses the same argument order. `MakeEnergy` returns `shared_ptr<Energy>` and
-`MakeResponse` returns `shared_ptr<Response>`. Both factories are retained by the
+`MakeResponse` returns `shared_ptr<Response>`. Both factories and the convergence policy are retained by the
 equilibrium object and exposed to Python's cyclic garbage collector. The response
 factory is called at the solved state only when derivatives on free DOFs are needed.
 Its evaluation prepares any needed dynamic structure at the current parameters.

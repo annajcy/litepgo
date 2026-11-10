@@ -127,7 +127,7 @@ For other bound types that do not support weak references, omit the back-referen
 or refer weakly to a Python model container. No property named `owner` or
 `energy` is required by the library.
 
-`StaticEquilibriumResponse` exposes its two Python callbacks to the cyclic garbage
+`StaticEquilibriumResponse` exposes its factory and convergence callbacks to the cyclic garbage
 collector. Cycles through those callbacks can be collected when all other
 references in the cycle are visible to Python.
 

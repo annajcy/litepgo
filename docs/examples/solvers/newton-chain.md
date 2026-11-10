@@ -13,7 +13,7 @@ stationarity equations give equally spaced values.
 
 **API walkthrough.** Build `QuadraticEnergy(D.T @ D)`.
 `DofReduction(6,[0,5])` fixes indices; `initial` supplies endpoint values 1 and
-3. Set `NewtonOptions.gradient_tolerance=1e-10`, call `newton_solve`, and inspect
+3. Pass `convergence=AbsoluteConvergence(1e-10)` to `newton_solve`, and inspect
 `NewtonStatus.Converged`. Its callback reports the free-gradient max norm and
 accepted step; a terminal callback has step zero.
 

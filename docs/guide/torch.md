@@ -180,6 +180,7 @@ def make_response(u):
 
 equilibrium = solver.StaticEquilibriumResponse(
     num_parameters, fixed, initial, options, make_energy, make_response,
+    convergence=solver.AbsoluteConvergence(1e-12),
 )
 ```
 

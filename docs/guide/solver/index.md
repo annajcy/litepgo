@@ -1,9 +1,8 @@
 # Nonlinear solvers
 
 Newton minimizes a scalar energy with hard fixed DOFs. Gauss–Newton minimizes the
-squared norm of a response. Both need analytic derivatives and an explicit finite
-`gradient_tolerance`; the default tolerance is NaN to require a deliberate choice.
-Newton accepts a nonnegative tolerance; Gauss–Newton requires a positive one.
+squared norm of a response. Both need analytic derivatives. Newton requires an explicit `convergence` policy;
+Gauss–Newton requires a positive finite `gradient_tolerance`.
 
 ## Module architecture
 

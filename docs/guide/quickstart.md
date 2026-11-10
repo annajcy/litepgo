@@ -38,16 +38,17 @@ objective = energy.QuadraticEnergy((D.T @ D).tocsc())
 initial = np.zeros(n)
 initial[0], initial[-1] = 1.0, 3.0
 fixed = dof.DofReduction(n, [0, n - 1])
-options = solver.NewtonOptions(gradient_tolerance=1e-10)
-result = solver.newton_solve(objective, fixed, initial, options)
+options = solver.NewtonOptions()
+result = solver.newton_solve(objective, fixed, initial, options,
+                             convergence=solver.AbsoluteConvergence(1e-10))
 assert result.status == solver.NewtonStatus.Converged
 np.testing.assert_allclose(result.x, np.linspace(1.0, 3.0, n), atol=1e-10)
 print(result.x)
 ```
 
 `QuadraticEnergy` stores the symmetric matrix. `DofReduction` selects fixed
-indices; their values come from `initial`. `NewtonOptions.gradient_tolerance`
-is required and measures the free-gradient infinity norm. The result's `x`
+indices; their values come from `initial`. The `convergence` argument is required;
+`AbsoluteConvergence(tolerance)` checks the free-gradient infinity norm. The result's `x`
 contains all six unknowns, including the prescribed values. Inspect `status`
 before using a result as a converged equilibrium.
 
