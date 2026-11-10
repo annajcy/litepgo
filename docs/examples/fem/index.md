@@ -31,3 +31,8 @@ coefficient orders, and derivative layouts. Continue with
 [quadrature](../../guide/fem/quadrature.md) for reference integration rules and
 [fields and quadrature](../../guide/fem/fields.md) to combine shape functions
 with coefficients and integrate local terms.
+- [Free shell relaxation with prescribed Fp](shell-fp-free-relaxation.md).
+  Koiter–StVK Schwarz P shell, open boundaries, fixed nonuniform plastic forms,
+  and exported before/after geometry.
+- [Uniform plastic contraction](shell-uniform-fp.md). The same Fp=diag(1,0.5,1)
+  on every face, checked against the compatible affine zero-energy shape.
