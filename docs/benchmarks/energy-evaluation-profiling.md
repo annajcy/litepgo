@@ -1,5 +1,7 @@
 # Energy evaluation: profiling and corrected baseline
 
+Follow-up: [native cache optimization and allocation/serial-path experiments](energy-cache-optimization.md).
+
 The Debug audit found two defects: matrix coefficients were inspected before
 checking compressed structure, causing an Eigen assertion instead of an exception;
 and returning a structured-binding Jacobian by name copied it, incidentally

@@ -1,0 +1,16 @@
+import sys
+from pathlib import Path
+sys.path.insert(0,str(Path('benchmarks').resolve()))
+from energy_cache import measure
+import numpy as np
+import scipy.sparse as sp
+from litepgo import energy,tbb_thread_limit
+n=10000
+with tbb_thread_limit(1):
+ A=sp.diags([-.1*np.ones(n-1),np.ones(n),-.1*np.ones(n-1)],[-1,0,1],format='csc')
+ leaf=energy.QuadraticEnergy(A)
+ pair=energy.WeightedSumEnergy([(leaf,.75),(leaf,.25)])
+ mapped=energy.AffineMappedEnergy(pair,sp.eye(n,format='csc')*1.1)
+ x=np.sin(np.arange(n)+.1)
+ for name,model in [('leaf',leaf),('pair',pair),('mapped',mapped)]:
+  measure(f'{name}/{n}',model,x,'gradient',1,41,300)

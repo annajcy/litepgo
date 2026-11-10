@@ -1,0 +1,48 @@
+--- a/src/core/dof/energy_assembler.cpp
++++ b/src/core/dof/energy_assembler.cpp
+@@ -126,14 +126,19 @@
+     const auto count = element_dof_indices_.size();
+     if (elements.size() != count)
+         throw std::invalid_argument("EnergyAssembler::assemble requires one view per element");
+-    tbb::parallel_for(std::size_t(0), count, [&](std::size_t e) {
++    const auto validate = [&](std::size_t e) {
+         const auto n = static_cast<Eigen::Index>(element_dof_indices_[e].size());
+         const auto local_gradient = elements[e].gradient();
+         const auto local_hessian = elements[e].hessian();
+         if ((gradient && (local_gradient.size() != n || !local_gradient.allFinite())) ||
+             (hessian && (local_hessian.rows() != n || local_hessian.cols() != n || !all_finite(local_hessian))))
+             throw std::invalid_argument("EnergyAssembler::assemble: invalid local dimensions or non-finite values");
+-    });
++    };
++    if (count <= 8) {
++        for (std::size_t e = 0; e < count; ++e)
++            validate(e);
++    } else
++        tbb::parallel_for(std::size_t(0), count, validate);
+     if (hessian && !linalg::same_pattern(*hessian, pattern_))
+         throw std::invalid_argument("EnergyAssembler::assemble: Hessian pattern does not match hessian_pattern()");
+     if (gradient)
+--- a/src/core/energy/scalar/mesh_energy.cpp
++++ b/src/core/energy/scalar/mesh_energy.cpp
+@@ -55,7 +55,7 @@
+ }
+ double MeshEnergy::assemble_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, bool project) const {
+     ::litepgo::detail::BusyScope scope(busy_, "MeshEnergy");
+-    tbb::parallel_for(std::size_t(0), batches_.size(), [&](std::size_t k) {
++    const auto evaluate_batch = [&](std::size_t k) {
+         auto& data = batches_[k];
+         const auto& ids = data.ids;
+         gather(ids, x, data.inputs);
+@@ -86,7 +86,11 @@
+                 views_[e] = dof::EnergyAssembler::ElementView(local_g, local_H);
+             }
+         }
+-    });
++    };
++    if (batches_.size() == 1)
++        evaluate_batch(0);
++    else
++        tbb::parallel_for(std::size_t(0), batches_.size(), evaluate_batch);
+     assembler_.assemble(views_, gradient, hessian);
+     const double value = std::accumulate(values_.begin(), values_.end(), 0.);
+     if (!std::isfinite(value))

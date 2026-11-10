@@ -1,6 +1,7 @@
 #include "litepgo/energy/scalar/weighted_sum_energy.hpp"
 
 #include "litepgo/common/busy_scope.hpp"
+#include "litepgo/energy/scalar/detail/evaluation_access.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <algorithm>
@@ -99,42 +100,35 @@ class WeightedSumEnergy::Evaluation final : public EnergyEvaluation {
         EnergyValues result{0, std::nullopt, std::nullopt};
         if (gradient)
             result.gradient = Vec::Zero(num_dofs());
-        std::vector<EnergyValues> children;
-        children.reserve(model_.terms_.size());
-        for (const auto& child : children_) {
-            EnergyValues r{0., std::nullopt, std::nullopt};
+        std::vector<const SpMat*> hessians;
+        if (hessian)
+            hessians.reserve(children_.size());
+        for (size_t i = 0; i < children_.size(); ++i) {
+            auto& child = *children_[i];
+            const double w = model_.terms_[i].weight;
             if (hessian)
-                r.hessian = project ? child->projected_hessian() : child->hessian();
+                hessians.push_back(&(project ? detail::EvaluationAccess::projected_hessian(child)
+                                             : detail::EvaluationAccess::hessian(child)));
             if (gradient)
-                r.gradient = child->gradient();
-            r.value = child->value();
-            children.push_back(std::move(r));
+                *result.gradient += w * detail::EvaluationAccess::gradient(child);
+            result.value += w * child.value();
         }
         if (hessian) {
             bool changed = !model_.plan_;
-            for (size_t i = 0; !changed && i < children.size(); ++i)
-                changed = !linalg::same_pattern(*children[i].hessian, model_.plan_->terms[i].pattern);
+            for (size_t i = 0; !changed && i < hessians.size(); ++i)
+                changed = !linalg::same_pattern(*hessians[i], model_.plan_->terms[i].pattern);
             if (changed) {
-                std::vector<const SpMat*> patterns;
-                for (const auto& child : children)
-                    patterns.push_back(&*child.hessian);
-                AssemblyPlan next{merged_pattern(num_dofs(), patterns), {}};
-                for (const auto& child : children)
-                    next.terms.push_back(
-                        {linalg::pattern_of(*child.hessian), positions_in(next.pattern, *child.hessian)});
+                AssemblyPlan next{merged_pattern(num_dofs(), hessians), {}};
+                for (const auto* H : hessians)
+                    next.terms.push_back({linalg::pattern_of(*H), positions_in(next.pattern, *H)});
                 model_.plan_ = std::move(next);
             }
             result.hessian = model_.plan_->pattern;
-        }
-        for (size_t i = 0; i < model_.terms_.size(); ++i) {
-            const double w = model_.terms_[i].weight;
-            result.value += w * children[i].value;
-            if (gradient)
-                *result.gradient += w * *children[i].gradient;
-            if (hessian) {
+            for (size_t i = 0; i < hessians.size(); ++i) {
+                const double w = model_.terms_[i].weight;
                 const auto& positions = model_.plan_->terms[i].positions;
                 for (size_t k = 0; k < positions.size(); ++k)
-                    result.hessian->valuePtr()[positions[k]] += w * children[i].hessian->valuePtr()[k];
+                    result.hessian->valuePtr()[positions[k]] += w * hessians[i]->valuePtr()[k];
             }
         }
         return result;

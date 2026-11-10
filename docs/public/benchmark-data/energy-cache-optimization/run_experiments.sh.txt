@@ -1,0 +1,20 @@
+#!/bin/zsh
+set -eu
+cd /Users/jinceyang/Desktop/litepgo
+out=build/energy-cache-optimization
+for run in 0 1 2 3; do
+  for variant in experiment2 experiment3; do
+    if [[ "$run" == 0 || "$run" == 3 ]]; then
+      version=cache
+    else
+      version=$variant
+    fi
+    if [[ "$variant" == experiment2 ]]; then
+      suite=composites
+    else
+      suite=assembly
+    fi
+    /usr/bin/time -l env PYTHONPATH="$out/$version-python" .venv/bin/python benchmarks/energy_cache.py --suite "$suite" > "$out/exp-$run-$variant-$version-$suite.jsonl" 2> "$out/exp-$run-$variant-$version-$suite.resources.txt"
+    /usr/bin/time -l env PYTHONPATH="$out/$version-python" .venv/bin/python benchmarks/equilibrium_evaluation.py > "$out/exp-$run-$variant-$version-equilibrium.jsonl" 2> "$out/exp-$run-$variant-$version-equilibrium.resources.txt"
+  done
+done

@@ -1,0 +1,33 @@
+{
+  "base_commit": "fbc54493c500666894f51ba880ddddf9789f862b",
+  "baseline_module": "build/energy-profile/fixed-python",
+  "baseline_binary_sha256": "4af39f1f3c6a60a6d3f6628de9d4283dd2bb0ce167a12e4e953fb96c6477c2c1",
+  "source_patch_sha256": "03d0e5cb65b3a4b876cd037af7edc325b5648512585bed5203ee08a3b806baa9",
+  "binaries": {
+    "cache": "6e6470595d15ee270d3b1d9983994c821bcbe809ea1e6cf90d0b66fe4194fe02",
+    "experiment2": "69f34afbc2592bf51d80dc31e9d3593cd8c124834566dd9d02ae43769967f1a7",
+    "experiment3": "a429f43f9091ebad1f70f760dee7d951e9f7ee6eb04175aac3b41680d90bd041"
+  },
+  "installed_binary_sha256": "6e6470595d15ee270d3b1d9983994c821bcbe809ea1e6cf90d0b66fe4194fe02",
+  "build": "Release -O3 -DNDEBUG arm64, same existing build configuration",
+  "ordering": "before/after/after/before, separate processes, no concurrent builds/tests",
+  "tests": {
+    "release_ctest": "508/508",
+    "python": "658 passed, 81 skipped",
+    "debug": "Energy/Response 87, solver 35, DOF 56",
+    "sanitizers": "ASan/UBSan: Energy/Response 87, solver 35, DOF 56",
+    "experiment2": "Release Energy 85, solver 35, DOF 56, Python 42; ASan/UBSan Energy/Response 87, solver 35",
+    "experiment3": "Release Energy 85, solver 35, DOF 56, Python 54",
+    "docs": "VitePress build passed"
+  },
+  "numerical_tolerance": {
+    "rtol": 2e-08,
+    "atol": 1e-09
+  },
+  "equilibrium_solves_per_operation": 1,
+  "status": "Only cache optimization retained in source; experiment2/3 are archived prototypes.",
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "cpu": "Apple M1 Pro",
+  "raw_archive_sha256": "ffe9bca9b5ef0dbc9ab3e473215d22616d025f01cfec2a3d6a060bf2d4831f38",
+  "raw_record_count": 1796
+}

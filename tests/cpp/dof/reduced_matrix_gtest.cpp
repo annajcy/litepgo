@@ -49,6 +49,7 @@ TEST(ReducedMatrix, AssignRefreshesValuesInPlace) {
     const int* inner = reduced.matrix().innerIndexPtr();
 
     const SpMat B = tridiagonal(8, 2.5);
+    EXPECT_TRUE(reduced.has_pattern(B));
     reduced.assign(B);
     expect_same(reduced.matrix(), reduction.reduce(B));
     EXPECT_EQ(reduced.matrix().valuePtr(), values);
@@ -64,6 +65,7 @@ TEST(ReducedMatrix, AssignRejectsAnotherPattern) {
     denser.insert(0, 7) = 1.0;
     denser.insert(7, 0) = 1.0;
     denser.makeCompressed();
+    EXPECT_FALSE(reduced.has_pattern(denser));
     EXPECT_THROW(reduced.assign(denser), std::invalid_argument);
     expect_same(reduced.matrix(), before);
 }
@@ -79,6 +81,15 @@ TEST(ReducedMatrix, CoversNoAndAllFixedDofs) {
 TEST(ReducedMatrix, ChecksTheMatrix) {
     const DofReduction reduction(5, {1});
     EXPECT_THROW(ReducedMatrix(reduction, tridiagonal(4, 1.0)), std::invalid_argument);
+    const SpMat A = tridiagonal(5, 1.);
+    ReducedMatrix reduced(reduction, A);
+    SpMat uncompressed = A;
+    uncompressed.uncompress();
+    EXPECT_FALSE(reduced.has_pattern(uncompressed));
+    SpMat rectangular = A;
+    rectangular.conservativeResize(6, 5);
+    EXPECT_FALSE(reduced.has_pattern(rectangular));
+    EXPECT_THROW(reduced.assign(rectangular), std::invalid_argument);
 }
 
 TEST(ReducedMatrix, StoresTheWholeDiagonal) {

@@ -1,7 +1,7 @@
 #include "litepgo/solver/newton.hpp"
 
 #include "litepgo/dof/reduced_matrix.hpp"
-#include "litepgo/linalg/sparse_pattern.hpp"
+#include "litepgo/energy/scalar/detail/evaluation_access.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -43,6 +43,10 @@ bool is_converged(const NewtonStep& step, const NewtonOptions& options) {
 class LinearSystem {
   public:
     LinearSystem(const dof::DofReduction& fixed, linalg::SparseSolver& solver) : fixed_(fixed), solver_(solver) {}
+
+    bool has_pattern(const SpMat& hessian) const {
+        return matrix_ && matrix_->has_pattern(hessian);
+    }
 
     // Rebuilds the free block and the analysis for a new Hessian pattern.
     void rebuild(const SpMat& hessian) {
@@ -149,26 +153,24 @@ NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed
     };
 
     Vec& x = result.x;
-    Vec gradient;
     Vec gradient_free;
     Vec direction_free;
     Vec direction = Vec::Zero(x.size()); // fixed entries stay zero
     Vec trial(x.size());
-    SpMat hessian;
     LinearSystem system(fixed, solver);
 
     for (int iteration = 0;; ++iteration) {
         NewtonStep step;
         step.iteration = iteration;
 
-        SpMat next_hessian = options.project_hessian ? evaluation->projected_hessian() : evaluation->hessian();
-        step.pattern_changed = iteration == 0 || !linalg::same_pattern(hessian, next_hessian);
-        gradient = evaluation->gradient();
-        hessian = std::move(next_hessian);
+        const SpMat& hessian = options.project_hessian
+                                   ? energy::detail::EvaluationAccess::projected_hessian(*evaluation)
+                                   : energy::detail::EvaluationAccess::hessian(*evaluation);
+        step.pattern_changed = !system.has_pattern(hessian);
         if (step.pattern_changed)
             system.rebuild(hessian);
         step.energy = evaluation->value();
-        gradient_free = fixed.reduce(gradient);
+        gradient_free = fixed.reduce(energy::detail::EvaluationAccess::gradient(*evaluation));
         step.gradient_norm = gradient_free.cwiseAbs().maxCoeff();
 
         if (is_converged(step, options)) {

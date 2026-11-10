@@ -65,11 +65,16 @@ ReducedMatrix::ReducedMatrix(const DofReduction& reduction, const SpMat& A) {
     assign(A);
 }
 
+bool ReducedMatrix::has_pattern(const SpMat& A) const {
+    return A.isCompressed() && A.rows() == A.cols() &&
+           A.outerSize() + 1 == static_cast<Eigen::Index>(outer_indices_.size()) &&
+           A.nonZeros() == static_cast<Eigen::Index>(inner_indices_.size()) &&
+           std::equal(outer_indices_.begin(), outer_indices_.end(), A.outerIndexPtr()) &&
+           std::equal(inner_indices_.begin(), inner_indices_.end(), A.innerIndexPtr());
+}
+
 void ReducedMatrix::assign(const SpMat& A) {
-    if (!A.isCompressed() || A.outerSize() + 1 != static_cast<Eigen::Index>(outer_indices_.size()) ||
-        A.nonZeros() != static_cast<Eigen::Index>(inner_indices_.size()) ||
-        !std::equal(outer_indices_.begin(), outer_indices_.end(), A.outerIndexPtr()) ||
-        !std::equal(inner_indices_.begin(), inner_indices_.end(), A.innerIndexPtr())) {
+    if (!has_pattern(A)) {
         throw std::invalid_argument("ReducedMatrix::assign requires the sparsity pattern given at construction");
     }
     const double* source = A.valuePtr();

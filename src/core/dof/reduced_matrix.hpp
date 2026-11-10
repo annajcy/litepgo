@@ -31,6 +31,8 @@ class ReducedMatrix {
     // otherwise throws std::invalid_argument and leaves matrix() unchanged.
     void assign(const SpMat& A);
 
+    bool has_pattern(const SpMat& A) const;
+
     // Adds shift to every diagonal entry. The next assign() overwrites it.
     void add_to_diagonal(double shift);
 

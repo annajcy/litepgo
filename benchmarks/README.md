@@ -51,3 +51,12 @@ an archived old-API driver and checks values, gradients, Hessian actions and
 end-to-end equilibrium results. See `docs/benchmarks/energy-evaluation.md` for
 raw samples, build conditions and measured overheads. Do not run concurrently
 with builds, tests, or tutorial execution.
+
+Focused cache/assembly checks: `python benchmarks/energy_cache.py --suite composites`
+measures fresh-state construction, gradients and Hessians for leaf, weighted,
+nested and affine-mapped energies at 3/1000/10000 DOFs. `--suite assembly` measures
+small shell, TetP1 and HexHermite gradients/Hessians with 1/4 TBB threads. Both
+use warmups, repeated calls and numerical checks outside the timed region;
+`PYTHONPATH` selects an isolated build for paired comparisons. See
+`docs/benchmarks/energy-cache-optimization.md` for the cache optimization and
+separate allocation/serial-path experiments.

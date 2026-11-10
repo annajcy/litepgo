@@ -3,6 +3,9 @@
 #include <memory>
 #include <optional>
 namespace litepgo::energy {
+namespace detail {
+struct EvaluationAccess;
+}
 class Energy;
 struct EnergyValues {
     double value;
@@ -30,6 +33,7 @@ class EnergyEvaluation {
 
   private:
     friend class Energy;
+    friend struct detail::EvaluationAccess;
     void save(EnergyValues result, bool gradient, bool hessian, bool projected);
     std::optional<double> value_;
     std::optional<Vec> gradient_;

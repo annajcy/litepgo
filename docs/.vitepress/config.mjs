@@ -192,7 +192,8 @@ export default defineConfig({
         { text: 'Benchmarks', link: '/benchmarks/', items: [
           { text: 'Torch material performance', link: '/benchmarks/torch-material' },
           { text: 'Response evaluation performance', link: '/benchmarks/response-evaluation' },
-          { text: 'Energy evaluation performance', link: '/benchmarks/energy-evaluation' }
+          { text: 'Energy evaluation performance', link: '/benchmarks/energy-evaluation' },
+          { text: 'Energy cache optimization', link: '/benchmarks/energy-cache-optimization' }
         ] },
         { text: 'Development', link: '/development' }
       ] }

@@ -1,6 +1,7 @@
 #include "litepgo/energy/scalar/affine_mapped_energy.hpp"
 
 #include "litepgo/common/busy_scope.hpp"
+#include "litepgo/energy/scalar/detail/evaluation_access.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
 
 #include <algorithm>
@@ -97,24 +98,23 @@ class AffineMappedEnergy::Evaluation final : public EnergyEvaluation {
     }
     EnergyValues assemble(bool gradient, bool hessian, bool project) {
         ::litepgo::detail::BusyScope scope(model_.busy_, "AffineMappedEnergy");
-        EnergyValues child{0., std::nullopt, std::nullopt};
+        const SpMat* H = nullptr;
         if (hessian)
-            child.hessian = project ? child_->projected_hessian() : child_->hessian();
+            H = &(project ? detail::EvaluationAccess::projected_hessian(*child_)
+                          : detail::EvaluationAccess::hessian(*child_));
+        EnergyValues result{0., std::nullopt, std::nullopt};
         if (gradient)
-            child.gradient = child_->gradient();
-        child.value = child_->value();
-        EnergyValues result{child.value, std::nullopt, std::nullopt};
-        if (gradient)
-            result.gradient = model_.map_.transpose() * *child.gradient;
+            result.gradient = model_.map_.transpose() * detail::EvaluationAccess::gradient(*child_);
+        result.value = child_->value();
         if (hessian) {
-            if (!model_.plan_ || !linalg::same_pattern(*child.hessian, model_.plan_->inner_pattern)) {
-                CachedPlan next{linalg::pattern_of(*child.hessian), model_.plan_hessian(*child.hessian, model_.map_)};
+            if (!model_.plan_ || !linalg::same_pattern(*H, model_.plan_->inner_pattern)) {
+                CachedPlan next{linalg::pattern_of(*H), model_.plan_hessian(*H, model_.map_)};
                 model_.plan_ = std::move(next);
             }
             result.hessian = model_.plan_->hessian.pattern;
             for (const auto& contribution : model_.plan_->hessian.contributions)
                 result.hessian->valuePtr()[contribution.output] +=
-                    contribution.coefficient * child.hessian->valuePtr()[contribution.input];
+                    contribution.coefficient * H->valuePtr()[contribution.input];
         }
         return result;
     }

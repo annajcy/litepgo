@@ -1,0 +1,335 @@
+diff --git a/src/core/dof/reduced_matrix.cpp b/src/core/dof/reduced_matrix.cpp
+index a641fe6..81532e6 100644
+--- a/src/core/dof/reduced_matrix.cpp
++++ b/src/core/dof/reduced_matrix.cpp
+@@ -65,11 +65,16 @@ ReducedMatrix::ReducedMatrix(const DofReduction& reduction, const SpMat& A) {
+     assign(A);
+ }
+ 
++bool ReducedMatrix::has_pattern(const SpMat& A) const {
++    return A.isCompressed() && A.rows() == A.cols() &&
++           A.outerSize() + 1 == static_cast<Eigen::Index>(outer_indices_.size()) &&
++           A.nonZeros() == static_cast<Eigen::Index>(inner_indices_.size()) &&
++           std::equal(outer_indices_.begin(), outer_indices_.end(), A.outerIndexPtr()) &&
++           std::equal(inner_indices_.begin(), inner_indices_.end(), A.innerIndexPtr());
++}
++
+ void ReducedMatrix::assign(const SpMat& A) {
+-    if (!A.isCompressed() || A.outerSize() + 1 != static_cast<Eigen::Index>(outer_indices_.size()) ||
+-        A.nonZeros() != static_cast<Eigen::Index>(inner_indices_.size()) ||
+-        !std::equal(outer_indices_.begin(), outer_indices_.end(), A.outerIndexPtr()) ||
+-        !std::equal(inner_indices_.begin(), inner_indices_.end(), A.innerIndexPtr())) {
++    if (!has_pattern(A)) {
+         throw std::invalid_argument("ReducedMatrix::assign requires the sparsity pattern given at construction");
+     }
+     const double* source = A.valuePtr();
+diff --git a/src/core/dof/reduced_matrix.hpp b/src/core/dof/reduced_matrix.hpp
+index 03e1dec..4cdaeca 100644
+--- a/src/core/dof/reduced_matrix.hpp
++++ b/src/core/dof/reduced_matrix.hpp
+@@ -31,6 +31,8 @@ class ReducedMatrix {
+     // otherwise throws std::invalid_argument and leaves matrix() unchanged.
+     void assign(const SpMat& A);
+ 
++    bool has_pattern(const SpMat& A) const;
++
+     // Adds shift to every diagonal entry. The next assign() overwrites it.
+     void add_to_diagonal(double shift);
+ 
+diff --git a/src/core/energy/scalar/affine_mapped_energy.cpp b/src/core/energy/scalar/affine_mapped_energy.cpp
+index c443980..ae11507 100644
+--- a/src/core/energy/scalar/affine_mapped_energy.cpp
++++ b/src/core/energy/scalar/affine_mapped_energy.cpp
+@@ -1,6 +1,7 @@
+ #include "litepgo/energy/scalar/affine_mapped_energy.hpp"
+ 
+ #include "litepgo/common/busy_scope.hpp"
++#include "litepgo/energy/scalar/detail/evaluation_access.hpp"
+ #include "litepgo/linalg/sparse_pattern.hpp"
+ 
+ #include <algorithm>
+@@ -97,24 +98,23 @@ class AffineMappedEnergy::Evaluation final : public EnergyEvaluation {
+     }
+     EnergyValues assemble(bool gradient, bool hessian, bool project) {
+         ::litepgo::detail::BusyScope scope(model_.busy_, "AffineMappedEnergy");
+-        EnergyValues child{0., std::nullopt, std::nullopt};
++        const SpMat* H = nullptr;
+         if (hessian)
+-            child.hessian = project ? child_->projected_hessian() : child_->hessian();
++            H = &(project ? detail::EvaluationAccess::projected_hessian(*child_)
++                          : detail::EvaluationAccess::hessian(*child_));
++        EnergyValues result{0., std::nullopt, std::nullopt};
+         if (gradient)
+-            child.gradient = child_->gradient();
+-        child.value = child_->value();
+-        EnergyValues result{child.value, std::nullopt, std::nullopt};
+-        if (gradient)
+-            result.gradient = model_.map_.transpose() * *child.gradient;
++            result.gradient = model_.map_.transpose() * detail::EvaluationAccess::gradient(*child_);
++        result.value = child_->value();
+         if (hessian) {
+-            if (!model_.plan_ || !linalg::same_pattern(*child.hessian, model_.plan_->inner_pattern)) {
+-                CachedPlan next{linalg::pattern_of(*child.hessian), model_.plan_hessian(*child.hessian, model_.map_)};
++            if (!model_.plan_ || !linalg::same_pattern(*H, model_.plan_->inner_pattern)) {
++                CachedPlan next{linalg::pattern_of(*H), model_.plan_hessian(*H, model_.map_)};
+                 model_.plan_ = std::move(next);
+             }
+             result.hessian = model_.plan_->hessian.pattern;
+             for (const auto& contribution : model_.plan_->hessian.contributions)
+                 result.hessian->valuePtr()[contribution.output] +=
+-                    contribution.coefficient * child.hessian->valuePtr()[contribution.input];
++                    contribution.coefficient * H->valuePtr()[contribution.input];
+         }
+         return result;
+     }
+diff --git a/src/core/energy/scalar/energy.cpp b/src/core/energy/scalar/energy.cpp
+index 5ad3de3..d38f02f 100644
+--- a/src/core/energy/scalar/energy.cpp
++++ b/src/core/energy/scalar/energy.cpp
+@@ -1,4 +1,5 @@
+ #include "litepgo/energy/scalar/energy.hpp"
++#include "litepgo/energy/scalar/detail/evaluation_access.hpp"
+ #include "litepgo/linalg/sparse_pattern.hpp"
+ #include <Eigen/Eigenvalues>
+ #include <cmath>
+@@ -54,8 +55,10 @@ void EnergyEvaluation::save(EnergyValues result, bool gradient, bool hessian, bo
+ #endif
+     }
+ 
+-    value_ = result.value;
+-    if (result.gradient)
++    // Published caches must keep their storage while native consumers borrow them.
++    if (!value_)
++        value_ = result.value;
++    if (result.gradient && !gradient_)
+         gradient_ = std::move(result.gradient);
+     if (result.hessian)
+         (projected ? projected_ : hessian_) = std::move(result.hessian);
+@@ -66,22 +69,16 @@ double EnergyEvaluation::value() {
+     return *value_;
+ }
+ Vec EnergyEvaluation::gradient() {
+-    if (!gradient_)
+-        save(compute(true, false), true, false, false);
+-    return *gradient_;
++    return detail::EvaluationAccess::gradient(*this);
+ }
+ SpMat EnergyEvaluation::hessian() {
+-    if (!hessian_)
+-        save(compute(true, true), true, true, false);
+-    return *hessian_;
++    return detail::EvaluationAccess::hessian(*this);
+ }
+ SpMat EnergyEvaluation::projected_hessian() {
+-    if (!projected_)
+-        save(compute_projected(), true, true, true);
+-    return *projected_;
++    return detail::EvaluationAccess::projected_hessian(*this);
+ }
+ EnergyValues Energy::eval_projected_values(const ConstVecRef&, EnergyEvaluation& exact) const {
+-    SpMat projected = project_hessian(exact.hessian());
++    SpMat projected = project_hessian(detail::EvaluationAccess::hessian(exact));
+     return {exact.value(), exact.gradient(), std::move(projected)};
+ }
+ SpMat project_hessian(const SpMat& H) {
+diff --git a/src/core/energy/scalar/energy.hpp b/src/core/energy/scalar/energy.hpp
+index 15bb221..6d615a8 100644
+--- a/src/core/energy/scalar/energy.hpp
++++ b/src/core/energy/scalar/energy.hpp
+@@ -3,6 +3,9 @@
+ #include <memory>
+ #include <optional>
+ namespace litepgo::energy {
++namespace detail {
++struct EvaluationAccess;
++}
+ class Energy;
+ struct EnergyValues {
+     double value;
+@@ -30,6 +33,7 @@ class EnergyEvaluation {
+ 
+   private:
+     friend class Energy;
++    friend struct detail::EvaluationAccess;
+     void save(EnergyValues result, bool gradient, bool hessian, bool projected);
+     std::optional<double> value_;
+     std::optional<Vec> gradient_;
+diff --git a/src/core/energy/scalar/weighted_sum_energy.cpp b/src/core/energy/scalar/weighted_sum_energy.cpp
+index 642cc07..9b05ccd 100644
+--- a/src/core/energy/scalar/weighted_sum_energy.cpp
++++ b/src/core/energy/scalar/weighted_sum_energy.cpp
+@@ -1,6 +1,7 @@
+ #include "litepgo/energy/scalar/weighted_sum_energy.hpp"
+ 
+ #include "litepgo/common/busy_scope.hpp"
++#include "litepgo/energy/scalar/detail/evaluation_access.hpp"
+ #include "litepgo/linalg/sparse_pattern.hpp"
+ 
+ #include <algorithm>
+@@ -99,42 +100,35 @@ class WeightedSumEnergy::Evaluation final : public EnergyEvaluation {
+         EnergyValues result{0, std::nullopt, std::nullopt};
+         if (gradient)
+             result.gradient = Vec::Zero(num_dofs());
+-        std::vector<EnergyValues> children;
+-        children.reserve(model_.terms_.size());
+-        for (const auto& child : children_) {
+-            EnergyValues r{0., std::nullopt, std::nullopt};
++        std::vector<const SpMat*> hessians;
++        if (hessian)
++            hessians.reserve(children_.size());
++        for (size_t i = 0; i < children_.size(); ++i) {
++            auto& child = *children_[i];
++            const double w = model_.terms_[i].weight;
+             if (hessian)
+-                r.hessian = project ? child->projected_hessian() : child->hessian();
++                hessians.push_back(&(project ? detail::EvaluationAccess::projected_hessian(child)
++                                             : detail::EvaluationAccess::hessian(child)));
+             if (gradient)
+-                r.gradient = child->gradient();
+-            r.value = child->value();
+-            children.push_back(std::move(r));
++                *result.gradient += w * detail::EvaluationAccess::gradient(child);
++            result.value += w * child.value();
+         }
+         if (hessian) {
+             bool changed = !model_.plan_;
+-            for (size_t i = 0; !changed && i < children.size(); ++i)
+-                changed = !linalg::same_pattern(*children[i].hessian, model_.plan_->terms[i].pattern);
++            for (size_t i = 0; !changed && i < hessians.size(); ++i)
++                changed = !linalg::same_pattern(*hessians[i], model_.plan_->terms[i].pattern);
+             if (changed) {
+-                std::vector<const SpMat*> patterns;
+-                for (const auto& child : children)
+-                    patterns.push_back(&*child.hessian);
+-                AssemblyPlan next{merged_pattern(num_dofs(), patterns), {}};
+-                for (const auto& child : children)
+-                    next.terms.push_back(
+-                        {linalg::pattern_of(*child.hessian), positions_in(next.pattern, *child.hessian)});
++                AssemblyPlan next{merged_pattern(num_dofs(), hessians), {}};
++                for (const auto* H : hessians)
++                    next.terms.push_back({linalg::pattern_of(*H), positions_in(next.pattern, *H)});
+                 model_.plan_ = std::move(next);
+             }
+             result.hessian = model_.plan_->pattern;
+-        }
+-        for (size_t i = 0; i < model_.terms_.size(); ++i) {
+-            const double w = model_.terms_[i].weight;
+-            result.value += w * children[i].value;
+-            if (gradient)
+-                *result.gradient += w * *children[i].gradient;
+-            if (hessian) {
++            for (size_t i = 0; i < hessians.size(); ++i) {
++                const double w = model_.terms_[i].weight;
+                 const auto& positions = model_.plan_->terms[i].positions;
+                 for (size_t k = 0; k < positions.size(); ++k)
+-                    result.hessian->valuePtr()[positions[k]] += w * children[i].hessian->valuePtr()[k];
++                    result.hessian->valuePtr()[positions[k]] += w * hessians[i]->valuePtr()[k];
+             }
+         }
+         return result;
+diff --git a/src/core/solver/newton.cpp b/src/core/solver/newton.cpp
+index ac8e54b..84a4a97 100644
+--- a/src/core/solver/newton.cpp
++++ b/src/core/solver/newton.cpp
+@@ -1,7 +1,7 @@
+ #include "litepgo/solver/newton.hpp"
+ 
+ #include "litepgo/dof/reduced_matrix.hpp"
+-#include "litepgo/linalg/sparse_pattern.hpp"
++#include "litepgo/energy/scalar/detail/evaluation_access.hpp"
+ 
+ #include <algorithm>
+ #include <cmath>
+@@ -44,6 +44,10 @@ class LinearSystem {
+   public:
+     LinearSystem(const dof::DofReduction& fixed, linalg::SparseSolver& solver) : fixed_(fixed), solver_(solver) {}
+ 
++    bool has_pattern(const SpMat& hessian) const {
++        return matrix_ && matrix_->has_pattern(hessian);
++    }
++
+     // Rebuilds the free block and the analysis for a new Hessian pattern.
+     void rebuild(const SpMat& hessian) {
+         matrix_.emplace(fixed_, hessian);
+@@ -149,26 +153,24 @@ NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed
+     };
+ 
+     Vec& x = result.x;
+-    Vec gradient;
+     Vec gradient_free;
+     Vec direction_free;
+     Vec direction = Vec::Zero(x.size()); // fixed entries stay zero
+     Vec trial(x.size());
+-    SpMat hessian;
+     LinearSystem system(fixed, solver);
+ 
+     for (int iteration = 0;; ++iteration) {
+         NewtonStep step;
+         step.iteration = iteration;
+ 
+-        SpMat next_hessian = options.project_hessian ? evaluation->projected_hessian() : evaluation->hessian();
+-        step.pattern_changed = iteration == 0 || !linalg::same_pattern(hessian, next_hessian);
+-        gradient = evaluation->gradient();
+-        hessian = std::move(next_hessian);
++        const SpMat& hessian = options.project_hessian
++                                   ? energy::detail::EvaluationAccess::projected_hessian(*evaluation)
++                                   : energy::detail::EvaluationAccess::hessian(*evaluation);
++        step.pattern_changed = !system.has_pattern(hessian);
+         if (step.pattern_changed)
+             system.rebuild(hessian);
+         step.energy = evaluation->value();
+-        gradient_free = fixed.reduce(gradient);
++        gradient_free = fixed.reduce(energy::detail::EvaluationAccess::gradient(*evaluation));
+         step.gradient_norm = gradient_free.cwiseAbs().maxCoeff();
+ 
+         if (is_converged(step, options)) {
+diff --git a/src/core/solver/static_equilibrium_response.cpp b/src/core/solver/static_equilibrium_response.cpp
+index 212d2b4..bc5ad74 100644
+--- a/src/core/solver/static_equilibrium_response.cpp
++++ b/src/core/solver/static_equilibrium_response.cpp
+@@ -1,5 +1,6 @@
+ #include "litepgo/solver/static_equilibrium_response.hpp"
+ #include "litepgo/dof/reduced_matrix.hpp"
++#include "litepgo/energy/scalar/detail/evaluation_access.hpp"
+ #include "litepgo/linalg/sparse_pattern.hpp"
+ #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
+ #include <cmath>
+@@ -48,8 +49,10 @@ class EquilibriumEvaluation final : public energy::ResponseEvaluation {
+         auto force = make_response_(u);
+         if (!force || force->num_inputs() != num_inputs() || force->num_outputs() != num_outputs())
+             throw std::invalid_argument("StaticEquilibriumResponse: incompatible force response");
+-        const SpMat exact = potential_evaluation_->hessian();
+-        const SpMat previous_hessian = options_.project_hessian ? potential_evaluation_->projected_hessian() : exact;
++        const SpMat& exact = energy::detail::EvaluationAccess::hessian(*potential_evaluation_);
++        const SpMat& previous_hessian =
++            options_.project_hessian ? energy::detail::EvaluationAccess::projected_hessian(*potential_evaluation_)
++                                     : exact;
+         const dof::ReducedMatrix reduced(fixed_, exact), previous(fixed_, previous_hessian);
+         K_ = reduced.matrix();
+         const bool same = linalg::same_pattern(K_, previous.matrix());
+--- /dev/null
++++ b/src/core/energy/scalar/detail/evaluation_access.hpp
+@@ -0,0 +1,23 @@
++#pragma once
++#include "litepgo/energy/scalar/energy.hpp"
++
++namespace litepgo::energy::detail {
++// Internal borrows remain valid until the evaluation is destroyed.
++struct EvaluationAccess {
++    static const Vec& gradient(EnergyEvaluation& e) {
++        if (!e.gradient_)
++            e.save(e.compute(true, false), true, false, false);
++        return *e.gradient_;
++    }
++    static const SpMat& hessian(EnergyEvaluation& e) {
++        if (!e.hessian_)
++            e.save(e.compute(true, true), true, true, false);
++        return *e.hessian_;
++    }
++    static const SpMat& projected_hessian(EnergyEvaluation& e) {
++        if (!e.projected_)
++            e.save(e.compute_projected(), true, true, true);
++        return *e.projected_;
++    }
++};
++} // namespace litepgo::energy::detail

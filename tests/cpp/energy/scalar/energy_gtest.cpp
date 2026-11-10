@@ -1,5 +1,7 @@
 #include "../../testing/evaluate_energy.hpp"
+#include "litepgo/energy/scalar/detail/evaluation_access.hpp"
 #include "litepgo/energy/scalar/energy.hpp"
+#include "litepgo/energy/scalar/quadratic_energy.hpp"
 
 #include "../../testing/finite_difference.hpp"
 #include "litepgo/energy/scalar/affine_mapped_energy.hpp"
@@ -189,6 +191,36 @@ TEST(EnergyContract, RejectsBrokenRequestedDerivativesAndRecovers) {
     EXPECT_THROW(e.evaluate(bad)->hessian(), std::invalid_argument);
     EXPECT_THROW(e.evaluate(x)->max_feasible_step(bad), std::invalid_argument);
     EXPECT_EQ(e.calls, calls);
+}
+
+TEST(EnergyEvaluation, NativeBorrowsSurviveCacheUpgradesAndOtherEvaluations) {
+    using namespace litepgo;
+    using Access = energy::detail::EvaluationAccess;
+    Eigen::Matrix2d A;
+    A << -2., 0., 0., 3.;
+    energy::QuadraticEnergy model(A.sparseView());
+    for (bool projected_first : {false, true}) {
+        auto e = model.evaluate(Vec::Ones(2));
+        const Vec& g = Access::gradient(*e);
+        const double* gradient_data = g.data();
+        const SpMat& first = projected_first ? Access::projected_hessian(*e) : Access::hessian(*e);
+        const double* first_data = first.valuePtr();
+        const SpMat& second = projected_first ? Access::hessian(*e) : Access::projected_hessian(*e);
+        const double* second_data = second.valuePtr();
+        model.evaluate(Vec::Constant(2, 4.))->hessian();
+        EXPECT_EQ(Access::gradient(*e).data(), gradient_data);
+        EXPECT_EQ(g, A * Vec::Ones(2));
+        EXPECT_EQ(first.valuePtr(), first_data);
+        EXPECT_EQ(second.valuePtr(), second_data);
+        EXPECT_EQ(Eigen::MatrixXd(Access::hessian(*e)), A);
+        EXPECT_DOUBLE_EQ(Access::projected_hessian(*e).coeff(0, 0), 0.);
+        Vec owned_gradient = e->gradient();
+        SpMat owned_hessian = e->hessian();
+        owned_gradient.setZero();
+        owned_hessian.coeffs().setZero();
+        EXPECT_EQ(g, A * Vec::Ones(2));
+        EXPECT_EQ(Eigen::MatrixXd(Access::hessian(*e)), A);
+    }
 }
 
 #ifndef NDEBUG

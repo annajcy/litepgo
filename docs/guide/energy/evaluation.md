@@ -29,6 +29,9 @@ caches results on demand:
 Here `n = energy.num_dofs`. Vectors are NumPy arrays / C++ `Vec`; matrices are
 SciPy CSC / C++ `SpMat`, containing both symmetric triangles. Returned arrays and
 matrices own their data. Repeated requests reuse this evaluation's cached results.
+Native composition and solver internals read the cached derivatives by const
+reference; this does not change the owning results returned by the public C++
+and Python methods. Cached storage stays valid for the evaluation's lifetime.
 
 ```python
 import numpy as np

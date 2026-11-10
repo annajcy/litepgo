@@ -1,5 +1,6 @@
 #include "litepgo/solver/static_equilibrium_response.hpp"
 #include "litepgo/dof/reduced_matrix.hpp"
+#include "litepgo/energy/scalar/detail/evaluation_access.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
 #include "litepgo/linalg/sparse_solver/auto_sparse_solver.hpp"
 #include <cmath>
@@ -48,8 +49,10 @@ class EquilibriumEvaluation final : public energy::ResponseEvaluation {
         auto force = make_response_(u);
         if (!force || force->num_inputs() != num_inputs() || force->num_outputs() != num_outputs())
             throw std::invalid_argument("StaticEquilibriumResponse: incompatible force response");
-        const SpMat exact = potential_evaluation_->hessian();
-        const SpMat previous_hessian = options_.project_hessian ? potential_evaluation_->projected_hessian() : exact;
+        const SpMat& exact = energy::detail::EvaluationAccess::hessian(*potential_evaluation_);
+        const SpMat& previous_hessian =
+            options_.project_hessian ? energy::detail::EvaluationAccess::projected_hessian(*potential_evaluation_)
+                                     : exact;
         const dof::ReducedMatrix reduced(fixed_, exact), previous(fixed_, previous_hessian);
         K_ = reduced.matrix();
         const bool same = linalg::same_pattern(K_, previous.matrix());

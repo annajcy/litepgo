@@ -10,6 +10,7 @@ and avoid concurrent test/build jobs when collecting a baseline.
 | Suite | Measures | Output |
 | --- | --- | --- |
 | [Torch material performance](./torch-material.md) | Constitutive evaluation, assembled FEM, parameter VJP, equilibrium forward and backward | Raw JSONL samples, CSV summaries, environment metadata |
+| [Energy cache optimization](./energy-cache-optimization.md) | Native cache reuse, composite derivatives, equilibrium, allocation and serial-path experiments | Paired timings, numerical checks, experimental patches |
 | Native mesh batching | Value, gradient, Hessian over batch sizes and TBB thread counts | CSV on stdout |
 | Contact backend comparison | Native and IPC Toolkit contact on the same example setup | CSV, displacement arrays, convergence traces, environment metadata |
 | Contact scaling | Mesh-size/thread matrix using validated structured meshes | Per-case outputs and reports |

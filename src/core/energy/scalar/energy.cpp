@@ -1,4 +1,5 @@
 #include "litepgo/energy/scalar/energy.hpp"
+#include "litepgo/energy/scalar/detail/evaluation_access.hpp"
 #include "litepgo/linalg/sparse_pattern.hpp"
 #include <Eigen/Eigenvalues>
 #include <cmath>
@@ -54,8 +55,10 @@ void EnergyEvaluation::save(EnergyValues result, bool gradient, bool hessian, bo
 #endif
     }
 
-    value_ = result.value;
-    if (result.gradient)
+    // Published caches must keep their storage while native consumers borrow them.
+    if (!value_)
+        value_ = result.value;
+    if (result.gradient && !gradient_)
         gradient_ = std::move(result.gradient);
     if (result.hessian)
         (projected ? projected_ : hessian_) = std::move(result.hessian);
@@ -66,22 +69,16 @@ double EnergyEvaluation::value() {
     return *value_;
 }
 Vec EnergyEvaluation::gradient() {
-    if (!gradient_)
-        save(compute(true, false), true, false, false);
-    return *gradient_;
+    return detail::EvaluationAccess::gradient(*this);
 }
 SpMat EnergyEvaluation::hessian() {
-    if (!hessian_)
-        save(compute(true, true), true, true, false);
-    return *hessian_;
+    return detail::EvaluationAccess::hessian(*this);
 }
 SpMat EnergyEvaluation::projected_hessian() {
-    if (!projected_)
-        save(compute_projected(), true, true, true);
-    return *projected_;
+    return detail::EvaluationAccess::projected_hessian(*this);
 }
 EnergyValues Energy::eval_projected_values(const ConstVecRef&, EnergyEvaluation& exact) const {
-    SpMat projected = project_hessian(exact.hessian());
+    SpMat projected = project_hessian(detail::EvaluationAccess::hessian(exact));
     return {exact.value(), exact.gradient(), std::move(projected)};
 }
 SpMat project_hessian(const SpMat& H) {

@@ -1,0 +1,14 @@
+#!/bin/zsh
+set -eu
+cd /Users/jinceyang/Desktop/litepgo
+out=build/energy-cache-optimization
+for run in 0 1 2 3; do
+ if [[ "$run" == 0 || "$run" == 3 ]]; then
+  version=baseline
+  module=build/energy-profile/fixed-python
+ else
+  version=cache
+  module=$out/cache-python
+ fi
+ env PYTHONPATH="$module" .venv/bin/python "$out/recheck_gradient.py" > "$out/recheck-$run-$version-gradient.jsonl"
+done
