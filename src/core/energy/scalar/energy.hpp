@@ -12,8 +12,7 @@ struct EnergyValues {
     std::optional<Vec> gradient;
     std::optional<SpMat> hessian;
 };
-// Public evaluations snapshot their input; internal children may borrow that snapshot.
-// Borrows its model. Not concurrently callable; its address must remain stable.
+// Owns its input snapshot and borrows its model. Not concurrently callable.
 class EnergyEvaluation {
   public:
     virtual ~EnergyEvaluation() = default;
@@ -27,13 +26,12 @@ class EnergyEvaluation {
     int num_dofs() const noexcept;
 
   protected:
-    EnergyEvaluation(const Energy& energy, const ConstVecRef& x, bool borrow_input = false);
+    EnergyEvaluation(const Energy& energy, const ConstVecRef& x);
     virtual EnergyValues compute(bool gradient, bool hessian);
     virtual EnergyValues compute_projected();
     virtual double feasible_step_impl(const ConstVecRef& direction) const;
     const Energy& energy_;
-    const Vec owned_x_;
-    const ConstVecRef x_;
+    const Vec x_;
 
   private:
     friend class Energy;
@@ -56,16 +54,13 @@ class Energy {
 
   protected:
     explicit Energy(int num_dofs);
-    // Forward borrow_input to the state constructor. Borrowed children must not escape their parent.
-    virtual std::shared_ptr<EnergyEvaluation> make_evaluation(const ConstVecRef& x, bool borrow_input) const;
+    virtual std::shared_ptr<EnergyEvaluation> make_evaluation(const ConstVecRef& x) const;
     virtual EnergyValues eval_impl(const ConstVecRef& x, bool gradient, bool hessian) const;
     virtual EnergyValues eval_projected_values(const ConstVecRef& x, EnergyEvaluation& exact) const;
     virtual double feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const;
 
   private:
     friend class EnergyEvaluation;
-    friend struct detail::EvaluationAccess;
-    std::shared_ptr<EnergyEvaluation> evaluate_internal(const ConstVecRef& x, bool borrow_input) const;
     int num_dofs_;
 };
 // Spectral PSD projection; may produce a dense sparsity pattern.

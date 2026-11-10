@@ -74,11 +74,10 @@ WeightedSumEnergy::WeightedSumEnergy(std::vector<WeightedEnergy> terms)
 
 class WeightedSumEnergy::Evaluation final : public EnergyEvaluation {
   public:
-    Evaluation(const WeightedSumEnergy& model, const ConstVecRef& x, bool borrow_input)
-        : EnergyEvaluation(model, x, borrow_input), model_(model) {
+    Evaluation(const WeightedSumEnergy& model, const ConstVecRef& x) : EnergyEvaluation(model, x), model_(model) {
         children_.reserve(model_.terms_.size());
         for (const auto& term : model_.terms_)
-            children_.push_back(detail::EvaluationAccess::evaluate_child(*term.energy, *this));
+            children_.push_back(term.energy->evaluate(x));
     }
 
   private:
@@ -138,8 +137,8 @@ class WeightedSumEnergy::Evaluation final : public EnergyEvaluation {
     const WeightedSumEnergy& model_;
     std::vector<std::shared_ptr<EnergyEvaluation>> children_;
 };
-std::shared_ptr<EnergyEvaluation> WeightedSumEnergy::make_evaluation(const ConstVecRef& x, bool borrow_input) const {
-    return std::make_shared<Evaluation>(*this, x, borrow_input);
+std::shared_ptr<EnergyEvaluation> WeightedSumEnergy::make_evaluation(const ConstVecRef& x) const {
+    return std::make_shared<Evaluation>(*this, x);
 }
 
 } // namespace litepgo::energy

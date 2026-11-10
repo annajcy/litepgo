@@ -14,6 +14,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <type_traits>
 
@@ -258,30 +259,26 @@ TEST(EnergyEvaluation, RejectsUncompressedExactAndProjectedResultsWithoutAbortin
 }
 #endif
 
-TEST(EnergyEvaluation, NestedChildrenBorrowOneSnapshotPerPublicEvaluation) {
+TEST(EnergyEvaluation, NestedChildrenOwnIndependentSnapshots) {
     using namespace litepgo;
     static_assert(!std::is_copy_constructible_v<energy::EnergyEvaluation>);
     static_assert(!std::is_move_constructible_v<energy::EnergyEvaluation>);
     struct Probe final : energy::Energy {
         Probe() : Energy(2) {}
-        mutable std::vector<bool> borrowed;
         mutable std::vector<const double*> inputs;
         mutable int destroyed = 0;
         struct State final : energy::EnergyEvaluation {
             const Probe& model;
-            State(const Probe& model, const ConstVecRef& x, bool borrow_input)
-                : EnergyEvaluation(model, x, borrow_input), model(model) {
-                model.borrowed.push_back(borrow_input);
-                EXPECT_EQ(owned_x_.size(), borrow_input ? 0 : x.size());
+            State(const Probe& model, const ConstVecRef& x) : EnergyEvaluation(model, x), model(model) {
+                EXPECT_NE(x_.data(), x.data());
             }
             ~State() override {
-                EXPECT_TRUE(x_.allFinite()); // Parent storage must survive child destruction.
+                EXPECT_TRUE(x_.allFinite());
                 ++model.destroyed;
             }
         };
-        std::shared_ptr<energy::EnergyEvaluation> make_evaluation(const ConstVecRef& x,
-                                                                  bool borrow_input) const override {
-            return std::make_shared<State>(*this, x, borrow_input);
+        std::shared_ptr<energy::EnergyEvaluation> make_evaluation(const ConstVecRef& x) const override {
+            return std::make_shared<State>(*this, x);
         }
         energy::EnergyValues eval_impl(const ConstVecRef& x, bool gradient, bool hessian) const override {
             inputs.push_back(x.data());
@@ -309,18 +306,16 @@ TEST(EnergyEvaluation, NestedChildrenBorrowOneSnapshotPerPublicEvaluation) {
     x.setConstant(7.);
     auto b = nested.evaluate(x);
     x.resize(0);
-    EXPECT_EQ(leaf->borrowed, std::vector<bool>(8, true));
     EXPECT_EQ(Eigen::MatrixXd(a->hessian()), Eigen::Matrix2d::Identity());
     ASSERT_EQ(leaf->inputs.size(), 4);
-    const double* first = leaf->inputs.front();
-    for (const double* input : leaf->inputs)
-        EXPECT_EQ(input, first);
+    const auto first_inputs = leaf->inputs;
+    EXPECT_EQ(std::set<const double*>(first_inputs.begin(), first_inputs.end()).size(), 4);
     leaf->inputs.clear();
     EXPECT_EQ(b->gradient(), Vec::Constant(2, 7.));
     ASSERT_EQ(leaf->inputs.size(), 4);
-    EXPECT_NE(leaf->inputs.front(), first);
-    for (const double* input : leaf->inputs)
-        EXPECT_EQ(input, leaf->inputs.front());
+    std::set<const double*> all_inputs(first_inputs.begin(), first_inputs.end());
+    all_inputs.insert(leaf->inputs.begin(), leaf->inputs.end());
+    EXPECT_EQ(all_inputs.size(), 8);
     b.reset();
     EXPECT_EQ(leaf->destroyed, 4);
     EXPECT_EQ(a->gradient(), original);
@@ -329,6 +324,5 @@ TEST(EnergyEvaluation, NestedChildrenBorrowOneSnapshotPerPublicEvaluation) {
     a.reset();
     EXPECT_EQ(leaf->destroyed, 8);
     auto standalone = leaf->evaluate(Vec::Ones(2));
-    EXPECT_FALSE(leaf->borrowed.back());
     EXPECT_EQ(standalone->gradient(), Vec::Ones(2));
 }

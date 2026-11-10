@@ -60,5 +60,7 @@ use warmups, repeated calls and numerical checks outside the timed region;
 `PYTHONPATH` selects an isolated build for paired comparisons. See
 `docs/benchmarks/energy-cache-optimization.md` for the cache optimization and
 separate allocation/serial-path experiments.
-The production input-sharing follow-up is in
+The historical input-sharing follow-up is in
 `docs/benchmarks/energy-input-optimization.md`, compared against the cache-only commit.
+
+The current owning-input implementation is measured in `docs/benchmarks/energy-own.md`.

@@ -1,5 +1,9 @@
 # Energy cache optimization and allocation/serial-path experiments
 
+Historical measurements: input sharing was later removed in favor of uniform
+input ownership. See [the owning-input comparison](energy-own.md).
+
+
 Experiment 2 was subsequently implemented and validated separately; see
 [the input-sharing follow-up](energy-input-optimization.md). The results below
 describe the earlier cache-only implementation and experimental prototypes.

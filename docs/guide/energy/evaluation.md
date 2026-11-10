@@ -33,12 +33,10 @@ Native composition and solver internals read the cached derivatives by const
 reference; this does not change the owning results returned by the public C++
 and Python methods. Cached storage stays valid for the evaluation's lifetime.
 
-Weighted sums share that input snapshot with their internal child evaluations,
-including nested sums. Affine-mapped children own the transformed input `T*x+b`.
-Each public `evaluate(x)` still has an independent snapshot: changing or deleting
-the caller's input, or destroying another evaluation, does not affect it. Internal
-children are destroyed before their parent's input storage. The Energy model is
-still borrowed; this optimization adds no shared ownership of the model.
+Every evaluation owns an independent input snapshot, including weighted-sum
+children. Affine-mapped children own the transformed input `T*x+b`. Changing or
+deleting the caller's input, or destroying another evaluation, does not affect
+it. The Energy model remains borrowed.
 
 ```python
 import numpy as np

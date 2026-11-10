@@ -83,9 +83,8 @@ AffineMappedEnergy::HessianPlan AffineMappedEnergy::plan_hessian(const SpMat& in
 
 class AffineMappedEnergy::Evaluation final : public EnergyEvaluation {
   public:
-    Evaluation(const AffineMappedEnergy& model, const ConstVecRef& x, bool borrow_input)
-        : EnergyEvaluation(model, x, borrow_input), model_(model),
-          child_(model.energy_->evaluate(model.map_ * x + model.offset_)) {}
+    Evaluation(const AffineMappedEnergy& model, const ConstVecRef& x)
+        : EnergyEvaluation(model, x), model_(model), child_(model.energy_->evaluate(model.map_ * x + model.offset_)) {}
 
   private:
     double feasible_step_impl(const ConstVecRef& dx) const override {
@@ -122,8 +121,8 @@ class AffineMappedEnergy::Evaluation final : public EnergyEvaluation {
     const AffineMappedEnergy& model_;
     std::shared_ptr<EnergyEvaluation> child_;
 };
-std::shared_ptr<EnergyEvaluation> AffineMappedEnergy::make_evaluation(const ConstVecRef& x, bool borrow_input) const {
-    return std::make_shared<Evaluation>(*this, x, borrow_input);
+std::shared_ptr<EnergyEvaluation> AffineMappedEnergy::make_evaluation(const ConstVecRef& x) const {
+    return std::make_shared<Evaluation>(*this, x);
 }
 
 } // namespace litepgo::energy

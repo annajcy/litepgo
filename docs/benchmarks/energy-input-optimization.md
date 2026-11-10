@@ -1,5 +1,9 @@
 # Energy evaluation input sharing
 
+Historical measurements: input sharing was later removed in favor of uniform
+input ownership. See [the owning-input comparison](energy-own.md).
+
+
 The allocation/input-sharing optimization is now implemented on top of native
 cache reuse (`7b17320`). It replaces the earlier experiment 2 prototype; the
 small-workload serial-path experiment remains disabled.

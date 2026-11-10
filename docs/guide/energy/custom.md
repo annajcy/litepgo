@@ -38,29 +38,25 @@ C++ implementations that produce their own matrices may derive directly from
 returning `EnergyValues`. The optional `eval_projected_values(x, exact_evaluation)`
 returns value, gradient and a PSD Hessian; its default reuses the exact evaluation
 and projects its Hessian. More specialized implementations can override
-`make_evaluation(x, borrow_input)` to retain child states. `MeshEnergy` retains its
+`make_evaluation(x)` to retain child states. `MeshEnergy` retains its
 batch hooks and local projection path. All outputs pass through the evaluation's validation.
 
-For a custom C++ evaluation, forward the input policy to its base constructor:
+For a custom C++ evaluation, pass the input to its base constructor:
 
 ```cpp
-MyEvaluation::MyEvaluation(const MyEnergy& model, const ConstVecRef& x, bool borrow_input)
-    : EnergyEvaluation(model, x, borrow_input) {}
+MyEvaluation::MyEvaluation(const MyEnergy& model, const ConstVecRef& x)
+    : EnergyEvaluation(model, x) {}
 
 std::shared_ptr<EnergyEvaluation> MyEnergy::make_evaluation(
-    const ConstVecRef& x, bool borrow_input) const {
-    return std::make_shared<MyEvaluation>(*this, x, borrow_input);
+    const ConstVecRef& x) const {
+    return std::make_shared<MyEvaluation>(*this, x);
 }
 ```
 
-Public `evaluate(x)` passes `false`, so the state copies its input. Internal
-weighted-sum child creation passes `true`, allowing a read-only borrow of the
-parent's snapshot; taking a copy instead is also safe. Borrowed children must not
-outlive their parent or escape to external callers. The protected `x_` member is
-now a read-only `ConstVecRef`, backed by either owned storage or the parent.
-Evaluation objects cannot be copied or moved; move their owning pointers instead.
-This replaces the former one-argument C++ factory hook. The numerical hooks and
-public C++/Python evaluation methods are unchanged.
+Every evaluation owns a copy of its input, including internal children of
+composite energies. The protected `x_` member is a read-only `Vec`.
+The factory takes only `x`; no input ownership flag is needed. Energy models
+remain borrowed, and public derivative results remain independently owned.
 
 ## Implement a vector response
 

@@ -1,0 +1,15 @@
+#!/bin/zsh
+set -eu
+cd /Users/jinceyang/Desktop/litepgo
+out=build/energy-own
+for run in 0 1 2 3; do
+ if [[ "$run" == 0 || "$run" == 3 ]]; then
+  version=before
+ else
+  version=after
+ fi
+ for suite in energy equilibrium; do
+  /usr/bin/time -l env PYTHONPATH="$out/$version-python" .venv/bin/python "benchmarks/${suite}_evaluation.py" > "$out/$run-$version-$suite.jsonl" 2> "$out/$run-$version-$suite.resources.txt"
+ done
+ /usr/bin/time -l env PYTHONPATH="$out/$version-python" .venv/bin/python benchmarks/energy_cache.py --suite composites > "$out/$run-$version-composites.jsonl" 2> "$out/$run-$version-composites.resources.txt"
+done
