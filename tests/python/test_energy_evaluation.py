@@ -135,3 +135,33 @@ def test_composites_allow_projection_fill_and_rebuild_plans(mapped):
             np.testing.assert_allclose(e.projected_hessian().toarray(), expected_P, atol=1e-14)
         np.testing.assert_allclose(e.hessian().toarray(), expected_H, atol=1e-14)
         np.testing.assert_allclose(e.projected_hessian().toarray(), expected_P, atol=1e-14)
+
+
+@pytest.mark.parametrize('projected_first', [False, True])
+def test_nested_mapped_inputs_survive_mutation_and_interleaved_destruction(projected_first):
+    A = np.diag([2., 3.])
+    leaf = Counted(A)
+    pair = energy.WeightedSumEnergy([(leaf, .75), (leaf, .25)])
+    T = np.array([[1., 2., 0.], [0., 1., -1.]])
+    offset = np.array([.5, -.25])
+    mapped = energy.AffineMappedEnergy(pair, T, offset)
+    model = energy.WeightedSumEnergy([(mapped, .6), (mapped, .4)])
+    backing = np.arange(6., dtype=float)
+    x = backing[::-2]  # The binding must snapshot even a non-contiguous temporary view.
+    original = x.copy()
+    state = model.evaluate(x)
+    backing[:] = 100.
+    other = model.evaluate(x)
+    del model, mapped, pair, leaf, x, backing
+    gc.collect()
+    other.hessian()
+    del other
+    gc.collect()
+    if projected_first:
+        state.projected_hessian()
+    H = state.hessian()
+    expected_x = T @ original + offset
+    np.testing.assert_allclose(state.gradient(), T.T @ A @ expected_x)
+    np.testing.assert_allclose(H.toarray(), T.T @ A @ T)
+    np.testing.assert_allclose(state.value, .5 * expected_x @ A @ expected_x)
+    np.testing.assert_allclose(state.projected_hessian().toarray(), H.toarray())

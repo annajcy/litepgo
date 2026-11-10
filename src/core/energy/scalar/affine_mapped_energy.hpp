@@ -36,7 +36,7 @@ class AffineMappedEnergy final : public Energy {
     static HessianPlan plan_hessian(const SpMat& inner_pattern, const SpMat& map);
 
     class Evaluation;
-    std::shared_ptr<EnergyEvaluation> make_evaluation(const ConstVecRef& x) const override;
+    std::shared_ptr<EnergyEvaluation> make_evaluation(const ConstVecRef& x, bool borrow_input) const override;
     std::shared_ptr<Energy> energy_;
     SpMat map_;
     Vec offset_;

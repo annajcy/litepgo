@@ -9,20 +9,28 @@ Energy::Energy(int n) : num_dofs_(n) {
     if (n < 0)
         throw std::invalid_argument("Energy requires a non-negative DOF count");
 }
-EnergyEvaluation::EnergyEvaluation(const Energy& energy, Vec x) : energy_(energy), x_(std::move(x)) {}
+EnergyEvaluation::EnergyEvaluation(const Energy& energy, const ConstVecRef& x, bool borrow_input)
+    : energy_(energy), owned_x_(borrow_input ? Vec() : Vec(x)), x_(borrow_input ? x : ConstVecRef(owned_x_)) {}
 int EnergyEvaluation::num_dofs() const noexcept {
     return energy_.num_dofs();
 }
 std::shared_ptr<EnergyEvaluation> Energy::evaluate(const ConstVecRef& x) const {
+    return evaluate_internal(x, false);
+}
+std::shared_ptr<EnergyEvaluation> Energy::evaluate_internal(const ConstVecRef& x, bool borrow_input) const {
     if (x.size() != num_dofs_ || !x.allFinite())
         throw std::invalid_argument("Energy::evaluate: invalid input");
-    auto result = make_evaluation(x);
+    auto result = make_evaluation(x, borrow_input);
     if (!result || result->num_dofs() != num_dofs_)
         throw std::logic_error("Energy: invalid evaluation");
     return result;
 }
-std::shared_ptr<EnergyEvaluation> Energy::make_evaluation(const ConstVecRef& x) const {
-    return std::shared_ptr<EnergyEvaluation>(new EnergyEvaluation(*this, x));
+std::shared_ptr<EnergyEvaluation> Energy::make_evaluation(const ConstVecRef& x, bool borrow_input) const {
+    struct Evaluation final : EnergyEvaluation {
+        Evaluation(const Energy& energy, const ConstVecRef& x, bool borrow_input)
+            : EnergyEvaluation(energy, x, borrow_input) {}
+    };
+    return std::make_shared<Evaluation>(*this, x, borrow_input);
 }
 EnergyValues Energy::eval_impl(const ConstVecRef&, bool, bool) const {
     throw std::logic_error("Energy: missing evaluation implementation");

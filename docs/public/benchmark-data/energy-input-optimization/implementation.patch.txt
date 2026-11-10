@@ -1,0 +1,186 @@
+diff --git a/src/core/energy/scalar/affine_mapped_energy.cpp b/src/core/energy/scalar/affine_mapped_energy.cpp
+index ae11507..8358ee6 100644
+--- a/src/core/energy/scalar/affine_mapped_energy.cpp
++++ b/src/core/energy/scalar/affine_mapped_energy.cpp
+@@ -83,8 +83,9 @@ AffineMappedEnergy::HessianPlan AffineMappedEnergy::plan_hessian(const SpMat& in
+ 
+ class AffineMappedEnergy::Evaluation final : public EnergyEvaluation {
+   public:
+-    Evaluation(const AffineMappedEnergy& model, const ConstVecRef& x)
+-        : EnergyEvaluation(model, x), model_(model), child_(model.energy_->evaluate(model.map_ * x + model.offset_)) {}
++    Evaluation(const AffineMappedEnergy& model, const ConstVecRef& x, bool borrow_input)
++        : EnergyEvaluation(model, x, borrow_input), model_(model),
++          child_(model.energy_->evaluate(model.map_ * x + model.offset_)) {}
+ 
+   private:
+     double feasible_step_impl(const ConstVecRef& dx) const override {
+@@ -121,8 +122,8 @@ class AffineMappedEnergy::Evaluation final : public EnergyEvaluation {
+     const AffineMappedEnergy& model_;
+     std::shared_ptr<EnergyEvaluation> child_;
+ };
+-std::shared_ptr<EnergyEvaluation> AffineMappedEnergy::make_evaluation(const ConstVecRef& x) const {
+-    return std::make_shared<Evaluation>(*this, x);
++std::shared_ptr<EnergyEvaluation> AffineMappedEnergy::make_evaluation(const ConstVecRef& x, bool borrow_input) const {
++    return std::make_shared<Evaluation>(*this, x, borrow_input);
+ }
+ 
+ } // namespace litepgo::energy
+diff --git a/src/core/energy/scalar/affine_mapped_energy.hpp b/src/core/energy/scalar/affine_mapped_energy.hpp
+index ca5185c..a9b8d97 100644
+--- a/src/core/energy/scalar/affine_mapped_energy.hpp
++++ b/src/core/energy/scalar/affine_mapped_energy.hpp
+@@ -36,7 +36,7 @@ class AffineMappedEnergy final : public Energy {
+     static HessianPlan plan_hessian(const SpMat& inner_pattern, const SpMat& map);
+ 
+     class Evaluation;
+-    std::shared_ptr<EnergyEvaluation> make_evaluation(const ConstVecRef& x) const override;
++    std::shared_ptr<EnergyEvaluation> make_evaluation(const ConstVecRef& x, bool borrow_input) const override;
+     std::shared_ptr<Energy> energy_;
+     SpMat map_;
+     Vec offset_;
+diff --git a/src/core/energy/scalar/detail/evaluation_access.hpp b/src/core/energy/scalar/detail/evaluation_access.hpp
+index da37787..d1d3172 100644
+--- a/src/core/energy/scalar/detail/evaluation_access.hpp
++++ b/src/core/energy/scalar/detail/evaluation_access.hpp
+@@ -4,6 +4,10 @@
+ namespace litepgo::energy::detail {
+ // Internal borrows remain valid until the evaluation is destroyed.
+ struct EvaluationAccess {
++    // The child must be destroyed before parent, which owns or borrows the shared input.
++    static std::shared_ptr<EnergyEvaluation> evaluate_child(const Energy& energy, const EnergyEvaluation& parent) {
++        return energy.evaluate_internal(parent.x_, true);
++    }
+     static const Vec& gradient(EnergyEvaluation& e) {
+         if (!e.gradient_)
+             e.save(e.compute(true, false), true, false, false);
+diff --git a/src/core/energy/scalar/energy.cpp b/src/core/energy/scalar/energy.cpp
+index d38f02f..f7ff122 100644
+--- a/src/core/energy/scalar/energy.cpp
++++ b/src/core/energy/scalar/energy.cpp
+@@ -9,20 +9,28 @@ Energy::Energy(int n) : num_dofs_(n) {
+     if (n < 0)
+         throw std::invalid_argument("Energy requires a non-negative DOF count");
+ }
+-EnergyEvaluation::EnergyEvaluation(const Energy& energy, Vec x) : energy_(energy), x_(std::move(x)) {}
++EnergyEvaluation::EnergyEvaluation(const Energy& energy, const ConstVecRef& x, bool borrow_input)
++    : energy_(energy), owned_x_(borrow_input ? Vec() : Vec(x)), x_(borrow_input ? x : ConstVecRef(owned_x_)) {}
+ int EnergyEvaluation::num_dofs() const noexcept {
+     return energy_.num_dofs();
+ }
+ std::shared_ptr<EnergyEvaluation> Energy::evaluate(const ConstVecRef& x) const {
++    return evaluate_internal(x, false);
++}
++std::shared_ptr<EnergyEvaluation> Energy::evaluate_internal(const ConstVecRef& x, bool borrow_input) const {
+     if (x.size() != num_dofs_ || !x.allFinite())
+         throw std::invalid_argument("Energy::evaluate: invalid input");
+-    auto result = make_evaluation(x);
++    auto result = make_evaluation(x, borrow_input);
+     if (!result || result->num_dofs() != num_dofs_)
+         throw std::logic_error("Energy: invalid evaluation");
+     return result;
+ }
+-std::shared_ptr<EnergyEvaluation> Energy::make_evaluation(const ConstVecRef& x) const {
+-    return std::shared_ptr<EnergyEvaluation>(new EnergyEvaluation(*this, x));
++std::shared_ptr<EnergyEvaluation> Energy::make_evaluation(const ConstVecRef& x, bool borrow_input) const {
++    struct Evaluation final : EnergyEvaluation {
++        Evaluation(const Energy& energy, const ConstVecRef& x, bool borrow_input)
++            : EnergyEvaluation(energy, x, borrow_input) {}
++    };
++    return std::make_shared<Evaluation>(*this, x, borrow_input);
+ }
+ EnergyValues Energy::eval_impl(const ConstVecRef&, bool, bool) const {
+     throw std::logic_error("Energy: missing evaluation implementation");
+diff --git a/src/core/energy/scalar/energy.hpp b/src/core/energy/scalar/energy.hpp
+index 6d615a8..2195f11 100644
+--- a/src/core/energy/scalar/energy.hpp
++++ b/src/core/energy/scalar/energy.hpp
+@@ -12,10 +12,13 @@ struct EnergyValues {
+     std::optional<Vec> gradient;
+     std::optional<SpMat> hessian;
+ };
+-// One copied input; borrows its model. Not concurrently callable.
++// Public evaluations snapshot their input; internal children may borrow that snapshot.
++// Borrows its model. Not concurrently callable; its address must remain stable.
+ class EnergyEvaluation {
+   public:
+     virtual ~EnergyEvaluation() = default;
++    EnergyEvaluation(const EnergyEvaluation&) = delete;
++    EnergyEvaluation& operator=(const EnergyEvaluation&) = delete;
+     double value();
+     Vec gradient();
+     SpMat hessian();
+@@ -24,12 +27,13 @@ class EnergyEvaluation {
+     int num_dofs() const noexcept;
+ 
+   protected:
+-    EnergyEvaluation(const Energy& energy, Vec x);
++    EnergyEvaluation(const Energy& energy, const ConstVecRef& x, bool borrow_input = false);
+     virtual EnergyValues compute(bool gradient, bool hessian);
+     virtual EnergyValues compute_projected();
+     virtual double feasible_step_impl(const ConstVecRef& direction) const;
+     const Energy& energy_;
+-    Vec x_;
++    const Vec owned_x_;
++    const ConstVecRef x_;
+ 
+   private:
+     friend class Energy;
+@@ -52,13 +56,16 @@ class Energy {
+ 
+   protected:
+     explicit Energy(int num_dofs);
+-    virtual std::shared_ptr<EnergyEvaluation> make_evaluation(const ConstVecRef& x) const;
++    // Forward borrow_input to the state constructor. Borrowed children must not escape their parent.
++    virtual std::shared_ptr<EnergyEvaluation> make_evaluation(const ConstVecRef& x, bool borrow_input) const;
+     virtual EnergyValues eval_impl(const ConstVecRef& x, bool gradient, bool hessian) const;
+     virtual EnergyValues eval_projected_values(const ConstVecRef& x, EnergyEvaluation& exact) const;
+     virtual double feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const;
+ 
+   private:
+     friend class EnergyEvaluation;
++    friend struct detail::EvaluationAccess;
++    std::shared_ptr<EnergyEvaluation> evaluate_internal(const ConstVecRef& x, bool borrow_input) const;
+     int num_dofs_;
+ };
+ // Spectral PSD projection; may produce a dense sparsity pattern.
+diff --git a/src/core/energy/scalar/weighted_sum_energy.cpp b/src/core/energy/scalar/weighted_sum_energy.cpp
+index 9b05ccd..95192f9 100644
+--- a/src/core/energy/scalar/weighted_sum_energy.cpp
++++ b/src/core/energy/scalar/weighted_sum_energy.cpp
+@@ -74,9 +74,10 @@ WeightedSumEnergy::WeightedSumEnergy(std::vector<WeightedEnergy> terms)
+ 
+ class WeightedSumEnergy::Evaluation final : public EnergyEvaluation {
+   public:
+-    Evaluation(const WeightedSumEnergy& model, const ConstVecRef& x) : EnergyEvaluation(model, x), model_(model) {
++    Evaluation(const WeightedSumEnergy& model, const ConstVecRef& x, bool borrow_input)
++        : EnergyEvaluation(model, x, borrow_input), model_(model) {
+         for (const auto& term : model_.terms_)
+-            children_.push_back(term.energy->evaluate(x));
++            children_.push_back(detail::EvaluationAccess::evaluate_child(*term.energy, *this));
+     }
+ 
+   private:
+@@ -136,8 +137,8 @@ class WeightedSumEnergy::Evaluation final : public EnergyEvaluation {
+     const WeightedSumEnergy& model_;
+     std::vector<std::shared_ptr<EnergyEvaluation>> children_;
+ };
+-std::shared_ptr<EnergyEvaluation> WeightedSumEnergy::make_evaluation(const ConstVecRef& x) const {
+-    return std::make_shared<Evaluation>(*this, x);
++std::shared_ptr<EnergyEvaluation> WeightedSumEnergy::make_evaluation(const ConstVecRef& x, bool borrow_input) const {
++    return std::make_shared<Evaluation>(*this, x, borrow_input);
+ }
+ 
+ } // namespace litepgo::energy
+diff --git a/src/core/energy/scalar/weighted_sum_energy.hpp b/src/core/energy/scalar/weighted_sum_energy.hpp
+index e582046..cfa4349 100644
+--- a/src/core/energy/scalar/weighted_sum_energy.hpp
++++ b/src/core/energy/scalar/weighted_sum_energy.hpp
+@@ -32,7 +32,7 @@ class WeightedSumEnergy final : public Energy {
+   private:
+     static int checked_size(const std::vector<WeightedEnergy>& terms);
+     class Evaluation;
+-    std::shared_ptr<EnergyEvaluation> make_evaluation(const ConstVecRef& x) const override;
++    std::shared_ptr<EnergyEvaluation> make_evaluation(const ConstVecRef& x, bool borrow_input) const override;
+     struct TermPlan {
+         SpMat pattern;
+         std::vector<int> positions;

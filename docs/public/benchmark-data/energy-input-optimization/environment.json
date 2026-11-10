@@ -1,0 +1,27 @@
+{
+  "base_commit": "7b173205659251c8794fff51a6b9fc26059ff915",
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "cpu": "Apple M1 Pro",
+  "source_diff_sha256": "deee10930c05bf03133dd91a7519b8042a2d4c2490b2a6867185b312e7a324b2",
+  "binaries": {
+    "before": "6e6470595d15ee270d3b1d9983994c821bcbe809ea1e6cf90d0b66fe4194fe02",
+    "after": "30e7a000aa4301442ff51b2f0dc3cf0c6777b4e0450e4b19cf80e146a458c5d7"
+  },
+  "installed_binary_sha256": "30e7a000aa4301442ff51b2f0dc3cf0c6777b4e0450e4b19cf80e146a458c5d7",
+  "build": "Release -O3 -DNDEBUG arm64; same existing configuration",
+  "ordering": "before/after/after/before, separate processes, no concurrent builds/tests",
+  "cases": 182,
+  "raw_runs": 12,
+  "raw_records": 728,
+  "tests": {
+    "release_ctest": "509/509",
+    "python": "660 passed, 81 skipped",
+    "asan_ubsan": "88 Energy/Response and 35 solver tests"
+  },
+  "numerical_tolerance": {
+    "rtol": 2e-08,
+    "atol": 1e-09
+  },
+  "equilibrium_solves_per_operation": 1,
+  "archive_sha256": "e1d44a8865e8bf4980a944369bd52c1b558aeb3b7b2437fd5a7a38544bbe238f"
+}

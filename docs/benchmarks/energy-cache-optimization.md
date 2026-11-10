@@ -1,5 +1,9 @@
 # Energy cache optimization and allocation/serial-path experiments
 
+Experiment 2 was subsequently implemented and validated separately; see
+[the input-sharing follow-up](energy-input-optimization.md). The results below
+describe the earlier cache-only implementation and experimental prototypes.
+
 The existing workspace was committed as `fbc5449` before this work. Only the
 native derivative-cache optimization is retained in the working tree. The two
 other prototypes were built, checked, timed independently, and removed from the

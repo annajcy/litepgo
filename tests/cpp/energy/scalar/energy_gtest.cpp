@@ -15,6 +15,7 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <type_traits>
 
 namespace litepgo::energy::test {
 
@@ -256,3 +257,78 @@ TEST(EnergyEvaluation, RejectsUncompressedExactAndProjectedResultsWithoutAbortin
     EXPECT_DOUBLE_EQ(state->value(), 0.);
 }
 #endif
+
+TEST(EnergyEvaluation, NestedChildrenBorrowOneSnapshotPerPublicEvaluation) {
+    using namespace litepgo;
+    static_assert(!std::is_copy_constructible_v<energy::EnergyEvaluation>);
+    static_assert(!std::is_move_constructible_v<energy::EnergyEvaluation>);
+    struct Probe final : energy::Energy {
+        Probe() : Energy(2) {}
+        mutable std::vector<bool> borrowed;
+        mutable std::vector<const double*> inputs;
+        mutable int destroyed = 0;
+        struct State final : energy::EnergyEvaluation {
+            const Probe& model;
+            State(const Probe& model, const ConstVecRef& x, bool borrow_input)
+                : EnergyEvaluation(model, x, borrow_input), model(model) {
+                model.borrowed.push_back(borrow_input);
+                EXPECT_EQ(owned_x_.size(), borrow_input ? 0 : x.size());
+            }
+            ~State() override {
+                EXPECT_TRUE(x_.allFinite()); // Parent storage must survive child destruction.
+                ++model.destroyed;
+            }
+        };
+        std::shared_ptr<energy::EnergyEvaluation> make_evaluation(const ConstVecRef& x,
+                                                                  bool borrow_input) const override {
+            return std::make_shared<State>(*this, x, borrow_input);
+        }
+        energy::EnergyValues eval_impl(const ConstVecRef& x, bool gradient, bool hessian) const override {
+            inputs.push_back(x.data());
+            energy::EnergyValues r{.5 * x.squaredNorm(), std::nullopt, std::nullopt};
+            if (gradient)
+                r.gradient = x;
+            if (hessian) {
+                r.hessian.emplace(2, 2);
+                r.hessian->setIdentity();
+            }
+            return r;
+        }
+        double feasible_step(const ConstVecRef& x, const ConstVecRef&) const override {
+            inputs.push_back(x.data());
+            return 1. / (1. + x.squaredNorm());
+        }
+    };
+    const auto leaf = std::make_shared<Probe>();
+    const auto pair =
+        std::make_shared<energy::WeightedSumEnergy>(std::vector<energy::WeightedEnergy>{{leaf, .75}, {leaf, .25}});
+    energy::WeightedSumEnergy nested({{pair, .5}, {pair, .5}});
+    const Vec original = (Vec(2) << 1., 2.).finished();
+    Vec x = original;
+    auto a = nested.evaluate(x);
+    x.setConstant(7.);
+    auto b = nested.evaluate(x);
+    x.resize(0);
+    EXPECT_EQ(leaf->borrowed, std::vector<bool>(8, true));
+    EXPECT_EQ(Eigen::MatrixXd(a->hessian()), Eigen::Matrix2d::Identity());
+    ASSERT_EQ(leaf->inputs.size(), 4);
+    const double* first = leaf->inputs.front();
+    for (const double* input : leaf->inputs)
+        EXPECT_EQ(input, first);
+    leaf->inputs.clear();
+    EXPECT_EQ(b->gradient(), Vec::Constant(2, 7.));
+    ASSERT_EQ(leaf->inputs.size(), 4);
+    EXPECT_NE(leaf->inputs.front(), first);
+    for (const double* input : leaf->inputs)
+        EXPECT_EQ(input, leaf->inputs.front());
+    b.reset();
+    EXPECT_EQ(leaf->destroyed, 4);
+    EXPECT_EQ(a->gradient(), original);
+    EXPECT_EQ(Eigen::MatrixXd(a->projected_hessian()), Eigen::Matrix2d::Identity());
+    EXPECT_DOUBLE_EQ(a->max_feasible_step(Vec::Ones(2)), 1. / 6.);
+    a.reset();
+    EXPECT_EQ(leaf->destroyed, 8);
+    auto standalone = leaf->evaluate(Vec::Ones(2));
+    EXPECT_FALSE(leaf->borrowed.back());
+    EXPECT_EQ(standalone->gradient(), Vec::Ones(2));
+}

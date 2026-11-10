@@ -32,7 +32,7 @@ class WeightedSumEnergy final : public Energy {
   private:
     static int checked_size(const std::vector<WeightedEnergy>& terms);
     class Evaluation;
-    std::shared_ptr<EnergyEvaluation> make_evaluation(const ConstVecRef& x) const override;
+    std::shared_ptr<EnergyEvaluation> make_evaluation(const ConstVecRef& x, bool borrow_input) const override;
     struct TermPlan {
         SpMat pattern;
         std::vector<int> positions;
