@@ -1,0 +1,22 @@
+{
+  "purpose": "Corrected EnergyEvaluation baseline for subsequent optimization; no optimization patches applied.",
+  "fixes": [
+    "Check sparse canonical structure before coeffs() in Debug, Energy and Response",
+    "Move the structured-binding Jacobian on return"
+  ],
+  "binary_sha256": "4af39f1f3c6a60a6d3f6628de9d4283dd2bb0ce167a12e4e953fb96c6477c2c1",
+  "source_diff_sha256": "41163ebcc55bcc7fb2b2a6a54802844658201aaa0b015a83186f2a434b06a075",
+  "isolated_module": "build/energy-profile/fixed-python",
+  "build": "same Release -O3 -DNDEBUG arm64 configuration",
+  "runs": 2,
+  "cases": 146,
+  "energy_samples_per_case": 30,
+  "equilibrium_samples_per_case": 14,
+  "debug_tests": {
+    "energy_response": 86,
+    "solver": 35
+  },
+  "release_ctest": "507/507",
+  "python": "658 passed, 81 skipped",
+  "sampling_note": "sample-before/after and phases describe pre-fix migration binaries; the two fixes do not change scalar gradient algorithms. long-* and fixed-* use the corrected binary."
+}

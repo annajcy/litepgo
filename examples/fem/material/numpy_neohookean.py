@@ -116,8 +116,14 @@ def main():
     native = fem.VolumetricFemEnergy[KEY](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, Fp, theta)
     numpy = fem.VolumetricFemEnergy[KEY](NumpyNeoHookean(), mapping, geometry, Fp, theta)
     u = 0.02 * np.sin(np.arange(mapping.num_dofs) * 0.37)
-    a = native.eval(u, gradient=True, hessian=energy.HessianKind.Exact)
-    b = numpy.eval(u, gradient=True, hessian=energy.HessianKind.Exact)
+    native_evaluation = native.evaluate(u)
+    native_evaluation_hessian = native_evaluation.hessian()
+    native_evaluation_gradient = native_evaluation.gradient()
+    a = (native_evaluation.value, native_evaluation_gradient, native_evaluation_hessian)
+    numpy_evaluation = numpy.evaluate(u)
+    numpy_evaluation_hessian = numpy_evaluation.hessian()
+    numpy_evaluation_gradient = numpy_evaluation.gradient()
+    b = (numpy_evaluation.value, numpy_evaluation_gradient, numpy_evaluation_hessian)
     print(
         f"energy: value_error={abs(a[0] - b[0]):.2e}, "
         f"gradient_error={np.abs(a[1] - b[1]).max():.2e}, "

@@ -73,7 +73,7 @@ def run(copies=1, batch_size=256, repeats=0):
     energy = Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](),
         mapping, geometry, plastic, [AffineResponse(np.zeros((2, 3)), truth)] * topology.num_cells
     )
-    expected = energy.eval_gradient(displacement)
+    expected = energy.evaluate(displacement).gradient()
     single_evaluation = single.evaluate(truth)
     J = single_evaluation.jacobian()
     single_value = single_evaluation.value

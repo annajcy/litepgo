@@ -67,7 +67,7 @@ def main():
         if result.status != solver.NewtonStatus.Converged:
             raise RuntimeError(f"Static equilibrium failed at step {step}")
         u = result.x
-        residual = np.linalg.norm(elastic.eval_gradient(u)[len(fixed_dofs) :])
+        residual = np.linalg.norm(elastic.evaluate(u).gradient()[len(fixed_dofs) :])
         max_displacement = np.linalg.norm(u.reshape(-1, 3), axis=1).max()
         print(
             f"step={step}, energy={result.energy:.12g}, free_residual={residual:.12g}, "

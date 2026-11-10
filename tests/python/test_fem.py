@@ -240,7 +240,7 @@ def test_single_tet_energy_matches_material_times_volume():
     A = np.eye(3) + 0.1 * np.array([[1, 2, 0], [0, 1, 3], [1, 0, 2.0]])
     u = (nodes @ (A - np.eye(3)).T).ravel()
     expected = fem.NeoHookean.eval_W(A, np.eye(3), NEO_HOOKEAN_THETA) / 6
-    assert elastic.eval_value(u) == pytest.approx(expected, rel=1e-13)
+    assert elastic.evaluate(u).value == pytest.approx(expected, rel=1e-13)
     assert isinstance(elastic, fem.VolumetricFemEnergy) and isinstance(elastic, energy.Energy)
 
 
@@ -253,8 +253,8 @@ def test_erased_field_types_can_be_mixed():
     constant = volumetric_energy(data, fem.HexHermiteBasis, fem.GaussLegendre3D[2], 24)
     mixed = volumetric_energy(data, fem.HexHermiteBasis, fem.GaussLegendre3D[2], 24, interpolated_theta)
     u = 1e-3 * np.sin(np.arange(constant.num_dofs))
-    assert mixed.eval_value(u) == pytest.approx(constant.eval_value(u), rel=1e-14)
-    np.testing.assert_allclose(mixed.eval_gradient(u), constant.eval_gradient(u), rtol=1e-12, atol=1e-14)
+    assert mixed.evaluate(u).value == pytest.approx(constant.evaluate(u).value, rel=1e-14)
+    np.testing.assert_allclose(mixed.evaluate(u).gradient(), constant.evaluate(u).gradient(), rtol=1e-12, atol=1e-14)
 
 
 def test_energy_rejects_bad_fields():
@@ -437,9 +437,9 @@ def test_shell_material_integration_matches_shell_energy():
     value = area * fem.KoiterStVK.eval_W(*inputs)
     gradient = area * J.T @ stress
     hessian = area * (J.T @ tangent @ J + sum(stress[i] * second[i] for i in range(6)))
-    assert value == pytest.approx(whole.eval_value(u), rel=1e-14)
-    np.testing.assert_allclose(gradient, whole.eval_gradient(u), rtol=1e-12, atol=1e-14)
-    np.testing.assert_allclose(hessian, whole.eval_hessian(u).toarray(), rtol=1e-12, atol=1e-14)
+    assert value == pytest.approx(whole.evaluate(u).value, rel=1e-14)
+    np.testing.assert_allclose(gradient, whole.evaluate(u).gradient(), rtol=1e-12, atol=1e-14)
+    np.testing.assert_allclose(hessian, whole.evaluate(u).hessian().toarray(), rtol=1e-12, atol=1e-14)
 
 
 def test_triangle_mid_edge_kinematics():

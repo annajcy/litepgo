@@ -199,7 +199,7 @@ def test_fem_parameterizations_match_energy_and_equilibrium(plastic, shared):
 
     p = np.linspace(-0.02, 0.03, parameter_map.num_dofs)
     force = make_response(u)
-    np.testing.assert_allclose(force.evaluate(p).value, make_energy(p).eval_gradient(u), atol=1e-12)
+    np.testing.assert_allclose(force.evaluate(p).value, make_energy(p).evaluate(u).gradient(), atol=1e-12)
     check_products(force, p)
     eq = solver.StaticEquilibriumResponse(
         parameter_map.num_dofs,

@@ -7,10 +7,12 @@ class FixedPatternEnergy : public detail::SparseEnergy {
         : SparseEnergy(static_cast<int>(pattern.rows())),
           hessian_pattern_(checked_hessian_pattern(pattern, num_dofs())) {}
 
-  private:
+  protected:
     SpMat make_hessian_pattern(const ConstVecRef&) const final {
         return hessian_pattern_;
     }
+
+  private:
     SpMat hessian_pattern_;
 };
 } // namespace litepgo::energy

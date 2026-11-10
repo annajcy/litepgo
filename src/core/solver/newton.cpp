@@ -93,9 +93,11 @@ bool accepts(double energy, double trial_energy) {
 // a step that no longer moves x ends the search. Leaves the
 // accepted point in trial and returns its step length, or nullopt.
 std::optional<double> line_search(const energy::Energy& energy, const Vec& x, const Vec& direction,
-                                  const NewtonOptions& options, Vec& trial, NewtonStep& step) {
+                                  const NewtonOptions& options, Vec& trial, NewtonStep& step,
+                                  const std::shared_ptr<energy::EnergyEvaluation>& current,
+                                  std::shared_ptr<energy::EnergyEvaluation>& accepted) {
     const double scale = std::min(1.0, options.max_coordinate_step / direction.cwiseAbs().maxCoeff());
-    double alpha = scale * energy.max_feasible_step(x, scale * direction);
+    double alpha = scale * current->max_feasible_step(scale * direction);
     step.feasible_step = alpha;
     for (int j = 0; j < options.max_line_search_steps; ++j) {
         trial = x + alpha * direction;
@@ -103,7 +105,9 @@ std::optional<double> line_search(const energy::Energy& energy, const Vec& x, co
             return std::nullopt; // accepting a step that does not move x would make no progress
         }
         ++step.line_search_evaluations;
-        if (accepts(step.energy, energy.eval_value(trial))) {
+        auto evaluation = energy.evaluate(trial);
+        if (accepts(step.energy, evaluation->value())) {
+            accepted = std::move(evaluation);
             return alpha;
         }
         alpha *= options.line_search_shrink;
@@ -115,14 +119,18 @@ std::optional<double> line_search(const energy::Energy& energy, const Vec& x, co
 
 NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed, const ConstVecRef& x0,
                           const NewtonOptions& options, linalg::SparseSolver& solver,
-                          const std::function<void(const NewtonStep&)>& on_iteration, SpMat* converged_hessian) {
+                          const std::function<void(const NewtonStep&)>& on_iteration,
+                          std::shared_ptr<energy::EnergyEvaluation>* converged_evaluation) {
     check_arguments(energy, fixed, x0, options);
     NewtonResult result;
     result.x = x0;
-    energy.max_feasible_step(result.x, Vec::Zero(result.x.size()));
+    auto evaluation = energy.evaluate(result.x);
+    evaluation->max_feasible_step(Vec::Zero(result.x.size()));
     if (fixed.num_free() == 0) {
         result.status = NewtonStatus::Converged;
-        result.energy = energy.eval_value(result.x);
+        result.energy = evaluation->value();
+        if (converged_evaluation)
+            *converged_evaluation = evaluation;
         return result;
     }
 
@@ -153,19 +161,19 @@ NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed
         NewtonStep step;
         step.iteration = iteration;
 
-        auto evaluation = energy.eval(x, true, options.hessian);
-        step.pattern_changed = iteration == 0 || !linalg::same_pattern(hessian, *evaluation.hessian);
-        gradient = std::move(*evaluation.gradient);
-        hessian = std::move(*evaluation.hessian);
+        SpMat next_hessian = options.project_hessian ? evaluation->projected_hessian() : evaluation->hessian();
+        step.pattern_changed = iteration == 0 || !linalg::same_pattern(hessian, next_hessian);
+        gradient = evaluation->gradient();
+        hessian = std::move(next_hessian);
         if (step.pattern_changed)
             system.rebuild(hessian);
-        step.energy = evaluation.value;
+        step.energy = evaluation->value();
         gradient_free = fixed.reduce(gradient);
         step.gradient_norm = gradient_free.cwiseAbs().maxCoeff();
 
         if (is_converged(step, options)) {
-            if (converged_hessian)
-                *converged_hessian = std::move(hessian);
+            if (converged_evaluation)
+                *converged_evaluation = evaluation;
             return finish(NewtonStatus::Converged, step);
         }
         if (iteration == options.max_iterations) {
@@ -179,13 +187,16 @@ NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed
         }
         fixed.expand(direction_free, direction);
 
-        const std::optional<double> alpha = line_search(energy, x, direction, options, trial, step);
+        std::shared_ptr<energy::EnergyEvaluation> accepted;
+        const std::optional<double> alpha =
+            line_search(energy, x, direction, options, trial, step, evaluation, accepted);
         if (!alpha) {
             return finish(NewtonStatus::StepTooSmall, step);
         }
         step.step = *alpha;
         report(step);
         x = trial;
+        evaluation = std::move(accepted);
     }
 }
 

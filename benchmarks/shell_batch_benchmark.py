@@ -25,7 +25,7 @@ def main():
             for batch in (1,256):
                 obj = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](),mapping,rest,[.1]*len(faces),[np.array([2.,3.])]*len(faces),batch_size=batch)
                 for op in ('value','gradient','hessian'):
-                    fn = getattr(obj,'eval_'+op)
+                    fn = (lambda x: obj.evaluate(x).value) if op == 'value' else (lambda x: getattr(obj.evaluate(x), op)())
                     value = fn(u)
                     array = value.toarray() if op=='hessian' else value
                     if op not in reference: reference[op] = array

@@ -83,11 +83,14 @@ def test_energy_example_independent_analytic_values(api_modules, x, value, g, H)
 
     obj = api_modules[0].Coupled()
     x = np.array(x)
-    assert obj.eval_value(x) == value
-    np.testing.assert_array_equal(obj.eval_gradient(x), g)
-    for kind in (energy.HessianKind.Exact, energy.HessianKind.Projected):
+    assert obj.evaluate(x).value == value
+    np.testing.assert_array_equal(obj.evaluate(x).gradient(), g)
+    for kind in (False, True):
         for want_g in (False, True):
-            actual, gradient, hessian = obj.eval(x, gradient=want_g, hessian=kind)
+            obj_evaluation = obj.evaluate(x)
+            obj_evaluation_hessian = (obj_evaluation.projected_hessian() if kind else obj_evaluation.hessian()) if kind is not None else None
+            obj_evaluation_gradient = obj_evaluation.gradient() if want_g else None
+            actual, gradient, hessian = (obj_evaluation.value, obj_evaluation_gradient, obj_evaluation_hessian)
             assert actual == value
             if want_g:
                 np.testing.assert_array_equal(gradient, g)
@@ -97,9 +100,9 @@ def test_energy_example_independent_analytic_values(api_modules, x, value, g, H)
     # Fixed energy has a different target: independently check all outputs.
     fixed = api_modules[0].Quadratic()
     delta = x - [1.0, 2.0]
-    assert fixed.eval_value(x) == 0.5 * delta @ delta
-    np.testing.assert_array_equal(fixed.eval_gradient(x), delta)
-    np.testing.assert_array_equal(fixed.eval_hessian(x).toarray(), np.eye(2))
+    assert fixed.evaluate(x).value == 0.5 * delta @ delta
+    np.testing.assert_array_equal(fixed.evaluate(x).gradient(), delta)
+    np.testing.assert_array_equal(fixed.evaluate(x).hessian().toarray(), np.eye(2))
 
 
 @pytest.mark.parametrize(
@@ -130,13 +133,13 @@ def test_example_pattern_errors_and_zeroing(api_modules):
     import numpy as np
 
     obj = api_modules[0].Coupled()
-    assert obj.eval_hessian(np.ones(2)).nnz == 4
+    assert obj.evaluate(np.ones(2)).hessian().nnz == 4
 
     for x in (-np.ones(2), np.zeros(2)):
-        np.testing.assert_array_equal(obj.eval_hessian(x).toarray(), np.eye(2))
+        np.testing.assert_array_equal(obj.evaluate(x).hessian().toarray(), np.eye(2))
 
 
-    assert obj.eval_hessian(np.ones(2)).nnz == 4
+    assert obj.evaluate(np.ones(2)).hessian().nnz == 4
 
     response = api_modules[1].NonlinearResidual()
     for x in (np.ones(2), -np.ones(2), np.zeros(2), np.ones(2)):

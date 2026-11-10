@@ -42,11 +42,11 @@ def test_uniform_table_scales_energy_derivatives_and_snapshot(make, area, scale)
     s = surface()
     base, weighted = make(s, area=area), make(s, uniform(s, scale), area)
     x = s.positions.ravel()
-    assert weighted.eval_value(x) == pytest.approx(scale * base.eval_value(x), rel=1e-12)
-    np.testing.assert_allclose(weighted.eval_gradient(x), scale * base.eval_gradient(x), atol=1e-12)
-    np.testing.assert_allclose(weighted.eval_hessian(x).toarray(), scale * base.eval_hessian(x).toarray(), atol=1e-11)
-    np.testing.assert_allclose(weighted.eval_hessian(x, kind=energy.HessianKind.Projected).toarray(),
-                               scale * base.eval_hessian(x, kind=energy.HessianKind.Projected).toarray(), atol=1e-10)
+    assert weighted.evaluate(x).value == pytest.approx(scale * base.evaluate(x).value, rel=1e-12)
+    np.testing.assert_allclose(weighted.evaluate(x).gradient(), scale * base.evaluate(x).gradient(), atol=1e-12)
+    np.testing.assert_allclose(weighted.evaluate(x).hessian().toarray(), scale * base.evaluate(x).hessian().toarray(), atol=1e-11)
+    np.testing.assert_allclose(weighted.evaluate(x).projected_hessian().toarray(),
+                               scale * base.evaluate(x).projected_hessian().toarray(), atol=1e-10)
     a, b = base.contact_snapshot(x), weighted.contact_snapshot(x)
     assert a.types == b.types and len(b.types) == weighted.num_active_pairs(x)
     np.testing.assert_array_equal(a.vertex_ids, b.vertex_ids)
@@ -79,18 +79,18 @@ def test_parent_multipliers_are_applied_before_vertex_vertex_merging(make, area)
     assert snapshot.weights[0] == pytest.approx(weight, abs=1e-14)
     d = np.sum((p[0] - p[3])**2) - .05**2
     h = .7 * (.7 + .1)
-    assert e.eval_value(x) == pytest.approx(-weight * (d - h)**2 * np.log(d / h), rel=1e-12)
+    assert e.evaluate(x).value == pytest.approx(-weight * (d - h)**2 * np.log(d / h), rel=1e-12)
     basis = np.eye(len(x)) * 1e-6
-    fd_gradient = [(e.eval_value(x + dx) - e.eval_value(x - dx)) / 2e-6 for dx in basis]
-    np.testing.assert_allclose(e.eval_gradient(x), fd_gradient, atol=1e-9)
-    fd_hessian = np.column_stack([(e.eval_gradient(x + dx) - e.eval_gradient(x - dx)) / 2e-6 for dx in basis])
-    np.testing.assert_allclose(e.eval_hessian(x).toarray(), fd_hessian, atol=1e-8)
+    fd_gradient = [(e.evaluate(x + dx).value - e.evaluate(x - dx).value) / 2e-6 for dx in basis]
+    np.testing.assert_allclose(e.evaluate(x).gradient(), fd_gradient, atol=1e-9)
+    fd_hessian = np.column_stack([(e.evaluate(x + dx).gradient() - e.evaluate(x - dx).gradient()) / 2e-6 for dx in basis])
+    np.testing.assert_allclose(e.evaluate(x).hessian().toarray(), fd_hessian, atol=1e-8)
     reordered = mesh.TriangleMesh(p, s.cells[::-1, ::-1].copy())
     relabeled = contact.ContactPairWeights(config.vertex_groups, config.edge_groups,
                                            config.face_groups[::-1], config.weights)
     other = make(reordered, relabeled, area)
-    assert other.eval_value(x) == pytest.approx(e.eval_value(x), rel=1e-12)
-    np.testing.assert_allclose(other.eval_gradient(x), e.eval_gradient(x), atol=1e-12)
+    assert other.evaluate(x).value == pytest.approx(e.evaluate(x).value, rel=1e-12)
+    np.testing.assert_allclose(other.evaluate(x).gradient(), e.evaluate(x).gradient(), atol=1e-12)
 
 
 def test_zero_removes_pairs_and_ccd_while_global_intersections_remain_invalid(make):
@@ -99,26 +99,26 @@ def test_zero_removes_pairs_and_ccd_while_global_intersections_remain_invalid(ma
     x = s.positions.ravel().copy()
     dx = np.zeros_like(x)
     dx[11] = -2
-    step = base.max_feasible_step(x, dx)
+    step = base.evaluate(x).max_feasible_step(dx)
     assert 0 < step < 1
-    assert zero.max_feasible_step(x, dx) == 1
+    assert zero.evaluate(x).max_feasible_step(dx) == 1
     for scale in (.001, .5, 2):
-        assert make(s, uniform(s, scale)).max_feasible_step(x, dx) == step
-    assert zero.eval_value(x) == 0
-    np.testing.assert_array_equal(zero.eval_gradient(x), np.zeros_like(x))
+        assert make(s, uniform(s, scale)).evaluate(x).max_feasible_step(dx) == step
+    assert zero.evaluate(x).value == 0
+    np.testing.assert_array_equal(zero.evaluate(x).gradient(), np.zeros_like(x))
     assert zero.num_active_pairs(x) == 0 and zero.min_active_distance(x) == float("inf")
     assert zero.contact_snapshot(x).types == ()
 
-    assert zero.eval_hessian(x).nnz == 0
+    assert zero.evaluate(x).hessian().nnz == 0
     x[11] = .01  # Below min_distance, still excluded from this contact item.
-    assert zero.eval_value(x) == 0 and zero.max_feasible_step(x, np.zeros_like(x)) == 1
+    assert zero.evaluate(x).value == 0 and zero.evaluate(x).max_feasible_step(np.zeros_like(x)) == 1
     x[11] = -.5  # An edge now crosses a face: the independent global check still rejects it.
     with pytest.raises(ValueError, match="intersect"):
-        zero.max_feasible_step(x, np.zeros_like(x))
+        zero.evaluate(x).max_feasible_step(np.zeros_like(x))
     x = x.reshape(-1, 3)
     x[3:] = [[2, 2, 0], [3, 2, 0], [2, 3, 0]]  # Coplanar overlap, with no edge crossing the face plane.
     with pytest.raises(ValueError, match="intersect"):
-        zero.max_feasible_step(x.ravel(), np.zeros(x.size))
+        zero.evaluate(x.ravel()).max_feasible_step(np.zeros(x.size))
 
 
 @pytest.mark.parametrize("bad", ["vertices_length", "edges_length", "faces_length", "negative_id", "large_id",
@@ -186,9 +186,9 @@ def test_mixed_groups_match_toolkit_including_mollified_features(p, area):
     renamed = contact.IPCContactEnergy(s, contact.IPCContactOptions(**options), contact.SpatialHash(), relabeled)
     x = s.positions.ravel()
     for other in (toolkit, renamed):
-        assert other.eval_value(x) == pytest.approx(native.eval_value(x), rel=1e-11, abs=1e-13)
-        np.testing.assert_allclose(other.eval_gradient(x), native.eval_gradient(x), rtol=1e-8, atol=1e-10)
-        np.testing.assert_allclose(other.eval_hessian(x).toarray(), native.eval_hessian(x).toarray(), rtol=1e-7, atol=1e-8)
+        assert other.evaluate(x).value == pytest.approx(native.evaluate(x).value, rel=1e-11, abs=1e-13)
+        np.testing.assert_allclose(other.evaluate(x).gradient(), native.evaluate(x).gradient(), rtol=1e-8, atol=1e-10)
+        np.testing.assert_allclose(other.evaluate(x).hessian().toarray(), native.evaluate(x).hessian().toarray(), rtol=1e-7, atol=1e-8)
         assert other.num_active_pairs(x) == native.num_active_pairs(x)
         assert other.min_active_distance(x) == native.min_active_distance(x)
         assert sum(other.contact_snapshot(x).mollifiers == 0) == sum(native.contact_snapshot(x).mollifiers == 0)

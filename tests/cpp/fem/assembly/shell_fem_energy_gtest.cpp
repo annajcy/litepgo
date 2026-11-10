@@ -66,15 +66,15 @@ TEST(ShellFemEnergy, PerFaceInputsMatchExplicitIntegrationAndScatter) {
         step = std::min(
             step, eval_triangle_mid_edge_feasible_step(rest.X_local + local_u, patch.map.gather(e, du), rest.opposite));
     }
-    EXPECT_NEAR(energy.eval_value(u), expected, 1e-12);
-    EXPECT_TRUE(energy.eval_gradient(u).isApprox(g, 1e-12));
-    EXPECT_TRUE(Eigen::MatrixXd(energy.eval_hessian(u)).isApprox(H, 1e-12));
-    EXPECT_DOUBLE_EQ(energy.max_feasible_step(u, du), step);
+    EXPECT_NEAR(energy.evaluate(u)->value(), expected, 1e-12);
+    EXPECT_TRUE(energy.evaluate(u)->gradient().isApprox(g, 1e-12));
+    EXPECT_TRUE(Eigen::MatrixXd(energy.evaluate(u)->hessian()).isApprox(H, 1e-12));
+    EXPECT_DOUBLE_EQ(energy.evaluate(u)->max_feasible_step(du), step);
     energy::test::expect_derivatives_match(energy, u, 2e-6);
     patch.rest[0].X_local.setZero();
     patch.thickness[0] = 100;
     patch.theta[0].setZero();
-    EXPECT_NEAR(energy.eval_value(u), expected, 1e-12);
+    EXPECT_NEAR(energy.evaluate(u)->value(), expected, 1e-12);
 }
 
 TEST(ShellFemEnergy, RejectsInvalidArraysStencilsThicknessAndMaterial) {
@@ -127,10 +127,10 @@ TEST(ShellFemEnergy, RejectsInvalidArraysStencilsThicknessAndMaterial) {
 TEST(ShellFemEnergy, EmptyMeshProducesZeroAndFullStep) {
     ShellFemEnergy energy(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(),
                           dof::StencilDofMap(0, {}, 3), {}, {}, {});
-    EXPECT_EQ(energy.eval_value(Vec(0)), 0);
-    EXPECT_EQ(energy.eval_gradient(Vec(0)).size(), 0);
-    EXPECT_EQ(energy.eval_hessian(Vec(0)).rows(), 0);
-    EXPECT_EQ(energy.max_feasible_step(Vec(0), Vec(0)), 1);
+    EXPECT_EQ(energy.evaluate(Vec(0))->value(), 0);
+    EXPECT_EQ(energy.evaluate(Vec(0))->gradient().size(), 0);
+    EXPECT_EQ(energy.evaluate(Vec(0))->hessian().rows(), 0);
+    EXPECT_EQ(energy.evaluate(Vec(0))->max_feasible_step(Vec(0)), 1);
 }
 
 TEST(ShellFemEnergy, PlasticFormsPreserveOriginalMeasureAndMatchResponse) {
@@ -153,9 +153,9 @@ TEST(ShellFemEnergy, PlasticFormsPreserveOriginalMeasureAndMatchResponse) {
                             p.thickness, p.theta);
     ShellFemEnergy identity(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), p.map, p.rest,
                             p.thickness, p.theta, std::vector<Eigen::Matrix3d>(4, Eigen::Matrix3d::Identity()));
-    EXPECT_NEAR(identity.eval_value(u), original.eval_value(u), 1e-12);
-    EXPECT_TRUE(identity.eval_gradient(u).isApprox(original.eval_gradient(u), 1e-12));
-    EXPECT_DOUBLE_EQ(elastic.max_feasible_step(u, -2 * X), original.max_feasible_step(u, -2 * X));
+    EXPECT_NEAR(identity.evaluate(u)->value(), original.evaluate(u)->value(), 1e-12);
+    EXPECT_TRUE(identity.evaluate(u)->gradient().isApprox(original.evaluate(u)->gradient(), 1e-12));
+    EXPECT_DOUBLE_EQ(elastic.evaluate(u)->max_feasible_step(-2 * X), original.evaluate(u)->max_feasible_step(-2 * X));
     double expected = 0;
     for (int e = 0; e < 4; ++e) {
         const auto& r = p.rest[e];
@@ -165,14 +165,14 @@ TEST(ShellFemEnergy, PlasticFormsPreserveOriginalMeasureAndMatchResponse) {
         expected +=
             evaluate_shell_element<KoiterStVK>(natural, r.X_local + p.map.gather(e, u) - Y, p.thickness[e], p.theta[e]);
     }
-    EXPECT_NEAR(elastic.eval_value(u), expected, 1e-12);
+    EXPECT_NEAR(elastic.evaluate(u)->value(), expected, 1e-12);
     ShellFemForceFpResponse response(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(),
                                      dof::ConstantDofMap(topology(), 9), p.map, p.rest, u, p.thickness, p.theta);
-    EXPECT_TRUE(elastic.eval_gradient(u).isApprox(response.evaluate(P.reshaped())->value(), 1e-11));
+    EXPECT_TRUE(elastic.evaluate(u)->gradient().isApprox(response.evaluate(P.reshaped())->value(), 1e-11));
     energy::test::expect_derivatives_match(elastic, u);
     plastic[0].setZero();
     p.rest.clear();
-    EXPECT_NEAR(elastic.eval_value(u), expected, 1e-12);
+    EXPECT_NEAR(elastic.evaluate(u)->value(), expected, 1e-12);
 }
 
 TEST(ShellFemEnergy, RejectsInvalidPlasticFields) {

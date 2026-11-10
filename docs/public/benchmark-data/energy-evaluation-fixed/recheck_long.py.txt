@@ -1,0 +1,34 @@
+import importlib.util,json,statistics,sys,time
+from pathlib import Path
+import numpy as np
+import torch
+from litepgo import energy,tbb_thread_limit
+from litepgo import torch as lt
+before=hasattr(energy,'HessianKind')
+path=Path('build/energy-evaluation-baseline/equilibrium_before.py') if before else Path('benchmarks/equilibrium_evaluation.py')
+spec=importlib.util.spec_from_file_location('driver',path);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+for case,threads in [('tet_torch',1),('shell_gradient',4)]:
+    with tbb_thread_limit(threads):
+        eq,p,potential,_=module.problem('tet' if case=='tet_torch' else 'shell',1 if case=='tet_torch' else 2,energy.HessianKind.Exact if before else False,{'solves':0})
+        if case=='tet_torch':
+            def run():
+                x=torch.tensor(p,dtype=torch.float64,requires_grad=True)
+                lt.response(eq,x).sum().backward()
+                return x.grad.numpy()
+        else:
+            x=eq.evaluate(p).value;model=potential(p)
+            if before:
+                def run():return model.eval(x,gradient=True)[1]
+            else:
+                def run():
+                    e=model.evaluate(x);g=e.gradient();e.value
+                    return g
+        reference=run()
+        for _ in range(200):run()
+        samples=[]
+        for _ in range(31):
+            start=time.perf_counter()
+            for _ in range(200):result=run()
+            samples.append((time.perf_counter()-start)*1e6/200)
+            np.testing.assert_allclose(result,reference,rtol=1e-10,atol=1e-12)
+        print(json.dumps(dict(case=case,version='before' if before else 'after',median_us=statistics.median(samples),samples_us=samples,gradient=reference.tolist())),flush=True)

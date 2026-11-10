@@ -146,9 +146,11 @@ int main(int argc, char** argv) {
     const double distance = barrier->min_active_distance(surface_positions);
     const bool touching = pairs > 0 && distance > 0 && distance < contact_options.dhat;
     std::cout << "converged=" << converged << ", iterations=" << result.iterations << ", potential=" << result.energy
-              << ", elastic=" << elastic->eval_value(result.x) << ", pulling=" << pulling->eval_value(result.x)
-              << ", contact=" << kappa * contact->eval_value(result.x) << ", free residual=" << result.gradient_norm
-              << ", active pairs=" << pairs << ", min distance=" << distance << '\n';
+              << ", elastic=" << elastic->evaluate(result.x)->value()
+              << ", pulling=" << pulling->evaluate(result.x)->value()
+              << ", contact=" << kappa * contact->evaluate(result.x)->value()
+              << ", free residual=" << result.gradient_norm << ", active pairs=" << pairs
+              << ", min distance=" << distance << '\n';
     const std::filesystem::path output = argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/tet_p1_box_stack.veg";
     if (!output.parent_path().empty())
         std::filesystem::create_directories(output.parent_path());

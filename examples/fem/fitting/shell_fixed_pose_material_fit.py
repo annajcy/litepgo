@@ -65,7 +65,7 @@ def make_problem():
         mapping, rest, thickness, [truth] * mapping.num_elements
     )
     # Generate observations through the energy API, independently of the response path.
-    target = elastic.eval_gradient(displacement)
+    target = elastic.evaluate(displacement).gradient()
     scale = np.linalg.norm(target)
     if not np.isfinite(scale) or scale <= 0:
         raise RuntimeError("Calibration requires finite nonzero target forces")

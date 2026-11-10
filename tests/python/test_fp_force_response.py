@@ -16,7 +16,7 @@ def test_fp_force_energy_jacobian_and_recovery(batch_size):
     p = np.concatenate([field.evaluate(np.zeros(3)).value for field in plastic])
     obj = Force(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ElementDofMap(topology, 9), mapping, geometry, u, theta=theta, batch_size=batch_size)
     assert isinstance(obj, energy.MeshResponse)
-    expected = Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, plastic, theta).eval_gradient(u)
+    expected = Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, plastic, theta).evaluate(u).gradient()
     obj_evaluation = obj.evaluate(p)
     J = obj_evaluation.jacobian()
     value = obj_evaluation.value

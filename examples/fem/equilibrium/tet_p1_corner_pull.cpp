@@ -90,8 +90,9 @@ int main(int argc, char** argv) {
         corner_gap = std::max(corner_gap,
                               (result.x.segment<3>(3 * corners[i]) - targets.segment<3>(3 * Eigen::Index(i))).norm());
     std::cout << "converged=" << converged << ", iterations=" << result.iterations << ", potential=" << result.energy
-              << ", elastic=" << elastic->eval_value(result.x) << ", pulling=" << pulling->eval_value(result.x)
-              << ", free residual=" << result.gradient_norm << ", max corner-anchor distance=" << corner_gap << '\n';
+              << ", elastic=" << elastic->evaluate(result.x)->value()
+              << ", pulling=" << pulling->evaluate(result.x)->value() << ", free residual=" << result.gradient_norm
+              << ", max corner-anchor distance=" << corner_gap << '\n';
     const std::filesystem::path output = argc > 2 ? argv[2] : LITEPGO_OUTPUT_DIR "/tet_p1_corner_pull.veg";
     if (!output.parent_path().empty())
         std::filesystem::create_directories(output.parent_path());

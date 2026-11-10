@@ -318,9 +318,9 @@ def equilibrium_errors(model):
                 a.x[fixed.free_dofs] - b.x[fixed.free_dofs]
             ) / np.linalg.norm(b.x[fixed.free_dofs])
             force_error = np.linalg.norm(
-                learned.eval_gradient(a.x)[fixed.fixed_dofs]
-                - native.eval_gradient(b.x)[fixed.fixed_dofs]
-            ) / np.linalg.norm(native.eval_gradient(b.x)[fixed.fixed_dofs])
+                learned.evaluate(a.x).gradient()[fixed.fixed_dofs]
+                - native.evaluate(b.x).gradient()[fixed.fixed_dofs]
+            ) / np.linalg.norm(native.evaluate(b.x).gradient()[fixed.fixed_dofs])
             stretches = []
             for e, X in enumerate(geometry):
                 field = Field(mapping.gather(e, a.x))

@@ -35,7 +35,8 @@ struct Patch {
             params.push_back(theta.size() == 2 ? theta : Vec(theta.segment<2>(2 * e)));
         return ShellFemEnergy(std::make_shared<litepgo::fem::PointwiseShellAdapter<KoiterStVK>>(), map, rest, thickness,
                               params)
-            .eval_gradient(u);
+            .evaluate(u)
+            ->gradient();
     }
 };
 TEST(ShellFemForceMaterialResponse, SharedAndPerFaceParametersMatchEnergyAndFiniteDifferences) {

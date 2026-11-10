@@ -74,8 +74,8 @@ TEST(SurfaceIntegration, IntegratesReferenceAreaForThreeComponentFieldsOnTwoDime
     for (int v = 0; v < 6; ++v)
         x.segment<3>(12 * v) = translation;
     const double total_area = 2 * tangent1.cross(tangent2).norm();
-    EXPECT_NEAR(energy.eval_value(x), 0.5 * translation.squaredNorm() * total_area, 1e-12);
-    EXPECT_DOUBLE_EQ(energy.eval_value(Vec::Zero(x.size())), 0);
+    EXPECT_NEAR(energy.evaluate(x)->value(), 0.5 * translation.squaredNorm() * total_area, 1e-12);
+    EXPECT_DOUBLE_EQ(energy.evaluate(Vec::Zero(x.size()))->value(), 0);
 }
 
 TEST(SurfaceIntegration, AssembledGradientAndHessianMatchFiniteDifferencesWithSharedDofs) {
@@ -84,7 +84,7 @@ TEST(SurfaceIntegration, AssembledGradientAndHessianMatchFiniteDifferencesWithSh
     for (int j = 0; j < x.size(); ++j)
         x[j] = 0.07 * std::sin(0.3 * (j + 1));
     energy::test::expect_derivatives_match(energy, x, 2e-7);
-    const Eigen::MatrixXd H = energy.eval_hessian(x);
+    const Eigen::MatrixXd H = energy.evaluate(x)->hessian();
     EXPECT_TRUE(H.isApprox(H.transpose(), 1e-13));
     EXPECT_GT(H.block(12, 48, 12, 12).norm(), 0);
 }

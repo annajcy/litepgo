@@ -35,7 +35,9 @@ class MeshEnergy : public FixedPatternEnergy {
     }
     MeshEnergy(dof::EnergyAssembler assembler, int batch_size);
     void gather(const std::vector<int>& ids, const ConstVecRef& x, BatchMatrix& result) const;
-    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const override;
+    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian) const override;
+    energy::EnergyValues eval_projected_values(const ConstVecRef& x, energy::EnergyEvaluation&) const override;
+    double assemble_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, bool project) const;
     double feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const override;
     dof::EnergyAssembler assembler_;
     struct Batch {

@@ -21,12 +21,12 @@ Vec two_pairs_active() {
 TEST(DynamicPatternEnergy, EvaluatesCurrentStructureAndOwnsResults) {
     SwitchingEnergy energy(4);
     const Vec x = two_pairs_active();
-    const SpMat active = energy.eval_hessian(x);
-    const SpMat inactive = energy.eval_hessian(-Vec::Ones(4));
+    const SpMat active = energy.evaluate(x)->hessian();
+    const SpMat inactive = energy.evaluate(-Vec::Ones(4))->hessian();
     EXPECT_EQ(active.nonZeros(), 8);
     EXPECT_EQ(inactive.nonZeros(), 4);
     EXPECT_EQ(active.coeff(0, 1), 1);
     EXPECT_EQ(active.coeff(2, 3), 1);
-    EXPECT_EQ(Eigen::MatrixXd(active), Eigen::MatrixXd(energy.eval_hessian(x)));
+    EXPECT_EQ(Eigen::MatrixXd(active), Eigen::MatrixXd(energy.evaluate(x)->hessian()));
 }
 } // namespace litepgo::energy::test

@@ -50,7 +50,7 @@ def make_problem():
         theta,
     )
     # Target comes from the energy gradient, independently of the force-response path.
-    target = elastic.eval_gradient(displacement)
+    target = elastic.evaluate(displacement).gradient()
     scale = np.linalg.norm(target)
     if not np.isfinite(scale) or scale <= 0:
         raise RuntimeError("Calibration requires finite nonzero target forces")

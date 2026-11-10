@@ -80,29 +80,49 @@ AffineMappedEnergy::HessianPlan AffineMappedEnergy::plan_hessian(const SpMat& in
     return {std::move(pattern), std::move(contributions)};
 }
 
-EnergyEvaluation AffineMappedEnergy::eval_impl(const ConstVecRef& z, bool gradient,
-                                               std::optional<HessianKind> kind) const {
-    ::litepgo::detail::BusyScope scope(busy_, "AffineMappedEnergy");
-    const Vec x = map_ * z + offset_;
-    auto child = energy_->eval(x, gradient, kind);
-    EnergyEvaluation result{child.value, std::nullopt, std::nullopt};
-    if (gradient)
-        result.gradient = map_.transpose() * *child.gradient;
-    if (kind) {
-        if (!plan_ || !linalg::same_pattern(*child.hessian, plan_->inner_pattern)) {
-            CachedPlan next{linalg::pattern_of(*child.hessian), plan_hessian(*child.hessian, map_)};
-            plan_ = std::move(next);
-        }
-        result.hessian = plan_->hessian.pattern;
-        for (const auto& contribution : plan_->hessian.contributions)
-            result.hessian->valuePtr()[contribution.output] +=
-                contribution.coefficient * child.hessian->valuePtr()[contribution.input];
+class AffineMappedEnergy::Evaluation final : public EnergyEvaluation {
+  public:
+    Evaluation(const AffineMappedEnergy& model, const ConstVecRef& x)
+        : EnergyEvaluation(model, x), model_(model), child_(model.energy_->evaluate(model.map_ * x + model.offset_)) {}
+
+  private:
+    double feasible_step_impl(const ConstVecRef& dx) const override {
+        return child_->max_feasible_step(model_.map_ * dx);
     }
-    return result;
+    EnergyValues compute(bool gradient, bool hessian) override {
+        return assemble(gradient, hessian, false);
+    }
+    EnergyValues compute_projected() override {
+        return assemble(true, true, true);
+    }
+    EnergyValues assemble(bool gradient, bool hessian, bool project) {
+        ::litepgo::detail::BusyScope scope(model_.busy_, "AffineMappedEnergy");
+        EnergyValues child{0., std::nullopt, std::nullopt};
+        if (hessian)
+            child.hessian = project ? child_->projected_hessian() : child_->hessian();
+        if (gradient)
+            child.gradient = child_->gradient();
+        child.value = child_->value();
+        EnergyValues result{child.value, std::nullopt, std::nullopt};
+        if (gradient)
+            result.gradient = model_.map_.transpose() * *child.gradient;
+        if (hessian) {
+            if (!model_.plan_ || !linalg::same_pattern(*child.hessian, model_.plan_->inner_pattern)) {
+                CachedPlan next{linalg::pattern_of(*child.hessian), model_.plan_hessian(*child.hessian, model_.map_)};
+                model_.plan_ = std::move(next);
+            }
+            result.hessian = model_.plan_->hessian.pattern;
+            for (const auto& contribution : model_.plan_->hessian.contributions)
+                result.hessian->valuePtr()[contribution.output] +=
+                    contribution.coefficient * child.hessian->valuePtr()[contribution.input];
+        }
+        return result;
+    }
+    const AffineMappedEnergy& model_;
+    std::shared_ptr<EnergyEvaluation> child_;
+};
+std::shared_ptr<EnergyEvaluation> AffineMappedEnergy::make_evaluation(const ConstVecRef& x) const {
+    return std::make_shared<Evaluation>(*this, x);
 }
-double AffineMappedEnergy::feasible_step(const ConstVecRef& z, const ConstVecRef& dz) const {
-    const Vec x = map_ * z + offset_;
-    const Vec dx = map_ * dz;
-    return energy_->max_feasible_step(x, dx);
-}
+
 } // namespace litepgo::energy

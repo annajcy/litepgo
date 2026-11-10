@@ -14,7 +14,7 @@ struct NewtonOptions {
     // Required: converged when the free DOFs' gradient max-norm is at most this.
     double gradient_tolerance = std::numeric_limits<double>::quiet_NaN();
     int max_iterations = 50;
-    energy::HessianKind hessian = energy::HessianKind::Projected;
+    bool project_hessian = true;
     int max_line_search_steps = 30;
     double line_search_shrink = 0.5;
     // Bounds max_i |x_next[i] - x[i]| per accepted iteration in solver coordinates.
@@ -72,6 +72,6 @@ struct NewtonResult {
 NewtonResult newton_solve(energy::Energy& energy, const dof::DofReduction& fixed, const ConstVecRef& x0,
                           const NewtonOptions& options, linalg::SparseSolver& solver,
                           const std::function<void(const NewtonStep&)>& on_iteration = {},
-                          SpMat* converged_hessian = nullptr);
+                          std::shared_ptr<energy::EnergyEvaluation>* converged_evaluation = nullptr);
 
 } // namespace litepgo::solver

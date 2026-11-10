@@ -13,7 +13,7 @@ $$
 Truth stretches are `(1.08,0.94,1.03)`. Start at $p=0$, or identity plastic
 state. Observe all nodal forces and divide the force residual by target norm.
 
-**API walkthrough.** Targets come from `VolumetricFemEnergy.eval_gradient`.
+**API walkthrough.** Targets come from `VolumetricFemEnergy.evaluate(u).gradient()`.
 `VolumetricFemForceFpResponse` uses `ConstantDofMap(topology,9)` for the full
 plastic matrix. `ComposedResponse(force, LogDiagonalFpResponse(3))` restricts
 and differentiates the log parameterization:

@@ -8,12 +8,12 @@ void check_vector(const ConstVecRef& x, int size, const char* message) {
         throw std::invalid_argument(message);
 }
 void check_matrix(const SpMat& matrix, int rows, int cols) {
-    if (matrix.rows() != rows || matrix.cols() != cols || !matrix.coeffs().allFinite())
-        throw std::logic_error("ResponseEvaluation: invalid derivative");
 #ifndef NDEBUG
     if (!linalg::is_canonical(matrix))
         throw std::logic_error("ResponseEvaluation: invalid derivative structure");
 #endif
+    if (matrix.rows() != rows || matrix.cols() != cols || !matrix.coeffs().allFinite())
+        throw std::logic_error("ResponseEvaluation: invalid derivative");
 }
 } // namespace
 void ResponseEvaluation::save_value(Vec v) {
@@ -81,7 +81,7 @@ class PointEvaluation final : public ResponseEvaluation {
     SpMat jacobian_impl() override {
         auto [v, J] = response_.value_jacobian_at(x_);
         save_value(std::move(v));
-        return J;
+        return std::move(J);
     }
     SpMat hessian_impl(const ConstVecRef& w) override {
         return response_.hessian_at(x_, w);
@@ -100,7 +100,6 @@ std::shared_ptr<ResponseEvaluation> Response::evaluate(const ConstVecRef& x) {
     auto state = make_evaluation(x);
     if (!state || state->num_inputs() != num_inputs() || state->num_outputs() != num_outputs())
         throw std::logic_error("Response: invalid evaluation");
-    state->owner_ = weak_from_this().lock();
     return state;
 }
 std::shared_ptr<ResponseEvaluation> Response::make_evaluation(const ConstVecRef& x) {

@@ -40,11 +40,11 @@ TEST(VertexPullingEnergy, EvaluatesValueGradientAndHessian) {
         expected_gradient[dofs[i]] = k * gap;
         expected_hessian(dofs[i], dofs[i]) = k;
     }
-    EXPECT_DOUBLE_EQ(energy.eval_value(x), expected);
-    EXPECT_TRUE(energy.eval_gradient(x).isApprox(expected_gradient, 1e-15));
-    EXPECT_EQ(Eigen::MatrixXd(energy.eval_hessian(x)), expected_hessian);
-    EXPECT_EQ(Eigen::MatrixXd(energy.eval_hessian(x, HessianKind::Projected)), expected_hessian);
-    EXPECT_EQ(energy.eval_hessian(Vec::Zero(energy.num_dofs())).nonZeros(), 6);
+    EXPECT_DOUBLE_EQ(energy.evaluate(x)->value(), expected);
+    EXPECT_TRUE(energy.evaluate(x)->gradient().isApprox(expected_gradient, 1e-15));
+    EXPECT_EQ(Eigen::MatrixXd(energy.evaluate(x)->hessian()), expected_hessian);
+    EXPECT_EQ(Eigen::MatrixXd(energy.evaluate(x)->projected_hessian()), expected_hessian);
+    EXPECT_EQ(energy.evaluate(Vec::Zero(energy.num_dofs()))->hessian().nonZeros(), 6);
 
     expect_derivatives_match(energy, x);
 }
@@ -56,14 +56,14 @@ TEST(VertexPullingEnergy, VanishesAtTargets) {
     x[7] = targets()[3];
     x[5] = targets()[4];
     x[6] = targets()[5];
-    EXPECT_EQ(energy.eval_value(x), 0.0);
-    EXPECT_TRUE(energy.eval_gradient(x).isZero(0.0));
+    EXPECT_EQ(energy.evaluate(x)->value(), 0.0);
+    EXPECT_TRUE(energy.evaluate(x)->gradient().isZero(0.0));
 }
 
 TEST(VertexPullingEnergy, AllowsNoPulledVertices) {
     const VertexPullingEnergy energy(3, {}, Vec(), 1.0);
-    EXPECT_EQ(energy.eval_value(Vec::Ones(3)), 0.0);
-    EXPECT_EQ(energy.eval_hessian(Vec::Zero(energy.num_dofs())).nonZeros(), 0);
+    EXPECT_EQ(energy.evaluate(Vec::Ones(3))->value(), 0.0);
+    EXPECT_EQ(energy.evaluate(Vec::Zero(energy.num_dofs()))->hessian().nonZeros(), 0);
 }
 
 TEST(VertexPullingEnergy, RejectsInvalidInput) {

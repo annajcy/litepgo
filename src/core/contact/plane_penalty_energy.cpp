@@ -32,7 +32,7 @@ PlanePenaltyEnergy::PlanePenaltyEnergy(const SpMat& pattern, int axis, double he
     : FixedPatternEnergy(pattern), axis_(axis), height_(height), stiffness_(stiffness),
       side_(positive_side ? 1.0 : -1.0) {}
 
-double PlanePenaltyEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, energy::HessianKind) const {
+double PlanePenaltyEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian) const {
     if (gradient)
         gradient->setZero();
     double value = 0;

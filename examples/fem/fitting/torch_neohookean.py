@@ -70,11 +70,17 @@ def make_problem(batch_size=256):
 
 
 def compare(native, autodiff, u, label):
-    for kind in (energy.HessianKind.Exact, energy.HessianKind.Projected):
-        reference = native.eval(u, gradient=True, hessian=kind)
-        actual = autodiff.eval(u, gradient=True, hessian=kind)
+    for kind in (False, True):
+        native_evaluation = native.evaluate(u)
+        native_evaluation_hessian = native_evaluation.projected_hessian() if kind else native_evaluation.hessian()
+        native_evaluation_gradient = native_evaluation.gradient()
+        reference = (native_evaluation.value, native_evaluation_gradient, native_evaluation_hessian)
+        autodiff_evaluation = autodiff.evaluate(u)
+        autodiff_evaluation_hessian = autodiff_evaluation.projected_hessian() if kind else autodiff_evaluation.hessian()
+        autodiff_evaluation_gradient = autodiff_evaluation.gradient()
+        actual = (autodiff_evaluation.value, autodiff_evaluation_gradient, autodiff_evaluation_hessian)
         print(
-            f"{label} {kind.name}: energy_error={abs(actual[0] - reference[0]):.3e}, "
+            f"{label} {'projected' if kind else 'exact'}: energy_error={abs(actual[0] - reference[0]):.3e}, "
             f"force_error={np.linalg.norm(actual[1] - reference[1]):.3e}, "
             f"stiffness_error={np.linalg.norm((actual[2] - reference[2]).toarray()):.3e}"
         )

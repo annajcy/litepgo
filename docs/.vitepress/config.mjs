@@ -191,7 +191,8 @@ export default defineConfig({
         { text: 'Python reference', link: '/reference/python/index.html', target: '_self' },
         { text: 'Benchmarks', link: '/benchmarks/', items: [
           { text: 'Torch material performance', link: '/benchmarks/torch-material' },
-          { text: 'Response evaluation performance', link: '/benchmarks/response-evaluation' }
+          { text: 'Response evaluation performance', link: '/benchmarks/response-evaluation' },
+          { text: 'Energy evaluation performance', link: '/benchmarks/energy-evaluation' }
         ] },
         { text: 'Development', link: '/development' }
       ] }

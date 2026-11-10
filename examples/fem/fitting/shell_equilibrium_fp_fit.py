@@ -113,11 +113,11 @@ def measure(problem, make_energy, make_response, p, load=1.0, need_jacobian=Fals
 
     # 2. Compute force and its total derivative along the equilibrium branch.
     elastic = make_energy(p)
-    force = elastic.eval_gradient(displacement)
+    force = elastic.evaluate(displacement).gradient()
     reaction_jacobian = None
     if need_jacobian:
         force_parameter_jacobian = make_response(displacement).evaluate(p).jacobian()
-        stiffness = elastic.eval_hessian(displacement)
+        stiffness = elastic.evaluate(displacement).hessian()
         reaction_jacobian = force_parameter_jacobian + stiffness @ state_jacobian
 
     # 3. Observe free displacement, followed by the reactions at fixed DOFs.

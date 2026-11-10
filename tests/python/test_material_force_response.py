@@ -23,7 +23,7 @@ def problem():
 def observed(data, theta):
     _, mapping, geometry, u, plastic = data
     fields = [AffineResponse(np.zeros((np.asarray(theta if theta.size == 2 else theta[2*e:2*e+2]).size, 3)), theta if theta.size == 2 else theta[2*e:2*e+2]) for e in range(2)]
-    return Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, plastic, fields).eval_gradient(u)
+    return Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, plastic, fields).evaluate(u).gradient()
 
 
 @pytest.mark.parametrize("batch_size", [1, 3, 256])

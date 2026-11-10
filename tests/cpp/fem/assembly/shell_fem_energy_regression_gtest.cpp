@@ -65,54 +65,54 @@ void expect_safe_segment(const energy::Energy& energy, const Vec& u, const Vec& 
     ASSERT_GE(alpha, 0);
     ASSERT_LE(alpha, 1);
     for (int i = 0; i <= 32; ++i)
-        EXPECT_NO_THROW(energy.eval_value(u + (alpha * i / 32) * du));
+        EXPECT_NO_THROW(energy.evaluate(u + (alpha * i / 32) * du)->value());
 }
 
 TEST(ShellFemEnergyRegression, UniformStretchAndRigidMotionMatchReferenceAreaAndMaterialParameters) {
     const Vec X_nodes = shell_stvk_rest_positions();
     auto energy = make_shell_energy(X_nodes);
     EXPECT_EQ(energy.num_dofs(), 18);
-    EXPECT_DOUBLE_EQ(energy.eval_value(Vec::Zero(18)), 0);
+    EXPECT_DOUBLE_EQ(energy.evaluate(Vec::Zero(18))->value(), 0);
     const double Y = 100, nu = 0.3;
     const double lambda_ps = Y * nu / (1 - nu * nu), mu = Y / (2 * (1 + nu));
     const double density = 0.1 / 2 * (lambda_ps + mu) * 0.21 * 0.21;
-    EXPECT_NEAR(energy.eval_value(0.1 * X_nodes), 5.5 * density, 1e-12);
+    EXPECT_NEAR(energy.evaluate(0.1 * X_nodes)->value(), 5.5 * density, 1e-12);
     const Eigen::Matrix3d R = Eigen::AngleAxisd(0.4, Eigen::Vector3d(1, 2, -1).normalized()).toRotationMatrix();
     Vec rigid(18);
     for (int v = 0; v < 6; ++v) {
         const Eigen::Vector3d X = X_nodes.segment<3>(3 * v);
         rigid.segment<3>(3 * v) = R * X + Eigen::Vector3d(0.3, -0.4, 0.7) - X;
     }
-    EXPECT_NEAR(energy.eval_value(rigid), 0, 1e-24);
-    EXPECT_TRUE(energy.eval_gradient(rigid).isZero(1e-11));
+    EXPECT_NEAR(energy.evaluate(rigid)->value(), 0, 1e-24);
+    EXPECT_TRUE(energy.evaluate(rigid)->gradient().isZero(1e-11));
 }
 
 TEST(ShellFemEnergyRegression, BentStateHasCorrectGradientHessianAndNeighborCouplings) {
     auto energy = make_shell_energy(shell_stvk_rest_positions());
     const Vec u = bent_displacements();
-    EXPECT_GT(energy.eval_value(u), 0);
+    EXPECT_GT(energy.evaluate(u)->value(), 0);
     energy::test::expect_derivatives_match(energy, u, 2e-6);
-    const SpMat H = energy.eval_hessian(u);
+    const SpMat H = energy.evaluate(u)->hessian();
     EXPECT_GT(std::abs(H.coeff(3 * 3 + 2, 3 * 4 + 2)), 1e-8);
-    EXPECT_NO_THROW(energy.eval_hessian(u));
+    EXPECT_NO_THROW(energy.evaluate(u)->hessian());
 }
 
 TEST(ShellFemEnergyRegression, FeasibleStepPreventsInteriorCollapseEvenWhenEndpointIsFeasible) {
     const Vec X_nodes = shell_stvk_rest_positions();
     auto energy = make_shell_energy(X_nodes);
     const Vec u = Vec::Zero(18), du = -2 * X_nodes;
-    EXPECT_NO_THROW(energy.eval_value(u + du));
-    EXPECT_THROW(energy.eval_value(u + 0.5 * du), std::domain_error);
-    const double alpha = energy.max_feasible_step(u, du);
+    EXPECT_NO_THROW(energy.evaluate(u + du)->value());
+    EXPECT_THROW(energy.evaluate(u + 0.5 * du)->value(), std::domain_error);
+    const double alpha = energy.evaluate(u)->max_feasible_step(du);
     EXPECT_GT(alpha, 0);
     EXPECT_LT(alpha, 0.5);
     expect_safe_segment(energy, u, du, alpha);
     Vec translation(18);
     for (int v = 0; v < 6; ++v)
         translation.segment<3>(3 * v) = Eigen::Vector3d(0.1, -0.2, 0.3);
-    EXPECT_DOUBLE_EQ(energy.max_feasible_step(u, translation), 1);
-    EXPECT_DOUBLE_EQ(energy.max_feasible_step(u, Vec::Zero(18)), 1);
-    EXPECT_DOUBLE_EQ(energy.max_feasible_step(u, -1e200 * X_nodes), 0);
+    EXPECT_DOUBLE_EQ(energy.evaluate(u)->max_feasible_step(translation), 1);
+    EXPECT_DOUBLE_EQ(energy.evaluate(u)->max_feasible_step(Vec::Zero(18)), 1);
+    EXPECT_DOUBLE_EQ(energy.evaluate(u)->max_feasible_step(-1e200 * X_nodes), 0);
 }
 
 TEST(ShellFemEnergyRegression, FeasibleStepKeepsAdjacentNormalsFromCancelling) {
@@ -120,19 +120,19 @@ TEST(ShellFemEnergyRegression, FeasibleStepKeepsAdjacentNormalsFromCancelling) {
     Vec u = Vec::Zero(18), du = Vec::Zero(18);
     u.segment<3>(9) << -1, -1.5, 1;
     du.segment<3>(9) << -1, -0.5, -1;
-    EXPECT_NO_THROW(energy.eval_value(u));
-    EXPECT_THROW(energy.eval_value(u + du), std::domain_error);
-    const double alpha = energy.max_feasible_step(u, du);
+    EXPECT_NO_THROW(energy.evaluate(u)->value());
+    EXPECT_THROW(energy.evaluate(u + du)->value(), std::domain_error);
+    const double alpha = energy.evaluate(u)->max_feasible_step(du);
     EXPECT_GT(alpha, 0);
     EXPECT_LT(alpha, 1);
     expect_safe_segment(energy, u, du, alpha);
-    EXPECT_THROW(energy.max_feasible_step(u + du, du), std::domain_error);
+    EXPECT_THROW(energy.evaluate(u + du)->max_feasible_step(du), std::domain_error);
 }
 
 TEST(ShellFemEnergyRegression, NewtonRelaxesBentPatchWhileKeepingCentralTriangleFixed) {
     auto energy = make_shell_energy(shell_stvk_rest_positions());
     const Vec u0 = bent_displacements();
-    const double initial_energy = energy.eval_value(u0);
+    const double initial_energy = energy.evaluate(u0)->value();
     const dof::DofReduction fixed(18, {0, 1, 2, 3, 4, 5, 6, 7, 8});
     solver::NewtonOptions options;
     options.gradient_tolerance = 1e-9;
@@ -151,9 +151,9 @@ TEST(ShellFemEnergyRegression, OwnsReferenceDataAndRejectsInvalidRestAndTrialGeo
     Vec X_nodes = shell_stvk_rest_positions();
     auto energy = make_shell_energy(X_nodes);
     const Vec u = bent_displacements();
-    const double W = energy.eval_value(u);
+    const double W = energy.evaluate(u)->value();
     X_nodes.setZero();
-    EXPECT_DOUBLE_EQ(energy.eval_value(u), W);
+    EXPECT_DOUBLE_EQ(energy.evaluate(u)->value(), W);
     EXPECT_THROW(make_shell_energy(Vec::Zero(17)), std::invalid_argument);
     EXPECT_THROW(make_shell_energy(Vec::Zero(18)), std::domain_error);
     X_nodes = shell_stvk_rest_positions();
@@ -163,11 +163,11 @@ TEST(ShellFemEnergyRegression, OwnsReferenceDataAndRejectsInvalidRestAndTrialGeo
     collapsed.segment<3>(3) = -shell_stvk_rest_positions().segment<3>(3);
     // Repeat cancellation across concurrent batches and verify the object remains usable.
     for (int attempt = 0; attempt < 25; ++attempt) {
-        EXPECT_THROW(energy.eval_value(collapsed), std::domain_error);
-        EXPECT_THROW(energy.eval_gradient(collapsed), std::domain_error);
-        EXPECT_THROW(energy.eval_hessian(collapsed), std::domain_error);
-        EXPECT_THROW(energy.max_feasible_step(collapsed, Vec::Zero(18)), std::domain_error);
-        EXPECT_DOUBLE_EQ(energy.eval_value(u), W);
+        EXPECT_THROW(energy.evaluate(collapsed)->value(), std::domain_error);
+        EXPECT_THROW(energy.evaluate(collapsed)->gradient(), std::domain_error);
+        EXPECT_THROW(energy.evaluate(collapsed)->hessian(), std::domain_error);
+        EXPECT_THROW(energy.evaluate(collapsed)->max_feasible_step(Vec::Zero(18)), std::domain_error);
+        EXPECT_DOUBLE_EQ(energy.evaluate(u)->value(), W);
     }
 
     const auto stencils = mesh::make_triangle_mid_edge_stencils(shell_stvk_topology());

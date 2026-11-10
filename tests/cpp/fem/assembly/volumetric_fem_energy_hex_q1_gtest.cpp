@@ -94,9 +94,10 @@ TEST(HexQ1FemEnergy, GradientAndHessianMatchFiniteDifferences) {
             }
             d.normalize();
             v.normalize();
-            const double mixed = (energy.eval_value(x + h * d + h * v) - energy.eval_value(x + h * d - h * v) -
-                                  energy.eval_value(x - h * d + h * v) + energy.eval_value(x - h * d - h * v)) /
-                                 (4 * h * h);
+            const double mixed =
+                (energy.evaluate(x + h * d + h * v)->value() - energy.evaluate(x + h * d - h * v)->value() -
+                 energy.evaluate(x - h * d + h * v)->value() + energy.evaluate(x - h * d - h * v)->value()) /
+                (4 * h * h);
             EXPECT_NEAR(d.dot(H * v), mixed, (10 * h * h + 1e-7) * (1 + H.norm()));
         }
     }
@@ -137,7 +138,7 @@ TEST(HexQ1FemEnergy, CachedElementIntegratesTranslatedWarpedGeometryAndIndepende
                 1e-13);
     Vec g_only = Vec::Constant(2, 7);
     SpMat H_only;
-    EXPECT_DOUBLE_EQ(energy.eval_value(x), value);
+    EXPECT_DOUBLE_EQ(energy.evaluate(x)->value(), value);
     EXPECT_DOUBLE_EQ(litepgo::testing::evaluate_energy(energy, x, &g_only, nullptr), value);
     EXPECT_DOUBLE_EQ(litepgo::testing::evaluate_energy(energy, x, nullptr, &H_only), value);
     EXPECT_TRUE(g_only.isApprox(g, 1e-13));
@@ -157,23 +158,23 @@ TEST(HexQ1FemEnergy, ConstructionRejectsGeometryInvertedAtAQuadraturePoint) {
 TEST(HexQ1FemEnergy, FeasibleStepDetectsInteriorCollapseAndTheMostRestrictiveElement) {
     const Vec X = hex_q1_rest_positions(), zero = Vec::Zero(X.size());
     auto energy = make_hex_q1_energy(X);
-    EXPECT_EQ(energy.max_feasible_step(zero, zero), 1);
-    EXPECT_EQ(energy.max_feasible_step(zero, 0.1 * X), 1);
+    EXPECT_EQ(energy.evaluate(zero)->max_feasible_step(zero), 1);
+    EXPECT_EQ(energy.evaluate(zero)->max_feasible_step(0.1 * X), 1);
     Vec direction = zero;
     for (int v = 0; v < X.size() / 3; ++v) {
         direction[3 * v] = -4 * X[3 * v];
         direction[3 * v + 1] = -4 * X[3 * v + 1];
     }
-    EXPECT_TRUE(std::isfinite(energy.eval_value(direction)));
-    const double alpha = energy.max_feasible_step(zero, direction);
+    EXPECT_TRUE(std::isfinite(energy.evaluate(direction)->value()));
+    const double alpha = energy.evaluate(zero)->max_feasible_step(direction);
     EXPECT_NEAR(alpha, 0.225, 1e-6);
     for (int i = 0; i <= 20; ++i)
-        EXPECT_TRUE(std::isfinite(energy.eval_value((alpha * i / 20) * direction)));
+        EXPECT_TRUE(std::isfinite(energy.evaluate((alpha * i / 20) * direction)->value()));
     direction.setZero();
     for (int v = 0; v < X.size() / 3; ++v)
         direction[3 * v] = -4 * std::max(0.0, X[3 * v] - 1);
-    EXPECT_NEAR(energy.max_feasible_step(zero, direction), 0.225, 1e-12);
-    EXPECT_THROW(energy.max_feasible_step(-X, zero), std::domain_error);
+    EXPECT_NEAR(energy.evaluate(zero)->max_feasible_step(direction), 0.225, 1e-12);
+    EXPECT_THROW(energy.evaluate(-X)->max_feasible_step(zero), std::domain_error);
 }
 
 } // namespace litepgo::fem::test

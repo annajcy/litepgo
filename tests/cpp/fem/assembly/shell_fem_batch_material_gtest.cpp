@@ -103,7 +103,7 @@ TEST(ShellFemBatchMaterial, EnergyMatchesPointwiseMaterial) {
         SCOPED_TRACE(batch_size);
         const ShellFemEnergy batched(std::make_shared<BatchKoiter>(calls), p.map, p.rest, p.thickness, p.theta, p.Fp,
                                      batch_size);
-        for (auto kind : {litepgo::energy::HessianKind::Exact, litepgo::energy::HessianKind::Projected}) {
+        for (auto kind : {false, true}) {
             Vec g0, g1;
             SpMat H0, H1;
             *calls = 0;
@@ -116,7 +116,7 @@ TEST(ShellFemBatchMaterial, EnergyMatchesPointwiseMaterial) {
             EXPECT_LT(Eigen::MatrixXd(H0 - H1).norm(), 1e-12 * (1 + Eigen::MatrixXd(H0).norm()));
         }
         const Vec dx = 3 * p.u;
-        EXPECT_DOUBLE_EQ(native.max_feasible_step(p.u, dx), batched.max_feasible_step(p.u, dx));
+        EXPECT_DOUBLE_EQ(native.evaluate(p.u)->max_feasible_step(dx), batched.evaluate(p.u)->max_feasible_step(dx));
     }
     EXPECT_THROW(
         ShellFemEnergy(std::make_shared<BatchKoiter>(calls, true), p.map, p.rest, p.thickness, p.theta, p.Fp, 256),

@@ -85,8 +85,8 @@ TEST(HexHermiteFemEnergy, ReproducesAffineDisplacementAndVolumeWeightedEnergy) {
     const Eigen::Vector3d b(0.2, -0.1, 0.3);
     const Vec x = affine_dofs(X_nodes, A, b);
     auto energy = make_hex_hermite_energy(X_nodes);
-    EXPECT_DOUBLE_EQ(energy.eval_value(Vec::Zero(x.size())), 0);
-    EXPECT_NEAR(energy.eval_value(x),
+    EXPECT_DOUBLE_EQ(energy.evaluate(Vec::Zero(x.size()))->value(), 0);
+    EXPECT_NEAR(energy.evaluate(x)->value(),
                 18 * fem::NeoHookean::eval_W(
                          {Eigen::Matrix3d::Identity() + A, Eigen::Matrix3d::Identity(), Eigen::Vector2d(2, 3)}),
                 1e-11);
@@ -153,9 +153,12 @@ TEST(HexHermiteFemEnergy, SharedFacesHaveContinuousValuesAndPhysicalGradientsInA
                 const Eigen::Vector3d p0_xi = xi;
                 xi[normal] = 0;
                 const Eigen::Vector3d p1_xi = xi;
-                EXPECT_TRUE(X_fields[0]->evaluate(p0_xi)->value().isApprox(X_fields[1]->evaluate(p1_xi)->value(), 1e-14));
+                EXPECT_TRUE(
+                    X_fields[0]->evaluate(p0_xi)->value().isApprox(X_fields[1]->evaluate(p1_xi)->value(), 1e-14));
                 EXPECT_LT((u0->evaluate(p0_xi)->value() - u1->evaluate(p1_xi)->value()).norm(), 1e-13);
-                EXPECT_LT((F0->evaluate(p0_xi)->value().reshaped(3, 3) - F1->evaluate(p1_xi)->value().reshaped(3, 3)).norm(), 1e-13);
+                EXPECT_LT(
+                    (F0->evaluate(p0_xi)->value().reshaped(3, 3) - F1->evaluate(p1_xi)->value().reshaped(3, 3)).norm(),
+                    1e-13);
             }
     }
 }
@@ -175,7 +178,7 @@ TEST(HexHermiteFemEnergy, PhysicalDofGradientAndHessianMatchFiniteDifferences) {
     ASSERT_EQ(H.rows(), x.size());
     ASSERT_EQ(H.cols(), x.size());
     EXPECT_LT((H - H.transpose()).norm(), 1e-12 * (1 + H.norm()));
-    EXPECT_NEAR(energy.eval_value(x), value, 1e-13);
+    EXPECT_NEAR(energy.evaluate(x)->value(), value, 1e-13);
 
     constexpr double h = 1e-4;
     Vec fd_g(x.size());
@@ -201,9 +204,10 @@ TEST(HexHermiteFemEnergy, PhysicalDofGradientAndHessianMatchFiniteDifferences) {
     v.normalize();
     for (double step : {1e-3, 3e-4, 1e-4}) {
         SCOPED_TRACE(step);
-        const double mixed = (energy.eval_value(x + step * d + step * v) - energy.eval_value(x + step * d - step * v) -
-                              energy.eval_value(x - step * d + step * v) + energy.eval_value(x - step * d - step * v)) /
-                             (4 * step * step);
+        const double mixed =
+            (energy.evaluate(x + step * d + step * v)->value() - energy.evaluate(x + step * d - step * v)->value() -
+             energy.evaluate(x - step * d + step * v)->value() + energy.evaluate(x - step * d - step * v)->value()) /
+            (4 * step * step);
         EXPECT_NEAR(d.dot(H * v), mixed, (10 * step * step + 1e-7) * (1 + H.norm()));
     }
     SpMat h_only;
@@ -250,18 +254,19 @@ TEST(HexHermiteFemEnergy, RejectsUnsupportedGeometryAndIncorrectDofShapes) {
 TEST(HexHermiteFemEnergy, FeasibleStepMapsPhysicalDerivativeDofsAndChecksAllQuadraturePoints) {
     const Vec X = hex_hermite_rest_positions(), zero = Vec::Zero(288);
     auto energy = make_hex_hermite_energy(X);
-    EXPECT_EQ(energy.max_feasible_step(zero, zero), 1);
-    EXPECT_EQ(energy.max_feasible_step(zero, affine_dofs(X, 0.1 * Eigen::Matrix3d::Identity())), 1);
+    EXPECT_EQ(energy.evaluate(zero)->max_feasible_step(zero), 1);
+    EXPECT_EQ(energy.evaluate(zero)->max_feasible_step(affine_dofs(X, 0.1 * Eigen::Matrix3d::Identity())), 1);
     const Eigen::Matrix3d dF = Eigen::Vector3d(-4, -4, 0).asDiagonal();
     const Vec direction = affine_dofs(X, dF);
-    EXPECT_TRUE(std::isfinite(energy.eval_value(direction)));
-    const double alpha = energy.max_feasible_step(zero, direction);
+    EXPECT_TRUE(std::isfinite(energy.evaluate(direction)->value()));
+    const double alpha = energy.evaluate(zero)->max_feasible_step(direction);
     EXPECT_NEAR(alpha, 0.225, 1e-6);
     for (int i = 0; i <= 12; ++i)
-        EXPECT_TRUE(std::isfinite(energy.eval_value((alpha * i / 12) * direction)));
+        EXPECT_TRUE(std::isfinite(energy.evaluate((alpha * i / 12) * direction)->value()));
     const Vec current = affine_dofs(X, 0.1 * Eigen::Matrix3d::Identity());
-    EXPECT_NEAR(energy.max_feasible_step(current, direction), 0.2475, 1e-6);
-    EXPECT_THROW(energy.max_feasible_step(affine_dofs(X, -Eigen::Matrix3d::Identity()), zero), std::domain_error);
+    EXPECT_NEAR(energy.evaluate(current)->max_feasible_step(direction), 0.2475, 1e-6);
+    EXPECT_THROW(energy.evaluate(affine_dofs(X, -Eigen::Matrix3d::Identity()))->max_feasible_step(zero),
+                 std::domain_error);
 }
 
 TEST(HexHermiteFemEnergy, BasisTransformsUsePhysicalDofLayoutAndIndependentPullbacks) {
@@ -320,11 +325,13 @@ TEST(HexHermiteFemEnergy, AcceptsHermiteReferenceFieldsRepresentingAffineBoxes) 
         std::move(fields), {Fp, Fp}, {theta, theta});
     auto reference = make_hex_hermite_energy(positions);
     const Vec u = affine_dofs(positions, 0.1 * Eigen::Matrix3d::Identity());
-    EXPECT_NEAR(energy.eval_value(u), reference.eval_value(u), 1e-11);
-    EXPECT_TRUE(energy.eval_gradient(u).isApprox(reference.eval_gradient(u), 1e-11));
-    EXPECT_TRUE(Eigen::MatrixXd(energy.eval_hessian(u)).isApprox(Eigen::MatrixXd(reference.eval_hessian(u)), 1e-11));
+    EXPECT_NEAR(energy.evaluate(u)->value(), reference.evaluate(u)->value(), 1e-11);
+    EXPECT_TRUE(energy.evaluate(u)->gradient().isApprox(reference.evaluate(u)->gradient(), 1e-11));
+    EXPECT_TRUE(Eigen::MatrixXd(energy.evaluate(u)->hessian())
+                    .isApprox(Eigen::MatrixXd(reference.evaluate(u)->hessian()), 1e-11));
     const Vec direction = affine_dofs(positions, -4 * Eigen::Matrix3d::Identity());
-    EXPECT_NEAR(energy.max_feasible_step(u, direction), reference.max_feasible_step(u, direction), 1e-12);
+    EXPECT_NEAR(energy.evaluate(u)->max_feasible_step(direction), reference.evaluate(u)->max_feasible_step(direction),
+                1e-12);
 }
 
 TEST(HexHermiteFemEnergy, CachedKinematicsMatchesUncachedAcrossChangingDisplacements) {
@@ -383,14 +390,15 @@ TEST(HexHermiteFemEnergy, CachedKinematicsMatchesUncachedAcrossChangingDisplacem
             u[j] += 0.002 * std::sin(j + pose);
         // Distinct compression rates avoid clustered determinant roots in this equality check.
         const Vec direction = affine_dofs(positions, Eigen::Vector3d(-4, -1, -0.5).asDiagonal());
-        const double step = cached.max_feasible_step(u, direction);
+        const double step = cached.evaluate(u)->max_feasible_step(direction);
         EXPECT_GT(step, 0);
         EXPECT_LT(step, 1);
-        EXPECT_NEAR(step, uncached.max_feasible_step(u, direction), 1e-12);
-        EXPECT_TRUE(std::isfinite(cached.eval_value(u + step * direction)));
-        EXPECT_NEAR(cached.eval_value(u), uncached.eval_value(u), 1e-11);
-        EXPECT_TRUE(cached.eval_gradient(u).isApprox(uncached.eval_gradient(u), 1e-11));
-        EXPECT_TRUE(Eigen::MatrixXd(cached.eval_hessian(u)).isApprox(Eigen::MatrixXd(uncached.eval_hessian(u)), 1e-11));
+        EXPECT_NEAR(step, uncached.evaluate(u)->max_feasible_step(direction), 1e-12);
+        EXPECT_TRUE(std::isfinite(cached.evaluate(u + step * direction)->value()));
+        EXPECT_NEAR(cached.evaluate(u)->value(), uncached.evaluate(u)->value(), 1e-11);
+        EXPECT_TRUE(cached.evaluate(u)->gradient().isApprox(uncached.evaluate(u)->gradient(), 1e-11));
+        EXPECT_TRUE(Eigen::MatrixXd(cached.evaluate(u)->hessian())
+                        .isApprox(Eigen::MatrixXd(uncached.evaluate(u)->hessian()), 1e-11));
     }
 }
 

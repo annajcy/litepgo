@@ -87,7 +87,7 @@ Problem make_problem() {
     fem::ShellFemEnergy target_energy(std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(), map,
                                       rest, thickness, theta,
                                       std::vector<Eigen::Matrix3d>(map.num_elements(), true_Fp));
-    const Vec target = target_energy.eval_gradient(u);
+    const Vec target = target_energy.evaluate(u)->gradient();
     const double scale = target.norm();
     if (!(scale > 0) || !std::isfinite(scale))
         throw std::runtime_error("Calibration requires finite nonzero target forces");

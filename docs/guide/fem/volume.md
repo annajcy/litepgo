@@ -78,8 +78,10 @@ material = [energy.AffineResponse(np.zeros((2, 3)), np.array([2., 3.]))]
 Energy = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature]
 elastic = Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, plastic, material)
 u = np.zeros(mapping.num_dofs)
-value, gradient, hessian = elastic.eval(u, gradient=True,
-                                       hessian=energy.HessianKind.Exact)
+elastic_evaluation = elastic.evaluate(u)
+hessian = elastic_evaluation.hessian()
+gradient = elastic_evaluation.gradient()
+value = elastic_evaluation.value
 assert abs(value) < 1e-12
 assert np.linalg.norm(gradient) < 1e-12
 assert hessian.shape == (12, 12)

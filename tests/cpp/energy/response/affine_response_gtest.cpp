@@ -16,6 +16,14 @@ Eigen::Matrix<double, 2, 3> matrix() {
 }
 } // namespace
 
+TEST(AffineResponse, EvaluationBorrowsModel) {
+    auto response = std::make_shared<IdentityResponse>(3);
+    const auto owners = response.use_count();
+    auto evaluation = response->evaluate(Vec::Ones(3));
+    EXPECT_EQ(response.use_count(), owners);
+    EXPECT_TRUE(evaluation->value().isApprox(Vec::Ones(3)));
+}
+
 TEST(AffineResponse, RectangularValuesDerivativesAndZeroHessian) {
     const auto A = matrix();
     const Vec b = Eigen::Vector2d(4, -1), x = Eigen::Vector3d(1, 2, -3);

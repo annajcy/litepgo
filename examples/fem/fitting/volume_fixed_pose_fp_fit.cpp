@@ -86,7 +86,7 @@ Problem make_problem() {
                                                    litepgo::SpMat((true_Fp.reshaped()).size(), 3), true_Fp.reshaped())),
                           theta);
     // Target comes from the energy gradient, independently of the force-response path.
-    const Vec target = elastic.eval_gradient(u);
+    const Vec target = elastic.evaluate(u)->gradient();
     const double scale = target.norm();
     if (!(scale > 0) || !std::isfinite(scale))
         throw std::runtime_error("Calibration requires finite nonzero target forces");

@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
     const contact::IPCContactEnergy reference(surface, options, std::make_shared<contact::SpatialHash>());
     const contact::IPCContactEnergy grouped(surface, options, std::make_shared<contact::SpatialHash>(), weights);
     const std::array snapshots{reference.contact_snapshot(x), grouped.contact_snapshot(x)};
-    const std::array gradients{reference.eval_gradient(x), grouped.eval_gradient(x)};
+    const std::array gradients{reference.evaluate(x)->gradient(), grouped.evaluate(x)->gradient()};
     const std::filesystem::path output = argc > 1 ? argv[1] : LITEPGO_OUTPUT_DIR "/contact_pair_weights.csv";
     if (!output.parent_path().empty())
         std::filesystem::create_directories(output.parent_path());
@@ -82,8 +82,8 @@ int main(int argc, char** argv) {
         std::cout << "groups=(" << a << ',' << b << "), multiplier=" << scale << ", energy=" << values[1]
                   << ", force=" << forces[1] << ", records=" << counts[1] << '\n';
     }
-    if (std::abs(totals[0] - reference.eval_value(x)) > 1e-12 * totals[0] ||
-        std::abs(totals[1] - grouped.eval_value(x)) > 1e-12 * totals[0])
+    if (std::abs(totals[0] - reference.evaluate(x)->value()) > 1e-12 * totals[0] ||
+        std::abs(totals[1] - grouped.evaluate(x)->value()) > 1e-12 * totals[0])
         throw std::runtime_error("snapshot contributions must sum to the actual energy");
     stream.close();
     std::cout << "Saved " << output << '\n';

@@ -123,11 +123,11 @@ Observation measure(const Problem& problem, const Factories& factories, const Ve
 
     // 2. Compute force and its total derivative along the equilibrium branch.
     const auto elastic = factories.make_energy(p);
-    const Vec force = elastic->eval_gradient(displacement);
+    const Vec force = elastic->evaluate(displacement)->gradient();
     Eigen::MatrixXd reaction_jacobian;
     if (need_jacobian) {
         const SpMat force_parameter_jacobian = factories.make_response(displacement)->evaluate(p)->jacobian();
-        const SpMat stiffness = elastic->eval_hessian(displacement);
+        const SpMat stiffness = elastic->evaluate(displacement)->hessian();
         reaction_jacobian = Eigen::MatrixXd(force_parameter_jacobian) + stiffness * state_jacobian;
     }
 

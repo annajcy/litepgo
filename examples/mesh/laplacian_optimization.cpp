@@ -137,7 +137,7 @@ int main(int argc, char** argv) {
     const auto smooth = solver::newton_solve(smooth_energy, dof::DofReduction(3 * vertices, boundary_dofs), noisy,
                                              options, linear_solver);
     if (smooth.status != solver::NewtonStatus::Converged || (smooth.x - rest).lpNorm<Eigen::Infinity>() > 1e-9 ||
-        !(smooth.energy < smooth_energy.eval_value(noisy)))
+        !(smooth.energy < smooth_energy.evaluate(noisy)->value()))
         throw std::runtime_error("Smoothing check failed");
     for (int d : boundary_dofs)
         if (smooth.x[d] != noisy[d])
@@ -149,8 +149,8 @@ int main(int argc, char** argv) {
         initial[3 * (i * n + n - 1) + 2] = 0.5;
     const auto edited = solver::newton_solve(edit_energy, dof::DofReduction(3 * vertices, handle_dofs), initial,
                                              options, linear_solver);
-    const double before = std::sqrt(2. * edit_energy.eval_value(initial)),
-                 after = std::sqrt(2. * edit_energy.eval_value(edited.x));
+    const double before = std::sqrt(2. * edit_energy.evaluate(initial)->value()),
+                 after = std::sqrt(2. * edit_energy.evaluate(edited.x)->value());
     if (edited.status != solver::NewtonStatus::Converged || !(after < before) ||
         edited.x[3 * (vertices / 2) + 2] <= 0.1)
         throw std::runtime_error("Mesh editing check failed");

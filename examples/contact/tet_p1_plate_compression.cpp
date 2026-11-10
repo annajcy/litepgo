@@ -118,8 +118,8 @@ int main(int argc, char** argv) {
     const Vec surface_positions = kinematics.positions(result.x);
     const int pairs = barrier->num_active_pairs(surface_positions);
     const double distance = barrier->min_active_distance(surface_positions);
-    const double lower_energy = bottom_plate->eval_value(surface_positions);
-    const double upper_energy = top_plate->eval_value(surface_positions);
+    const double lower_energy = bottom_plate->evaluate(surface_positions)->value();
+    const double upper_energy = top_plate->evaluate(surface_positions)->value();
     std::cout << "converged=" << converged << ", iterations=" << result.iterations << ", potential=" << result.energy
               << ", bottom penalty=" << lower_energy << ", top penalty=" << upper_energy << ", active pairs=" << pairs
               << ", min distance=" << distance << '\n';

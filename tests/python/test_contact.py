@@ -48,11 +48,11 @@ def test_barrier_mirrors_cpp():
     x = surface.positions.ravel()
     assert barrier.num_active_pairs(x) == 1
     assert barrier.min_active_distance(x) == pytest.approx(0.5, abs=1e-14)
-    assert barrier.eval_value(x) > 0
-    np.testing.assert_allclose(barrier.eval_gradient(x), central_gradient(barrier.eval_value, x), atol=1e-6)
+    assert barrier.evaluate(x).value > 0
+    np.testing.assert_allclose(barrier.evaluate(x).gradient(), central_gradient(lambda x: barrier.evaluate(x).value, x), atol=1e-6)
 
-    assert barrier.eval_hessian(x).nnz == 144
-    assert np.linalg.eigvalsh(barrier.eval_hessian(x, kind=energy.HessianKind.Projected).toarray()).min() > -1e-10
+    assert barrier.evaluate(x).hessian().nnz == 144
+    assert np.linalg.eigvalsh(barrier.evaluate(x).projected_hessian().toarray()).min() > -1e-10
 
 
 def test_barrier_rejects_infeasible_states():
@@ -61,7 +61,7 @@ def test_barrier_rejects_infeasible_states():
         contact.IPCContactEnergy(surface, contact.IPCContactOptions(), contact.SpatialHash())  # dhat unset
     thick = contact.IPCContactEnergy(surface, contact.IPCContactOptions(dhat=1.0, min_distance=0.6), contact.SpatialHash())
     with pytest.raises(ValueError, match="min_distance"):
-        thick.eval_value(surface.positions.ravel())
+        thick.evaluate(surface.positions.ravel()).value
 
 
 @pytest.mark.parametrize("backend", ["native", "toolkit"])
@@ -93,23 +93,23 @@ def test_physical_barrier_scale_derivatives_and_distance_semantics(backend, mini
     assert snapshot.types == ("VF",)
     np.testing.assert_array_equal(snapshot.weights, raw.contact_snapshot(x).weights)
     assert physical.min_active_distance(x) == raw.min_active_distance(x) == .5
-    assert physical.eval_value(x) == pytest.approx(scale * raw.eval_value(x), rel=1e-13)
-    np.testing.assert_allclose(physical.eval_gradient(x), scale * raw.eval_gradient(x), rtol=1e-12, atol=1e-12)
-    for kind in [energy.HessianKind.Exact, energy.HessianKind.Projected]:
-        np.testing.assert_allclose(physical.eval_hessian(x, kind).toarray(),
-                                   scale * raw.eval_hessian(x, kind).toarray(), rtol=1e-10, atol=1e-10)
-    np.testing.assert_allclose(physical.eval_gradient(x), central_gradient(physical.eval_value, x), atol=1e-6)
+    assert physical.evaluate(x).value == pytest.approx(scale * raw.evaluate(x).value, rel=1e-13)
+    np.testing.assert_allclose(physical.evaluate(x).gradient(), scale * raw.evaluate(x).gradient(), rtol=1e-12, atol=1e-12)
+    for kind in [False, True]:
+        np.testing.assert_allclose((physical.evaluate(x).projected_hessian() if kind else physical.evaluate(x).hessian()).toarray(),
+                                   scale * (raw.evaluate(x).projected_hessian() if kind else raw.evaluate(x).hessian()).toarray(), rtol=1e-10, atol=1e-10)
+    np.testing.assert_allclose(physical.evaluate(x).gradient(), central_gradient(lambda x: physical.evaluate(x).value, x), atol=1e-6)
     stiffness = 4.5
     weighted = energy.WeightedSumEnergy([(physical, stiffness)])
     s = .5**2 - minimum**2
     expected = stiffness * snapshot.weights.sum() * scale * -(s-h)**2 * np.log(s/h)
-    assert weighted.eval_value(x) == pytest.approx(expected, rel=1e-13)
+    assert weighted.evaluate(x).value == pytest.approx(expected, rel=1e-13)
     direction = np.zeros(18)
     direction[11] = -2
-    assert physical.max_feasible_step(x, direction) == raw.max_feasible_step(x, direction)
+    assert physical.evaluate(x).max_feasible_step(direction) == raw.evaluate(x).max_feasible_step(direction)
     boundary = x.reshape(-1, 3).copy()
     boundary[3:, 2] += minimum + .7 - .5
-    assert physical.eval_value(boundary.ravel()) == pytest.approx(0, abs=1e-14)
+    assert physical.evaluate(boundary.ravel()).value == pytest.approx(0, abs=1e-14)
 
 
 @pytest.mark.parametrize("backend", ["native", "toolkit"])
@@ -131,20 +131,20 @@ def test_physical_barrier_rejects_unrepresentable_normalization(backend, dhat):
 def test_plane_penalty_value_gradient_and_fixed_hessian(positive_side, active_dof):
     penalty = contact.PlanePenaltyEnergy(3, axis=0, height=1.0, stiffness=4.0, positive_side=positive_side)
     x = np.array([0.5, 8.0, -2.0, 1.0, -4.0, 2.0, 1.5, 3.0, 0.0])
-    assert penalty.eval_value(x) == 0.5
+    assert penalty.evaluate(x).value == 0.5
     gradient = np.zeros(9)
     gradient[active_dof] = 4.0 * (x[active_dof] - 1.0)
-    np.testing.assert_array_equal(penalty.eval_gradient(x), gradient)
+    np.testing.assert_array_equal(penalty.evaluate(x).gradient(), gradient)
     diagonal = np.zeros(9)
     diagonal[active_dof] = 4.0
-    np.testing.assert_array_equal(penalty.eval_hessian(x).toarray(), np.diag(diagonal))
+    np.testing.assert_array_equal(penalty.evaluate(x).hessian().toarray(), np.diag(diagonal))
 
     cleared = x.copy()
     cleared[active_dof] = 1.0
-    assert penalty.eval_value(cleared) == 0
-    assert penalty.eval_hessian(cleared).nnz == 3
-    np.testing.assert_array_equal(penalty.eval_hessian(cleared).toarray(), np.zeros((9, 9)))
-    assert penalty.max_feasible_step(cleared, x - cleared) == 1.0
+    assert penalty.evaluate(cleared).value == 0
+    assert penalty.evaluate(cleared).hessian().nnz == 3
+    np.testing.assert_array_equal(penalty.evaluate(cleared).hessian().toarray(), np.zeros((9, 9)))
+    assert penalty.evaluate(cleared).max_feasible_step(x - cleared) == 1.0
 
 
 def test_plane_penalty_rejects_invalid_axis():
@@ -162,8 +162,8 @@ def test_barrier_composes_with_a_surface_kinematics():
     u[2] = -0.2
     x = barrier.rest_positions.ravel().copy()
     x[11] -= 0.2
-    assert mapped.eval_value(u) == barrier.eval_value(x)
-    np.testing.assert_array_equal(mapped.eval_gradient(u), barrier.eval_gradient(x)[9:])
+    assert mapped.evaluate(u).value == barrier.evaluate(x).value
+    np.testing.assert_array_equal(mapped.evaluate(u).gradient(), barrier.evaluate(x).gradient()[9:])
 
 
 def parse_results(stdout):
@@ -211,9 +211,9 @@ def test_independent_native_matches_toolkit_original_sum(use_area_weighting, phy
         dhat=3, min_distance=0.1, use_area_weighting=use_area_weighting, use_physical_barrier=physical))
     x = surface.positions.ravel().copy()
     x[12:15] += [0.3, -0.2, 0.1]
-    assert native.eval_value(x) == pytest.approx(toolkit.eval_value(x), rel=1e-12)
-    np.testing.assert_allclose(native.eval_gradient(x), toolkit.eval_gradient(x), rtol=1e-10, atol=1e-10)
-    np.testing.assert_allclose(native.eval_hessian(x).toarray(), toolkit.eval_hessian(x).toarray(), rtol=1e-9, atol=1e-9)
+    assert native.evaluate(x).value == pytest.approx(toolkit.evaluate(x).value, rel=1e-12)
+    np.testing.assert_allclose(native.evaluate(x).gradient(), toolkit.evaluate(x).gradient(), rtol=1e-10, atol=1e-10)
+    np.testing.assert_allclose(native.evaluate(x).hessian().toarray(), toolkit.evaluate(x).hessian().toarray(), rtol=1e-9, atol=1e-9)
     with pytest.raises(TypeError):
         contact.IPCContactEnergy(surface, contact.IPCTKContactOptions(dhat=1), contact.SpatialHash())
 
@@ -245,13 +245,13 @@ def test_native_broad_phase_injection_and_lifetime(backend_factory):
     dx = np.zeros_like(x)
     dx[11] = -2
     for barrier in energies:
-        assert barrier.eval_value(x) == energies[0].eval_value(x)
-        np.testing.assert_array_equal(barrier.eval_gradient(x), energies[0].eval_gradient(x))
-        np.testing.assert_array_equal(barrier.eval_hessian(x).toarray(), energies[0].eval_hessian(x).toarray())
-        assert barrier.max_feasible_step(x, dx) == energies[0].max_feasible_step(x, dx)
+        assert barrier.evaluate(x).value == energies[0].evaluate(x).value
+        np.testing.assert_array_equal(barrier.evaluate(x).gradient(), energies[0].evaluate(x).gradient())
+        np.testing.assert_array_equal(barrier.evaluate(x).hessian().toarray(), energies[0].evaluate(x).hessian().toarray())
+        assert barrier.evaluate(x).max_feasible_step(dx) == energies[0].evaluate(x).max_feasible_step(dx)
     del energies[1]
     gc.collect()
-    assert energies[1].eval_value(x) == energies[0].eval_value(x)
+    assert energies[1].evaluate(x).value == energies[0].evaluate(x).value
     with pytest.raises(TypeError):
         contact.IPCContactEnergy(surface, options, broad_phase=object())
     if hasattr(contact, "IPCTKContactEnergy"):
@@ -278,9 +278,9 @@ def test_analytic_features_and_mollifier_match_toolkit(positions, use_area_weigh
     toolkit = contact.IPCTKContactEnergy(surface, contact.IPCTKContactOptions(
         dhat=0.7, min_distance=0.05, use_area_weighting=use_area_weighting, use_physical_barrier=physical))
     x = surface.positions.ravel()
-    assert native.eval_value(x) == pytest.approx(toolkit.eval_value(x), rel=1e-11, abs=1e-12)
-    np.testing.assert_allclose(native.eval_gradient(x), toolkit.eval_gradient(x), rtol=1e-8, atol=1e-9)
-    np.testing.assert_allclose(native.eval_hessian(x).toarray(), toolkit.eval_hessian(x).toarray(), rtol=1e-7, atol=1e-8)
+    assert native.evaluate(x).value == pytest.approx(toolkit.evaluate(x).value, rel=1e-11, abs=1e-12)
+    np.testing.assert_allclose(native.evaluate(x).gradient(), toolkit.evaluate(x).gradient(), rtol=1e-8, atol=1e-9)
+    np.testing.assert_allclose(native.evaluate(x).hessian().toarray(), toolkit.evaluate(x).hessian().toarray(), rtol=1e-7, atol=1e-8)
 
 
 @pytest.mark.parametrize("cell_size", [0, -1, float("inf"), float("nan")])
@@ -306,7 +306,7 @@ def test_broad_phase_lifetime_with_weak_energy_back_reference():
     del broad
     gc.collect()
     assert broad_ref() is not None
-    assert barrier.eval_value(barrier.rest_positions.ravel()) > 0
+    assert barrier.evaluate(barrier.rest_positions.ravel()).value > 0
     del barrier
     gc.collect()
     assert broad_ref() is None and energy_ref() is None

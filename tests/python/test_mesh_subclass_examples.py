@@ -42,9 +42,10 @@ def test_mesh_energy_subclass_assembly_and_solution():
 
     potential = example["SpringEnergy"](mapping, stiffness, lengths)
     initial = np.array([0.0, 0.0, 0.0, 7.0])
-    value, g, H = potential.eval(
-        initial, gradient=True, hessian=energy.HessianKind.Exact
-    )
+    potential_evaluation = potential.evaluate(initial)
+    potential_evaluation_hessian = potential_evaluation.hessian()
+    potential_evaluation_gradient = potential_evaluation.gradient()
+    value, g, H = (potential_evaluation.value, potential_evaluation_gradient, potential_evaluation_hessian)
     # Independent global incidence-matrix check catches shared-node assembly errors.
     D = np.array([[-1.0, 1.0, 0.0, 0.0], [0.0, -1.0, 1.0, 0.0], [0.0, 0.0, -1.0, 1.0]])
     stretch = D @ initial - lengths
@@ -64,4 +65,4 @@ def test_mesh_energy_subclass_assembly_and_solution():
     expected = np.r_[0.0, np.cumsum(lengths + tension / stiffness)]
     np.testing.assert_allclose(result.x, expected, atol=1e-10, rtol=0)
     np.testing.assert_array_equal(result.x[[0, 3]], initial[[0, 3]])
-    assert np.max(np.abs(potential.eval_gradient(result.x)[1:3])) < 1e-10
+    assert np.max(np.abs(potential.evaluate(result.x).gradient()[1:3])) < 1e-10

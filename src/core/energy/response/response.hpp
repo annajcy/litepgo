@@ -40,12 +40,11 @@ class ResponseEvaluation {
     int inputs_, outputs_;
     bool hessian_;
     std::optional<Vec> value_;
-    std::shared_ptr<Response> owner_;
 };
 
-// Shared responses are retained by their evaluations. A stack response must outlive its evaluations.
+// Evaluations borrow their response; the response must outlive its evaluations.
 // Inputs are copied; the response and any external callback state must remain unchanged while in use.
-class Response : public std::enable_shared_from_this<Response> {
+class Response {
   public:
     virtual ~Response() = default;
     Response(const Response&) = delete;

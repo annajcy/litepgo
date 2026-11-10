@@ -20,7 +20,7 @@ $$
 structure. `Coupled` derives from `DynamicPatternEnergy`; `hessian_pattern_at` returns
 full structure when $x_0+x_1>0$, diagonal otherwise. Both implement
 `eval_values`, returning requested derivatives and `None` for unused outputs.
-Both energies are convex, so Exact and Projected Hessians can coincide here.
+Both energies are convex, so exact and projected Hessians can coincide here.
 
 Hessian calls automatically prepare structure for the supplied input. Public C++
 and Python calls return independent results. Native subclass hooks receive

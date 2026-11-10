@@ -63,14 +63,15 @@ TYPED_TEST(ContactPairWeightsTest, UniformWeightsScaleDerivativesAndOwnData) {
             auto weighted = make<TypeParam>(s, config, area);
             config.weights.setZero();
             config.vertex_groups.assign(6, 999); // Caller mutations cannot change the energy.
-            EXPECT_NEAR(weighted->eval_value(s.positions), scale * base->eval_value(s.positions), 1e-12);
-            EXPECT_TRUE(weighted->eval_gradient(s.positions).isApprox(scale * base->eval_gradient(s.positions), 1e-12));
-            EXPECT_TRUE(Eigen::MatrixXd(weighted->eval_hessian(s.positions))
-                            .isApprox(scale * Eigen::MatrixXd(base->eval_hessian(s.positions)), 1e-12));
+            EXPECT_NEAR(weighted->evaluate(s.positions)->value(), scale * base->evaluate(s.positions)->value(), 1e-12);
+            EXPECT_TRUE(weighted->evaluate(s.positions)
+                            ->gradient()
+                            .isApprox(scale * base->evaluate(s.positions)->gradient(), 1e-12));
+            EXPECT_TRUE(Eigen::MatrixXd(weighted->evaluate(s.positions)->hessian())
+                            .isApprox(scale * Eigen::MatrixXd(base->evaluate(s.positions)->hessian()), 1e-12));
             EXPECT_TRUE(
-                Eigen::MatrixXd(weighted->eval_hessian(s.positions, energy::HessianKind::Projected))
-                    .isApprox(scale * Eigen::MatrixXd(base->eval_hessian(s.positions, energy::HessianKind::Projected)),
-                              1e-10));
+                Eigen::MatrixXd(weighted->evaluate(s.positions)->projected_hessian())
+                    .isApprox(scale * Eigen::MatrixXd(base->evaluate(s.positions)->projected_hessian()), 1e-10));
             EXPECT_EQ(weighted->contact_snapshot(s.positions).types.size(),
                       base->contact_snapshot(s.positions).types.size());
         }
@@ -96,7 +97,7 @@ TYPED_TEST(ContactPairWeightsTest, MixedParentGroupsMergeIntoOneVertexVertexReco
         EXPECT_NEAR(snapshot.weights[0], expected, 1e-14);
         EXPECT_EQ(snapshot.vertex_ids.row(0), (Eigen::RowVector4i(0, 3, -1, -1)));
         const double d = snapshot.distances[0] * snapshot.distances[0] - .05 * .05, h = .7 * (.7 + .1);
-        EXPECT_NEAR(energy->eval_value(s.positions), -expected * (d - h) * (d - h) * std::log(d / h), 1e-13);
+        EXPECT_NEAR(energy->evaluate(s.positions)->value(), -expected * (d - h) * (d - h) * std::log(d / h), 1e-13);
     }
 }
 
@@ -106,21 +107,21 @@ TYPED_TEST(ContactPairWeightsTest, ZeroExcludesActiveAndCCDButNotGlobalIntersect
     auto zero = make<TypeParam>(s, uniform(s, 0));
     Vec dx = Vec::Zero(18);
     dx[11] = -2;
-    const double step = base->max_feasible_step(s.positions, dx);
+    const double step = base->evaluate(s.positions)->max_feasible_step(dx);
     EXPECT_GT(step, 0);
     EXPECT_LT(step, 1);
-    EXPECT_DOUBLE_EQ(zero->eval_value(s.positions), 0);
-    EXPECT_EQ(zero->eval_gradient(s.positions), Vec::Zero(18));
-    EXPECT_NO_THROW(zero->eval_hessian(s.positions));
+    EXPECT_DOUBLE_EQ(zero->evaluate(s.positions)->value(), 0);
+    EXPECT_EQ(zero->evaluate(s.positions)->gradient(), Vec::Zero(18));
+    EXPECT_NO_THROW(zero->evaluate(s.positions)->hessian());
     EXPECT_EQ(zero->contact_snapshot(s.positions).distances.size(), 0);
-    EXPECT_DOUBLE_EQ(zero->max_feasible_step(s.positions, dx), 1);
+    EXPECT_DOUBLE_EQ(zero->evaluate(s.positions)->max_feasible_step(dx), 1);
     for (double scale : {.001, .5, 2.0})
-        EXPECT_DOUBLE_EQ(make<TypeParam>(s, uniform(s, scale))->max_feasible_step(s.positions, dx), step);
+        EXPECT_DOUBLE_EQ(make<TypeParam>(s, uniform(s, scale))->evaluate(s.positions)->max_feasible_step(dx), step);
     Vec intersecting = s.positions;
     intersecting[11] = -.5;
-    EXPECT_THROW(zero->max_feasible_step(intersecting, Vec::Zero(18)), std::domain_error);
+    EXPECT_THROW(zero->evaluate(intersecting)->max_feasible_step(Vec::Zero(18)), std::domain_error);
     intersecting.tail<9>() << 2, 2, 0, 3, 2, 0, 2, 3, 0;
-    EXPECT_THROW(zero->max_feasible_step(intersecting, Vec::Zero(18)), std::domain_error);
+    EXPECT_THROW(zero->evaluate(intersecting)->max_feasible_step(Vec::Zero(18)), std::domain_error);
 }
 
 TYPED_TEST(ContactPairWeightsTest, RejectsInvalidGroupsAndTables) {
@@ -160,12 +161,12 @@ TYPED_TEST(ContactPairWeightsTest, CCDSkipsOnlyDisabledPairsInAMixedTable) {
     dx[29] = -1; // Enabled pair must still bound the step.
     Vec isolated_dx = Vec::Zero(18);
     isolated_dx[11] = -1;
-    const double expected = make<TypeParam>(single)->max_feasible_step(single.positions, isolated_dx);
+    const double expected = make<TypeParam>(single)->evaluate(single.positions)->max_feasible_step(isolated_dx);
     const auto weighted = make<TypeParam>(doubled, config);
     EXPECT_EQ(weighted->num_active_pairs(x), 1);
-    EXPECT_NEAR(weighted->max_feasible_step(x, dx), expected, 1e-6);
+    EXPECT_NEAR(weighted->evaluate(x)->max_feasible_step(dx), expected, 1e-6);
     EXPECT_LT(expected, 1);
-    EXPECT_LT(make<TypeParam>(doubled)->max_feasible_step(x, dx), expected);
+    EXPECT_LT(make<TypeParam>(doubled)->evaluate(x)->max_feasible_step(dx), expected);
 }
 } // namespace
 } // namespace litepgo::contact::test

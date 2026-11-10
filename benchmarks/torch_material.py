@@ -139,8 +139,8 @@ def worker(case, repeats):
             metadata.update(elements=n, dofs=len(u))
             prepares = {}
             if case["layer"] == "fem":
-                operations = {"value": lambda: obj.eval_value(u), "gradient": lambda: obj.eval_gradient(u),
-                              "hessian": lambda: obj.eval_hessian(u), "parameter_vjp": lambda: force.evaluate(p).vjp(upstream)}
+                operations = {"value": lambda: obj.evaluate(u).value, "gradient": lambda: obj.evaluate(u).gradient(),
+                              "hessian": lambda: obj.evaluate(u).hessian(), "parameter_vjp": lambda: force.evaluate(p).vjp(upstream)}
                 def validate(name, value):
                     array = value.data if sp.issparse(value) else value
                     assert np.isfinite(array).all()
@@ -150,7 +150,7 @@ def worker(case, repeats):
                     if name == "parameter_vjp":
                         expected = forces(u, batch=1, kind=fem.PointwiseVolumetricAdapter[fem.NeoHookean]() if case['model'] == 'torch' else material).evaluate(p).vjp(upstream)
                     else:
-                        expected = getattr(other, "eval_" + name)(u)
+                        expected = other.evaluate(u).value if name == "value" else getattr(other.evaluate(u), name)()
                     if sp.issparse(value):
                         diff = value - expected
                         assert not diff.nnz or abs(diff).max() < 1e-9
@@ -175,7 +175,7 @@ def worker(case, repeats):
                 if diagnostic.status != solver.NewtonStatus.Converged:
                     raise ValueError(f"equilibrium failed: {diagnostic.status}")
                 metadata.update(newton_iterations=diagnostic.iterations, convergence=str(diagnostic.status),
-                                free_residual=float(np.linalg.norm(total(p).eval_gradient(diagnostic.x)[free])))
+                                free_residual=float(np.linalg.norm(total(p).evaluate(diagnostic.x).gradient()[free])))
                 diagnostic_ms = 1000 * (time.perf_counter() - diagnostic_start)
                 metadata["diagnostic_ms"] = diagnostic_ms
                 tensor = torch.tensor(p, requires_grad=True)

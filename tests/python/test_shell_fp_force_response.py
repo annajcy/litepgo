@@ -64,7 +64,7 @@ def test_shared_and_element_fp_jacobians_and_original_area(batch_size):
     np.testing.assert_allclose(J.toarray(), sum(repeated_J[:, 9*e:9*e+9] for e in range(4)), atol=1e-12)
     identity = np.eye(3).ravel(order="F")
     original = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta)
-    np.testing.assert_allclose(shared.evaluate(identity).value, original.eval_gradient(u), atol=1e-12)
+    np.testing.assert_allclose(shared.evaluate(identity).value, original.evaluate(u).gradient(), atol=1e-12)
     with pytest.raises(ValueError):
         shared.evaluate(np.zeros(9)).value
     np.testing.assert_array_equal(shared.evaluate(packed).jacobian().indices, J.indices)
@@ -130,19 +130,19 @@ def test_shell_energy_fixed_fp_derivatives_and_validation():
     elastic = Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta, Fp=plastic)
     original = Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta)
     identity = Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta, [np.eye(3)]*len(rest))
-    np.testing.assert_allclose(identity.eval_gradient(u), original.eval_gradient(u), atol=1e-12)
+    np.testing.assert_allclose(identity.evaluate(u).gradient(), original.evaluate(u).gradient(), atol=1e-12)
     response = Force(fem.PointwiseShellAdapter[fem.KoiterStVK](), dof.ConstantDofMap(topology, 9), mapping, rest, u, thickness, theta)
-    np.testing.assert_allclose(elastic.eval_gradient(u), response.evaluate(P.ravel(order='F')).value, atol=1e-12)
+    np.testing.assert_allclose(elastic.evaluate(u).gradient(), response.evaluate(P.ravel(order='F')).value, atol=1e-12)
     expected = explicit_force((topology, mapping, rest, u, thickness), P.ravel(order="F"), theta)
-    np.testing.assert_allclose(elastic.eval_gradient(u), expected, atol=1e-12)
-    H = elastic.eval_hessian(u).toarray()
-    g = elastic.eval_gradient(u)
+    np.testing.assert_allclose(elastic.evaluate(u).gradient(), expected, atol=1e-12)
+    H = elastic.evaluate(u).hessian().toarray()
+    g = elastic.evaluate(u).gradient()
     for j in range(len(u)):
         plus, minus = u.copy(), u.copy()
         plus[j] += 1e-6
         minus[j] -= 1e-6
-        np.testing.assert_allclose(g[j], (elastic.eval_value(plus)-elastic.eval_value(minus))/2e-6, atol=1e-8)
-        np.testing.assert_allclose(H[:, j], (elastic.eval_gradient(plus)-elastic.eval_gradient(minus))/2e-6,
+        np.testing.assert_allclose(g[j], (elastic.evaluate(plus).value-elastic.evaluate(minus).value)/2e-6, atol=1e-8)
+        np.testing.assert_allclose(H[:, j], (elastic.evaluate(plus).gradient()-elastic.evaluate(minus).gradient())/2e-6,
                                    atol=1e-7, rtol=1e-6)
     with pytest.raises(ValueError):
         Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta, plastic[:1])
@@ -153,4 +153,4 @@ def test_shell_energy_fixed_fp_derivatives_and_validation():
             Energy(fem.PointwiseShellAdapter[fem.KoiterStVK](), mapping, rest, thickness, theta, invalid)
     plastic[0][:] = 0
     rest.clear()
-    np.testing.assert_array_equal(elastic.eval_gradient(u), g)
+    np.testing.assert_array_equal(elastic.evaluate(u).gradient(), g)

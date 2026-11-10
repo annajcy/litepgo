@@ -30,7 +30,7 @@ def main():
     grouped = contact.IPCContactEnergy(surface, options, contact.SpatialHash(), pair_weights)
     x = positions.ravel()
     snapshots = [e.contact_snapshot(x) for e in (reference, grouped)]
-    gradients = [e.eval_gradient(x).reshape(-1, 3) for e in (reference, grouped)]
+    gradients = [e.evaluate(x).gradient().reshape(-1, 3) for e in (reference, grouped)]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     totals = np.zeros(2)
     with args.output.open("w", newline="") as stream:
@@ -52,7 +52,7 @@ def main():
             writer.writerow([pair, a, b, scale, *values, *forces, counts[1]])
             totals += values
             print(f"groups=({a},{b}), multiplier={scale:g}, energy={values[1]:.6g}, force={forces[1]:.6g}, records={counts[1]}")
-    np.testing.assert_allclose(totals, [reference.eval_value(x), grouped.eval_value(x)], rtol=1e-12)
+    np.testing.assert_allclose(totals, [reference.evaluate(x).value, grouped.evaluate(x).value], rtol=1e-12)
     print(f"Saved {args.output}")
 
 

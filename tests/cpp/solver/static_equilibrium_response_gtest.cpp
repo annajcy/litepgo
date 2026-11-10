@@ -73,7 +73,7 @@ TEST(StaticEquilibriumResponse, FemDisplacementAndReactionMatchResolveFiniteDiff
         EXPECT_EQ(Eigen::MatrixXd(J).row(r).norm(), 0);
     }
     const auto potential = make_energy(p);
-    const Eigen::MatrixXd reaction_J = Eigen::MatrixXd(partial(p, u)) + potential->eval_hessian(u) * J;
+    const Eigen::MatrixXd reaction_J = Eigen::MatrixXd(partial(p, u)) + potential->evaluate(u)->hessian() * J;
     EXPECT_LT(reaction_J.bottomRows(3).norm(), 1e-10);
     const int calls_before = partial_calls;
     for (double h : {1e-3, 1e-4}) {
@@ -86,7 +86,7 @@ TEST(StaticEquilibriumResponse, FemDisplacementAndReactionMatchResolveFiniteDiff
             const Vec up = response.evaluate(plus)->value(), um = response.evaluate(minus)->value();
             EXPECT_LT((Vec(J.col(c)) - (up - um) / (2 * h)).norm(), 2e-7);
             const Vec numerical =
-                (make_energy(plus)->eval_gradient(up) - make_energy(minus)->eval_gradient(um)) / (2 * h);
+                (make_energy(plus)->evaluate(up)->gradient() - make_energy(minus)->evaluate(um)->gradient()) / (2 * h);
             EXPECT_LT((reaction_J.col(c) - numerical).norm(), 2e-7);
         }
     }
@@ -255,7 +255,7 @@ TEST(StaticEquilibriumResponse, EvaluationOwnsIndependentStateAndReusesFactories
     };
     NewtonOptions options;
     options.gradient_tolerance = 1e-12;
-    options.hessian = energy::HessianKind::Exact;
+    options.project_hessian = false;
     auto response = std::make_shared<StaticEquilibriumResponse>(2, dof::DofReduction(2, std::vector<int>{}),
                                                                 Vec::Zero(2), options, make_energy, make_response);
     std::weak_ptr<StaticEquilibriumResponse> weak = response;
@@ -263,7 +263,7 @@ TEST(StaticEquilibriumResponse, EvaluationOwnsIndependentStateAndReusesFactories
     auto first = response->evaluate(p);
     p *= 2;
     auto second = response->evaluate(p);
-    response.reset();
+    EXPECT_EQ(response.use_count(), 1);
     EXPECT_FALSE(weak.expired());
     EXPECT_TRUE(second->value().isApprox(p));
     EXPECT_TRUE(first->value().isApprox(.5 * p));
@@ -276,6 +276,7 @@ TEST(StaticEquilibriumResponse, EvaluationOwnsIndependentStateAndReusesFactories
     EXPECT_EQ(forces, 1);
     first.reset();
     second.reset();
+    response.reset();
     EXPECT_TRUE(weak.expired());
 }
 } // namespace litepgo::solver::test

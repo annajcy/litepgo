@@ -291,8 +291,15 @@ SpMat IPCTKContactEnergy::hessian_pattern_at(const ConstVecRef& x) const {
     return pattern;
 }
 
-double IPCTKContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian,
-                                       energy::HessianKind kind) const {
+double IPCTKContactEnergy::eval_values(const ConstVecRef& x, Vec* g, SpMat* H) const {
+    return assemble_values(x, g, H, false);
+}
+energy::EnergyValues IPCTKContactEnergy::eval_projected_values(const ConstVecRef& x, energy::EnergyEvaluation&) const {
+    energy::EnergyValues result{0., Vec(num_dofs()), make_hessian_pattern(x)};
+    result.value = assemble_values(x, &*result.gradient, &*result.hessian, true);
+    return result;
+}
+double IPCTKContactEnergy::assemble_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, bool project) const {
     if (!x.allFinite()) {
         throw std::invalid_argument("IPCTKContactEnergy requires finite positions");
     }
@@ -302,7 +309,7 @@ double IPCTKContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMa
     const Eigen::MatrixXi& edges = impl.mesh.edges();
     const Eigen::MatrixXi& faces = impl.mesh.faces();
     const ipc::PSDProjectionMethod projection =
-        kind == energy::HessianKind::Projected ? ipc::PSDProjectionMethod::CLAMP : ipc::PSDProjectionMethod::NONE;
+        project ? ipc::PSDProjectionMethod::CLAMP : ipc::PSDProjectionMethod::NONE;
     const double min_squared = impl.min_distance * impl.min_distance;
 
     const std::size_t count = active.size();

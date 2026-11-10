@@ -6,7 +6,7 @@ class DynamicPatternEnergy : public detail::SparseEnergy {
     explicit DynamicPatternEnergy(int num_dofs) : SparseEnergy(num_dofs) {}
     virtual SpMat hessian_pattern_at(const ConstVecRef& x) const = 0;
 
-  private:
+  protected:
     SpMat make_hessian_pattern(const ConstVecRef& x) const final {
         return checked_hessian_pattern(hessian_pattern_at(x), num_dofs());
     }

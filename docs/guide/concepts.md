@@ -92,8 +92,9 @@ returned matrix structures to reuse symbolic factorization; callers do not manag
 current patterns or output buffers.
 
 Exact derivatives and solver approximations have distinct meanings.
-`HessianKind.Exact` is the energy's exact second derivative.
-`HessianKind.Projected` assembles local PSD approximations where provided;
+`evaluation.hessian()` is the energy's exact second derivative.
+`evaluation.projected_hessian()` returns a PSD approximation, using local
+projection where provided and global spectral clamping otherwise;
 it is useful for Newton directions, and is not the derivative used in analytic
 equilibrium sensitivities.
 

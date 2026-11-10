@@ -4,7 +4,7 @@ import scipy.sparse as sp
 
 from litepgo.energy import FixedPatternResponse
 from litepgo.dof import DofReduction
-from litepgo.energy import AffineMappedEnergy, HessianKind, QuadraticEnergy, WeightedSumEnergy
+from litepgo.energy import AffineMappedEnergy, QuadraticEnergy, WeightedSumEnergy
 from litepgo.linalg.sparse_solver import AutoIndefiniteSparseSolver, EigenLDLT
 from litepgo.solver import NewtonOptions, NewtonStatus, newton_solve
 
@@ -61,7 +61,7 @@ def test_exact_hessian_with_an_indefinite_solver():
     # An indefinite quadratic: Newton must shift its way to a descent direction
     # and then be stopped by the iteration limit, as the energy is unbounded below.
     A = sp.csc_matrix(np.diag([1.0, -1.0]))
-    options = NewtonOptions(gradient_tolerance=1e-12, hessian=HessianKind.Exact, max_iterations=3)
+    options = NewtonOptions(gradient_tolerance=1e-12, project_hessian=False, max_iterations=3)
     steps = []
     result = newton_solve(QuadraticEnergy(A, np.array([1.0, 1.0])), free(2), np.zeros(2), options,
                           AutoIndefiniteSparseSolver(), on_iteration=steps.append)
@@ -89,7 +89,7 @@ def test_callback_exceptions_propagate():
 
 def test_options():
     options = NewtonOptions(gradient_tolerance=1e-6)
-    assert options.max_iterations == 50 and options.hessian == HessianKind.Projected
+    assert options.max_iterations == 50 and options.project_hessian is True
     options.max_iterations = 5
     assert options.max_iterations == 5
     # Like the C++ aggregate, the tolerance defaults to NaN and must be set before solving.
@@ -197,10 +197,10 @@ def test_newton_coordinate_limit_precedes_ccd_without_extra_hessian(maximum, ccd
             self.hessians = 0
             self.feasibility_queries = []
 
-        def eval_values(self, x, want_gradient, kind):
+        def eval_values(self, x, want_gradient, need_hessian):
             r = x - [1., -.4]
-            self.hessians += kind is not None
-            return .5*r @ r, r if want_gradient else None, np.eye(2) if kind is not None else None
+            self.hessians += need_hessian
+            return .5*r @ r, r if want_gradient else None, np.eye(2) if need_hessian else None
 
         def feasible_step(self, x, direction):
             self.feasibility_queries.append((x.copy(), direction.copy()))
@@ -233,7 +233,7 @@ def test_newton_checks_feasibility_before_stationary_or_fixed_return(fixed):
         def __init__(self):
             super().__init__(sp.eye(2, format='csc'))
 
-        def eval_values(self, x, want_gradient, kind):
+        def eval_values(self, x, want_gradient, need_hessian):
             pytest.fail('initial feasibility must be checked before evaluation')
 
         def feasible_step(self, x, direction):

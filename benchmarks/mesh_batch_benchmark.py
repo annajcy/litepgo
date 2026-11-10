@@ -18,14 +18,14 @@ for count in (128, 4096):
     reference = None
     for batch in (1, 16, 64, 256):
         obj = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, [geometry]*count, [fp]*count, [theta]*count, batch_size=batch)
-        actual = obj.eval_gradient(x)
+        actual = obj.evaluate(x).gradient()
         if reference is None:
             reference = actual
         np.testing.assert_array_equal(actual, reference)
         for threads in (1, 2, 4, 8):
             with tbb_thread_limit(threads):
-                for name in ('eval_value', 'eval_gradient', 'eval_hessian'):
-                    operation = getattr(obj, name)
+                for name in ('value', 'gradient', 'hessian'):
+                    operation = (lambda x: obj.evaluate(x).value) if name == "value" else (lambda x: getattr(obj.evaluate(x), name)())
                     operation(x)
                     samples = []
                     for _ in range(9):

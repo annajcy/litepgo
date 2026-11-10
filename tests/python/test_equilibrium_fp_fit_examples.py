@@ -107,7 +107,7 @@ def test_plastic_equilibrium_derivatives_and_boundary_conditions(plastic_experim
                 make_response,
             )
             displacement = equilibrium.evaluate(p).value
-            gradient = make_energy(p).eval_gradient(displacement)
+            gradient = make_energy(p).evaluate(displacement).gradient()
             np.testing.assert_array_equal(displacement[fixed_ids], initial[fixed_ids])
             assert np.max(np.abs(gradient[free_ids])) < 2e-11
             np.testing.assert_allclose(

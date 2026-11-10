@@ -95,8 +95,8 @@ inline int run_contact_benchmark(const litepgo::mesh::TriangleMesh& surface,
             valid = valid && result.status == solver::NewtonStatus::Converged &&
                     result.gradient_norm <= options.gradient_tolerance && pairs > 0 && distance > 0 && distance < dhat;
             runs << round << ',' << name << ',' << seconds << ',' << static_cast<int>(result.status) << ','
-                 << result.iterations << ',' << result.energy << ',' << elastic->eval_value(result.x) << ','
-                 << pulling->eval_value(result.x) << ',' << kappa * mapped->eval_value(result.x) << ','
+                 << result.iterations << ',' << result.energy << ',' << elastic->evaluate(result.x)->value() << ','
+                 << pulling->evaluate(result.x)->value() << ',' << kappa * mapped->evaluate(result.x)->value() << ','
                  << result.gradient_norm << ',' << pairs << ',' << distance << ',' << repeat << '\n';
             for (const auto& s : steps)
                 traces << round << ',' << name << ',' << s.iteration << ',' << s.energy << ',' << s.gradient_norm << ','
@@ -129,17 +129,18 @@ inline int run_contact_benchmark(const litepgo::mesh::TriangleMesh& surface,
     const Vec direction = kinematics.positions(2 * solutions[0]) - kinematics.positions(initial);
     for (std::size_t i = 0; i < states.size(); ++i) {
         const Vec positions = kinematics.positions(states[i]);
-        ccd << names[i] << ',' << native.max_feasible_step(positions, direction) << ','
-            << toolkit.max_feasible_step(positions, direction) << '\n';
-        for (const auto kind : {energy::HessianKind::Exact, energy::HessianKind::Projected}) {
+        ccd << names[i] << ',' << native.evaluate(positions)->max_feasible_step(direction) << ','
+            << toolkit.evaluate(positions)->max_feasible_step(direction) << '\n';
+        for (const auto kind : {false, true}) {
             Vec gn, gt;
-            auto n = native.eval(positions, true, kind);
-            auto t = toolkit.eval(positions, true, kind);
-            gn = std::move(*n.gradient);
-            gt = std::move(*t.gradient);
-            SpMat hn = std::move(*n.hessian), ht = std::move(*t.hessian);
-            const double en = kappa * n.value;
-            const double et = kappa * t.value;
+            auto n = native.evaluate(positions);
+            auto t = toolkit.evaluate(positions);
+            SpMat hn = kind ? n->projected_hessian() : n->hessian();
+            SpMat ht = kind ? t->projected_hessian() : t->hessian();
+            gn = n->gradient();
+            gt = t->gradient();
+            const double en = kappa * n->value();
+            const double et = kappa * t->value();
             gn *= kappa;
             gt *= kappa;
             hn *= kappa;
@@ -149,8 +150,8 @@ inline int run_contact_benchmark(const litepgo::mesh::TriangleMesh& surface,
             double maximum = 0;
             for (int j = 0; j < hd.nonZeros(); ++j)
                 maximum = std::max(maximum, std::abs(hd.valuePtr()[j]));
-            shared << names[i] << ',' << (kind == energy::HessianKind::Exact ? "exact" : "projected") << ',' << en
-                   << ',' << et << ',' << std::abs(en - et) << ',' << gd.cwiseAbs().maxCoeff() << ','
+            shared << names[i] << ',' << (kind == false ? "exact" : "projected") << ',' << en << ',' << et << ','
+                   << std::abs(en - et) << ',' << gd.cwiseAbs().maxCoeff() << ','
                    << gd.norm() / std::sqrt(double(gd.size())) << ',' << gd.norm() / std::max(gn.norm(), 1e-300) << ','
                    << maximum << ',' << hd.norm() / double(hd.rows()) << ',' << hd.norm() / std::max(hn.norm(), 1e-300)
                    << ',' << gn.norm() << ',' << hn.norm() << ',' << native.num_active_pairs(positions) << ','

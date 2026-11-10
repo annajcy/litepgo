@@ -116,11 +116,14 @@ class TorchNeoHookean(TorchVolumetricMaterial):
 
 Energy = fem.VolumetricFemEnergy[fem.HexHermiteBasis, fem.GaussLegendre3D[4]]
 potential = Energy(TorchNeoHookean(), displacement_map, rest_position_fields, Fp, theta)
-E, force, stiffness = potential.eval(u, gradient=True, hessian=energy.HessianKind.Exact)
+potential_evaluation = potential.evaluate(u)
+stiffness = potential_evaluation.hessian()
+force = potential_evaluation.gradient()
+E = potential_evaluation.value
 ```
 
 Native code computes the deformation gradients of a whole batch, calls the
-material once, then integrates, pulls back, projects (`Projected`) and assembles.
+material once, then integrates, pulls back, projects (when `projected_hessian()` is requested) and assembles.
 Every compiled basis and quadrature pair is available. Rows
 must be independent and `W` twice differentiable in the inputs whose
 derivatives are requested. The material owns the multiplicative split and any

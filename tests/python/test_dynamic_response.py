@@ -74,11 +74,11 @@ def test_sparse_column_merge_retains_zero_slots_and_rejects_outside_entries(kind
             return (np.zeros(7), derivative()) if need else np.zeros(7)
 
     class SparseEnergy(energy.FixedPatternEnergy):
-        def eval_values(self, x, want_gradient, hessian_kind):
-            return 0., np.zeros(7) if want_gradient else None, derivative() if hessian_kind is not None else None
+        def eval_values(self, x, want_gradient, need_hessian):
+            return 0., np.zeros(7) if want_gradient else None, derivative() if need_hessian else None
 
     obj = SparseResponse(pattern) if kind == "response" else SparseEnergy(pattern)
-    evaluate = (lambda x: obj.evaluate(x).jacobian()) if kind == "response" else obj.eval_hessian
+    evaluate = (lambda x: obj.evaluate(x).jacobian()) if kind == "response" else (lambda x: obj.evaluate(x).hessian())
     x = np.zeros(shape[1])
     actual = evaluate(x)
     np.testing.assert_array_equal(actual.indices, pattern.indices)

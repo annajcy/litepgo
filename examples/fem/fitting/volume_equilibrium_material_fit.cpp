@@ -114,14 +114,14 @@ double reaction(const Problem& problem, const Eigen::Vector2d& theta, int axis, 
     if (derivative)
         J = evaluation->jacobian();
     const Vec displacement = evaluation->value();
-    const Vec gradient = elastic.eval_gradient(displacement);
+    const Vec gradient = elastic.evaluate(displacement)->gradient();
     double force = 0;
     for (int v : top_vertices)
         force += gradient[3 * v + axis];
     if (derivative) {
         const Eigen::MatrixXd force_derivative =
             Eigen::MatrixXd(make_response(displacement)->evaluate(theta)->jacobian()) +
-            elastic.eval_hessian(displacement) * J;
+            elastic.evaluate(displacement)->hessian() * J;
         derivative->setZero();
         for (int v : top_vertices)
             *derivative += force_derivative.row(3 * v + axis);

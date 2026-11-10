@@ -56,7 +56,9 @@ class IPCContactEnergy final : public energy::DynamicPatternEnergy {
   private:
     struct Impl;
     SpMat hessian_pattern_at(const ConstVecRef& x) const override;
-    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, energy::HessianKind kind) const override;
+    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian) const override;
+    energy::EnergyValues eval_projected_values(const ConstVecRef& x, energy::EnergyEvaluation&) const override;
+    double assemble_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, bool project) const;
     double feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const override;
     Vec rest_positions_;
     IPCContactOptions options_;

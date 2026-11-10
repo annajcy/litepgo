@@ -1,0 +1,15 @@
+import importlib.util,time
+from pathlib import Path
+import numpy as np
+from litepgo import energy,tbb_thread_limit
+before=hasattr(energy,'HessianKind')
+p=Path('build/energy-evaluation-baseline/equilibrium_before.py' if before else 'benchmarks/equilibrium_evaluation.py')
+spec=importlib.util.spec_from_file_location('driver',p);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+with tbb_thread_limit(4):
+ eq,p,potential,_=m.problem('shell',2,energy.HessianKind.Exact if before else False,{'solves':0});x=eq.evaluate(p).value;model=potential(p)
+ print('ready',flush=True)
+ end=time.monotonic()+10
+ while time.monotonic()<end:
+  if before:model.eval(x,gradient=True)
+  else:
+   e=model.evaluate(x);e.gradient();e.value

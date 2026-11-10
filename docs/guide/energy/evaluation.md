@@ -14,18 +14,21 @@ Dynamic sparsity does not imply differentiability at active-set transitions.
 
 ## Evaluate an energy
 
+`energy.evaluate(x)` creates an independent `EnergyEvaluation` with a copy of
+`x`. Construction does not compute value or derivatives. Access prepares and
+caches results on demand:
+
 | Python call | Result | Shape |
 | --- | --- | --- |
-| `eval_value(x)` | $E(x)$ | scalar |
-| `eval_gradient(x)` | $g(x)$ | `(n,)` |
-| `eval_hessian(x, kind=HessianKind.Exact)` | $H(x)$ or the requested approximation | `(n,n)` |
-| `eval(x, gradient=False, hessian=None)` | value and requested derivatives | triple |
-| `max_feasible_step(x, dx)` | conservative feasible bound | scalar in `[0,1]` |
+| `e.value` | $E(x)$ | scalar |
+| `e.gradient()` | exact gradient | `(n,)` |
+| `e.hessian()` | exact Hessian | `(n,n)` |
+| `e.projected_hessian()` | symmetric PSD optimization approximation | `(n,n)` |
+| `e.max_feasible_step(dx)` | conservative feasible bound | scalar in `[0,1]` |
 
-Here `n = num_dofs`, a read-only Python property / C++ query. Inputs and directions
-have shape `(n,)`. Vectors are NumPy arrays / C++ `Vec`; matrices are SciPy CSC /
-C++ `SpMat`. Hessians contain **both symmetric triangles**, not packed or
-triangular storage. After constructing an energy, Python can request:
+Here `n = energy.num_dofs`. Vectors are NumPy arrays / C++ `Vec`; matrices are
+SciPy CSC / C++ `SpMat`, containing both symmetric triangles. Returned arrays and
+matrices own their data. Repeated requests reuse this evaluation's cached results.
 
 ```python
 import numpy as np
@@ -34,45 +37,47 @@ from litepgo import energy
 
 E = energy.QuadraticEnergy(sp.eye(2, format="csc"))
 x = np.array([1.0, 2.0])
-value, gradient, hessian = E.eval(x, gradient=True, hessian=energy.HessianKind.Exact)
-assert value == 2.5
-np.testing.assert_allclose(gradient, x)
-np.testing.assert_allclose(hessian.toarray(), np.eye(2))
+e = E.evaluate(x)
+H = e.hessian()  # One joint assembly also prepares value and gradient.
+g = e.gradient()
+assert e.value == 2.5
+np.testing.assert_allclose(g, x)
+np.testing.assert_allclose(H.toarray(), np.eye(2))
 ```
-
-Unrequested outputs are `None`. The convenience calls are `eval_value`,
-`eval_gradient`, and `eval_hessian(x, kind=HessianKind.Exact)`.
-`max_feasible_step(x, dx)` bounds the entire segment
-$x+t\,dx$, $0\le t\le\alpha$. Start from a feasible state.
-
-C++ returns independently owned results with optional derivatives:
 
 ```cpp
-auto result = E.eval(x, true, litepgo::energy::HessianKind::Exact);
-const double value = result.value;
-const auto& g = *result.gradient;
-const auto& H = *result.hessian;
+auto e = E.evaluate(x);
+SpMat H = e->hessian();
+Vec g = e->gradient();
+double value = e->value();
 ```
 
-Unrequested derivatives are `std::nullopt`. Hessian structure is prepared at the
-supplied input, only when requested. Joint evaluation invokes one numerical
-assembly. Later calls do not modify previous results. The mathematical base has
-no concurrency guard; MeshEnergy and composites protect their shared workspaces.
+Value-only requests do not compute derivatives. Gradient requests also prepare
+value; Hessian requests also prepare value and gradient. Asking for value before
+Hessian may enter the numerical kernel twice. Exact and projected Hessians have
+separate caches; computing a local projection does not necessarily compute the
+assembled exact Hessian. Model configuration must stay unchanged while an
+evaluation is in use.
 
-## Hessian kinds and sparse structure
+## Hessian projection and sparse structure
 
-`Exact` returns the mathematical Hessian. `Projected` returns an
-implementation-provided approximation for solver steps; it need not be an exact
-derivative, a global PSD projection, or even PSD. Values and gradients are
-unchanged by this choice. Mesh energies clamp negative eigenvalues of each local
-Hessian before assembly; custom energies supply their own approximation.
+`hessian()` always returns the mathematical second derivative.
+`projected_hessian()` returns a symmetric positive-semidefinite approximation
+for optimization. Its default is a symmetric eigendecomposition followed by
+clamping negative eigenvalues to zero. It is not an SVD. Newton's diagonal
+regularization remains a separate solver operation.
 
-Fixed subclasses snapshot a full symmetric square pattern. Dynamic subclasses
-generate it from the current $x$ when a Hessian is requested. A pattern is a
-structural superset for **both** Hessian kinds, including any fill introduced by
-projection. Its stored numerical values are ignored. Preserve stored zeros and
-do not prune entries merely because their current derivative vanishes.
-A zero Hessian may use an empty $n\times n$ pattern.
+Mesh/FEM and contact energies project local Hessians before assembly. This
+preserves their assembly structure but generally differs from projecting the
+assembled global Hessian. Custom implementations may provide their own PSD fast
+path. Values and gradients always remain exact.
+
+Fixed subclasses snapshot the exact Hessian's symmetric square pattern; dynamic
+subclasses generate it at the input when requested. Preserve structural zeros.
+The projected Hessian may have a different pattern: default spectral projection
+can be dense, with cubic time and quadratic memory costs. Large problems should
+provide local or analytic projection paths. A zero Hessian may use an empty
+$n\times n$ pattern.
 
 ## Feasibility
 
@@ -91,13 +96,16 @@ overflow may still make an evaluation fail. Newton propagates evaluation errors.
 
 ## Migration
 
-`WeightedEnergySum` is renamed `WeightedSumEnergy`, including its C++ header
-`weighted_sum_energy.hpp`. Remove `update_pattern`, `hessian_pattern`, and
-`has_fixed_pattern` calls. Replace native output pointers with the owned result
-above. Python retains the tuple-returning `eval`; replace
-`eval_projected_hessian(x)` with `eval_hessian(x, kind=HessianKind.Projected)`.
-Fixed subclasses now take only `pattern`; dynamic subclasses take only
-`num_dofs` and implement `hessian_pattern_at(x)`. No compatibility aliases remain.
+The old scalar `eval`, `eval_value`, `eval_gradient`, `eval_hessian` methods and
+`HessianKind` enum are removed without compatibility aliases. Create one
+evaluation, then request its results. Replace the enum in Newton options with
+`project_hessian=True` (default) or `False` for exact curvature. Move the feasible
+step query to `energy.evaluate(x).max_feasible_step(dx)`.
+
+Python scalar hooks now receive `eval_values(x, need_gradient, need_hessian)`;
+the last argument is a boolean. Exact derivatives remain required. An optional
+`eval_projected_values` hook supplies a PSD fast path; otherwise projection is
+automatic. See [custom energies](custom.md).
 
 ## Validation in Debug and Release
 
@@ -117,8 +125,8 @@ $$
 E(x)=\tfrac12x^TAx+b^Tx,\qquad g=Ax+b,\qquad H=A,
 $$
 
-with finite symmetric $A\in\mathbb R^{n\times n}$ and finite optional $b\in\mathbb R^n$ (default zero). It returns the same Hessian for both
-kinds; an indefinite $A$ is not made PSD by requesting `Projected`.
+with finite symmetric $A\in\mathbb R^{n\times n}$ and finite optional $b\in\mathbb R^n$ (default zero). Its projected Hessian clamps negative eigenvalues and is cached across inputs;
+diagonal matrices use an entrywise fast path.
 
 `VertexPullingEnergy(n, position_dofs, targets, stiffness)` supplies soft springs:
 
@@ -141,7 +149,8 @@ $$
 
 Its domain is the intersection of the child domains, even for negative weights.
 Weights must be finite and nonzero, but may be negative. Positive weights preserve
-PSD leaf projections; negative weights can produce an indefinite Hessian.
+PSD leaf projections. If any weight is negative, projected evaluation falls back
+to spectral projection of the exact summed Hessian.
 `AffineMappedEnergy(E, T, c)` evaluates $F(z)=E(Tz+c)$ and uses
 
 $$
@@ -152,11 +161,17 @@ For an inner energy with $n$ DOFs and an outer input of length $k$, $T$ has shap
 $(n,k)$ and $c$ has length $n$. The matrix and offset are finite snapshots; an
 omitted or empty offset means zero. Rank deficiency is allowed. The feasible-step
 bound is the child's bound at $(Tz+c,T\,dz)$.
-For `Projected`, the same pullback is applied to the child's approximation.
+For `projected_hessian()`, the same pullback is applied to the child's approximation.
 This is how contact positions are connected to simulation displacement DOFs.
 See the [composition example](../../examples/energy/energy-composition.md).
 
 ## Ownership and concurrency
+
+C++ evaluations borrow their Energy, which must outlive them. Python bindings
+keep the Energy alive for the evaluation's lifetime. The input is copied, but
+model parameters and callback configuration are not snapshotted. Each evaluation
+is used by one caller at a time; different evaluations may be interleaved.
+
 
 `WeightedSumEnergy` and `AffineMappedEnergy` keep Python subclasses alive.
 Children must not strongly reference their owner; use `weakref.ref` for a
@@ -165,8 +180,8 @@ See the [Python ownership contract](../concepts.md#python-ownership-must-remain-
 which also applies to callbacks, contact broad phases, and spatial Response dependencies.
 
 Composites retain their child energies, which may be shared. They consume
-independent child results and cache only internal assembly plans keyed by returned
-matrix structure. Newton owns symbolic factorization reuse. No allocation-free
+child evaluations retained at the corresponding input. Internal assembly plans
+are keyed by returned matrix structure. Newton owns symbolic factorization reuse. No allocation-free
 evaluation guarantee or public preparation protocol is provided.
 
 C++ Energy evaluation is `const`; implementations may still use mutable workspaces.

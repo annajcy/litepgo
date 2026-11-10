@@ -42,7 +42,8 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
     using PlasticForce = VolumetricFemForceFpResponse<B, Q>;
     const Vec expected = Energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), map, geometry,
                                 plastic, parameters)
-                             .eval_gradient(u);
+                             .evaluate(u)
+                             ->gradient();
     Eigen::MatrixXd material_reference, plastic_reference;
     for (int batch_size : {1, 3}) {
         MaterialForce material(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
@@ -69,10 +70,12 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
                                                                        p - h * direction));
         const Vec fd = (Energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), map, geometry,
                                plus, parameters)
-                            .eval_gradient(u) -
+                            .evaluate(u)
+                            ->gradient() -
                         Energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), map, geometry,
                                minus, parameters)
-                            .eval_gradient(u)) /
+                            .evaluate(u)
+                            ->gradient()) /
                        (2 * h);
         EXPECT_TRUE((P * direction).isApprox(fd, 1e-8));
         MaterialForce material_elements(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(),
@@ -98,7 +101,8 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
                 std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((t.tail(2)).size(), 3), t.tail(2))};
             return Energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), map, geometry,
                           plastic, fields)
-                .eval_gradient(u);
+                .evaluate(u)
+                ->gradient();
         };
         const auto plastic_gradient = [&](const Vec& p_element) -> Vec {
             const std::vector<std::shared_ptr<litepgo::energy::Response>> fields{
@@ -108,7 +112,8 @@ template <class B, class Q> void check_hex_responses(bool warped = false) {
                                                                   p_element.tail(9))};
             return Energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), map, geometry,
                           fields, parameters)
-                .eval_gradient(u);
+                .evaluate(u)
+                ->gradient();
         };
         EXPECT_TRUE(material_elements.evaluate(ts)->value().isApprox(material_gradient(ts), 1e-11));
         EXPECT_TRUE(plastic_elements.evaluate(ps)->value().isApprox(plastic_gradient(ps), 1e-11));

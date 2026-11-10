@@ -9,7 +9,6 @@ import scipy.sparse as sp
 
 from litepgo.energy import (
     AffineMappedEnergy,
-    HessianKind,
     QuadraticEnergy,
     VertexPullingEnergy,
     WeightedSumEnergy,
@@ -29,7 +28,10 @@ def main():
     mapped = AffineMappedEnergy(total, T, offset)
     z = np.array([0.2, -0.3])
     # Joint evaluation prepares structure and returns independent results.
-    value, gradient, hessian = mapped.eval(z, gradient=True, hessian=HessianKind.Exact)
+    mapped_evaluation = mapped.evaluate(z)
+    hessian = mapped_evaluation.hessian()
+    gradient = mapped_evaluation.gradient()
+    value = mapped_evaluation.value
     x = T @ z + offset
     np.testing.assert_allclose(value, 0.25 * (x @ x) + np.sum((x - target) ** 2))
     np.testing.assert_allclose(gradient, T.T @ (2.5 * x - 2.0 * target))

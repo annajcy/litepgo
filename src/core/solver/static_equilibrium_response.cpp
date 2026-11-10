@@ -33,12 +33,12 @@ class EquilibriumEvaluation final : public energy::ResponseEvaluation {
         auto potential = make_energy_(parameters_);
         if (!potential || potential->num_dofs() != num_outputs())
             throw std::invalid_argument("StaticEquilibriumResponse: incompatible energy");
-        SpMat final_hessian;
-        const auto result = newton_solve(*potential, fixed_, initial_, options_, solver_, {}, &final_hessian);
+        std::shared_ptr<energy::EnergyEvaluation> final_evaluation;
+        const auto result = newton_solve(*potential, fixed_, initial_, options_, solver_, {}, &final_evaluation);
         if (result.status != NewtonStatus::Converged)
             throw std::domain_error("StaticEquilibriumResponse: equilibrium did not converge");
         potential_ = std::move(potential);
-        final_hessian_ = std::move(final_hessian);
+        potential_evaluation_ = std::move(final_evaluation);
         return result.x;
     }
     void prepare() {
@@ -48,10 +48,9 @@ class EquilibriumEvaluation final : public energy::ResponseEvaluation {
         auto force = make_response_(u);
         if (!force || force->num_inputs() != num_inputs() || force->num_outputs() != num_outputs())
             throw std::invalid_argument("StaticEquilibriumResponse: incompatible force response");
-        const SpMat exact = options_.hessian == energy::HessianKind::Exact
-                                ? final_hessian_
-                                : potential_->eval_hessian(u, energy::HessianKind::Exact);
-        const dof::ReducedMatrix reduced(fixed_, exact), previous(fixed_, final_hessian_);
+        const SpMat exact = potential_evaluation_->hessian();
+        const SpMat previous_hessian = options_.project_hessian ? potential_evaluation_->projected_hessian() : exact;
+        const dof::ReducedMatrix reduced(fixed_, exact), previous(fixed_, previous_hessian);
         K_ = reduced.matrix();
         const bool same = linalg::same_pattern(K_, previous.matrix());
         // Retry safely after failures: numeric factorization may have changed solver state.
@@ -105,10 +104,11 @@ class EquilibriumEvaluation final : public energy::ResponseEvaluation {
     StaticEquilibriumResponse::MakeEnergy make_energy_;
     StaticEquilibriumResponse::MakeResponse make_response_;
     std::shared_ptr<energy::Energy> potential_;
+    std::shared_ptr<energy::EnergyEvaluation> potential_evaluation_;
     std::shared_ptr<energy::Response> force_owner_;
     std::shared_ptr<energy::ResponseEvaluation> force_;
     linalg::AutoIndefiniteSparseSolver solver_;
-    SpMat final_hessian_, K_;
+    SpMat K_;
     bool prepared_ = false;
 };
 } // namespace

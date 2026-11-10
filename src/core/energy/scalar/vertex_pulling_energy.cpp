@@ -42,7 +42,7 @@ VertexPullingEnergy::VertexPullingEnergy(int num_dofs, std::vector<std::array<in
         throw std::invalid_argument("VertexPullingEnergy requires three finite target entries per pulled vertex");
 }
 
-double VertexPullingEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const {
+double VertexPullingEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian) const {
     if (gradient != nullptr) {
         gradient->setZero();
     }

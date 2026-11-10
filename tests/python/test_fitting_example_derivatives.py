@@ -58,7 +58,7 @@ def test_shell_material_equilibrium_derivatives_and_boundary():
             u = obs.displacement
             fixed, free = problem.fixed.fixed_dofs, problem.fixed.free_dofs
             np.testing.assert_array_equal(u[fixed], load * problem.prescribed[fixed])
-            force = make_energy(theta).eval_gradient(u)
+            force = make_energy(theta).evaluate(u).gradient()
             assert np.max(np.abs(force[free])) < 2e-12
             np.testing.assert_allclose(
                 force, make_response(u).evaluate(theta).value, atol=1e-12
@@ -99,7 +99,7 @@ def test_volume_material_reaction_scaling_and_derivatives():
         assert (
             np.max(
                 np.abs(
-                    problem.make_energy(truth).eval_gradient(u)[problem.fixed.free_dofs]
+                    problem.make_energy(truth).evaluate(u).gradient()[problem.fixed.free_dofs]
                 )
             )
             < 2e-10

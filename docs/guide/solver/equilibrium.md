@@ -53,7 +53,7 @@ factory is called at the solved state only when derivatives on free DOFs are nee
 Its evaluation prepares any needed dynamic structure at the current parameters.
 
 Callers must ensure
-`make_response(u).evaluate(p).value == make_energy(p).eval_gradient(u)` and that the
+`make_response(u).evaluate(p).value == make_energy(p).evaluate(u).gradient()` and that the
 response derivatives match that value. This is not checked automatically. Keep
 captured configuration fixed, copy the supplied state if retaining it, and check
 analytic derivatives against finite differences in tests.
@@ -113,7 +113,8 @@ from each trial prediction.
 `state.value` solves from the configured initial displacement once. The first
 `state.jvp(v)`, `state.vjp(w)` or `state.jacobian()` prepares the force response
 and exact reduced stiffness; later derivatives reuse the factorization. Exact
-Newton runs reuse the converged Hessian. Projected runs compute the exact Hessian
+Newton runs reuse the converged EnergyEvaluation and its exact Hessian. Projected
+runs request the exact Hessian from that evaluation
 for derivatives. Symbolic analysis is reused only when the reduced pattern matches.
 No previous-iterate or shifted numeric factorization is used for derivatives.
 

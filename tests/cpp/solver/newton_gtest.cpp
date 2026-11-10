@@ -29,7 +29,6 @@ using energy::test::DoubleWellChain;
 using energy::test::HalfSpaceBarrier;
 using energy::test::SwitchingEnergy;
 using litepgo::dof::DofReduction;
-using litepgo::energy::HessianKind;
 
 SpMat spd_matrix(int n) {
     std::vector<litepgo::Triplet> entries;
@@ -69,8 +68,7 @@ class WrongGradientEnergy final : public litepgo::energy::FixedPatternEnergy {
     explicit WrongGradientEnergy(int n) : energy::FixedPatternEnergy(energy::test::chain_pattern(n, {})) {}
 
   private:
-    double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian,
-                       energy::HessianKind) const override {
+    double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian) const override {
         if (gradient != nullptr) {
             *gradient = -x;
         }
@@ -87,8 +85,7 @@ class BrokenHessianEnergy final : public litepgo::energy::FixedPatternEnergy {
     explicit BrokenHessianEnergy(int n) : energy::FixedPatternEnergy(energy::test::chain_pattern(n, {})) {}
 
   private:
-    double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian,
-                       energy::HessianKind) const override {
+    double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian) const override {
         if (gradient != nullptr) {
             *gradient = x;
         }
@@ -145,19 +142,19 @@ TEST(Newton, PropagatesNeoHookeanTrialOverflowWithoutRetrying) {
     const Vec x0 = Eigen::Matrix3d::Identity().reshaped();
     Vec direction = Vec::Zero(9);
     direction[0] = 5e154;
-    EXPECT_DOUBLE_EQ(elastic->max_feasible_step(x0, direction), 1);
+    EXPECT_DOUBLE_EQ(elastic->evaluate(x0)->max_feasible_step(direction), 1);
     const Vec trial = x0 + direction;
     ASSERT_TRUE(trial.allFinite());
-    EXPECT_THROW(elastic->eval_value(trial), std::domain_error);
+    EXPECT_THROW(elastic->evaluate(trial)->value(), std::domain_error);
 
     Vec load = Vec::Zero(9);
     load[0] = -1;
     auto loading = std::make_shared<energy::QuadraticEnergy>(SpMat(9, 9), load);
     energy::WeightedSumEnergy energy({{elastic, 1}, {loading, 1}});
-    ASSERT_TRUE(std::isfinite(energy.eval_value(x0)));
+    ASSERT_TRUE(std::isfinite(energy.evaluate(x0)->value()));
     NewtonOptions opts = options();
     opts.max_iterations = 1;
-    opts.hessian = energy::HessianKind::Exact;
+    opts.project_hessian = false;
     linalg::EigenLDLT solver;
     std::vector<NewtonStep> steps;
     trial_evaluations = 0;
@@ -171,10 +168,10 @@ TEST(Newton, PropagatesNeoHookeanTrialOverflowWithoutRetrying) {
 TEST(Newton, StillBacktracksWhenFiniteTrialEnergyIncreases) {
     DoubleWellChain energy(3);
     const Vec x0 = Vec::Constant(3, 0.6);
-    const double initial_energy = energy.eval_value(x0);
+    const double initial_energy = energy.evaluate(x0)->value();
     NewtonOptions opts = options();
     opts.max_iterations = 1;
-    opts.hessian = energy::HessianKind::Exact;
+    opts.project_hessian = false;
     std::vector<NewtonStep> steps;
     const auto result = solve(energy, x0, {}, opts, &steps);
     EXPECT_EQ(result.status, NewtonStatus::MaxIterations);
@@ -227,13 +224,13 @@ TEST(Newton, KeepsFixedDofsAtTheirInitialValues) {
 }
 
 TEST(Newton, ConvergesOnANonlinearEnergyFromFarAway) {
-    for (const energy::HessianKind kind : {energy::HessianKind::Projected, energy::HessianKind::Exact}) {
+    for (const bool kind : {true, false}) {
         DoubleWellChain energy(6);
         NewtonOptions opts = options(1e-9);
-        opts.hessian = kind;
+        opts.project_hessian = kind;
         const NewtonResult result = solve(energy, Vec::LinSpaced(6, 3.0, 4.0), {}, opts);
         EXPECT_EQ(result.status, NewtonStatus::Converged);
-        EXPECT_LE(energy.eval_gradient(result.x).cwiseAbs().maxCoeff(), 1e-9);
+        EXPECT_LE(energy.evaluate(result.x)->gradient().cwiseAbs().maxCoeff(), 1e-9);
     }
 }
 
@@ -241,7 +238,7 @@ TEST(Newton, ShiftsTheDiagonalForAnIndefiniteExactHessian) {
     // At x = 0.1 the double wells are concave: the exact Hessian is indefinite.
     DoubleWellChain energy(4);
     NewtonOptions opts = options(1e-9);
-    opts.hessian = energy::HessianKind::Exact;
+    opts.project_hessian = false;
     std::vector<NewtonStep> steps;
     const NewtonResult result = solve(energy, Vec::Constant(4, 0.1), {}, opts, &steps);
     EXPECT_EQ(result.status, NewtonStatus::Converged);
@@ -310,7 +307,7 @@ TEST(Newton, WithEveryDofFixedJustEvaluates) {
     const NewtonResult result = solve(energy, x0, {0, 1, 2});
     EXPECT_EQ(result.status, NewtonStatus::Converged);
     EXPECT_EQ(result.x, x0);
-    EXPECT_EQ(result.energy, energy.eval_value(x0));
+    EXPECT_EQ(result.energy, energy.evaluate(x0)->value());
 }
 
 TEST(Newton, ChecksItsArguments) {
@@ -367,7 +364,7 @@ TEST(Newton, LimitsCoordinateMovementBeforeFeasibilityQuery) {
         BoundedQuadratic() : FixedPatternEnergy(energy::test::chain_pattern(2, {})) {}
 
       private:
-        double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, energy::HessianKind) const override {
+        double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian) const override {
             const Vec residual = x - Eigen::Vector2d(1.0, -0.4);
             if (gradient)
                 *gradient = residual;
@@ -405,7 +402,7 @@ TEST(Newton, ChecksInitialFeasibilityBeforeStationaryOrFixedReturn) {
         Infeasible() : FixedPatternEnergy(energy::test::chain_pattern(2, {})) {}
 
       private:
-        double eval_values(const ConstVecRef&, Vec*, SpMat*, energy::HessianKind) const override {
+        double eval_values(const ConstVecRef&, Vec*, SpMat*) const override {
             throw std::logic_error("initial feasibility must be checked before evaluation");
         }
         double feasible_step(const ConstVecRef&, const ConstVecRef& direction) const override {

@@ -63,10 +63,10 @@ TEST(IPCTKContactEnergy, VanishesBeyondDhat) {
 
     EXPECT_EQ(energy.num_active_pairs(surface.positions), 0);
     EXPECT_EQ(energy.min_active_distance(surface.positions), std::numeric_limits<double>::infinity());
-    EXPECT_NO_THROW(energy.eval_hessian(surface.positions));
-    EXPECT_EQ(energy.eval_value(surface.positions), 0.0);
-    EXPECT_EQ(energy.eval_gradient(surface.positions), Vec::Zero(18));
-    EXPECT_EQ(energy.eval_hessian(surface.positions).nonZeros(), 0);
+    EXPECT_NO_THROW(energy.evaluate(surface.positions)->hessian());
+    EXPECT_EQ(energy.evaluate(surface.positions)->value(), 0.0);
+    EXPECT_EQ(energy.evaluate(surface.positions)->gradient(), Vec::Zero(18));
+    EXPECT_EQ(energy.evaluate(surface.positions)->hessian().nonZeros(), 0);
 }
 
 TEST(IPCTKContactEnergy, ReportsTheActivePairAndItsDistance) {
@@ -83,11 +83,11 @@ TEST(IPCTKContactEnergy, ReportsTheActivePairAndItsDistance) {
     EXPECT_DOUBLE_EQ(snapshot.distances[0], 0.5);
     EXPECT_GT(snapshot.weights[0], 0);
     EXPECT_DOUBLE_EQ(snapshot.mollifiers[0], 1);
-    EXPECT_EQ(energy.eval_hessian(surface.positions).nonZeros(), 144);
+    EXPECT_EQ(energy.evaluate(surface.positions)->hessian().nonZeros(), 144);
 
     // Pushes vertex 3 away from A and A's vertices the other way.
-    const Vec gradient = energy.eval_gradient(surface.positions);
-    EXPECT_GT(energy.eval_value(surface.positions), 0.0);
+    const Vec gradient = energy.evaluate(surface.positions)->gradient();
+    EXPECT_GT(energy.evaluate(surface.positions)->value(), 0.0);
     EXPECT_LT(gradient[3 * 3 + 2], 0.0);
     EXPECT_GT(gradient[2] + gradient[5] + gradient[8], 0.0);
     EXPECT_NEAR(gradient.segment<3>(0).sum() + gradient.segment<3>(3).sum() + gradient.segment<3>(6).sum() +
@@ -101,15 +101,15 @@ TEST(IPCTKContactEnergy, PatternFollowsTheActiveSet) {
     const Vec near = translate_b(surface.positions, Eigen::Vector3d(0, 0, -1));
 
     // The first Hessian request prepares the active structure.
-    EXPECT_NO_THROW(energy.eval_hessian(near));
-    EXPECT_NO_THROW(energy.eval_gradient(near));
+    EXPECT_NO_THROW(energy.evaluate(near)->hessian());
+    EXPECT_NO_THROW(energy.evaluate(near)->gradient());
 
-    EXPECT_NO_THROW(energy.eval_hessian(near));
+    EXPECT_NO_THROW(energy.evaluate(near)->hessian());
     // Vertex 3 and face A's vertices 0, 1, 2: a dense 12 x 12 block.
-    EXPECT_EQ(energy.eval_hessian(near).nonZeros(), 144);
-    EXPECT_NO_THROW(energy.eval_hessian(translate_b(near, Eigen::Vector3d(0, 0, 0.1))));
-    EXPECT_NO_THROW(energy.eval_hessian(surface.positions));
-    EXPECT_EQ(energy.eval_hessian(surface.positions).nonZeros(), 0);
+    EXPECT_EQ(energy.evaluate(near)->hessian().nonZeros(), 144);
+    EXPECT_NO_THROW(energy.evaluate(translate_b(near, Eigen::Vector3d(0, 0, 0.1)))->hessian());
+    EXPECT_NO_THROW(energy.evaluate(surface.positions)->hessian());
+    EXPECT_EQ(energy.evaluate(surface.positions)->hessian().nonZeros(), 0);
 }
 
 TEST(IPCTKContactEnergy, DerivativesMatchFiniteDifferences) {
@@ -128,9 +128,8 @@ TEST(IPCTKContactEnergy, DerivativesMatchFiniteDifferences) {
 TEST(IPCTKContactEnergy, ProjectedHessianIsPositiveSemidefinite) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
     IPCTKContactEnergy energy(surface, options(3.0));
-    const Eigen::MatrixXd exact = Eigen::MatrixXd(energy.eval_hessian(surface.positions));
-    const Eigen::MatrixXd projected =
-        Eigen::MatrixXd(energy.eval_hessian(surface.positions, energy::HessianKind::Projected));
+    const Eigen::MatrixXd exact = Eigen::MatrixXd(energy.evaluate(surface.positions)->hessian());
+    const Eigen::MatrixXd projected = Eigen::MatrixXd(energy.evaluate(surface.positions)->projected_hessian());
     const Eigen::VectorXd exact_eigenvalues = Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd>(exact).eigenvalues();
     const Eigen::VectorXd eigenvalues = Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd>(projected).eigenvalues();
     EXPECT_LT(exact_eigenvalues.minCoeff(), 0.0); // the projection has work to do
@@ -159,22 +158,22 @@ TEST(IPCTKContactEnergy, FeasibleStepStopsBeforeImpact) {
 
     // Dropping B by 2 would pass vertex 3 through A at t = 0.25.
     const Vec down = translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -2));
-    const double alpha = energy.max_feasible_step(x, down);
+    const double alpha = energy.evaluate(x)->max_feasible_step(down);
     EXPECT_GT(alpha, 0.0);
     EXPECT_LT(alpha, 0.25);
     EXPECT_GT(energy.min_active_distance(x + alpha * down), 0.0);
-    EXPECT_NO_THROW(energy.eval_value(x + alpha * down));
+    EXPECT_NO_THROW(energy.evaluate(x + alpha * down)->value());
 
     // Moving apart, or sliding sideways above A, is unrestricted.
-    EXPECT_EQ(energy.max_feasible_step(x, -down), 1.0);
-    EXPECT_EQ(energy.max_feasible_step(x, translate_b(Vec::Zero(18), Eigen::Vector3d(1, 1, 0))), 1.0);
+    EXPECT_EQ(energy.evaluate(x)->max_feasible_step(-down), 1.0);
+    EXPECT_EQ(energy.evaluate(x)->max_feasible_step(translate_b(Vec::Zero(18), Eigen::Vector3d(1, 1, 0))), 1.0);
 }
 
 TEST(IPCTKContactEnergy, FeasibleStepKeepsMinDistance) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
     IPCTKContactEnergy energy(surface, options(1.0, 0.2));
     const Vec down = translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -2));
-    const double alpha = energy.max_feasible_step(surface.positions, down);
+    const double alpha = energy.evaluate(surface.positions)->max_feasible_step(down);
     EXPECT_GT(alpha, 0.0);
     EXPECT_GT(energy.min_active_distance(surface.positions + alpha * down), 0.2);
 }
@@ -182,15 +181,15 @@ TEST(IPCTKContactEnergy, FeasibleStepKeepsMinDistance) {
 TEST(IPCTKContactEnergy, RejectsInfeasibleStates) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
     IPCTKContactEnergy thick(surface, options(1.0, 0.6));
-    EXPECT_THROW(thick.eval_value(surface.positions), std::domain_error);
-    EXPECT_THROW(thick.max_feasible_step(surface.positions, Vec::Zero(18)), std::domain_error);
+    EXPECT_THROW(thick.evaluate(surface.positions)->value(), std::domain_error);
+    EXPECT_THROW(thick.evaluate(surface.positions)->max_feasible_step(Vec::Zero(18)), std::domain_error);
 
     // B's vertex 3 pokes through A, but sits 0.5 below it: eval does not see the
     // intersection, max_feasible_step does.
     IPCTKContactEnergy energy(surface, options(1.0));
     const Vec crossing = translate_b(surface.positions, Eigen::Vector3d(0, 0, -1));
-    EXPECT_NO_THROW(energy.eval_value(crossing));
-    EXPECT_THROW(energy.max_feasible_step(crossing, Vec::Zero(18)), std::domain_error);
+    EXPECT_NO_THROW(energy.evaluate(crossing)->value());
+    EXPECT_THROW(energy.evaluate(crossing)->max_feasible_step(Vec::Zero(18)), std::domain_error);
 }
 
 // Displacement DOFs u drive the surface through E(u) = B(X + W u), with X and W
@@ -210,20 +209,20 @@ TEST(IPCTKContactEnergy, ComposesWithASurfaceKinematics) {
     u[8] = -0.2; // lowers vertex 3
     u[3] = 0.1;  // moves vertex 4 in x
     const Vec x = kinematics.positions(u);
-    EXPECT_EQ(mapped.eval_value(u), barrier->eval_value(x));
-    const Vec g = barrier->eval_gradient(x);
-    const Vec gradient = mapped.eval_gradient(u);
+    EXPECT_EQ(mapped.evaluate(u)->value(), barrier->evaluate(x)->value());
+    const Vec g = barrier->evaluate(x)->gradient();
+    const Vec gradient = mapped.evaluate(u)->gradient();
     EXPECT_EQ(gradient[9], 0.0);
     EXPECT_EQ(gradient.segment<3>(6), g.segment<3>(9));
     EXPECT_EQ(gradient.segment<3>(3), g.segment<3>(12));
     EXPECT_EQ(gradient.segment<3>(0), g.segment<3>(15));
-    EXPECT_NO_THROW(mapped.eval_hessian(u));
+    EXPECT_NO_THROW(mapped.evaluate(u)->hessian());
     energy::test::expect_derivatives_match(mapped, u, 1e-5);
 
     // Dropping B through the obstacle is caught on the mapped positions.
     Vec du = Vec::Zero(10);
     du[2] = du[5] = du[8] = -2.0;
-    const double alpha = mapped.max_feasible_step(Vec::Zero(10), du);
+    const double alpha = mapped.evaluate(Vec::Zero(10))->max_feasible_step(du);
     EXPECT_GT(alpha, 0.0);
     EXPECT_LT(alpha, 0.25);
 }

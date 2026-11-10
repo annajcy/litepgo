@@ -98,13 +98,13 @@ def test_equilibrium_gradient_and_batch_partition(example, problem):
     for weights in (reference.numpy(), initial.numpy()):
         u = equilibrium.evaluate(weights).value
         potential = make_energy(weights)
-        np.testing.assert_allclose(potential.eval_gradient(u)[free], 0, atol=1e-11)
-        K = potential.eval_hessian(u).toarray()[np.ix_(free, free)]
+        np.testing.assert_allclose(potential.evaluate(u).gradient()[free], 0, atol=1e-11)
+        K = potential.evaluate(u).hessian().toarray()[np.ix_(free, free)]
         assert np.linalg.eigvalsh(K).min() > 0
         partial = make_response(u).evaluate(weights).jacobian().toarray()
         for j, delta in enumerate(1e-4 * np.eye(2)):
-            fd = (make_energy(weights + delta).eval_gradient(u)
-                  - make_energy(weights - delta).eval_gradient(u)) / 2e-4
+            fd = (make_energy(weights + delta).evaluate(u).gradient()
+                  - make_energy(weights - delta).evaluate(u).gradient()) / 2e-4
             np.testing.assert_allclose(partial[:, j], fd, atol=1e-10, rtol=1e-6)
 
     single, _, _, single_loss = example["make_fit"](batch_size=1)

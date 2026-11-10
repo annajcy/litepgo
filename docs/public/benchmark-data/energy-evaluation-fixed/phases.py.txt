@@ -1,0 +1,34 @@
+import gc, importlib.util, json, statistics, time, inspect, os
+from pathlib import Path
+import numpy as np
+import scipy.sparse as sp
+from litepgo import energy,tbb_thread_limit
+before=hasattr(energy,'HessianKind')
+p=Path('build/energy-evaluation-baseline/equilibrium_before.py' if before else 'benchmarks/equilibrium_evaluation.py')
+spec=importlib.util.spec_from_file_location('driver',p);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+source=inspect.getsource(m.problem).replace("return energy.WeightedSumEnergy([(elastic(p),1.),(foundation,1.)])",'return elastic(p)')
+ns=dict(m.__dict__);exec(source,ns)
+kind=energy.HessianKind.Exact if before else False
+for threads in (1,4):
+ with tbb_thread_limit(threads):
+  eq,p,potential,_=m.problem('shell',2,kind,{'solves':0});x=eq.evaluate(p).value
+  _,_,leaf_factory,_=ns['problem']('shell',2,kind,{'solves':0})
+  leaf=leaf_factory(p);foundation=energy.QuadraticEnergy(sp.eye(len(x),format='csc')*.01)
+  models={'leaf':leaf,'sum_one':energy.WeightedSumEnergy([(leaf,1.)]),'sum_two':energy.WeightedSumEnergy([(leaf,1.),(foundation,1.)]),'quadratic':foundation}
+  for name,model in models.items():
+   def fresh():
+    if before:return model.eval(x,gradient=True)[1]
+    e=model.evaluate(x);g=e.gradient();e.value
+    return g
+   funcs={'fresh':fresh}
+   if not before:
+    e=model.evaluate(x);e.gradient()
+    funcs.update(create=lambda:model.evaluate(x),cached_gradient=e.gradient,cached_value=lambda:e.value)
+   for phase,fn in funcs.items():
+    for _ in range(200):fn()
+    samples=[]
+    for _ in range(31):
+     start=time.perf_counter_ns()
+     for _ in range(200):result=fn()
+     samples.append((time.perf_counter_ns()-start)/200000)
+    print(json.dumps(dict(version='before' if before else 'after',threads=threads,model=name,phase=phase,median_us=statistics.median(samples),samples_us=samples)),flush=True)

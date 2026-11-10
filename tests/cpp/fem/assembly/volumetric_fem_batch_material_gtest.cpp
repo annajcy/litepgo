@@ -134,7 +134,7 @@ template <class Basis, class Q> void check_energy() {
         SCOPED_TRACE(batch_size);
         const VolumetricFemEnergy<Basis, Q> batched(std::make_shared<BatchNeoHookean>(calls), f.map, f.X, f.Fp, f.theta,
                                                     batch_size);
-        for (auto kind : {litepgo::energy::HessianKind::Exact, litepgo::energy::HessianKind::Projected}) {
+        for (auto kind : {false, true}) {
             Vec g0, g1;
             SpMat H0, H1;
             calls->eval = 0;
@@ -146,9 +146,9 @@ template <class Basis, class Q> void check_energy() {
             EXPECT_LT(Eigen::MatrixXd(H0 - H1).norm(), 1e-12 * (1 + Eigen::MatrixXd(H0).norm()));
         }
         const Vec dx = 5 * f.u;
-        EXPECT_DOUBLE_EQ(native.max_feasible_step(f.u, dx), batched.max_feasible_step(f.u, dx));
+        EXPECT_DOUBLE_EQ(native.evaluate(f.u)->max_feasible_step(dx), batched.evaluate(f.u)->max_feasible_step(dx));
         EXPECT_GT(calls->steps, 0);
-        EXPECT_NEAR(native.eval_value(f.u), batched.eval_value(f.u), 1e-12);
+        EXPECT_NEAR(native.evaluate(f.u)->value(), batched.evaluate(f.u)->value(), 1e-12);
     }
 }
 
@@ -216,8 +216,8 @@ TEST(VolumetricFemBatchMaterial, RequestsOnlyNeededOutputs) {
     auto requests = std::make_shared<std::vector<Request>>();
     const auto material = std::make_shared<RecordingMaterial>(calls, requests);
     const VolumetricFemEnergy<TetP1Basis, TetCentroidQuadrature> energy(material, f.map, f.X, f.Fp, f.theta, 256);
-    energy.eval_value(f.u);
-    energy.eval_gradient(f.u);
+    energy.evaluate(f.u)->value();
+    energy.evaluate(f.u)->gradient();
     Vec g;
     SpMat H;
     litepgo::testing::evaluate_energy(energy, f.u, &g, &H);
@@ -247,7 +247,7 @@ TEST(VolumetricFemBatchMaterial, RejectsInvalidMaterialOutputs) {
     Fixture<TetP1Basis, TetCentroidQuadrature> f;
     const VolumetricFemEnergy<TetP1Basis, TetCentroidQuadrature> energy(
         std::make_shared<Bad>(std::make_shared<Calls>()), f.map, f.X, f.Fp, f.theta, 256);
-    EXPECT_THROW(energy.eval_value(f.u), std::domain_error);
+    EXPECT_THROW(energy.evaluate(f.u)->value(), std::domain_error);
 }
 
 } // namespace

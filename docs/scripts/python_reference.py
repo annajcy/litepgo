@@ -53,9 +53,11 @@ def main() -> None:
                 (instance.__module__, instance.__qualname__),
             )
 
-    assert isinstance(modules["litepgo.energy"].get("Energy.eval"), doc.Function), (
-        "Missing native methods"
-    )
+    assert all(
+        isinstance(modules["litepgo.energy"].get(name), doc.Function)
+        for name in ("Energy.evaluate", "EnergyEvaluation.gradient", "EnergyEvaluation.hessian",
+                     "EnergyEvaluation.projected_hessian", "EnergyEvaluation.max_feasible_step")
+    ), "Missing native evaluation methods"
     assert all(
         isinstance(modules["litepgo.torch"].get(name), doc.Function)
         for name in ("energy", "response")

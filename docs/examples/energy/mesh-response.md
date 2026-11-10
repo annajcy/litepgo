@@ -23,7 +23,7 @@ The [solid density](../../guide/fem/volume.md) defines $E$.
 `VolumetricFemForceMaterialResponse[TetP1Basis,TetCentroidQuadrature]`
 returns integrated positive forces and their sparse Jacobian. `ForceResidual`
 subtracts observations generated independently by
-`VolumetricFemEnergy.eval_gradient`. Gauss–Newton starts at $(0.7,1.2)$.
+`VolumetricFemEnergy.evaluate(u).gradient()`. Gauss–Newton starts at $(0.7,1.2)$.
 Batch-size-one and larger batches use the same protocol.
 
 **Expected result.** Both batching paths agree with the energy gradient and

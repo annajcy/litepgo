@@ -44,7 +44,8 @@ struct Fixture {
                 litepgo::SpMat((theta.segment(theta.size() == 2 ? 0 : 2 * e, 2)).size(), 3),
                 theta.segment(theta.size() == 2 ? 0 : 2 * e, 2)));
         return Energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), map, X, plastic, fields)
-            .eval_gradient(u);
+            .evaluate(u)
+            ->gradient();
     }
 };
 TEST(VolumetricFemForceMaterialResponse, MatchesEnergySharedAndPerElementAndBatchSizes) {
@@ -129,7 +130,8 @@ TEST(VolumetricFemForceFpResponse, EnergyConsistencySharedElementAndBatchJacobia
                             dof::ConstantDofMap(f.topology, 9), f.map, f.X, f.u, theta, size);
         const auto expected = Energy(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<NeoHookean>>(), f.map,
                                      f.X, f.plastic, theta)
-                                  .eval_gradient(f.u);
+                                  .evaluate(f.u)
+                                  ->gradient();
         EXPECT_TRUE(local.evaluate(p)->value().isApprox(expected, 1e-12));
         const Eigen::MatrixXd J = local.evaluate(p)->jacobian();
         if (size == 1)

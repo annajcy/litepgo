@@ -54,7 +54,7 @@ class DoubleWellChain final : public energy::FixedPatternEnergy {
     explicit DoubleWellChain(int n) : energy::FixedPatternEnergy(chain_pattern(n, all_pair_starts(n))) {}
 
   private:
-    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, energy::HessianKind kind) const override {
+    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian) const override {
         const int n = num_dofs();
         double value = 0.0;
         if (gradient != nullptr) {
@@ -71,8 +71,7 @@ class DoubleWellChain final : public energy::FixedPatternEnergy {
             }
             if (hessian != nullptr) {
                 const double curvature = 12.0 * x[i] * x[i] - 4.0;
-                hessian->coeffRef(i, i) +=
-                    kind == energy::HessianKind::Projected ? std::max(curvature, 0.0) : curvature;
+                hessian->coeffRef(i, i) += curvature;
             }
         }
         for (int i = 0; i + 1 < n; ++i) {
@@ -107,7 +106,7 @@ class HalfSpaceBarrier final : public energy::FixedPatternEnergy {
         return pattern;
     }
 
-    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, energy::HessianKind) const override {
+    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian) const override {
         const double gap = 1.0 - x[k_];
         if (!(gap > 0.0)) {
             throw std::domain_error("HalfSpaceBarrier: x_k must be below 1");
@@ -159,7 +158,7 @@ class SwitchingEnergy final : public energy::DynamicPatternEnergy {
         return chain_pattern(num_dofs(), active_pairs(x));
     }
 
-    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, energy::HessianKind) const override {
+    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian) const override {
         const std::vector<int> active = active_pairs(x);
         if (hessian != nullptr) {
             for (const int i : active) {

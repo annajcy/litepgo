@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
             if (result.status != solver::NewtonStatus::Converged)
                 throw std::runtime_error("Static equilibrium failed at step " + std::to_string(step));
             u = result.x;
-            const double residual = elastic.eval_gradient(u).tail(u.size() - fixed_count).norm();
+            const double residual = elastic.evaluate(u)->gradient().tail(u.size() - fixed_count).norm();
             max_displacement = 0;
             for (int v = 0; v < count; ++v)
                 max_displacement = std::max(max_displacement, u.segment<3>(3 * v).norm());

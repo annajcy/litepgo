@@ -71,48 +71,79 @@ int WeightedSumEnergy::checked_size(const std::vector<WeightedEnergy>& terms) {
 WeightedSumEnergy::WeightedSumEnergy(std::vector<WeightedEnergy> terms)
     : Energy(checked_size(terms)), terms_(std::move(terms)) {}
 
-EnergyEvaluation WeightedSumEnergy::eval_impl(const ConstVecRef& x, bool gradient,
-                                              std::optional<HessianKind> kind) const {
-    ::litepgo::detail::BusyScope scope(busy_, "WeightedSumEnergy");
-    EnergyEvaluation result{0, std::nullopt, std::nullopt};
-    if (gradient)
-        result.gradient = Vec::Zero(num_dofs());
-    std::vector<EnergyEvaluation> children;
-    children.reserve(terms_.size());
-    for (const auto& term : terms_)
-        children.push_back(term.energy->eval(x, gradient, kind));
-    if (kind) {
-        bool changed = !plan_;
-        for (size_t i = 0; !changed && i < children.size(); ++i)
-            changed = !linalg::same_pattern(*children[i].hessian, plan_->terms[i].pattern);
-        if (changed) {
-            std::vector<const SpMat*> patterns;
-            for (const auto& child : children)
-                patterns.push_back(&*child.hessian);
-            AssemblyPlan next{merged_pattern(num_dofs(), patterns), {}};
-            for (const auto& child : children)
-                next.terms.push_back({linalg::pattern_of(*child.hessian), positions_in(next.pattern, *child.hessian)});
-            plan_ = std::move(next);
-        }
-        result.hessian = plan_->pattern;
+class WeightedSumEnergy::Evaluation final : public EnergyEvaluation {
+  public:
+    Evaluation(const WeightedSumEnergy& model, const ConstVecRef& x) : EnergyEvaluation(model, x), model_(model) {
+        for (const auto& term : model_.terms_)
+            children_.push_back(term.energy->evaluate(x));
     }
-    for (size_t i = 0; i < terms_.size(); ++i) {
-        const double w = terms_[i].weight;
-        result.value += w * children[i].value;
+
+  private:
+    double feasible_step_impl(const ConstVecRef& dx) const override {
+        double alpha = 1.;
+        for (const auto& child : children_)
+            alpha = std::min(alpha, child->max_feasible_step(dx));
+        return alpha;
+    }
+    EnergyValues compute(bool gradient, bool hessian) override {
+        return assemble(gradient, hessian, false);
+    }
+    EnergyValues compute_projected() override {
+        for (const auto& term : model_.terms_)
+            if (term.weight < 0)
+                return EnergyEvaluation::compute_projected();
+        return assemble(true, true, true);
+    }
+    EnergyValues assemble(bool gradient, bool hessian, bool project) {
+        ::litepgo::detail::BusyScope scope(model_.busy_, "WeightedSumEnergy");
+        EnergyValues result{0, std::nullopt, std::nullopt};
         if (gradient)
-            *result.gradient += w * *children[i].gradient;
-        if (kind) {
-            const auto& positions = plan_->terms[i].positions;
-            for (size_t k = 0; k < positions.size(); ++k)
-                result.hessian->valuePtr()[positions[k]] += w * children[i].hessian->valuePtr()[k];
+            result.gradient = Vec::Zero(num_dofs());
+        std::vector<EnergyValues> children;
+        children.reserve(model_.terms_.size());
+        for (const auto& child : children_) {
+            EnergyValues r{0., std::nullopt, std::nullopt};
+            if (hessian)
+                r.hessian = project ? child->projected_hessian() : child->hessian();
+            if (gradient)
+                r.gradient = child->gradient();
+            r.value = child->value();
+            children.push_back(std::move(r));
         }
+        if (hessian) {
+            bool changed = !model_.plan_;
+            for (size_t i = 0; !changed && i < children.size(); ++i)
+                changed = !linalg::same_pattern(*children[i].hessian, model_.plan_->terms[i].pattern);
+            if (changed) {
+                std::vector<const SpMat*> patterns;
+                for (const auto& child : children)
+                    patterns.push_back(&*child.hessian);
+                AssemblyPlan next{merged_pattern(num_dofs(), patterns), {}};
+                for (const auto& child : children)
+                    next.terms.push_back(
+                        {linalg::pattern_of(*child.hessian), positions_in(next.pattern, *child.hessian)});
+                model_.plan_ = std::move(next);
+            }
+            result.hessian = model_.plan_->pattern;
+        }
+        for (size_t i = 0; i < model_.terms_.size(); ++i) {
+            const double w = model_.terms_[i].weight;
+            result.value += w * children[i].value;
+            if (gradient)
+                *result.gradient += w * *children[i].gradient;
+            if (hessian) {
+                const auto& positions = model_.plan_->terms[i].positions;
+                for (size_t k = 0; k < positions.size(); ++k)
+                    result.hessian->valuePtr()[positions[k]] += w * children[i].hessian->valuePtr()[k];
+            }
+        }
+        return result;
     }
-    return result;
+    const WeightedSumEnergy& model_;
+    std::vector<std::shared_ptr<EnergyEvaluation>> children_;
+};
+std::shared_ptr<EnergyEvaluation> WeightedSumEnergy::make_evaluation(const ConstVecRef& x) const {
+    return std::make_shared<Evaluation>(*this, x);
 }
-double WeightedSumEnergy::feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const {
-    double alpha = 1.0;
-    for (const auto& term : terms_)
-        alpha = std::min(alpha, term.energy->max_feasible_step(x, dx));
-    return alpha;
-}
+
 } // namespace litepgo::energy

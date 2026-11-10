@@ -28,10 +28,10 @@ class MisbehavingEnergy final : public litepgo::energy::FixedPatternEnergy {
     MisbehavingEnergy() : FixedPatternEnergy(chain_pattern(2, {})) {}
 
   private:
-    double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const override {
+    double eval_values(const litepgo::ConstVecRef& x, Vec* gradient, SpMat* hessian) const override {
         if (reenter) {
             reenter = false;
-            eval_value(x);
+            evaluate(x)->value();
         }
         if (gradient != nullptr) {
             gradient->setZero();
@@ -53,10 +53,10 @@ TEST(Energy, ConveniencesAgreeWithEvaluate) {
     const Vec x = Vec::LinSpaced(5, -1.2, 0.9);
     Vec gradient;
     SpMat hessian;
-    const double value = litepgo::testing::evaluate_energy(energy, x, &gradient, &hessian, HessianKind::Projected);
-    EXPECT_DOUBLE_EQ(value, energy.eval_value(x));
-    EXPECT_EQ(gradient, energy.eval_gradient(x));
-    EXPECT_EQ(Eigen::MatrixXd(hessian), Eigen::MatrixXd(energy.eval_hessian(x, HessianKind::Projected)));
+    const double value = litepgo::testing::evaluate_energy(energy, x, &gradient, &hessian, true);
+    EXPECT_DOUBLE_EQ(value, energy.evaluate(x)->value());
+    EXPECT_EQ(gradient, energy.evaluate(x)->gradient());
+    EXPECT_EQ(Eigen::MatrixXd(hessian), Eigen::MatrixXd(energy.evaluate(x)->projected_hessian()));
 }
 
 TEST(Energy, ChainDerivativesMatchFiniteDifferences) {
@@ -67,22 +67,22 @@ TEST(Energy, ChainDerivativesMatchFiniteDifferences) {
 TEST(Energy, ProjectedHessianIsPositiveSemidefinite) {
     const DoubleWellChain energy(3);
     const Vec x = Vec::Constant(3, 0.1); // inside the double wells' concave region
-    const Eigen::MatrixXd exact = Eigen::MatrixXd(energy.eval_hessian(x, HessianKind::Exact));
-    const Eigen::MatrixXd projected = Eigen::MatrixXd(energy.eval_hessian(x, HessianKind::Projected));
+    const Eigen::MatrixXd exact = Eigen::MatrixXd(energy.evaluate(x)->hessian());
+    const Eigen::MatrixXd projected = Eigen::MatrixXd(energy.evaluate(x)->projected_hessian());
     EXPECT_NE(exact, projected);
     EXPECT_GE(Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd>(projected).eigenvalues().minCoeff(), -1e-12);
 }
 
 TEST(Energy, ChecksArgumentsBeforeWriting) {
     const DoubleWellChain energy(4);
-    EXPECT_THROW(energy.eval_value(Vec::Zero(3)), std::invalid_argument);
+    EXPECT_THROW(energy.evaluate(Vec::Zero(3))->value(), std::invalid_argument);
 
     SpMat wrong = chain_pattern(4, {});
     Vec gradient = Vec::Constant(2, 7.0);
     EXPECT_THROW(litepgo::testing::evaluate_energy(energy, Vec::Zero(3), &gradient, &wrong), std::invalid_argument);
     EXPECT_EQ(gradient, Vec::Constant(2, 7.0)); // untouched
 
-    EXPECT_THROW(energy.max_feasible_step(Vec::Zero(4), Vec::Zero(3)), std::invalid_argument);
+    EXPECT_THROW(energy.evaluate(Vec::Zero(4))->max_feasible_step(Vec::Zero(3)), std::invalid_argument);
 }
 
 TEST(Energy, ResizesTheGradient) {
@@ -94,23 +94,23 @@ TEST(Energy, ResizesTheGradient) {
 
 TEST(Energy, DefaultFeasibleStepIsTheFullStep) {
     const DoubleWellChain energy(3);
-    EXPECT_EQ(energy.max_feasible_step(Vec::Zero(3), Vec::Ones(3)), 1.0);
+    EXPECT_EQ(energy.evaluate(Vec::Zero(3))->max_feasible_step(Vec::Ones(3)), 1.0);
 }
 
 TEST(Energy, RejectsAFeasibleStepOutsideTheUnitInterval) {
     MisbehavingEnergy energy;
     energy.step = 1.5;
-    EXPECT_THROW(energy.max_feasible_step(Vec::Zero(2), Vec::Ones(2)), std::logic_error);
+    EXPECT_THROW(energy.evaluate(Vec::Zero(2))->max_feasible_step(Vec::Ones(2)), std::logic_error);
     energy.step = std::nan("");
-    EXPECT_THROW(energy.max_feasible_step(Vec::Zero(2), Vec::Ones(2)), std::logic_error);
+    EXPECT_THROW(energy.evaluate(Vec::Zero(2))->max_feasible_step(Vec::Ones(2)), std::logic_error);
 }
 
 TEST(Energy, SupportsFiniteReentry) {
     MisbehavingEnergy energy;
     energy.reenter = true;
-    EXPECT_NO_THROW(energy.eval_value(Vec::Zero(2)));
+    EXPECT_NO_THROW(energy.evaluate(Vec::Zero(2))->value());
     energy.reenter = false;
-    EXPECT_NO_THROW(energy.eval_value(Vec::Zero(2)));
+    EXPECT_NO_THROW(energy.evaluate(Vec::Zero(2))->value());
 }
 
 TEST(Energy, RejectsNonFiniteValuesAsABrokenEnergy) {
@@ -118,14 +118,14 @@ TEST(Energy, RejectsNonFiniteValuesAsABrokenEnergy) {
     for (const double returned : {infinity, -infinity, std::nan("")}) {
         const auto energy = std::make_shared<MisbehavingEnergy>();
         energy->returned = returned;
-        EXPECT_THROW(energy->eval_value(Vec::Zero(2)), std::logic_error);
+        EXPECT_THROW(energy->evaluate(Vec::Zero(2))->value(), std::logic_error);
         // The error surfaces through composites too, and is not mistaken for infeasibility.
         const litepgo::energy::WeightedSumEnergy sum({{energy, -1.0}});
-        EXPECT_THROW(sum.eval_value(Vec::Zero(2)), std::logic_error);
+        EXPECT_THROW(sum.evaluate(Vec::Zero(2))->value(), std::logic_error);
         const litepgo::energy::AffineMappedEnergy mapped(energy, SpMat(Eigen::MatrixXd::Identity(2, 2).sparseView()));
-        EXPECT_THROW(mapped.eval_value(Vec::Zero(2)), std::logic_error);
+        EXPECT_THROW(mapped.evaluate(Vec::Zero(2))->value(), std::logic_error);
         try {
-            sum.eval_value(Vec::Zero(2));
+            sum.evaluate(Vec::Zero(2))->value();
         } catch (const std::domain_error&) {
             ADD_FAILURE() << "a non-finite value must not be reported as std::domain_error";
         } catch (const std::logic_error&) {
@@ -146,7 +146,7 @@ TEST(EnergyContract, RejectsBrokenRequestedDerivativesAndRecovers) {
             return p;
         }
         Broken() : FixedPatternEnergy(pattern()) {}
-        double eval_values(const ConstVecRef&, Vec* g, SpMat* H, energy::HessianKind) const override {
+        double eval_values(const ConstVecRef&, Vec* g, SpMat* H) const override {
             ++calls;
             if (g) {
                 g->setOnes();
@@ -173,20 +173,54 @@ TEST(EnergyContract, RejectsBrokenRequestedDerivativesAndRecovers) {
 #endif
          }) {
         e.mode = mode;
-        EXPECT_DOUBLE_EQ(e.eval_value(x), 1);
+        EXPECT_DOUBLE_EQ(e.evaluate(x)->value(), 1);
         if (mode <= 2)
-            EXPECT_THROW(e.eval_gradient(x), std::logic_error);
+            EXPECT_THROW(e.evaluate(x)->gradient(), std::logic_error);
         else
-            EXPECT_THROW(e.eval_hessian(x), std::logic_error);
+            EXPECT_THROW(e.evaluate(x)->hessian(), std::logic_error);
         e.mode = 0;
-        EXPECT_TRUE(e.eval_gradient(x).isOnes());
-        EXPECT_DOUBLE_EQ(e.eval_hessian(x).coeff(0, 0), 1);
+        EXPECT_TRUE(e.evaluate(x)->gradient().isOnes());
+        EXPECT_DOUBLE_EQ(e.evaluate(x)->hessian().coeff(0, 0), 1);
     }
     Vec bad = x;
     bad[0] = std::numeric_limits<double>::quiet_NaN();
     const int calls = e.calls;
-    EXPECT_THROW(e.eval_value(bad), std::invalid_argument);
-    EXPECT_THROW(e.eval_hessian(bad), std::invalid_argument);
-    EXPECT_THROW(e.max_feasible_step(x, bad), std::invalid_argument);
+    EXPECT_THROW(e.evaluate(bad)->value(), std::invalid_argument);
+    EXPECT_THROW(e.evaluate(bad)->hessian(), std::invalid_argument);
+    EXPECT_THROW(e.evaluate(x)->max_feasible_step(bad), std::invalid_argument);
     EXPECT_EQ(e.calls, calls);
 }
+
+#ifndef NDEBUG
+TEST(EnergyEvaluation, RejectsUncompressedExactAndProjectedResultsWithoutAborting) {
+    using namespace litepgo;
+    class Uncompressed final : public energy::Energy {
+      public:
+        Uncompressed() : Energy(2) {}
+
+      private:
+        static SpMat matrix() {
+            SpMat H(2, 2);
+            H.insert(0, 0) = 1;
+            H.insert(1, 1) = 1;
+            EXPECT_FALSE(H.isCompressed());
+            return H;
+        }
+        energy::EnergyValues eval_impl(const ConstVecRef&, bool gradient, bool hessian) const override {
+            energy::EnergyValues result{0., std::nullopt, std::nullopt};
+            if (gradient)
+                result.gradient = Vec::Zero(2);
+            if (hessian)
+                result.hessian = matrix();
+            return result;
+        }
+        energy::EnergyValues eval_projected_values(const ConstVecRef& x, energy::EnergyEvaluation&) const override {
+            return eval_impl(x, true, true);
+        }
+    } model;
+    auto state = model.evaluate(Vec::Zero(2));
+    EXPECT_THROW(state->hessian(), std::logic_error);
+    EXPECT_THROW(state->projected_hessian(), std::logic_error);
+    EXPECT_DOUBLE_EQ(state->value(), 0.);
+}
+#endif

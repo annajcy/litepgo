@@ -44,8 +44,8 @@ def main():
             for weighted in (False, True):
                 options = contact.IPCContactOptions(dhat=DHAT, use_area_weighting=weighted)
                 barrier = contact.IPCContactEnergy(surface, options, contact.SpatialHash())
-                value = KAPPA * barrier.eval_value(x)
-                gradient = KAPPA * barrier.eval_gradient(x).reshape(-1, 3)
+                value = KAPPA * barrier.evaluate(x).value
+                gradient = KAPPA * barrier.evaluate(x).gradient().reshape(-1, 3)
                 force = abs(gradient[:(n + 1)**2, 2].sum())
                 if (not np.isfinite([value, force]).all() or min(value, force) <= 0
                         or abs(gradient[:, 2].sum()) > 1e-10 * force):

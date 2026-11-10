@@ -41,10 +41,10 @@ def test_batch_workers_gil_exception_and_recovery():
         R = BatchResponseFixture(mapping, mapping, r, batch_size=1)
         x = np.ones(1)
         for operation, expected in [
-            (lambda: E.eval_value(x), 32),
-            (lambda: E.eval_gradient(x)[0], 64),
-            (lambda: E.eval_hessian(x)[0, 0], 64),
-            (lambda: E.max_feasible_step(x, x), .5),
+            (lambda: E.evaluate(x).value, 32),
+            (lambda: E.evaluate(x).gradient()[0], 64),
+            (lambda: E.evaluate(x).hessian()[0, 0], 64),
+            (lambda: E.evaluate(x).max_feasible_step(x), .5),
             (lambda: R.evaluate(x).value[0], 64),
             (lambda: R.evaluate(x).jacobian()[0, 0], 64),
         ]:

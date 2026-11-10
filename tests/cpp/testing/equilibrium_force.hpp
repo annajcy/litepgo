@@ -12,7 +12,7 @@ class FormulaForce final : public energy::FixedPatternResponse {
 
   private:
     Vec eval_impl(const ConstVecRef& p, SpMat* J) override {
-        const Vec value = factory_(p)->eval_gradient(u_);
+        const Vec value = factory_(p)->evaluate(u_)->gradient();
         if (J) {
             const SpMat source = partial_(p, u_);
             if (source.rows() != J->rows() || source.cols() != J->cols() || !source.coeffs().allFinite())

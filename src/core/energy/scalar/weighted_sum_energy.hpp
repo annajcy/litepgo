@@ -17,8 +17,8 @@ struct WeightedEnergy {
 // AffineMappedEnergy to act on a subset). Weights are finite and nonzero; they may
 // be negative.
 //
-// The projected Hessian is sum_i w_i P_i, so it is PSD only when every weight is
-// positive and every term's P_i is. A term's std::domain_error passes through the
+// Positive weights combine child PSD approximations; negative weights use
+// spectral projection of the exact summed Hessian. A term's std::domain_error passes through the
 // sum whatever its weight. The feasible step is the smallest over terms.
 //
 // The Hessian pattern is the union of the terms' patterns. Each term has its own
@@ -31,8 +31,8 @@ class WeightedSumEnergy final : public Energy {
 
   private:
     static int checked_size(const std::vector<WeightedEnergy>& terms);
-    EnergyEvaluation eval_impl(const ConstVecRef& x, bool gradient, std::optional<HessianKind> kind) const override;
-    double feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const override;
+    class Evaluation;
+    std::shared_ptr<EnergyEvaluation> make_evaluation(const ConstVecRef& x) const override;
     struct TermPlan {
         SpMat pattern;
         std::vector<int> positions;

@@ -30,7 +30,7 @@ def test_hex_force_responses_match_energy_and_physical_derivatives(basis, width,
     theta = np.array([2., 3.])
     plastic = [AffineResponse(np.zeros((np.asarray(p).size, 3)), p) for _ in range(2)]
     parameters = [AffineResponse(np.zeros((np.asarray(theta).size, 3)), theta) for _ in range(2)]
-    expected = Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, plastic, parameters).eval_gradient(u)
+    expected = Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, plastic, parameters).evaluate(u).gradient()
     material = Material(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 2), mapping, geometry, u, plastic, batch_size)
     fp = Plastic(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 9), mapping, geometry, u, parameters, batch_size)
     material_evaluation = material.evaluate(theta)
@@ -45,7 +45,7 @@ def test_hex_force_responses_match_energy_and_physical_derivatives(basis, width,
     direction = np.linspace(-.2, .3, 9)
     def force_at(x):
         fields = [AffineResponse(np.zeros((np.asarray(x).size, 3)), x) for _ in range(2)]
-        return Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, fields, parameters).eval_gradient(u)
+        return Energy(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, geometry, fields, parameters).evaluate(u).gradient()
     np.testing.assert_allclose(P @ direction, (force_at(p+1e-6*direction)-force_at(p-1e-6*direction))/2e-6,
                                rtol=1e-6, atol=1e-8)
     me = Material(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ElementDofMap(topology, 2), mapping, geometry, u, plastic, batch_size)

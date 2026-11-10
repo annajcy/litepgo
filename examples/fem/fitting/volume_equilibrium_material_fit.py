@@ -94,13 +94,13 @@ def reaction(problem, theta, axis, strain, need_jacobian):
     displacement = evaluation.value
     problem.solves += 1
     elastic = problem.make_energy(theta)
-    force = elastic.eval_gradient(displacement)[loaded].sum()
+    force = elastic.evaluate(displacement).gradient()[loaded].sum()
     if not need_jacobian:
         return force, None
     # Total reaction derivative: direct material dependence plus equilibrium motion.
     force_derivative = (
         problem.make_response(displacement).evaluate(theta).jacobian()
-        + elastic.eval_hessian(displacement) @ J
+        + elastic.evaluate(displacement).hessian() @ J
     )
     return force, np.asarray(force_derivative[loaded].sum(axis=0)).ravel()
 

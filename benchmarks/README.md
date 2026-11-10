@@ -40,3 +40,14 @@ Each timing starts with a fresh evaluation/graph. It checks residuals and small-
 finite differences, records solve counts and gradients, and also measures tiny
 pure-value responses. See `docs/benchmarks/response-evaluation.md` for the paired
 baseline comparison and its small-mesh limitations.
+
+Energy evaluation benchmark: `python benchmarks/energy_evaluation.py --samples 15`.
+It covers tiny and 1000-DOF quadratic energies plus TetP1, HexHermite and shell FEM
+with 1/4 TBB threads. Value, value/gradient, joint exact/projected derivatives,
+and Hessian-only calls are measured separately. Each timing creates a fresh
+evaluation; repeated access inside that evaluation uses its cache. Hessian-only
+requests also prepare gradient/value under the new contract. The comparison uses
+an archived old-API driver and checks values, gradients, Hessian actions and
+end-to-end equilibrium results. See `docs/benchmarks/energy-evaluation.md` for
+raw samples, build conditions and measured overheads. Do not run concurrently
+with builds, tests, or tutorial execution.

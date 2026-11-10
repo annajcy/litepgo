@@ -51,8 +51,8 @@ int main(int argc, char** argv) {
             options.dhat = dhat;
             options.use_area_weighting = weighted;
             const contact::IPCContactEnergy barrier(surface, options, std::make_shared<contact::SpatialHash>());
-            const double value = kappa * barrier.eval_value(surface.positions);
-            const Vec gradient = kappa * barrier.eval_gradient(surface.positions);
+            const double value = kappa * barrier.evaluate(surface.positions)->value();
+            const Vec gradient = kappa * barrier.evaluate(surface.positions)->gradient();
             double force = 0, balance = 0;
             const int sheet_vertices = (n + 1) * (n + 1);
             for (int v = 0; v < 2 * sheet_vertices; ++v) {

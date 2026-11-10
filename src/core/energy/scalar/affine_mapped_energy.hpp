@@ -35,8 +35,8 @@ class AffineMappedEnergy final : public Energy {
     };
     static HessianPlan plan_hessian(const SpMat& inner_pattern, const SpMat& map);
 
-    EnergyEvaluation eval_impl(const ConstVecRef& z, bool gradient, std::optional<HessianKind> kind) const override;
-    double feasible_step(const ConstVecRef& z, const ConstVecRef& dz) const override;
+    class Evaluation;
+    std::shared_ptr<EnergyEvaluation> make_evaluation(const ConstVecRef& x) const override;
     std::shared_ptr<Energy> energy_;
     SpMat map_;
     Vec offset_;

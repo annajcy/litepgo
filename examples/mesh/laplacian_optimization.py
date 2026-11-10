@@ -156,7 +156,7 @@ def main():
     assert smooth.status == solver.NewtonStatus.Converged
     np.testing.assert_allclose(smooth.x, rest.ravel(), atol=1e-9, rtol=0)
     np.testing.assert_array_equal(smooth.x[boundary_dofs], noisy.ravel()[boundary_dofs])
-    assert smooth.energy < smooth_energy.eval_value(noisy.ravel())
+    assert smooth.energy < smooth_energy.evaluate(noisy.ravel()).value
 
     # MeshEnergy gathers each stencil and assembles its local derivatives.
     edit_energy = DifferentialCoordinateEnergy(ring_map, rest, rings)
@@ -183,8 +183,8 @@ def main():
     )
     free = np.setdiff1d(np.arange(len(rest)), handles)
     assert np.max(edited.x[3 * free + 2] - rest[free, 2]) > 0.1 * width
-    before = np.sqrt(2.0 * edit_energy.eval_value(initial.ravel()))
-    after = np.sqrt(2.0 * edit_energy.eval_value(edited.x))
+    before = np.sqrt(2.0 * edit_energy.evaluate(initial.ravel()).value)
+    after = np.sqrt(2.0 * edit_energy.evaluate(edited.x).value)
     assert after < before
     args.output.mkdir(parents=True, exist_ok=True)
     for name, positions in [

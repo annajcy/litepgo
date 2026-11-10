@@ -118,8 +118,8 @@ def main():
     surface_positions = kinematics.positions(result.x)
     pairs = barrier.num_active_pairs(surface_positions)
     distance = barrier.min_active_distance(surface_positions)
-    lower_energy = bottom_plate.eval_value(surface_positions)
-    upper_energy = top_plate.eval_value(surface_positions)
+    lower_energy = bottom_plate.evaluate(surface_positions).value
+    upper_energy = top_plate.evaluate(surface_positions).value
     print(
         f"converged={int(converged)}, iterations={result.iterations}, potential={result.energy:.6g}, "
         f"bottom penalty={lower_energy:.6g}, top penalty={upper_energy:.6g}, "

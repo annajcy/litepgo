@@ -28,10 +28,10 @@ int main() {
     energy::AffineMappedEnergy mapped(total, T.sparseView(), offset);
     const Vec z = Eigen::Vector2d(0.2, -0.3);
     // Joint evaluation prepares structure and owns all requested outputs.
-    auto result = mapped.eval(z, true, energy::HessianKind::Exact);
-    const double value = result.value;
-    const Vec& gradient = *result.gradient;
-    const SpMat& hessian = *result.hessian;
+    auto result = mapped.evaluate(z);
+    const SpMat hessian = result->hessian();
+    const Vec gradient = result->gradient();
+    const double value = result->value();
     const Vec x = T * z + offset;
     if (std::abs(value - (0.25 * x.squaredNorm() + (x - target).squaredNorm())) > 1e-12 ||
         !gradient.isApprox(T.transpose() * (2.5 * x - 2. * target), 1e-12) ||

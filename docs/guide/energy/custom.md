@@ -12,34 +12,34 @@ Derive from `FixedPatternEnergy(pattern)` or
 implements `hessian_pattern_at(x)`. In Python, override
 
 ```python
-def eval_values(self, x, want_gradient, hessian_kind):
-    # Return (scalar, gradient_or_None, hessian_or_None).
-    # hessian_kind is None, Exact, or Projected.
+def eval_values(self, x, need_gradient, need_hessian):
+    # Exact outputs: (scalar, gradient_or_None, hessian_or_None).
+    ...
+
+# Optional PSD fast path; same arguments and return shape.
+def eval_projected_values(self, x, need_gradient, need_hessian):
     ...
 ```
 
-Return `None` for an infeasible state. Return a dense gradient and a dense or SciPy sparse Hessian
-with correct dimensions and no nonzero entries outside the declared structure.
-Implement both requested Hessian kinds; no automatic projection is added to a
-custom scalar subclass. Optional `feasible_step(x, dx)` defaults to one, which
-is appropriate only if the complete finite segment is feasible.
+Omit `eval_projected_values` to use automatic spectral projection. Return `None`
+for an infeasible state. Exact Hessians must fit the declared structure;
+projected Hessians may have their own structure. Optional `feasible_step(x, dx)`
+defaults to one and must bound the complete closed segment.
 
-C++ overrides `double eval_values(x, gradient*, hessian*, kind) const` and, for a
-dynamic energy, `SpMat hessian_pattern_at(x) const`. Null derivative pointers
-mean that output was not requested; `kind` matters only when the Hessian pointer
-is non-null. Overwrite every requested gradient and stored Hessian entry,
-including zeros, without changing the prepared Hessian structure. Subclass hooks
-belong to the implementation; callers use the validated public API. The
-[custom-energy example](../../examples/energy/custom-energy.md) includes
-complete implementations in both languages.
+C++ fixed/dynamic subclasses override
+`double eval_values(x, Vec* gradient, SpMat* hessian) const`. Null pointers mean
+unrequested outputs. Overwrite all requested entries, including structural
+zeros. Dynamic subclasses also implement `SpMat hessian_pattern_at(x) const`.
+The [custom-energy example](../../examples/energy/custom-energy.md) demonstrates
+both languages.
 
-For implementations that naturally produce their own sparse matrices, derive
-from `Energy(num_dofs)` directly in C++ and override
-`eval_impl(x, need_gradient, optional_hessian_kind) const`, returning an
-`EnergyEvaluation` with exactly the requested outputs. `feasible_step` is shared
-by both construction paths. The internal `detail::SparseEnergy` adapter supplies
-prepared local buffers for Fixed/Dynamic subclasses; callers never use those
-buffers. `MeshEnergy` retains its batch hooks and protects its shared workspace.
+C++ implementations that produce their own matrices may derive directly from
+`Energy(num_dofs)` and override `eval_impl(x, need_gradient, need_hessian) const`,
+returning `EnergyValues`. The optional `eval_projected_values(x, exact_evaluation)`
+returns value, gradient and a PSD Hessian; its default reuses the exact evaluation
+and projects its Hessian. More specialized implementations can override
+`make_evaluation` to retain child states. `MeshEnergy` retains its batch hooks and
+local projection path. All outputs pass through the evaluation's validation.
 
 ## Implement a vector response
 

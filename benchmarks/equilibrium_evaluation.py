@@ -62,7 +62,7 @@ def problem(family, n, kind, counts):
     def make_energy(p):
         counts['solves']+=1
         return energy.WeightedSumEnergy([(elastic(p),1.),(foundation,1.)])
-    eq=solver.StaticEquilibriumResponse(len(theta),dof.DofReduction(len(initial),fixed_ids),initial,solver.NewtonOptions(gradient_tolerance=1e-9,max_iterations=100,hessian=kind),make_energy,force)
+    eq=solver.StaticEquilibriumResponse(len(theta),dof.DofReduction(len(initial),fixed_ids),initial,solver.NewtonOptions(gradient_tolerance=1e-9,max_iterations=100,project_hessian=kind),make_energy,force)
     return eq,theta,make_energy,np.setdiff1d(np.arange(len(initial)),fixed_ids)
 
 
@@ -72,11 +72,11 @@ def main():
         with tbb_thread_limit(threads):
             for family in ('tet','hermite','shell','shell_fp'):
                 for n in (1,2):
-                    for kind in (energy.HessianKind.Exact,energy.HessianKind.Projected):
+                    for kind in (False,True):
                         counts={'solves':0}
                         eq,p,potential,free=problem(family,n,kind,counts)
                         u=eq.evaluate(p).value
-                        residual=float(np.max(np.abs(potential(p).eval_gradient(u)[free])))
+                        residual=float(np.max(np.abs(potential(p).evaluate(u).gradient()[free])))
                         assert residual <= 1.1e-9
                         if n==1:
                             d=np.sin(np.arange(len(p))+.3);h=1e-5

@@ -11,7 +11,7 @@ from litepgo import dof, energy, fem, mesh, solver
 from litepgo.energy import AffineResponse
 from litepgo.torch import TorchShellMaterial, TorchVolumetricMaterial
 
-KINDS = (energy.HessianKind.Exact, energy.HessianKind.Projected)
+KINDS = (False, True)
 
 
 def vec_to_tensor(matrix, trailing):
@@ -97,7 +97,13 @@ def volume_problem(case):
 
 def assert_energy_matches(native, python, u):
     for kind in KINDS:
-        a, b = native.eval(u, True, kind), python.eval(u, True, kind)
+        native_evaluation = native.evaluate(u)
+        native_evaluation_hessian = (native_evaluation.projected_hessian() if kind else native_evaluation.hessian()) if kind is not None else None
+        native_evaluation_gradient = native_evaluation.gradient()
+        python_evaluation = python.evaluate(u)
+        python_evaluation_hessian = (python_evaluation.projected_hessian() if kind else python_evaluation.hessian()) if kind is not None else None
+        python_evaluation_gradient = python_evaluation.gradient()
+        a, b = (native_evaluation.value, native_evaluation_gradient, native_evaluation_hessian), (python_evaluation.value, python_evaluation_gradient, python_evaluation_hessian)
         assert b[0] == pytest.approx(a[0], rel=1e-12, abs=1e-14)
         np.testing.assert_allclose(b[1], a[1], rtol=1e-11, atol=1e-13)
         np.testing.assert_allclose(b[2].toarray(), a[2].toarray(), rtol=1e-10, atol=1e-12)
@@ -113,8 +119,8 @@ def test_volumetric_energy_matches_native(case, material):
     assert isinstance(python, energy.MeshEnergy)
     assert type(python) is type(native)
     assert_energy_matches(native, python, u)
-    assert python.max_feasible_step(u, 30 * u) == pytest.approx(
-        fem.VolumetricFemEnergy[key](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, X, Fp, theta).max_feasible_step(u, 30 * u))
+    assert python.evaluate(u).max_feasible_step(30 * u) == pytest.approx(
+        fem.VolumetricFemEnergy[key](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, X, Fp, theta).evaluate(u).max_feasible_step(30 * u))
 
 
 @pytest.mark.parametrize("material", [PointwiseNeoHookean, TorchNeoHookean], ids=["pointwise", "torch"])
@@ -144,11 +150,14 @@ def test_one_call_per_batch_with_requested_outputs():
     for batch_size, points in ((256, [16]), (1, [8, 8])):
         PointwiseNeoHookean.calls.clear()
         python = fem.VolumetricFemEnergy[key](PointwiseNeoHookean(), mapping, X, Fp, theta, batch_size)
-        python.eval(u, True, energy.HessianKind.Exact)
+        python_evaluation = python.evaluate(u)
+        python_evaluation_hessian = python_evaluation.hessian()
+        python_evaluation_gradient = python_evaluation.gradient()
+        (python_evaluation.value, python_evaluation_gradient, python_evaluation_hessian)
         assert PointwiseNeoHookean.calls == [(n, ("W", "dW_dF", "d2W_dF2")) for n in points]
     PointwiseNeoHookean.calls.clear()  # The batch_size=1 energy below calls twice per evaluation.
-    python.eval_value(u)
-    python.eval_gradient(u)
+    python.evaluate(u).value
+    python.evaluate(u).gradient()
     response = fem.VolumetricFemForceMaterialResponse[key](PointwiseNeoHookean(),
         dof.ConstantDofMap(topology, 2), mapping, X, u, Fp)
     response.evaluate(np.array([2.0, 3.0])).value
@@ -183,7 +192,7 @@ def test_material_class_is_collected_with_its_objects():
 
         topology, mapping, X, Fp, theta, u, key = volume_problem(CASES[0])
         potential = fem.VolumetricFemEnergy[key](Local(), mapping, X, Fp, theta)
-        potential.eval_value(u)
+        potential.evaluate(u).value
         return weakref.ref(Local), weakref.ref(potential)
 
     material, potential = make()
@@ -208,25 +217,25 @@ def test_material_errors():
     with pytest.raises(ValueError, match="incompatible spatial responses"):
         build(num_parameters=3)
     with pytest.raises(KeyError, match="'W'"):
-        build(eval=evaluator(lambda n: {})).eval_value(u)
+        build(eval=evaluator(lambda n: {})).evaluate(u).value
     with pytest.raises(TypeError, match="dict"):
-        build(eval=evaluator(lambda n: np.zeros(n))).eval_value(u)
+        build(eval=evaluator(lambda n: np.zeros(n))).evaluate(u).value
     with pytest.raises(ValueError, match=r"shape \(3,\); expected \(2,\)"):
-        build(eval=evaluator(lambda n: {"W": np.zeros(n + 1)})).eval_value(u)
+        build(eval=evaluator(lambda n: {"W": np.zeros(n + 1)})).evaluate(u).value
     with pytest.raises(ValueError, match="dW_dF with shape"):
-        build(eval=evaluator(lambda n: {"W": np.zeros(n), "dW_dF": np.zeros((n, 9))})).eval_gradient(u)
+        build(eval=evaluator(lambda n: {"W": np.zeros(n), "dW_dF": np.zeros((n, 9))})).evaluate(u).gradient()
     # Non-finite values are domain errors (ValueError); a Newton trial is shortened instead.
     with pytest.raises(ValueError, match="non-finite W"):
-        build(eval=evaluator(lambda n: {"W": np.full(n, np.nan)})).eval_value(u)
+        build(eval=evaluator(lambda n: {"W": np.full(n, np.nan)})).evaluate(u).value
 
     def raises(F, Fp, theta, *, outputs):
         raise RuntimeError("from the material")
 
     with pytest.raises(RuntimeError, match="from the material"):
-        build(eval=staticmethod(raises)).eval_value(u)
+        build(eval=staticmethod(raises)).evaluate(u).value
     with pytest.raises(NotImplementedError):
         fem.VolumetricFemEnergy[key](type("Bare", (fem.PyVolumetricMaterial,), {"num_parameters": 2})(),
-            mapping, X, Fp, theta).eval_value(u)
+            mapping, X, Fp, theta).evaluate(u).value
 
 
 def test_feasible_step_hook_and_default():
@@ -240,14 +249,14 @@ def test_feasible_step_hook_and_default():
             return np.full(len(F), 0.5)
 
     hooked = fem.VolumetricFemEnergy[key](Halved(), mapping, X, Fp, theta)
-    assert hooked.max_feasible_step(u, u) == 0.5
+    assert hooked.evaluate(u).max_feasible_step(u) == 0.5
     assert seen == [((2, 3, 3), (2, 3, 3))]
     # Without the hook, the bound is the native NeoHookean det(F) > 0 bound.
     default = fem.VolumetricFemEnergy[key](TorchNeoHookean(), mapping, X, Fp, theta)
     native = fem.VolumetricFemEnergy[key](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, X, Fp, theta)
     huge = 100 * np.sin(np.arange(mapping.num_dofs))
-    assert 0 < default.max_feasible_step(u, huge) < 1
-    assert default.max_feasible_step(u, huge) == pytest.approx(native.max_feasible_step(u, huge))
+    assert 0 < default.evaluate(u).max_feasible_step(huge) < 1
+    assert default.evaluate(u).max_feasible_step(huge) == pytest.approx(native.evaluate(u).max_feasible_step(huge))
 
     class OutOfRange(TorchNeoHookean):
         @staticmethod
@@ -255,7 +264,7 @@ def test_feasible_step_hook_and_default():
             return np.full(len(F), 2.0)
 
     with pytest.raises(RuntimeError, match="outside"):
-        fem.VolumetricFemEnergy[key](OutOfRange(), mapping, X, Fp, theta).max_feasible_step(u, u)
+        fem.VolumetricFemEnergy[key](OutOfRange(), mapping, X, Fp, theta).evaluate(u).max_feasible_step(u)
 
 
 def test_default_feasible_step_direct_call_and_super_override():
@@ -292,8 +301,8 @@ def test_default_feasible_step_direct_call_and_super_override():
     default_energy = fem.VolumetricFemEnergy[key](material, mapping, X, plastic, params)
     custom_energy = fem.VolumetricFemEnergy[key](custom, mapping, X, plastic, params)
     huge = 100 * np.sin(np.arange(mapping.num_dofs))
-    assert custom_energy.max_feasible_step(u, huge) == pytest.approx(
-        0.5 * default_energy.max_feasible_step(u, huge))
+    assert custom_energy.evaluate(u).max_feasible_step(huge) == pytest.approx(
+        0.5 * default_energy.evaluate(u).max_feasible_step(huge))
 
     class Disabled(TorchNeoHookean):
         eval_feasible_step = None
@@ -335,7 +344,10 @@ def test_torch_constant_and_linear_densities_have_zero_derivatives():
             return F[:, 0, 0] * 2.0
 
     python = fem.VolumetricFemEnergy[key](Linear(), mapping, X, Fp, theta)
-    _, gradient, hessian = python.eval(u, True, energy.HessianKind.Exact)
+    python_evaluation = python.evaluate(u)
+    python_evaluation_hessian = python_evaluation.hessian()
+    python_evaluation_gradient = python_evaluation.gradient()
+    _, gradient, hessian = (python_evaluation.value, python_evaluation_gradient, python_evaluation_hessian)
     assert np.abs(gradient).max() > 0
     assert abs(hessian).max() == 0
     response = fem.VolumetricFemForceMaterialResponse[key](Linear(),
@@ -350,7 +362,7 @@ def test_torch_constant_and_linear_densities_have_zero_derivatives():
             return F.sum()
 
     with pytest.raises(ValueError, match="float64 tensor of shape"):
-        fem.VolumetricFemEnergy[key](WrongShape(), mapping, X, Fp, theta).eval_value(u)
+        fem.VolumetricFemEnergy[key](WrongShape(), mapping, X, Fp, theta).evaluate(u).value
 
 
 def test_torch_material_runs_under_inference_mode():
@@ -358,7 +370,7 @@ def test_torch_material_runs_under_inference_mode():
     python = fem.VolumetricFemEnergy[key](TorchNeoHookean(), mapping, X, Fp, theta)
     native = fem.VolumetricFemEnergy[key](fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, X, Fp, theta)
     with torch.inference_mode():
-        np.testing.assert_allclose(python.eval_gradient(u), native.eval_gradient(u), rtol=1e-11, atol=1e-13)
+        np.testing.assert_allclose(python.evaluate(u).gradient(), native.evaluate(u).gradient(), rtol=1e-11, atol=1e-13)
 
 
 # Shell materials
@@ -430,7 +442,7 @@ def test_shell_energy_and_forces_match_native(material):
         python = fem.ShellFemEnergy(material(), mapping, rest, thickness, theta, Fp, batch_size)
         assert isinstance(python, fem.ShellFemEnergy)
         assert_energy_matches(native, python, u)
-        assert python.max_feasible_step(u, 5 * u) == native.max_feasible_step(u, 5 * u)
+        assert python.evaluate(u).max_feasible_step(5 * u) == native.evaluate(u).max_feasible_step(5 * u)
     for Map in (dof.ConstantDofMap, dof.ElementDofMap):
         p = np.array([2.5, 1.5]) if Map is dof.ConstantDofMap else np.concatenate(theta)
         native = fem.ShellFemForceMaterialResponse(fem.PointwiseShellAdapter[fem.KoiterStVK](), Map(topology, 2), mapping, rest, u, thickness)
@@ -480,7 +492,7 @@ def test_material_instance_state_and_lifetime():
     del first, second
     gc.collect()
     assert first_ref() is not None and second_ref() is not None
-    assert b.eval_value(u) == pytest.approx(1.5 * a.eval_value(u))
+    assert b.evaluate(u).value == pytest.approx(1.5 * a.evaluate(u).value)
     del a
     gc.collect()
     assert first_ref() is None and second_ref() is not None

@@ -77,8 +77,8 @@ int main() {
     auto fixed_theta = std::make_shared<energy::AffineResponse>(SpMat(2, 3), Eigen::Vector2d(2, 3));
     fem::VolumetricFemEnergy<B, Q> native(std::make_shared<litepgo::fem::PointwiseVolumetricAdapter<M>>(), map,
                                           {fixed_geometry}, {fixed_Fp}, {fixed_theta});
-    if (std::abs(E - native.eval_value(u)) > 1e-13 || !g.isApprox(native.eval_gradient(u), 1e-12) ||
-        !H.isApprox(Eigen::MatrixXd(native.eval_hessian(u)), 1e-12))
+    if (std::abs(E - native.evaluate(u)->value()) > 1e-13 || !g.isApprox(native.evaluate(u)->gradient(), 1e-12) ||
+        !H.isApprox(Eigen::MatrixXd(native.evaluate(u)->hessian()), 1e-12))
         throw std::runtime_error("explicit integration differs from native FEM");
     std::cout << "coefficient value, gradient and Hessian sampling: verified\n";
 }

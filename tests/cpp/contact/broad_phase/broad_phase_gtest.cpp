@@ -237,8 +237,8 @@ TEST(ContactBroadPhase, InjectedBackendNormalizesCandidatesAndOwnsLifetime) {
     const IPCContactOptions options{1.0};
     IPCContactEnergy reference(mesh, options, std::make_shared<SpatialHash>());
     const Vec x = mesh.positions;
-    const Vec g = reference.eval_gradient(x);
-    const SpMat h = reference.eval_hessian(x);
+    const Vec g = reference.evaluate(x)->gradient();
+    const SpMat h = reference.evaluate(x)->hessian();
     Vec dx = Vec::Zero(x.size());
     dx.segment<3>(9) << 0, 0, -2;
     std::shared_ptr<const BroadPhase> backend_default = std::make_shared<SpatialHash>();
@@ -246,34 +246,34 @@ TEST(ContactBroadPhase, InjectedBackendNormalizesCandidatesAndOwnsLifetime) {
     std::shared_ptr<const BroadPhase> hash = std::make_shared<SpatialHash>(0.5);
     for (const auto& backend : {backend_default, noisy, hash}) {
         IPCContactEnergy energy(mesh, options, backend);
-        EXPECT_EQ(energy.eval_value(x), reference.eval_value(x));
-        const Vec actual_g = energy.eval_gradient(x);
-        const SpMat actual_h = energy.eval_hessian(x);
+        EXPECT_EQ(energy.evaluate(x)->value(), reference.evaluate(x)->value());
+        const Vec actual_g = energy.evaluate(x)->gradient();
+        const SpMat actual_h = energy.evaluate(x)->hessian();
         ASSERT_EQ(actual_h.nonZeros(), h.nonZeros());
         EXPECT_EQ(std::memcmp(actual_h.outerIndexPtr(), h.outerIndexPtr(), sizeof(int) * (h.cols() + 1)), 0);
         EXPECT_EQ(std::memcmp(actual_h.innerIndexPtr(), h.innerIndexPtr(), sizeof(int) * h.nonZeros()), 0);
         EXPECT_EQ(std::memcmp(actual_g.data(), g.data(), sizeof(double) * g.size()), 0);
         EXPECT_EQ(std::memcmp(actual_h.valuePtr(), h.valuePtr(), sizeof(double) * h.nonZeros()), 0);
-        EXPECT_EQ(energy.max_feasible_step(x, dx), reference.max_feasible_step(x, dx));
+        EXPECT_EQ(energy.evaluate(x)->max_feasible_step(dx), reference.evaluate(x)->max_feasible_step(dx));
     }
     std::weak_ptr<const BroadPhase> weak = noisy;
     auto retained = std::make_unique<IPCContactEnergy>(mesh, options, noisy);
     noisy.reset();
     EXPECT_FALSE(weak.expired());
-    EXPECT_EQ(retained->eval_value(x), reference.eval_value(x));
+    EXPECT_EQ(retained->evaluate(x)->value(), reference.evaluate(x)->value());
     retained.reset();
     EXPECT_TRUE(weak.expired());
     IPCContactEnergy invalid(mesh, options, std::make_shared<InvalidBroadPhase>());
-    EXPECT_THROW(invalid.eval_value(x), std::invalid_argument);
-    EXPECT_THROW(invalid.eval_hessian(x), std::invalid_argument);
-    EXPECT_THROW(invalid.max_feasible_step(x, dx), std::invalid_argument);
+    EXPECT_THROW(invalid.evaluate(x)->value(), std::invalid_argument);
+    EXPECT_THROW(invalid.evaluate(x)->hessian(), std::invalid_argument);
+    EXPECT_THROW(invalid.evaluate(x)->max_feasible_step(dx), std::invalid_argument);
     auto solve = [&] {
         IPCContactEnergy energy(mesh, options, backend_default);
-        return energy.eval_value(x);
+        return energy.evaluate(x)->value();
     };
     auto first = std::async(std::launch::async, solve), second = std::async(std::launch::async, solve);
-    EXPECT_EQ(first.get(), reference.eval_value(x));
-    EXPECT_EQ(second.get(), reference.eval_value(x));
+    EXPECT_EQ(first.get(), reference.evaluate(x)->value());
+    EXPECT_EQ(second.get(), reference.evaluate(x)->value());
 }
 
 TEST(ContactBroadPhase, ContactSuppliesStaticIntersectionAndSweptQueries) {
@@ -281,7 +281,7 @@ TEST(ContactBroadPhase, ContactSuppliesStaticIntersectionAndSweptQueries) {
     auto backend = std::make_shared<RecordingBroadPhase>();
     IPCContactEnergy energy(mesh, IPCContactOptions{1.0, 0.1}, backend);
     const Vec x = mesh.positions;
-    energy.eval_value(x);
+    energy.evaluate(x)->value();
     ASSERT_EQ(backend->queries.size(), 1);
     const auto& [boxes, mask] = backend->queries.front();
     EXPECT_TRUE(mask.vertex_face);
@@ -292,7 +292,7 @@ TEST(ContactBroadPhase, ContactSuppliesStaticIntersectionAndSweptQueries) {
     backend->queries.clear();
     Vec dx = Vec::Zero(x.size());
     dx.segment<3>(9) << 0, 0, -2;
-    energy.max_feasible_step(x, dx);
+    energy.evaluate(x)->max_feasible_step(dx);
     ASSERT_EQ(backend->queries.size(), 3);
     EXPECT_FALSE(backend->queries[0].second.edge_face);
     EXPECT_TRUE(backend->queries[1].second.edge_face);

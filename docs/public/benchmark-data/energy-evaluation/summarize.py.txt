@@ -1,0 +1,47 @@
+import csv, hashlib, json, math, platform, re, shutil, statistics, subprocess
+from pathlib import Path
+import numpy as np
+
+root=Path('build/energy-evaluation-baseline')
+data={}
+for run in range(4):
+    version='before' if run in (0,3) else 'after'
+    for suite in ('energy','equilibrium'):
+        path=root/f'final-{run}-{suite}-{version}.jsonl'
+        records=[json.loads(line) for line in path.read_text().splitlines()]
+        assert len(records)==(48 if suite=='energy' else 98), (path,len(records))
+        for r in records:
+            if suite=='energy':
+                key=(suite,r['case'],str(r['threads']),r['operation'])
+                samples=r['samples_us']
+            elif 'family' in r:
+                hessian='projected' if r['hessian'] in ('True','HessianKind.Projected') else 'exact'
+                key=(suite,r['family'],str(r['n']),str(r['threads']),hessian,r['mode'])
+                samples=[v*1000 for v in r['samples_ms']]
+                assert r['residual']<=1.1e-9 and all(v==1 for v in r['solves'])
+            else:
+                key=(suite,r['case'],'value');samples=r['samples_us']
+            entry=data.setdefault(key,{'before':[],'after':[],'reference':r})
+            for field in ('value','gradient','hessian_action','state'):
+                a,b=r.get(field),entry['reference'].get(field)
+                if a is not None or b is not None:
+                    np.testing.assert_allclose(a,b,rtol=2e-8,atol=1e-9,err_msg=str((key,field)))
+            entry[version].extend(samples)
+rows=[]
+for key,e in data.items():
+    assert e['before'] and e['after']
+    b,a=statistics.median(e['before']),statistics.median(e['after'])
+    rows.append(dict(case='/'.join(key),before_us=b,after_us=a,change_percent=(a/b-1)*100,
+                     before_samples=len(e['before']),after_samples=len(e['after'])))
+with (root/'comparison.csv').open('w',newline='') as f:
+    w=csv.DictWriter(f,fieldnames=list(rows[0]));w.writeheader();w.writerows(rows)
+for suite in ('energy','equilibrium'):
+    for family in (('quadratic_3','quadratic_1000','tet','hermite','shell') if suite=='energy' else ('tet','hermite','shell','shell_fp','affine','exp')):
+        selected=[r for r in rows if r['case'].startswith(suite+'/'+family+'/')]
+        ratios=[1+r['change_percent']/100 for r in selected]
+        print(suite,family,'geomean',round((math.exp(statistics.mean(map(math.log,ratios)))-1)*100,1),
+              'range',round(min(r['change_percent'] for r in selected),1),round(max(r['change_percent'] for r in selected),1))
+print('Validated',len(rows),'cases across four runs')
+print('\nTiny scalar:')
+for r in rows:
+    if r['case'].startswith('energy/quadratic'): print(r)

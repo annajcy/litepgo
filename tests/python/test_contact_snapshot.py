@@ -34,7 +34,7 @@ def test_snapshot_contains_complete_assembly_records(make_barrier, weighted, phy
     x = surface.positions.copy().reshape(5, 6, 3)
     x[:, 3:, 2] -= .05
     x = x.ravel()
-    before = barrier.eval_value(x)
+    before = barrier.evaluate(x).value
     snapshot = barrier.contact_snapshot(x)
     assert isinstance(snapshot, contact.ContactSnapshot)
     count = len(snapshot.types)
@@ -62,8 +62,8 @@ def test_snapshot_contains_complete_assembly_records(make_barrier, weighted, phy
     if physical:
         reconstructed *= .7 / h**2
     assert reconstructed == pytest.approx(before, rel=1e-12)
-    assert barrier.eval_value(x) == before
-    pattern = barrier.eval_hessian(x)
+    assert barrier.evaluate(x).value == before
+    pattern = barrier.evaluate(x).hessian()
     far = x.reshape(5, 6, 3).copy()
     far[:, 3:, 2] += 20
     empty = barrier.contact_snapshot(far.ravel())
@@ -71,8 +71,8 @@ def test_snapshot_contains_complete_assembly_records(make_barrier, weighted, phy
     assert empty.vertex_ids.shape == (0, 4)
     assert empty.distances.shape == empty.weights.shape == empty.mollifiers.shape == (0,)
     assert barrier.min_active_distance(far.ravel()) == float("inf")
-    np.testing.assert_array_equal(barrier.eval_hessian(x).indices, pattern.indices)
-    np.testing.assert_array_equal(barrier.eval_hessian(x).indptr, pattern.indptr)
+    np.testing.assert_array_equal(barrier.evaluate(x).hessian().indices, pattern.indices)
+    np.testing.assert_array_equal(barrier.evaluate(x).hessian().indptr, pattern.indptr)
 
 @pytest.mark.parametrize("empty", [False, True])
 def test_snapshot_is_readonly_and_owns_its_data(make_barrier, empty):

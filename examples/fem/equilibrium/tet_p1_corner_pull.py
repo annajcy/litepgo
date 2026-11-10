@@ -91,7 +91,7 @@ def main():
     ).max()
     print(
         f"converged={int(converged)}, iterations={result.iterations}, potential={result.energy:.6g}, "
-        f"elastic={elastic.eval_value(result.x):.6g}, pulling={pulling.eval_value(result.x):.6g}, "
+        f"elastic={elastic.evaluate(result.x).value:.6g}, pulling={pulling.evaluate(result.x).value:.6g}, "
         f"free residual={result.gradient_norm:.6g}, max corner-anchor distance={corner_gap:.6g}"
     )
     output = args.output

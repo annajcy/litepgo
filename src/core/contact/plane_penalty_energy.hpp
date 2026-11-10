@@ -11,8 +11,13 @@ class PlanePenaltyEnergy final : public energy::FixedPatternEnergy {
     PlanePenaltyEnergy(int num_vertices, int axis, double height, double stiffness, bool positive_side = true);
 
   private:
+    energy::EnergyValues eval_projected_values(const ConstVecRef&, energy::EnergyEvaluation& exact) const override {
+        SpMat H = exact.hessian();
+        return {exact.value(), exact.gradient(), std::move(H)};
+    }
+
     PlanePenaltyEnergy(const SpMat& pattern, int axis, double height, double stiffness, bool positive_side);
-    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, energy::HessianKind) const override;
+    double eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian) const override;
 
     int axis_;
     double height_, stiffness_, side_;

@@ -14,9 +14,9 @@ def test_native_energy_batch_size(batch_size):
     cls = fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature]
     x = np.arange(12) * .001
     with tbb_thread_limit(1):
-        expected = cls(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), *args).eval_hessian(x).toarray()
+        expected = cls(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), *args).evaluate(x).hessian().toarray()
     with tbb_thread_limit(4):
-        actual = cls(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), *args, batch_size=batch_size).eval_hessian(x).toarray()
+        actual = cls(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), *args, batch_size=batch_size).evaluate(x).hessian().toarray()
     np.testing.assert_array_equal(actual, expected)
     with pytest.raises(ValueError, match='batch size'):
         cls(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), *args, batch_size=0)
@@ -28,9 +28,9 @@ def test_native_energy_batch_size(batch_size):
     cls = fem.ShellFemEnergy
     args = (mapping, [rest], [.1], [np.array([2., 3.])])
     with tbb_thread_limit(1):
-        expected = cls(fem.PointwiseShellAdapter[fem.KoiterStVK](), *args).eval_hessian(x[:9]).toarray()
+        expected = cls(fem.PointwiseShellAdapter[fem.KoiterStVK](), *args).evaluate(x[:9]).hessian().toarray()
     with tbb_thread_limit(4):
-        actual = cls(fem.PointwiseShellAdapter[fem.KoiterStVK](), *args, batch_size=batch_size).eval_hessian(x[:9]).toarray()
+        actual = cls(fem.PointwiseShellAdapter[fem.KoiterStVK](), *args, batch_size=batch_size).evaluate(x[:9]).hessian().toarray()
     np.testing.assert_array_equal(actual, expected)
     with pytest.raises(ValueError, match='batch size'):
         cls(fem.PointwiseShellAdapter[fem.KoiterStVK](), *args, batch_size=0)

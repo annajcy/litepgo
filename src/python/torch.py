@@ -123,11 +123,11 @@ class _Energy(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, potential, need_gradient):
         values = _input(x)
+        evaluation = potential.evaluate(values)
         if need_gradient:
-            value, gradient, _ = potential.eval(values, gradient=True)
+            gradient = evaluation.gradient()
             ctx.save_for_backward(torch.from_numpy(np.array(gradient, copy=True)))
-        else:
-            value = potential.eval_value(values)
+        value = evaluation.value
         return torch.tensor(value, dtype=torch.float64)
 
     @staticmethod

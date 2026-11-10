@@ -27,17 +27,17 @@ TEST(QuadraticEnergy, EvaluatesValueGradientAndHessian) {
     const QuadraticEnergy energy(A, b);
     const Vec x = Vec::LinSpaced(3, -1.0, 2.0);
     const Eigen::MatrixXd dense = Eigen::MatrixXd(A);
-    EXPECT_DOUBLE_EQ(energy.eval_value(x), 0.5 * x.dot(dense * x) + b.dot(x));
-    EXPECT_EQ(energy.eval_gradient(x), Vec(dense * x + b));
-    EXPECT_EQ(Eigen::MatrixXd(energy.eval_hessian(x)), dense);
-    EXPECT_EQ(Eigen::MatrixXd(energy.eval_hessian(x, HessianKind::Projected)), dense);
+    EXPECT_DOUBLE_EQ(energy.evaluate(x)->value(), 0.5 * x.dot(dense * x) + b.dot(x));
+    EXPECT_EQ(energy.evaluate(x)->gradient(), Vec(dense * x + b));
+    EXPECT_EQ(Eigen::MatrixXd(energy.evaluate(x)->hessian()), dense);
+    EXPECT_EQ(Eigen::MatrixXd(energy.evaluate(x)->projected_hessian()), dense);
     expect_derivatives_match(energy, x);
 }
 
 TEST(QuadraticEnergy, DefaultsToNoLinearTerm) {
     const QuadraticEnergy energy(symmetric_matrix());
     const Vec x = Vec::LinSpaced(3, -1.0, 2.0);
-    EXPECT_EQ(energy.eval_gradient(x), Vec(symmetric_matrix() * x));
+    EXPECT_EQ(energy.evaluate(x)->gradient(), Vec(symmetric_matrix() * x));
 }
 
 TEST(QuadraticEnergy, RejectsInvalidInput) {

@@ -1,0 +1,26 @@
+{
+  "baseline_commit": "d3898cf2286563749643b89a57695eae9be4de26",
+  "baseline_note": "Captured Release binary includes the subsequent Response borrowing-only change; Energy API and kernels are from the baseline commit. Old Python wrappers are frozen from the baseline commit.",
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "cpu": "Apple M1 Pro",
+  "memory_bytes": 17179869184,
+  "python": "Python 3.12.13",
+  "compiler": "Apple clang version 21.0.0 (clang-2100.4.1.1)",
+  "build": "Release -O3 -DNDEBUG, arm64, same build/release CMake configuration",
+  "sequence": [
+    "before",
+    "after",
+    "after",
+    "before"
+  ],
+  "threads": [
+    1,
+    4
+  ],
+  "cases": 146,
+  "energy_samples_per_version": 30,
+  "equilibrium_samples_per_version": 14,
+  "baseline_binary_sha256": "81d6f9d6bbb7228e1ad86548e5fac2183761636b76cfa1cd099384bb223836ff",
+  "current_binary_sha256": "0a20fdc45e60ffb9a8e1ae9046bd1712c5f8f184d30c234e8edef8798f6fce01",
+  "source_diff_sha256": "28377e885fe171ea6126af9e5cf9456948b51ba5197569a1c1b50988a0be7e26"
+}

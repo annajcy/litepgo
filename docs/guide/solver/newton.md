@@ -17,7 +17,7 @@ is not descent. With `max_coordinate_step` equal to $\ell$, the line search star
 
 $$
 \beta=\min(1,\ell/\|\Delta x\|_\infty),\qquad
-\alpha=\beta\,\texttt{energy.max\_feasible\_step}(x,\beta\Delta x).
+\alpha=\beta\,\texttt{evaluation.max\_feasible\_step}(\beta\Delta x).
 $$
 
 The coordinate limit therefore applies before the feasible-step query, including
@@ -27,7 +27,7 @@ floating-point comparison noise. Domain errors from an evaluation propagate
 immediately; feasible-step bounds must therefore match the energy's domain.
 
 Before any evaluation or convergence return, Newton queries
-`energy.max_feasible_step(initial, zeros)` to check initial feasibility. This
+`energy.evaluate(initial).max_feasible_step(zeros)` to check initial feasibility. This
 also applies when every DOF is fixed. The query delegates geometry validation
 to the Energy implementation. Native IPC checks surface intersections and
 minimum separation even for a zero direction.
@@ -49,7 +49,7 @@ bound, accepted step, and line-search count. Terminal callbacks have step zero.
 | --- | --- | --- |
 | `gradient_tolerance` | Required | Stop when $\|g_f\|_\infty$ is at most this value |
 | `max_iterations` | 50 | Maximum accepted iterations |
-| `hessian` | `Projected` | Hessian used for directions |
+| `project_hessian` | `True` | Use the PSD approximation; `False` selects exact Hessian |
 | `max_line_search_steps` | 30 | Trial-energy budget per direction |
 | `line_search_shrink` | 0.5 | Multiplicative step reduction |
 | `max_coordinate_step` | `inf` | Positive upper bound on each solver coordinate's absolute change per accepted iteration |
@@ -76,7 +76,9 @@ Inspect `result.status`: `Converged`, `MaxIterations`, `StepTooSmall`, or
 describe the returned state. A small free gradient is a stationarity criterion,
 not proof of a global minimum. Rigid modes must be constrained or penalized.
 
-Newton requests value, gradient and Hessian in one Energy evaluation. It compares
+Newton retains an EnergyEvaluation at each iterate and requests Hessian first
+to prepare value and gradient jointly. Line search requests only trial values;
+the accepted evaluation is retained for the next iteration. It compares
 returned full Hessian structures, rebuilding the reduced assembly and symbolic
 analysis when they change. `pattern_changed` is true on the first evaluation.
 The factorization is reused symbolically when only numerical values change.

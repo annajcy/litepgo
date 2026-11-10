@@ -1,0 +1,13 @@
+#!/bin/zsh
+set -eu
+cd /Users/jinceyang/Desktop/litepgo
+output=build/energy-evaluation-baseline
+for run in 0 1 2 3; do
+  if [[ "$run" == 0 || "$run" == 3 ]]; then
+    /usr/bin/time -l env PYTHONPATH="$output/python" .venv/bin/python "$output/energy_before.py" > "$output/final-$run-energy-before.jsonl" 2> "$output/final-$run-energy-before.resources.txt"
+    /usr/bin/time -l env PYTHONPATH="$output/python" .venv/bin/python "$output/equilibrium_before.py" --samples 7 > "$output/final-$run-equilibrium-before.jsonl" 2> "$output/final-$run-equilibrium-before.resources.txt"
+  else
+    /usr/bin/time -l .venv/bin/python benchmarks/energy_evaluation.py > "$output/final-$run-energy-after.jsonl" 2> "$output/final-$run-energy-after.resources.txt"
+    /usr/bin/time -l .venv/bin/python benchmarks/equilibrium_evaluation.py --samples 7 > "$output/final-$run-equilibrium-after.jsonl" 2> "$output/final-$run-equilibrium-after.resources.txt"
+  fi
+done

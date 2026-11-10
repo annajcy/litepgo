@@ -92,10 +92,10 @@ def test_mesh_energy_subclass():
             return np.full(len(ids), .25)
     obj = Quadratic()
     x = np.array([2.,3.])
-    assert obj.eval_value(x) == 6.5
-    np.testing.assert_array_equal(obj.eval_gradient(x),x)
-    np.testing.assert_array_equal(obj.eval_hessian(x).toarray(), np.eye(2))
-    assert obj.max_feasible_step(x,x) == .25
+    assert obj.evaluate(x).value == 6.5
+    np.testing.assert_array_equal(obj.evaluate(x).gradient(),x)
+    np.testing.assert_array_equal(obj.evaluate(x).hessian().toarray(), np.eye(2))
+    assert obj.evaluate(x).max_feasible_step(x) == .25
 
 
 def test_empty_mesh_products():
@@ -245,7 +245,7 @@ def test_mesh_energy_super_step_and_fem_inheritance():
             return .5 * super().eval_feasible_step_batch(ids, x, dx)
 
     obj = Quadratic()
-    assert obj.max_feasible_step(np.ones(2), np.ones(2)) == .5
+    assert obj.evaluate(np.ones(2)).max_feasible_step(np.ones(2)) == .5
     assert issubclass(
         fem.VolumetricFemEnergy[fem.TetP1Basis, fem.TetCentroidQuadrature],
         energy.MeshEnergy,

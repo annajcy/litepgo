@@ -8,7 +8,7 @@ from litepgo import energy, solver, dof
 from litepgo import torch as lt
 
 
-def problem(kind=energy.HessianKind.Exact):
+def problem(kind=False):
     calls = dict(energy=0, force=0)
     K = sp.csc_matrix(np.diag([2., 3., 4.]))
     A = np.array([[1., .2], [.3, 1.], [.1, -.4]])
@@ -19,11 +19,11 @@ def problem(kind=energy.HessianKind.Exact):
         calls['force'] += 1
         return energy.AffineResponse(-A, K @ u)
     eq = solver.StaticEquilibriumResponse(2, dof.DofReduction(3, []), np.zeros(3),
-        solver.NewtonOptions(gradient_tolerance=1e-12, hessian=kind), make_energy, make_force)
+        solver.NewtonOptions(gradient_tolerance=1e-12, project_hessian=kind), make_energy, make_force)
     return eq, calls, np.linalg.solve(K.toarray(), A)
 
 
-@pytest.mark.parametrize('kind', [energy.HessianKind.Exact, energy.HessianKind.Projected])
+@pytest.mark.parametrize('kind', [False, True])
 def test_equilibrium_state_reuses_solve_and_force(kind):
     eq, calls, J = problem(kind)
     p = np.array([.3, .4])
@@ -78,26 +78,31 @@ def test_evaluation_dimensions_and_finite_values():
         for w in (np.zeros(2), np.full(3, np.nan)):
             with pytest.raises(ValueError): product(w)
 
-@pytest.mark.parametrize('kind', [energy.HessianKind.Exact, energy.HessianKind.Projected])
+@pytest.mark.parametrize('kind', [False, True])
 def test_converged_hessian_is_reused_only_when_exact(kind):
     requests = []
     class Potential(energy.FixedPatternEnergy):
         def __init__(self, p):
             super().__init__(sp.eye(2, format='csc'))
             self.p = p.copy()
-        def eval_values(self, x, gradient, hessian):
-            if hessian is not None: requests.append(hessian)
+        def eval_values(self, x, gradient, need_hessian):
+            if need_hessian: requests.append("exact")
             return (.5 * x @ x - self.p @ x,
                     x - self.p if gradient else None,
-                    sp.eye(2, format='csc') if hessian is not None else None)
+                    sp.eye(2, format='csc') if need_hessian else None)
+        def eval_projected_values(self, x, gradient, need_hessian):
+            if need_hessian: requests.append("projected")
+            return (.5 * x @ x - self.p @ x,
+                    x - self.p if gradient else None,
+                    sp.eye(2, format='csc') if need_hessian else None)
     eq = solver.StaticEquilibriumResponse(2, dof.DofReduction(2, []), np.zeros(2),
-        solver.NewtonOptions(gradient_tolerance=1e-12, hessian=kind), Potential,
+        solver.NewtonOptions(gradient_tolerance=1e-12, project_hessian=kind), Potential,
         lambda u: energy.AffineResponse(-sp.eye(2, format='csc'), u))
     state = eq.evaluate(np.array([.3, .4]))
     np.testing.assert_allclose(state.value, [.3, .4])
-    assert requests == [kind, kind]
+    assert requests == ["projected" if kind else "exact"] * 2
     state.vjp(np.ones(2))
-    expected = [kind, kind] + ([] if kind == energy.HessianKind.Exact else [energy.HessianKind.Exact])
+    expected = ["projected" if kind else "exact"] * 2 + (["exact"] if kind else [])
     assert requests == expected
     state.jvp(np.ones(2)); state.jacobian()
     assert requests == expected

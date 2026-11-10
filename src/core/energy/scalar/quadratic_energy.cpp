@@ -51,7 +51,7 @@ QuadraticEnergy::QuadraticEnergy(SpMat A, Vec b)
         throw std::invalid_argument("QuadraticEnergy: b must have as many entries as A has rows");
 }
 
-double QuadraticEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind) const {
+double QuadraticEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian) const {
     const Vec Ax = A_ * x;
     if (gradient != nullptr) {
         *gradient = Ax + b_;
@@ -60,6 +60,24 @@ double QuadraticEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* 
         std::copy_n(A_.valuePtr(), A_.nonZeros(), hessian->valuePtr());
     }
     return 0.5 * x.dot(Ax) + b_.dot(x);
+}
+
+EnergyValues QuadraticEnergy::eval_projected_values(const ConstVecRef& x, EnergyEvaluation&) const {
+    std::call_once(projection_once_, [&] {
+        bool diagonal = true;
+        for (int c = 0; c < A_.outerSize(); ++c)
+            for (SpMat::InnerIterator it(A_, c); it; ++it)
+                if (it.row() != c && it.value() != 0.)
+                    diagonal = false;
+        if (diagonal) {
+            projected_ = A_;
+            projected_.coeffs() = projected_.coeffs().cwiseMax(0.);
+        } else
+            projected_ = project_hessian(A_);
+    });
+    EnergyValues result{0., Vec(num_dofs()), projected_};
+    result.value = eval_values(x, &*result.gradient, nullptr);
+    return result;
 }
 
 } // namespace litepgo::energy

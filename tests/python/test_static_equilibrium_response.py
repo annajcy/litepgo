@@ -279,7 +279,7 @@ def test_response_factory_direct_products_and_invalid_results():
     p, v, w = np.array([0.6, -1.1]), np.array([0.3, -0.7]), np.array([0.4, 7.0, -0.8])
     u = eq.evaluate(p).value
     assert not states
-    np.testing.assert_allclose(make_energy(p).eval_gradient(u), Force(u).evaluate(p).value)
+    np.testing.assert_allclose(make_energy(p).evaluate(u).gradient(), Force(u).evaluate(p).value)
     J = np.zeros((3, 2))
     J[[0, 2]] = np.linalg.solve(K[np.ix_([0, 2], [0, 2])], A[[0, 2]])
     np.testing.assert_allclose(eq.evaluate(p).jvp(v), J @ v, atol=1e-12)

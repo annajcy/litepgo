@@ -25,18 +25,22 @@ std::shared_ptr<litepgo::energy::QuadraticEnergy> coupling(int n, int i, int j) 
     return std::make_shared<litepgo::energy::QuadraticEnergy>(A);
 }
 
-void expect_weighted_sum(const Energy& sum, const std::vector<WeightedEnergy>& terms, const Vec& x, HessianKind kind) {
+void expect_weighted_sum(const Energy& sum, const std::vector<WeightedEnergy>& terms, const Vec& x, bool kind) {
     double value = 0.0;
     Vec gradient = Vec::Zero(x.size());
     Eigen::MatrixXd hessian = Eigen::MatrixXd::Zero(x.size(), x.size());
     for (const WeightedEnergy& term : terms) {
-        value += term.weight * term.energy->eval_value(x);
-        gradient += term.weight * term.energy->eval_gradient(x);
-        hessian += term.weight * Eigen::MatrixXd(term.energy->eval_hessian(x, kind));
+        value += term.weight * term.energy->evaluate(x)->value();
+        gradient += term.weight * term.energy->evaluate(x)->gradient();
+        hessian += term.weight * Eigen::MatrixXd((kind ? term.energy->evaluate(x)->projected_hessian()
+                                                       : term.energy->evaluate(x)->hessian()));
     }
-    EXPECT_NEAR(sum.eval_value(x), value, 1e-12);
-    EXPECT_LE((sum.eval_gradient(x) - gradient).cwiseAbs().maxCoeff(), 1e-12);
-    EXPECT_LE((Eigen::MatrixXd(sum.eval_hessian(x, kind)) - hessian).cwiseAbs().maxCoeff(), 1e-12);
+    EXPECT_NEAR(sum.evaluate(x)->value(), value, 1e-12);
+    EXPECT_LE((sum.evaluate(x)->gradient() - gradient).cwiseAbs().maxCoeff(), 1e-12);
+    EXPECT_LE((Eigen::MatrixXd((kind ? sum.evaluate(x)->projected_hessian() : sum.evaluate(x)->hessian())) - hessian)
+                  .cwiseAbs()
+                  .maxCoeff(),
+              1e-12);
 }
 
 } // namespace
@@ -49,16 +53,16 @@ TEST(WeightedSumEnergy, EqualsTheWeightedSumOfItsTerms) {
     };
     const WeightedSumEnergy sum(terms);
     const Vec x = Vec::LinSpaced(5, -0.8, 0.6);
-    expect_weighted_sum(sum, terms, x, HessianKind::Exact);
-    expect_weighted_sum(sum, terms, x, HessianKind::Projected);
+    expect_weighted_sum(sum, terms, x, false);
+    expect_weighted_sum(sum, terms, x, true);
     expect_derivatives_match(sum, x);
 }
 
 TEST(WeightedSumEnergy, PatternIsTheUnionOfTheTerms) {
     const WeightedSumEnergy sum({{std::make_shared<DoubleWellChain>(5), 1.0}, {coupling(5, 0, 4), 1.0}});
     // Tridiagonal (5 + 2 * 4 entries) plus the (0, 4) and (4, 0) coupling.
-    EXPECT_EQ(sum.eval_hessian(Vec::Zero(5)).nonZeros(), 15);
-    EXPECT_TRUE(stores(sum.eval_hessian(Vec::Zero(5)), 4, 0));
+    EXPECT_EQ(sum.evaluate(Vec::Zero(5))->hessian().nonZeros(), 15);
+    EXPECT_TRUE(stores(sum.evaluate(Vec::Zero(5))->hessian(), 4, 0));
 }
 
 TEST(WeightedSumEnergy, FeasibleStepIsTheSmallestTermStep) {
@@ -66,14 +70,14 @@ TEST(WeightedSumEnergy, FeasibleStepIsTheSmallestTermStep) {
         {{std::make_shared<DoubleWellChain>(3), 1.0}, {std::make_shared<HalfSpaceBarrier>(3, 1), 1.0}});
     const Vec x = Vec::Zero(3);
     const Vec dx = (Vec(3) << 0.0, 2.0, 0.0).finished();
-    EXPECT_DOUBLE_EQ(sum.max_feasible_step(x, dx), 0.45); // 0.9 * (1 - 0) / 2
+    EXPECT_DOUBLE_EQ(sum.evaluate(x)->max_feasible_step(dx), 0.45); // 0.9 * (1 - 0) / 2
 }
 
 TEST(WeightedSumEnergy, AllowsNegativeWeights) {
     const std::vector<WeightedEnergy> terms = {{std::make_shared<DoubleWellChain>(4), 1.0}, {coupling(4, 0, 3), -0.5}};
     const WeightedSumEnergy sum(terms);
     const Vec x = Vec::LinSpaced(4, -0.9, 0.7);
-    expect_weighted_sum(sum, terms, x, HessianKind::Exact);
+    expect_weighted_sum(sum, terms, x, false);
     expect_derivatives_match(sum, x);
 }
 
@@ -82,7 +86,7 @@ TEST(WeightedSumEnergy, InfeasibleTermThrowsThroughTheSumWhateverItsWeight) {
         const WeightedSumEnergy sum(
             {{std::make_shared<DoubleWellChain>(3), 1.0}, {std::make_shared<HalfSpaceBarrier>(3, 1), weight}});
         const Vec infeasible = (Vec(3) << 0.0, 2.0, 0.0).finished();
-        EXPECT_THROW(sum.eval_value(infeasible), std::domain_error);
+        EXPECT_THROW(sum.evaluate(infeasible)->value(), std::domain_error);
         Vec gradient;
         EXPECT_THROW(litepgo::testing::evaluate_energy(sum, infeasible, &gradient, nullptr), std::domain_error);
     }
@@ -93,7 +97,7 @@ TEST(WeightedSumEnergy, SharedAndNestedTerms) {
     const auto inner = std::make_shared<WeightedSumEnergy>(std::vector<WeightedEnergy>{{chain, 1.0}, {chain, 2.0}});
     const WeightedSumEnergy outer({{inner, 0.5}, {chain, 1.0}});
     const Vec x = Vec::LinSpaced(4, -1.0, 1.0);
-    EXPECT_NEAR(outer.eval_value(x), 2.5 * chain->eval_value(x), 1e-12);
+    EXPECT_NEAR(outer.evaluate(x)->value(), 2.5 * chain->evaluate(x)->value(), 1e-12);
     expect_derivatives_match(outer, x);
 }
 
@@ -113,12 +117,12 @@ TEST(WeightedSumEnergy, RebuildsWhenATermPatternChanges) {
     WeightedSumEnergy sum(terms);
     const Vec active = (Vec(4) << 1.0, 1.0, -2.0, 3.0).finished();
     const Vec inactive = -Vec::Ones(4);
-    const SpMat first = sum.eval_hessian(active);
-    const SpMat second = sum.eval_hessian(inactive);
+    const SpMat first = sum.evaluate(active)->hessian();
+    const SpMat second = sum.evaluate(inactive)->hessian();
     ASSERT_FALSE(linalg::same_pattern(first, second));
     for (const Vec& x : {active, inactive, active})
-        expect_weighted_sum(sum, terms, x, HessianKind::Exact);
-    EXPECT_TRUE(linalg::same_pattern(first, sum.eval_hessian(active)));
+        expect_weighted_sum(sum, terms, x, false);
+    EXPECT_TRUE(linalg::same_pattern(first, sum.evaluate(active)->hessian()));
 }
 
 TEST(WeightedSumEnergy, SharedTermEvaluationDoesNotInvalidateResults) {
@@ -127,26 +131,29 @@ TEST(WeightedSumEnergy, SharedTermEvaluationDoesNotInvalidateResults) {
     WeightedSumEnergy other({{switching, 2.0}});
     const Vec x = (Vec(4) << 1.0, 1.0, -2.0, 3.0).finished();
     const Vec inactive = -Vec::Ones(4);
-    const auto saved = sum.eval(x, true, HessianKind::Exact);
-    const Vec gradient = *saved.gradient;
-    const SpMat hessian = *saved.hessian;
-    const double value = saved.value;
+    const auto saved = sum.evaluate(x);
+    saved->hessian();
+    const Vec gradient = saved->gradient();
+    const SpMat hessian = saved->hessian();
+    const double value = saved->value();
 
-    EXPECT_EQ(other.eval_value(inactive), 2 * switching->eval_value(inactive));
-    const SpMat other_hessian = other.eval_hessian(inactive);
+    EXPECT_EQ(other.evaluate(inactive)->value(), 2 * switching->evaluate(inactive)->value());
+    const SpMat other_hessian = other.evaluate(inactive)->hessian();
     ASSERT_FALSE(linalg::same_pattern(hessian, other_hessian));
-    EXPECT_EQ(Eigen::MatrixXd(other_hessian), 2 * Eigen::MatrixXd(switching->eval_hessian(inactive)));
-    const auto changed = sum.eval(inactive, true, HessianKind::Exact);
-    EXPECT_NE(changed.value, value);
-    EXPECT_EQ(saved.value, value);
-    EXPECT_EQ(*saved.gradient, gradient);
-    EXPECT_TRUE(linalg::same_pattern(*saved.hessian, hessian));
-    EXPECT_EQ(Eigen::MatrixXd(*saved.hessian), Eigen::MatrixXd(hessian));
-    const auto again = sum.eval(x, true, HessianKind::Exact);
-    EXPECT_EQ(again.value, value);
-    EXPECT_EQ(*again.gradient, gradient);
-    EXPECT_TRUE(linalg::same_pattern(*again.hessian, hessian));
-    EXPECT_EQ(Eigen::MatrixXd(*again.hessian), Eigen::MatrixXd(hessian));
+    EXPECT_EQ(Eigen::MatrixXd(other_hessian), 2 * Eigen::MatrixXd(switching->evaluate(inactive)->hessian()));
+    const auto changed = sum.evaluate(inactive);
+    changed->hessian();
+    EXPECT_NE(changed->value(), value);
+    EXPECT_EQ(saved->value(), value);
+    EXPECT_EQ(saved->gradient(), gradient);
+    EXPECT_TRUE(linalg::same_pattern(saved->hessian(), hessian));
+    EXPECT_EQ(Eigen::MatrixXd(saved->hessian()), Eigen::MatrixXd(hessian));
+    const auto again = sum.evaluate(x);
+    again->hessian();
+    EXPECT_EQ(again->value(), value);
+    EXPECT_EQ(again->gradient(), gradient);
+    EXPECT_TRUE(linalg::same_pattern(again->hessian(), hessian));
+    EXPECT_EQ(Eigen::MatrixXd(again->hessian()), Eigen::MatrixXd(hessian));
 }
 
 } // namespace litepgo::energy::test

@@ -399,8 +399,15 @@ SpMat IPCContactEnergy::hessian_pattern_at(const ConstVecRef& x) const {
     pattern.setFromTriplets(entries.begin(), entries.end());
     return pattern;
 }
-double IPCContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian,
-                                     energy::HessianKind kind) const {
+double IPCContactEnergy::eval_values(const ConstVecRef& x, Vec* g, SpMat* H) const {
+    return assemble_values(x, g, H, false);
+}
+energy::EnergyValues IPCContactEnergy::eval_projected_values(const ConstVecRef& x, energy::EnergyEvaluation&) const {
+    energy::EnergyValues result{0., Vec(num_dofs()), make_hessian_pattern(x)};
+    result.value = assemble_values(x, &*result.gradient, &*result.hessian, true);
+    return result;
+}
+double IPCContactEnergy::assemble_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, bool project) const {
     check_x(x, num_dofs());
     auto pairs = impl_->active(x);
     double value = 0;
@@ -418,7 +425,7 @@ double IPCContactEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat*
             throw std::domain_error("IPCContactEnergy: non-finite derivatives");
         if (hessian) {
             Eigen::MatrixXd local = H->topLeftCorner(3 * pair.count(), 3 * pair.count());
-            if (kind == energy::HessianKind::Projected) {
+            if (project) {
                 Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> solver(local);
                 if (solver.info() != Eigen::Success)
                     throw std::domain_error("IPCContactEnergy: Hessian projection failed");

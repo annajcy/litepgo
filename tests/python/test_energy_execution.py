@@ -15,24 +15,27 @@ class Dynamic(energy.DynamicPatternEnergy):
         self.patterns += 1
         return np.eye(2) if x.sum() <= 0 else np.ones((2, 2))
 
-    def eval_values(self, x, gradient, kind):
+    def eval_values(self, x, gradient, need_hessian):
         self.calls += 1
         if self.fail:
             raise KeyError("deliberate")
         if self.reenter:
             self.reenter = False
-            self.eval_value(-x)
+            self.evaluate(-x).value
         s = max(0., x.sum())
         return (.5 * x @ x + .25 * s**4,
                 x + s**3 if gradient else None,
-                np.eye(2) + 3*s*s if kind is not None else None)
+                np.eye(2) + 3*s*s if need_hessian else None)
 
 
 @pytest.mark.parametrize("gradient", [False, True])
-@pytest.mark.parametrize("kind", [None, energy.HessianKind.Exact, energy.HessianKind.Projected])
+@pytest.mark.parametrize("kind", [None, False, True])
 def test_joint_requests_prepare_only_needed_structure(gradient, kind):
     e = Dynamic()
-    value, g, H = e.eval(np.ones(2), gradient=gradient, hessian=kind)
+    e_evaluation = e.evaluate(np.ones(2))
+    e_evaluation_hessian = (e_evaluation.projected_hessian() if kind else e_evaluation.hessian()) if kind is not None else None
+    e_evaluation_gradient = e_evaluation.gradient() if gradient else None
+    value, g, H = (e_evaluation.value, e_evaluation_gradient, e_evaluation_hessian)
     assert e.calls == 1 and e.patterns == int(kind is not None)
     assert value == 5
     assert (g is not None) == gradient
@@ -42,11 +45,11 @@ def test_joint_requests_prepare_only_needed_structure(gradient, kind):
 def test_dynamic_results_are_independent_and_hooks_can_reenter():
     e = Dynamic()
     e.reenter = True
-    active = e.eval_hessian(np.ones(2))
+    active = e.evaluate(np.ones(2)).hessian()
     original = active.toarray().copy()
-    assert e.eval_hessian(-np.ones(2)).nnz == 2
+    assert e.evaluate(-np.ones(2)).hessian().nnz == 2
     np.testing.assert_array_equal(active.toarray(), original)
-    np.testing.assert_array_equal(e.eval_hessian(np.ones(2)).toarray(), original)
+    np.testing.assert_array_equal(e.evaluate(np.ones(2)).hessian().toarray(), original)
     for name in ("update_pattern", "hessian_pattern", "has_fixed_pattern", "eval_projected_hessian"):
         assert not hasattr(e, name)
 
@@ -57,22 +60,22 @@ def test_shared_dynamic_children_and_cache_recovery():
     mapped = energy.AffineMappedEnergy(total, np.array([[1., 2.], [0., 1.]]))
     for x in (np.ones(2), -np.ones(2), np.ones(2)):
         T = np.array([[1., 2.], [0., 1.]])
-        expected = T.T @ child.eval_hessian(T @ x).toarray() @ T
-        np.testing.assert_allclose(mapped.eval_hessian(x).toarray(), expected)
+        expected = T.T @ child.evaluate(T @ x).hessian().toarray() @ T
+        np.testing.assert_allclose(mapped.evaluate(x).hessian().toarray(), expected)
     child.fail = True
     with pytest.raises(KeyError, match="deliberate"):
-        mapped.eval_hessian(np.ones(2))
+        mapped.evaluate(np.ones(2)).hessian()
     child.fail = False
-    np.testing.assert_allclose(mapped.eval_hessian(np.ones(2)).toarray(), expected)
+    np.testing.assert_allclose(mapped.evaluate(np.ones(2)).hessian().toarray(), expected)
 
 
-def test_projected_does_not_promise_psd():
+def test_projected_hessian_is_psd():
     indefinite = energy.QuadraticEnergy(np.diag([1., -2.]))
-    np.testing.assert_array_equal(indefinite.eval_hessian(np.zeros(2), kind=energy.HessianKind.Projected).toarray(),
-                                  np.diag([1., -2.]))
+    np.testing.assert_array_equal(indefinite.evaluate(np.zeros(2)).projected_hessian().toarray(),
+                                  np.diag([1., 0.]))
     negative = energy.WeightedSumEnergy([(energy.QuadraticEnergy(np.eye(2)), -1.)])
-    np.testing.assert_array_equal(negative.eval_hessian(np.zeros(2), kind=energy.HessianKind.Projected).toarray(),
-                                  -np.eye(2))
+    np.testing.assert_array_equal(negative.evaluate(np.zeros(2)).projected_hessian().toarray(),
+                                  np.zeros((2, 2)))
 
 
 def test_equal_nnz_different_structure_rebuilds_composite_plans():
@@ -86,9 +89,9 @@ def test_equal_nnz_different_structure_rebuilds_composite_plans():
             p[0, i] = p[i, 0] = 1
             return p
 
-        def eval_values(self, x, gradient, kind):
+        def eval_values(self, x, gradient, need_hessian):
             # Both optional slots are structural zeros for this quadratic.
-            return .5*x@x, x if gradient else None, np.eye(3) if kind is not None else None
+            return .5*x@x, x if gradient else None, np.eye(3) if need_hessian else None
 
     child = MovingStructure()
     total = energy.WeightedSumEnergy([(child, 2.)])
@@ -96,22 +99,25 @@ def test_equal_nnz_different_structure_rebuilds_composite_plans():
     mapped = energy.AffineMappedEnergy(total, T)
     for sign in [1., -1., 1.]:
         x = np.array([sign, 0., 0.])
-        H = total.eval_hessian(x)
+        H = total.evaluate(x).hessian()
         assert H.nnz == 5
-        np.testing.assert_array_equal(H.indices, child.eval_hessian(x).indices)
-        np.testing.assert_allclose(mapped.eval_hessian(x).toarray(), 2*T.T@T)
+        np.testing.assert_array_equal(H.indices, child.evaluate(x).hessian().indices)
+        np.testing.assert_allclose(mapped.evaluate(x).hessian().toarray(), 2*T.T@T)
 
 
 def test_fixed_pattern_snapshot_and_zero_dofs():
     pattern = np.eye(2)
 
     class Fixed(energy.FixedPatternEnergy):
-        def eval_values(self, x, gradient, kind):
-            return .5*x@x, x if gradient else None, np.eye(len(x)) if kind is not None else None
+        def eval_values(self, x, gradient, need_hessian):
+            return .5*x@x, x if gradient else None, np.eye(len(x)) if need_hessian else None
 
     e = Fixed(pattern)
     pattern[:] = 0
-    assert e.eval_hessian(np.ones(2)).nnz == 2
+    assert e.evaluate(np.ones(2)).hessian().nnz == 2
     zero = Fixed(np.empty((0, 0)))
-    value, g, H = zero.eval(np.empty(0), gradient=True, hessian=energy.HessianKind.Exact)
+    zero_evaluation = zero.evaluate(np.empty(0))
+    zero_evaluation_hessian = zero_evaluation.hessian()
+    zero_evaluation_gradient = zero_evaluation.gradient()
+    value, g, H = (zero_evaluation.value, zero_evaluation_gradient, zero_evaluation_hessian)
     assert value == 0 and g.shape == (0,) and H.shape == (0, 0)

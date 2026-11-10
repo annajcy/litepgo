@@ -8,7 +8,6 @@ import scipy.sparse as sp
 from litepgo.energy import (
     AffineMappedEnergy,
     Energy,
-    HessianKind,
     QuadraticEnergy,
     VertexPullingEnergy,
     WeightedSumEnergy,
@@ -31,12 +30,12 @@ def test_quadratic_energy_matches_numpy():
     energy = QuadraticEnergy(A, b)
     x = np.linspace(-1.0, 1.0, 5)
     dense = A.toarray()
-    assert energy.eval_value(x) == pytest.approx(0.5 * x @ dense @ x + b @ x)
-    np.testing.assert_allclose(energy.eval_gradient(x), dense @ x + b)
-    hessian = energy.eval_hessian(x)
+    assert energy.evaluate(x).value == pytest.approx(0.5 * x @ dense @ x + b @ x)
+    np.testing.assert_allclose(energy.evaluate(x).gradient(), dense @ x + b)
+    hessian = energy.evaluate(x).hessian()
     assert isinstance(hessian, sp.csc_matrix)
     np.testing.assert_array_equal(hessian.toarray(), dense)
-    np.testing.assert_array_equal(energy.eval_hessian(x, kind=HessianKind.Projected).toarray(), dense)
+    np.testing.assert_array_equal(energy.evaluate(x).projected_hessian().toarray(), dense)
     assert energy.num_dofs == 5
 
 
@@ -50,31 +49,35 @@ def test_quadratic_energy_rejects_invalid_input():
 def test_eval_returns_what_was_asked():
     energy = QuadraticEnergy(laplacian(3))
     x = np.array([1.0, 0.0, -1.0])
-    value, gradient, hessian = energy.eval(x)
+    energy_evaluation = energy.evaluate(x)
+    value, gradient, hessian = (energy_evaluation.value, None, None)
     assert gradient is None and hessian is None
-    value, gradient, hessian = energy.eval(x, gradient=True, hessian=HessianKind.Projected)
-    assert value == energy.eval_value(x)
-    np.testing.assert_array_equal(gradient, energy.eval_gradient(x))
+    energy_evaluation = energy.evaluate(x)
+    energy_evaluation_hessian = energy_evaluation.projected_hessian()
+    energy_evaluation_gradient = energy_evaluation.gradient()
+    value, gradient, hessian = (energy_evaluation.value, energy_evaluation_gradient, energy_evaluation_hessian)
+    assert value == energy.evaluate(x).value
+    np.testing.assert_array_equal(gradient, energy.evaluate(x).gradient())
     np.testing.assert_array_equal(hessian.toarray(), laplacian(3).toarray())
 
 
 def test_hessian_result_and_feasibility():
     energy = QuadraticEnergy(laplacian(4))
-    pattern = energy.eval_hessian(np.zeros(4))
+    pattern = energy.evaluate(np.zeros(4)).hessian()
     assert isinstance(pattern, sp.csc_matrix)
     assert pattern.nnz == laplacian(4).nnz
 
-    assert energy.max_feasible_step(np.zeros(4), np.ones(4)) == 1.0
+    assert energy.evaluate(np.zeros(4)).max_feasible_step(np.ones(4)) == 1.0
 
 
 def test_weighted_sum_energy_matches_the_weighted_terms():
     first, second = quadratic(6, 0), quadratic(6, 1)
     total = WeightedSumEnergy([(first, 2.0), (second, 0.5)])
     x = np.linspace(-1.0, 1.0, 6)
-    assert total.eval_value(x) == pytest.approx(2.0 * first.eval_value(x) + 0.5 * second.eval_value(x))
-    np.testing.assert_allclose(total.eval_gradient(x), 2.0 * first.eval_gradient(x) + 0.5 * second.eval_gradient(x))
-    np.testing.assert_allclose(total.eval_hessian(x).toarray(),
-                               2.0 * first.eval_hessian(x).toarray() + 0.5 * second.eval_hessian(x).toarray())
+    assert total.evaluate(x).value == pytest.approx(2.0 * first.evaluate(x).value + 0.5 * second.evaluate(x).value)
+    np.testing.assert_allclose(total.evaluate(x).gradient(), 2.0 * first.evaluate(x).gradient() + 0.5 * second.evaluate(x).gradient())
+    np.testing.assert_allclose(total.evaluate(x).hessian().toarray(),
+                               2.0 * first.evaluate(x).hessian().toarray() + 0.5 * second.evaluate(x).hessian().toarray())
 
 
 @pytest.mark.parametrize("terms", [[], [(QuadraticEnergy(laplacian(3)), 0.0)],
@@ -95,23 +98,23 @@ def test_affine_mapped_energy_matches_dense_products():
     x = T @ z + offset
     dense_T = T.toarray()
     assert mapped.num_dofs == 2
-    assert mapped.eval_value(z) == pytest.approx(inner.eval_value(x))
-    np.testing.assert_allclose(mapped.eval_gradient(z), dense_T.T @ inner.eval_gradient(x))
-    np.testing.assert_allclose(mapped.eval_hessian(z).toarray(), dense_T.T @ inner.eval_hessian(x).toarray() @ dense_T)
+    assert mapped.evaluate(z).value == pytest.approx(inner.evaluate(x).value)
+    np.testing.assert_allclose(mapped.evaluate(z).gradient(), dense_T.T @ inner.evaluate(x).gradient())
+    np.testing.assert_allclose(mapped.evaluate(z).hessian().toarray(), dense_T.T @ inner.evaluate(x).hessian().toarray() @ dense_T)
 
 
 def test_weighted_sum_energy_allows_negative_weights():
     first, second = quadratic(4, 6), quadratic(4, 7)
     total = WeightedSumEnergy([(first, 1.0), (second, -0.25)])
     x = np.linspace(-1.0, 1.0, 4)
-    assert total.eval_value(x) == pytest.approx(first.eval_value(x) - 0.25 * second.eval_value(x))
+    assert total.evaluate(x).value == pytest.approx(first.evaluate(x).value - 0.25 * second.evaluate(x).value)
 
 
 def test_affine_mapped_energy_defaults_to_zero_offset_and_checks_shapes():
     inner = quadratic(4, 3)
     mapped = AffineMappedEnergy(inner, sp.identity(4, format="csc"))
     z = np.linspace(-1.0, 1.0, 4)
-    assert mapped.eval_value(z) == pytest.approx(inner.eval_value(z))
+    assert mapped.evaluate(z).value == pytest.approx(inner.evaluate(z).value)
     with pytest.raises(ValueError):
         AffineMappedEnergy(inner, sp.identity(3, format="csc"))
 
@@ -119,20 +122,20 @@ def test_affine_mapped_energy_defaults_to_zero_offset_and_checks_shapes():
 def test_composites_keep_their_children_alive():
     first, second = quadratic(4, 4), quadratic(4, 5)
     x = np.ones(4)
-    expected = first.eval_value(x) + second.eval_value(x)
+    expected = first.evaluate(x).value + second.evaluate(x).value
     total = WeightedSumEnergy([(first, 1.0), (second, 1.0)])
     mapped = AffineMappedEnergy(total, sp.identity(4, format="csc"))
     del first, second, total
     gc.collect()
-    assert mapped.eval_value(x) == pytest.approx(expected)
+    assert mapped.evaluate(x).value == pytest.approx(expected)
 
 
 def test_checks_vector_sizes_and_types():
     energy = QuadraticEnergy(laplacian(3))
     with pytest.raises(ValueError):
-        energy.eval_value(np.ones(4))
+        energy.evaluate(np.ones(4)).value
     with pytest.raises(TypeError):
-        energy.eval_value([1.0, 2.0, 3.0])
+        energy.evaluate([1.0, 2.0, 3.0]).value
 
 
 def test_energy_base_is_abstract():
@@ -147,13 +150,13 @@ def test_vertex_pulling_energy_matches_numpy():
     energy = VertexPullingEnergy(7, dofs, targets, 2.0)
     x = np.linspace(-1.0, 2.0, 7)
     gap = x[dofs] - targets
-    assert energy.eval_value(x) == pytest.approx(gap.ravel() @ gap.ravel())
+    assert energy.evaluate(x).value == pytest.approx(gap.ravel() @ gap.ravel())
     expected_gradient = np.zeros(7)
     expected_gradient[dofs.ravel()] = 2.0 * gap.ravel()
-    np.testing.assert_allclose(energy.eval_gradient(x), expected_gradient)
+    np.testing.assert_allclose(energy.evaluate(x).gradient(), expected_gradient)
     expected_hessian = np.zeros((7, 7))
     expected_hessian[dofs.ravel(), dofs.ravel()] = 2.0
-    np.testing.assert_array_equal(energy.eval_hessian(x, kind=HessianKind.Projected).toarray(), expected_hessian)
+    np.testing.assert_array_equal(energy.evaluate(x).projected_hessian().toarray(), expected_hessian)
     with pytest.raises(ValueError, match="distinct"):
         VertexPullingEnergy(7, np.array([[0, 1, 2], [2, 4, 5]], dtype=np.int32), targets, 2.0)
     with pytest.raises(ValueError):
@@ -177,13 +180,13 @@ def test_mesh_energy_stencil_assembly_and_callback_lifetime():
     gc.collect()
     x = np.arange(9, dtype=float)
     H = np.kron([[1., -1., 0.], [-1., 2., -1.], [0., -1., 1.]], np.eye(3))
-    assert assembled.eval_value(x) == pytest.approx(0.5 * x @ H @ x)
-    np.testing.assert_allclose(assembled.eval_gradient(x), H @ x)
-    np.testing.assert_allclose(assembled.eval_hessian(x).toarray(), H)
-    np.testing.assert_allclose(assembled.eval_hessian(x, kind=HessianKind.Projected).toarray(), H, atol=1e-14)
+    assert assembled.evaluate(x).value == pytest.approx(0.5 * x @ H @ x)
+    np.testing.assert_allclose(assembled.evaluate(x).gradient(), H @ x)
+    np.testing.assert_allclose(assembled.evaluate(x).hessian().toarray(), H)
+    np.testing.assert_allclose(assembled.evaluate(x).projected_hessian().toarray(), H, atol=1e-14)
     for owned, snapshot in retained:
         np.testing.assert_array_equal(owned, snapshot)
-    assert assembled.max_feasible_step(x, x) == 1.
+    assert assembled.evaluate(x).max_feasible_step(x) == 1.
 
 
 def test_mesh_energy_callback_errors_and_step():
@@ -194,15 +197,15 @@ def test_mesh_energy_callback_errors_and_step():
     def fail(*args):
         raise ValueError('local callback failed')
     with pytest.raises(ValueError, match='local callback failed'):
-        BatchEnergyFixture(mapping, fail).eval_value(x)
+        BatchEnergyFixture(mapping, fail).evaluate(x).value
     with pytest.raises(ValueError, match='Missing batch gradients'):
-        BatchEnergyFixture(mapping, lambda *args: (np.zeros(1), None, None)).eval_gradient(x)
+        BatchEnergyFixture(mapping, lambda *args: (np.zeros(1), None, None)).evaluate(x).gradient()
     with pytest.raises(RuntimeError, match='invalid batch outputs'):
-        BatchEnergyFixture(mapping, lambda *args: (np.zeros(1), np.zeros((1,2)), None)).eval_gradient(x)
+        BatchEnergyFixture(mapping, lambda *args: (np.zeros(1), np.zeros((1,2)), None)).evaluate(x).gradient()
     with pytest.raises(RuntimeError, match='invalid batch outputs'):
-        BatchEnergyFixture(mapping, lambda *args: (np.array([np.nan]), None, None)).eval_value(x)
+        BatchEnergyFixture(mapping, lambda *args: (np.array([np.nan]), None, None)).evaluate(x).value
     bounded = BatchEnergyFixture(mapping, lambda *args: (np.zeros(1), None, None), step=lambda ids, x, dx: np.full(len(ids), .25))
-    assert bounded.max_feasible_step(x, x) == 0.25
+    assert bounded.evaluate(x).max_feasible_step(x) == 0.25
 
 
 @pytest.mark.parametrize('batch_size', [1, 2, 256])
@@ -218,15 +221,15 @@ def test_batched_mesh_energy_variable_stencils(batch_size):
                 (scale[:, None, None]*np.eye(z.shape[1])[None]).reshape(-1,z.shape[1]) if h else None)
     expected, actual = BatchEnergyFixture(mapping, batch, 1), BatchEnergyFixture(mapping, batch, batch_size)
     x = np.arange(12, dtype=float)
-    np.testing.assert_allclose(actual.eval_value(x), expected.eval_value(x))
-    np.testing.assert_allclose(actual.eval_gradient(x), expected.eval_gradient(x))
-    np.testing.assert_allclose(actual.eval_hessian(x).toarray(), expected.eval_hessian(x).toarray())
-    np.testing.assert_allclose(actual.eval_hessian(x, kind=HessianKind.Projected).toarray(), expected.eval_hessian(x, kind=HessianKind.Projected).toarray())
+    np.testing.assert_allclose(actual.evaluate(x).value, expected.evaluate(x).value)
+    np.testing.assert_allclose(actual.evaluate(x).gradient(), expected.evaluate(x).gradient())
+    np.testing.assert_allclose(actual.evaluate(x).hessian().toarray(), expected.evaluate(x).hessian().toarray())
+    np.testing.assert_allclose(actual.evaluate(x).projected_hessian().toarray(), expected.evaluate(x).projected_hessian().toarray())
     for ids, retained, copy in seen:
         assert len(ids) <= batch_size
         np.testing.assert_array_equal(retained, copy)
     assert set(np.concatenate([entry[0] for entry in seen])) == {0, 1, 2, 3}
-    assert actual.max_feasible_step(x, x) == 1.
+    assert actual.evaluate(x).max_feasible_step(x) == 1.
 
 
 def test_batched_mesh_energy_errors_steps_and_recovery():
@@ -238,18 +241,18 @@ def test_batched_mesh_energy_errors_steps_and_recovery():
     with pytest.raises(ValueError):
         BatchEnergyFixture(mapping, local, batch_size=0)
     with pytest.raises(RuntimeError, match='invalid batch outputs'):
-        BatchEnergyFixture(mapping, lambda *args: (np.zeros(1), None, None)).eval_value(x)
+        BatchEnergyFixture(mapping, lambda *args: (np.zeros(1), None, None)).evaluate(x).value
     with pytest.raises(ValueError, match='Missing batch gradients'):
-        BatchEnergyFixture(mapping, lambda *args: (np.zeros(2), None, None)).eval_gradient(x)
+        BatchEnergyFixture(mapping, lambda *args: (np.zeros(2), None, None)).evaluate(x).gradient()
     def fail(*args):
         raise KeyError('batch failure')
     with pytest.raises(KeyError, match='batch failure'):
-        BatchEnergyFixture(mapping, fail).eval_value(x)
+        BatchEnergyFixture(mapping, fail).evaluate(x).value
     bounded = BatchEnergyFixture(mapping, local, step=lambda ids, x, dx: np.full(len(ids), .25))
-    assert bounded.max_feasible_step(x, x) == .25
+    assert bounded.evaluate(x).max_feasible_step(x) == .25
     with pytest.raises(RuntimeError, match='invalid batch steps'):
-        BatchEnergyFixture(mapping, local, step=lambda ids, x, dx: np.full(len(ids), 2.)).max_feasible_step(x, x)
-    assert bounded.eval_value(x) == 0.
+        BatchEnergyFixture(mapping, local, step=lambda ids, x, dx: np.full(len(ids), 2.)).evaluate(x).max_feasible_step(x)
+    assert bounded.evaluate(x).value == 0.
 
 
 def test_batched_mesh_energy_projection_empty_and_recovery():
@@ -261,13 +264,13 @@ def test_batched_mesh_energy_projection_empty_and_recovery():
         return np.zeros(len(ids)), np.zeros((len(ids), 1)) if g else None, np.array([[-1.], [2.]]) if h else None
     obj = BatchEnergyFixture(StencilDofMap(1, [[0], [0]], 1), batch)
     with pytest.raises(ValueError, match='retry'):
-        obj.eval_hessian(np.zeros(1))
+        obj.evaluate(np.zeros(1)).hessian()
     fail = False
-    np.testing.assert_allclose(obj.eval_hessian(np.zeros(1)).toarray(), [[1.]])
-    np.testing.assert_allclose(obj.eval_hessian(np.zeros(1), kind=HessianKind.Projected).toarray(), [[2.]])
+    np.testing.assert_allclose(obj.evaluate(np.zeros(1)).hessian().toarray(), [[1.]])
+    np.testing.assert_allclose(obj.evaluate(np.zeros(1)).projected_hessian().toarray(), [[2.]])
     empty = BatchEnergyFixture(StencilDofMap(1, [], 3), lambda *args: pytest.fail('empty batch invoked'))
-    assert empty.eval_value(np.zeros(3)) == 0.
-    np.testing.assert_array_equal(empty.eval_gradient(np.zeros(3)), np.zeros(3))
+    assert empty.evaluate(np.zeros(3)).value == 0.
+    np.testing.assert_array_equal(empty.evaluate(np.zeros(3)).gradient(), np.zeros(3))
 
 
 @pytest.mark.parametrize("kind", ["constant", "element", "vertex", "stencil"])
@@ -292,9 +295,9 @@ def test_mesh_energy_all_maps_share_batch_layout(kind, batch_size):
 
     obj = BatchEnergyFixture(mapping, callback, batch_size=batch_size)
     x = np.arange(mapping.num_dofs, dtype=float)
-    assert obj.eval_value(x) == .5 * (counts * x*x).sum()
-    np.testing.assert_array_equal(obj.eval_gradient(x), counts * x)
-    np.testing.assert_array_equal(obj.eval_hessian(x).toarray(), np.diag(counts))
+    assert obj.evaluate(x).value == .5 * (counts * x*x).sum()
+    np.testing.assert_array_equal(obj.evaluate(x).gradient(), counts * x)
+    np.testing.assert_array_equal(obj.evaluate(x).hessian().toarray(), np.diag(counts))
 
 
 def test_batch_none_is_infeasible_and_recovers():
@@ -308,13 +311,13 @@ def test_batch_none_is_infeasible_and_recovers():
                 np.full((len(ids), 1), 2.) if need_h else None)
     obj = BatchEnergyFixture(mapping, callback, batch_size=1)
     x = np.ones(1)
-    for operation in (lambda: obj.eval_value(x), lambda: obj.eval_gradient(x), lambda: obj.eval_hessian(x)):
+    for operation in (lambda: obj.evaluate(x).value, lambda: obj.evaluate(x).gradient(), lambda: obj.evaluate(x).hessian()):
         with pytest.raises(ValueError, match="infeasible batch"):
             operation()
         fail = False
         operation()
         fail = True
     fail = False
-    assert obj.eval_value(x) == 32
-    np.testing.assert_array_equal(obj.eval_gradient(x), [64])
-    np.testing.assert_array_equal(obj.eval_hessian(x).toarray(), [[64]])
+    assert obj.evaluate(x).value == 32
+    np.testing.assert_array_equal(obj.evaluate(x).gradient(), [64])
+    np.testing.assert_array_equal(obj.evaluate(x).hessian().toarray(), [[64]])

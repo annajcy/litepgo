@@ -13,7 +13,7 @@
 
 namespace litepgo::energy {
 namespace {
-void project_hessian(Eigen::Ref<BatchMatrix> hessian) {
+void project_local_hessian(Eigen::Ref<BatchMatrix> hessian) {
     if (hessian.rows() == 0)
         return;
     const Eigen::MatrixXd symmetric = 0.5 * hessian + 0.5 * hessian.transpose();
@@ -45,7 +45,15 @@ void MeshEnergy::gather(const std::vector<int>& ids, const ConstVecRef& x, Batch
     for (std::size_t b = 0; b < ids.size(); ++b)
         result.row(b) = x(assembler_.dof_indices(ids[b])).transpose();
 }
-double MeshEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, HessianKind kind) const {
+double MeshEnergy::eval_values(const ConstVecRef& x, Vec* g, SpMat* H) const {
+    return assemble_values(x, g, H, false);
+}
+energy::EnergyValues MeshEnergy::eval_projected_values(const ConstVecRef& x, energy::EnergyEvaluation&) const {
+    energy::EnergyValues result{0., Vec(num_dofs()), make_hessian_pattern(x)};
+    result.value = assemble_values(x, &*result.gradient, &*result.hessian, true);
+    return result;
+}
+double MeshEnergy::assemble_values(const ConstVecRef& x, Vec* gradient, SpMat* hessian, bool project) const {
     ::litepgo::detail::BusyScope scope(busy_, "MeshEnergy");
     tbb::parallel_for(std::size_t(0), batches_.size(), [&](std::size_t k) {
         auto& data = batches_[k];
@@ -69,8 +77,8 @@ double MeshEnergy::eval_values(const ConstVecRef& x, Vec* gradient, SpMat* hessi
         for (Eigen::Index b = 0; b < count; ++b) {
             const int e = ids[b];
             values_[e] = values[b];
-            if (hessian && kind == HessianKind::Projected)
-                project_hessian(H.middleRows(b * n, n));
+            if (hessian && project)
+                project_local_hessian(H.middleRows(b * n, n));
             if (gradient || hessian) {
                 const Eigen::Map<const Vec> local_g(gradient && n ? g.data() + b * n : nullptr, gradient ? n : 0);
                 const Eigen::Map<const BatchMatrix> local_H(hessian && n ? H.data() + b * n * n : nullptr,

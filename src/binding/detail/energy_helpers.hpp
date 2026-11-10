@@ -36,12 +36,11 @@ template <class Base> class PyEnergy : public Base {
     explicit PyEnergy(int n) : Base(n) {}
 
   private:
-    double eval_values(const ConstVecRef& x, Vec* g, SpMat* H, HessianKind kind) const override {
+    double eval_values(const ConstVecRef& x, Vec* g, SpMat* H) const override {
         nb::gil_scoped_acquire gil;
         if (!nb::hasattr(this->nb_trampoline.base(), "eval_values"))
             throw std::logic_error("Energy: missing eval_values");
-        nb::object out = this->nb_trampoline.base().attr("eval_values")(nb::cast(Vec(x)), g != nullptr,
-                                                                        H ? nb::cast(kind) : nb::none());
+        nb::object out = this->nb_trampoline.base().attr("eval_values")(nb::cast(Vec(x)), g != nullptr, H != nullptr);
         if (out.is_none())
             throw std::domain_error("Energy is infeasible");
         if (!nb::isinstance<nb::tuple>(out) || nb::len(out) != 3)
@@ -57,6 +56,22 @@ template <class Base> class PyEnergy : public Base {
             copy_derivative_values(source, *H, "Energy: invalid Hessian", "Energy: Hessian outside pattern");
         }
         return nb::cast<double>(values[0]);
+    }
+    EnergyValues eval_projected_values(const ConstVecRef& x, EnergyEvaluation& exact) const override {
+        nb::gil_scoped_acquire gil;
+        auto self = this->nb_trampoline.base();
+        if (!nb::hasattr(self, "eval_projected_values")) {
+            nb::gil_scoped_release release;
+            return Base::eval_projected_values(x, exact);
+        }
+        nb::object out = self.attr("eval_projected_values")(nb::cast(Vec(x)), true, true);
+        if (out.is_none())
+            throw std::domain_error("Energy is infeasible");
+        if (!nb::isinstance<nb::tuple>(out) || nb::len(out) != 3)
+            throw nb::type_error("Expected (value, gradient, Hessian)");
+        nb::tuple values = nb::cast<nb::tuple>(out);
+        return {nb::cast<double>(values[0]), nb::cast<Vec>(values[1]),
+                nb::cast<linalg::binding::SparseArgument>(values[2]).matrix};
     }
     double feasible_step(const ConstVecRef& x, const ConstVecRef& dx) const override {
         nb::detail::ticket ticket(this->nb_trampoline, "feasible_step", nb::detail::str_hash("feasible_step"), false);

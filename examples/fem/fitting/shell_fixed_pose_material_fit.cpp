@@ -85,7 +85,7 @@ Problem make_problem() {
     const fem::ShellFemEnergy elastic(std::make_shared<litepgo::fem::PointwiseShellAdapter<fem::KoiterStVK>>(), map,
                                       rest, thickness, std::vector<Vec>(map.num_elements(), truth));
     // Generate observations through the energy API, independently of the response path.
-    const Vec target = elastic.eval_gradient(u);
+    const Vec target = elastic.evaluate(u)->gradient();
     const double scale = target.norm();
     if (!(scale > 0) || !std::isfinite(scale))
         throw std::runtime_error("Calibration requires finite nonzero target forces");

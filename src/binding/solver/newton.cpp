@@ -26,17 +26,17 @@ void bind_newton(nb::module_& m) {
     nb::class_<NewtonOptions>(m, "NewtonOptions")
         .def(
             "__init__",
-            [](NewtonOptions* self, double gradient_tolerance, int max_iterations, energy::HessianKind hessian,
+            [](NewtonOptions* self, double gradient_tolerance, int max_iterations, bool project_hessian,
                int max_line_search_steps, double line_search_shrink, double max_coordinate_step) {
-                new (self) NewtonOptions{gradient_tolerance,    max_iterations,     hessian,
+                new (self) NewtonOptions{gradient_tolerance,    max_iterations,     project_hessian,
                                          max_line_search_steps, line_search_shrink, max_coordinate_step};
             },
             "gradient_tolerance"_a = std::numeric_limits<double>::quiet_NaN(), "max_iterations"_a = 50,
-            "hessian"_a = energy::HessianKind::Projected, "max_line_search_steps"_a = 30, "line_search_shrink"_a = 0.5,
+            "project_hessian"_a = true, "max_line_search_steps"_a = 30, "line_search_shrink"_a = 0.5,
             "max_coordinate_step"_a = std::numeric_limits<double>::infinity())
         .def_rw("gradient_tolerance", &NewtonOptions::gradient_tolerance)
         .def_rw("max_iterations", &NewtonOptions::max_iterations)
-        .def_rw("hessian", &NewtonOptions::hessian)
+        .def_rw("project_hessian", &NewtonOptions::project_hessian)
         .def_rw("max_line_search_steps", &NewtonOptions::max_line_search_steps)
         .def_rw("line_search_shrink", &NewtonOptions::line_search_shrink)
         .def_rw("max_coordinate_step", &NewtonOptions::max_coordinate_step);
@@ -81,6 +81,6 @@ void bind_newton(nb::module_& m) {
         },
         "energy"_a, "fixed"_a, "x0"_a, "options"_a, "solver"_a = nb::none(), "on_iteration"_a = nb::none(),
         "Minimize energy from x0 with Newton's method; fixed DOFs keep their x0 values. Pass "
-        "AutoIndefiniteSparseSolver() with HessianKind.Exact.");
+        "AutoIndefiniteSparseSolver() with project_hessian=False.");
 }
 } // namespace litepgo::solver::binding

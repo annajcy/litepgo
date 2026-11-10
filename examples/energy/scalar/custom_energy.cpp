@@ -15,7 +15,7 @@ class Quadratic final : public energy::FixedPatternEnergy {
     Quadratic() : FixedPatternEnergy(Eigen::Matrix2d::Identity().sparseView()) {}
 
   private:
-    double eval_values(const ConstVecRef& x, Vec* g, SpMat* H, energy::HessianKind) const override {
+    double eval_values(const ConstVecRef& x, Vec* g, SpMat* H) const override {
         const Vec r = x - Eigen::Vector2d(1, 2);
         if (g)
             *g = r;
@@ -38,7 +38,7 @@ class Coupled final : public energy::DynamicPatternEnergy {
             return Eigen::Matrix2d::Ones().sparseView();
         return Eigen::Matrix2d::Identity().sparseView();
     }
-    double eval_values(const ConstVecRef& x, Vec* g, SpMat* H, energy::HessianKind) const override {
+    double eval_values(const ConstVecRef& x, Vec* g, SpMat* H) const override {
         const double s = std::max(0., x.sum());
         if (g)
             *g = x.array() + s * s * s;
@@ -57,10 +57,11 @@ class Coupled final : public energy::DynamicPatternEnergy {
 int main() {
     Quadratic fixed;
     const Vec x = Eigen::Vector2d(1, 1);
-    const auto fixed_result = fixed.eval(x, true, energy::HessianKind::Exact);
+    const auto fixed_result = fixed.evaluate(x);
     Coupled dynamic;
-    const auto active = dynamic.eval(x, true, energy::HessianKind::Exact);
-    const auto inactive = dynamic.eval_hessian(-x);
-    std::cout << "fixed value=" << fixed_result.value << ", active value=" << active.value << ", Hessian nnz=2->"
-              << active.hessian->nonZeros() << "->" << inactive.nonZeros() << '\n';
+    const auto active = dynamic.evaluate(x);
+    const SpMat active_hessian = active->hessian();
+    const auto inactive = dynamic.evaluate(-x)->hessian();
+    std::cout << "fixed value=" << fixed_result->value() << ", active value=" << active->value() << ", Hessian nnz=2->"
+              << active_hessian.nonZeros() << "->" << inactive.nonZeros() << '\n';
 }

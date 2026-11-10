@@ -64,7 +64,7 @@ def make_problem():
     target_energy = fem.ShellFemEnergy(fem.PointwiseShellAdapter[fem.KoiterStVK](),
         mapping, rest, thickness, theta, [true_Fp] * mapping.num_elements
     )
-    target = target_energy.eval_gradient(displacement)
+    target = target_energy.evaluate(displacement).gradient()
     scale = np.linalg.norm(target)
     if not np.isfinite(scale) or scale <= 0:
         raise RuntimeError("Calibration requires finite nonzero target forces")

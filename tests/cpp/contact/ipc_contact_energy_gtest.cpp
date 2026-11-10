@@ -73,10 +73,10 @@ TEST(IPCContactEnergy, VanishesBeyondDhat) {
 
     EXPECT_EQ(energy.num_active_pairs(surface.positions), 0);
     EXPECT_EQ(energy.min_active_distance(surface.positions), std::numeric_limits<double>::infinity());
-    EXPECT_NO_THROW(energy.eval_hessian(surface.positions));
-    EXPECT_EQ(energy.eval_value(surface.positions), 0.0);
-    EXPECT_EQ(energy.eval_gradient(surface.positions), Vec::Zero(18));
-    EXPECT_EQ(energy.eval_hessian(surface.positions).nonZeros(), 0);
+    EXPECT_NO_THROW(energy.evaluate(surface.positions)->hessian());
+    EXPECT_EQ(energy.evaluate(surface.positions)->value(), 0.0);
+    EXPECT_EQ(energy.evaluate(surface.positions)->gradient(), Vec::Zero(18));
+    EXPECT_EQ(energy.evaluate(surface.positions)->hessian().nonZeros(), 0);
 }
 
 TEST(IPCContactEnergy, ReportsTheActivePairAndItsDistance) {
@@ -92,11 +92,11 @@ TEST(IPCContactEnergy, ReportsTheActivePairAndItsDistance) {
     EXPECT_DOUBLE_EQ(snapshot.distances[0], 0.5);
     EXPECT_GT(snapshot.weights[0], 0);
     EXPECT_DOUBLE_EQ(snapshot.mollifiers[0], 1);
-    EXPECT_EQ(energy.eval_hessian(surface.positions).nonZeros(), 144);
+    EXPECT_EQ(energy.evaluate(surface.positions)->hessian().nonZeros(), 144);
 
     // Pushes vertex 3 away from A and A's vertices the other way.
-    const Vec gradient = energy.eval_gradient(surface.positions);
-    EXPECT_GT(energy.eval_value(surface.positions), 0.0);
+    const Vec gradient = energy.evaluate(surface.positions)->gradient();
+    EXPECT_GT(energy.evaluate(surface.positions)->value(), 0.0);
     EXPECT_LT(gradient[3 * 3 + 2], 0.0);
     EXPECT_GT(gradient[2] + gradient[5] + gradient[8], 0.0);
     EXPECT_NEAR(gradient.segment<3>(0).sum() + gradient.segment<3>(3).sum() + gradient.segment<3>(6).sum() +
@@ -110,15 +110,15 @@ TEST(IPCContactEnergy, PatternFollowsTheActiveSet) {
     const Vec near = translate_b(surface.positions, Eigen::Vector3d(0, 0, -1));
 
     // The first Hessian request prepares the active structure.
-    EXPECT_NO_THROW(energy.eval_hessian(near));
-    EXPECT_NO_THROW(energy.eval_gradient(near));
+    EXPECT_NO_THROW(energy.evaluate(near)->hessian());
+    EXPECT_NO_THROW(energy.evaluate(near)->gradient());
 
-    EXPECT_NO_THROW(energy.eval_hessian(near));
+    EXPECT_NO_THROW(energy.evaluate(near)->hessian());
     // Vertex 3 and face A's vertices 0, 1, 2: a dense 12 x 12 block.
-    EXPECT_EQ(energy.eval_hessian(near).nonZeros(), 144);
-    EXPECT_NO_THROW(energy.eval_hessian(translate_b(near, Eigen::Vector3d(0, 0, 0.1))));
-    EXPECT_NO_THROW(energy.eval_hessian(surface.positions));
-    EXPECT_EQ(energy.eval_hessian(surface.positions).nonZeros(), 0);
+    EXPECT_EQ(energy.evaluate(near)->hessian().nonZeros(), 144);
+    EXPECT_NO_THROW(energy.evaluate(translate_b(near, Eigen::Vector3d(0, 0, 0.1)))->hessian());
+    EXPECT_NO_THROW(energy.evaluate(surface.positions)->hessian());
+    EXPECT_EQ(energy.evaluate(surface.positions)->hessian().nonZeros(), 0);
 }
 
 TEST(IPCContactEnergy, DerivativesMatchFiniteDifferences) {
@@ -148,16 +148,15 @@ TEST(IPCContactEnergy, AreaWeightScalesValueAndDerivativesUsingRestGeometry) {
                           b = surface.positions.segment<3>(15) - surface.positions.segment<3>(9);
     const double weight = a.cross(b).norm() / 24; // quarter of vertex 3's one-third face area
     ASSERT_EQ(weighted.num_active_pairs(x), 1);
-    EXPECT_DOUBLE_EQ(weighted.eval_value(x), weight * unweighted.eval_value(x));
-    EXPECT_TRUE(weighted.eval_gradient(x).isApprox(weight * unweighted.eval_gradient(x), 1e-12));
-    EXPECT_TRUE(Eigen::MatrixXd(weighted.eval_hessian(x))
-                    .isApprox(weight * Eigen::MatrixXd(unweighted.eval_hessian(x)), 1e-12));
-    EXPECT_TRUE(
-        Eigen::MatrixXd(weighted.eval_hessian(x, energy::HessianKind::Projected))
-            .isApprox(weight * Eigen::MatrixXd(unweighted.eval_hessian(x, energy::HessianKind::Projected)), 1e-12));
+    EXPECT_DOUBLE_EQ(weighted.evaluate(x)->value(), weight * unweighted.evaluate(x)->value());
+    EXPECT_TRUE(weighted.evaluate(x)->gradient().isApprox(weight * unweighted.evaluate(x)->gradient(), 1e-12));
+    EXPECT_TRUE(Eigen::MatrixXd(weighted.evaluate(x)->hessian())
+                    .isApprox(weight * Eigen::MatrixXd(unweighted.evaluate(x)->hessian()), 1e-12));
+    EXPECT_TRUE(Eigen::MatrixXd(weighted.evaluate(x)->projected_hessian())
+                    .isApprox(weight * Eigen::MatrixXd(unweighted.evaluate(x)->projected_hessian()), 1e-12));
     Vec dx = Vec::Zero(x.size());
     dx[11] = -2;
-    EXPECT_EQ(weighted.max_feasible_step(x, dx), unweighted.max_feasible_step(x, dx));
+    EXPECT_EQ(weighted.evaluate(x)->max_feasible_step(dx), unweighted.evaluate(x)->max_feasible_step(dx));
 }
 
 TEST(IPCContactEnergy, AreaWeightedDerivativesMatchFiniteDifferences) {
@@ -174,9 +173,8 @@ TEST(IPCContactEnergy, AreaWeightedDerivativesMatchFiniteDifferences) {
 TEST(IPCContactEnergy, ProjectedHessianIsPositiveSemidefinite) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
     IPCContactEnergy energy(surface, options(3.0), std::make_shared<SpatialHash>());
-    const Eigen::MatrixXd exact = Eigen::MatrixXd(energy.eval_hessian(surface.positions));
-    const Eigen::MatrixXd projected =
-        Eigen::MatrixXd(energy.eval_hessian(surface.positions, energy::HessianKind::Projected));
+    const Eigen::MatrixXd exact = Eigen::MatrixXd(energy.evaluate(surface.positions)->hessian());
+    const Eigen::MatrixXd projected = Eigen::MatrixXd(energy.evaluate(surface.positions)->projected_hessian());
     const Eigen::VectorXd exact_eigenvalues = Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd>(exact).eigenvalues();
     const Eigen::VectorXd eigenvalues = Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd>(projected).eigenvalues();
     EXPECT_LT(exact_eigenvalues.minCoeff(), 0.0); // the projection has work to do
@@ -205,22 +203,22 @@ TEST(IPCContactEnergy, FeasibleStepStopsBeforeImpact) {
 
     // Dropping B by 2 would pass vertex 3 through A at t = 0.25.
     const Vec down = translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -2));
-    const double alpha = energy.max_feasible_step(x, down);
+    const double alpha = energy.evaluate(x)->max_feasible_step(down);
     EXPECT_GT(alpha, 0.0);
     EXPECT_LT(alpha, 0.25);
     EXPECT_GT(energy.min_active_distance(x + alpha * down), 0.0);
-    EXPECT_NO_THROW(energy.eval_value(x + alpha * down));
+    EXPECT_NO_THROW(energy.evaluate(x + alpha * down)->value());
 
     // Moving apart, or sliding sideways above A, is unrestricted.
-    EXPECT_EQ(energy.max_feasible_step(x, -down), 1.0);
-    EXPECT_EQ(energy.max_feasible_step(x, translate_b(Vec::Zero(18), Eigen::Vector3d(1, 1, 0))), 1.0);
+    EXPECT_EQ(energy.evaluate(x)->max_feasible_step(-down), 1.0);
+    EXPECT_EQ(energy.evaluate(x)->max_feasible_step(translate_b(Vec::Zero(18), Eigen::Vector3d(1, 1, 0))), 1.0);
 }
 
 TEST(IPCContactEnergy, FeasibleStepKeepsMinDistance) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
     IPCContactEnergy energy(surface, options(1.0, 0.2), std::make_shared<SpatialHash>());
     const Vec down = translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -2));
-    const double alpha = energy.max_feasible_step(surface.positions, down);
+    const double alpha = energy.evaluate(surface.positions)->max_feasible_step(down);
     EXPECT_GT(alpha, 0.0);
     EXPECT_GT(energy.min_active_distance(surface.positions + alpha * down), 0.2);
 }
@@ -228,15 +226,15 @@ TEST(IPCContactEnergy, FeasibleStepKeepsMinDistance) {
 TEST(IPCContactEnergy, RejectsInfeasibleStates) {
     const mesh::TriangleMesh surface = two_triangles(0.5);
     IPCContactEnergy thick(surface, options(1.0, 0.6), std::make_shared<SpatialHash>());
-    EXPECT_THROW(thick.eval_value(surface.positions), std::domain_error);
-    EXPECT_THROW(thick.max_feasible_step(surface.positions, Vec::Zero(18)), std::domain_error);
+    EXPECT_THROW(thick.evaluate(surface.positions)->value(), std::domain_error);
+    EXPECT_THROW(thick.evaluate(surface.positions)->max_feasible_step(Vec::Zero(18)), std::domain_error);
 
     // B's vertex 3 pokes through A, but sits 0.5 below it: eval does not see the
     // intersection, max_feasible_step does.
     IPCContactEnergy energy(surface, options(1.0), std::make_shared<SpatialHash>());
     const Vec crossing = translate_b(surface.positions, Eigen::Vector3d(0, 0, -1));
-    EXPECT_NO_THROW(energy.eval_value(crossing));
-    EXPECT_THROW(energy.max_feasible_step(crossing, Vec::Zero(18)), std::domain_error);
+    EXPECT_NO_THROW(energy.evaluate(crossing)->value());
+    EXPECT_THROW(energy.evaluate(crossing)->max_feasible_step(Vec::Zero(18)), std::domain_error);
 }
 
 // Displacement DOFs u drive the surface through E(u) = B(X + W u), with X and W
@@ -257,20 +255,20 @@ TEST(IPCContactEnergy, ComposesWithASurfaceKinematics) {
     u[8] = -0.2; // lowers vertex 3
     u[3] = 0.1;  // moves vertex 4 in x
     const Vec x = kinematics.positions(u);
-    EXPECT_EQ(mapped.eval_value(u), barrier->eval_value(x));
-    const Vec g = barrier->eval_gradient(x);
-    const Vec gradient = mapped.eval_gradient(u);
+    EXPECT_EQ(mapped.evaluate(u)->value(), barrier->evaluate(x)->value());
+    const Vec g = barrier->evaluate(x)->gradient();
+    const Vec gradient = mapped.evaluate(u)->gradient();
     EXPECT_EQ(gradient[9], 0.0);
     EXPECT_EQ(gradient.segment<3>(6), g.segment<3>(9));
     EXPECT_EQ(gradient.segment<3>(3), g.segment<3>(12));
     EXPECT_EQ(gradient.segment<3>(0), g.segment<3>(15));
-    EXPECT_NO_THROW(mapped.eval_hessian(u));
+    EXPECT_NO_THROW(mapped.evaluate(u)->hessian());
     energy::test::expect_derivatives_match(mapped, u, 1e-5);
 
     // Dropping B through the obstacle is caught on the mapped positions.
     Vec du = Vec::Zero(10);
     du[2] = du[5] = du[8] = -2.0;
-    const double alpha = mapped.max_feasible_step(Vec::Zero(10), du);
+    const double alpha = mapped.evaluate(Vec::Zero(10))->max_feasible_step(du);
     EXPECT_GT(alpha, 0.0);
     EXPECT_LT(alpha, 0.25);
 }
@@ -282,10 +280,10 @@ TEST(IPCContactEnergy, OriginalSquaredBarrierAndThickness) {
         unweighted_options.use_area_weighting = false;
         IPCContactEnergy e(surface, unweighted_options, std::make_shared<SpatialHash>());
         double s = 0.25 - thickness * thickness, h = 1 + 2 * thickness;
-        EXPECT_NEAR(e.eval_value(surface.positions), -(s - h) * (s - h) * std::log(s / h), 1e-13);
+        EXPECT_NEAR(e.evaluate(surface.positions)->value(), -(s - h) * (s - h) * std::log(s / h), 1e-13);
         energy::test::expect_derivatives_match(e, surface.positions, 1e-5);
         Vec boundary = translate_b(surface.positions, Eigen::Vector3d(0, 0, 0.5 + thickness));
-        EXPECT_NEAR(e.eval_value(boundary), 0, 1e-14);
+        EXPECT_NEAR(e.evaluate(boundary)->value(), 0, 1e-14);
     }
 }
 
@@ -300,16 +298,22 @@ TEST(IPCContactEnergy, PhysicalBarrierMatchesToolkitNormalization) {
             config.use_physical_barrier = true;
             IPCContactEnergy physical(surface, config, std::make_shared<SpatialHash>());
             const double h = .7 * (.7 + 2 * minimum), scale = .7 / (h * h);
-            EXPECT_NEAR(physical.eval_value(surface.positions), scale * raw.eval_value(surface.positions), 1e-12);
-            EXPECT_TRUE(physical.eval_gradient(surface.positions)
-                            .isApprox(scale * raw.eval_gradient(surface.positions), 1e-12));
-            for (auto kind : {energy::HessianKind::Exact, energy::HessianKind::Projected})
-                EXPECT_TRUE(Eigen::MatrixXd(physical.eval_hessian(surface.positions, kind))
-                                .isApprox(scale * Eigen::MatrixXd(raw.eval_hessian(surface.positions, kind)), 1e-10));
+            EXPECT_NEAR(physical.evaluate(surface.positions)->value(), scale * raw.evaluate(surface.positions)->value(),
+                        1e-12);
+            EXPECT_TRUE(physical.evaluate(surface.positions)
+                            ->gradient()
+                            .isApprox(scale * raw.evaluate(surface.positions)->gradient(), 1e-12));
+            for (auto kind : {false, true})
+                EXPECT_TRUE(
+                    Eigen::MatrixXd((kind ? physical.evaluate(surface.positions)->projected_hessian()
+                                          : physical.evaluate(surface.positions)->hessian()))
+                        .isApprox(scale * Eigen::MatrixXd((kind ? raw.evaluate(surface.positions)->projected_hessian()
+                                                                : raw.evaluate(surface.positions)->hessian())),
+                                  1e-10));
             energy::test::expect_derivatives_match(physical, surface.positions, 1e-5);
             const Vec direction = translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -2));
-            EXPECT_EQ(physical.max_feasible_step(surface.positions, direction),
-                      raw.max_feasible_step(surface.positions, direction));
+            EXPECT_EQ(physical.evaluate(surface.positions)->max_feasible_step(direction),
+                      raw.evaluate(surface.positions)->max_feasible_step(direction));
         }
     }
 }
@@ -338,9 +342,9 @@ TEST(IPCContactEnergy, RejectsDegenerateDuplicateAndUnusedGeometry) {
     IPCContactEnergy e(valid, options(1), std::make_shared<SpatialHash>());
     Vec x = valid.positions;
     x[0] = std::numeric_limits<double>::quiet_NaN();
-    EXPECT_THROW(e.eval_value(x), std::invalid_argument);
+    EXPECT_THROW(e.evaluate(x)->value(), std::invalid_argument);
     EXPECT_THROW(e.num_active_pairs(Vec::Zero(3)), std::invalid_argument);
-    EXPECT_THROW(e.max_feasible_step(valid.positions, x), std::invalid_argument);
+    EXPECT_THROW(e.evaluate(valid.positions)->max_feasible_step(x), std::invalid_argument);
 }
 
 TEST(IPCContactEnergy, ACCDBudgetToleranceAndFastCrossing) {
@@ -352,17 +356,17 @@ TEST(IPCContactEnergy, ACCDBudgetToleranceAndFastCrossing) {
             o.ccd_max_iterations = budget;
             o.ccd_tolerance = tolerance;
             IPCContactEnergy e(surface, o, std::make_shared<SpatialHash>());
-            double t = e.max_feasible_step(surface.positions, dx);
+            double t = e.evaluate(surface.positions)->max_feasible_step(dx);
             EXPECT_GT(t, 0);
             EXPECT_LT(t, 0.002);
             EXPECT_GT(e.min_active_distance(surface.positions + t * dx), 0.1);
-            EXPECT_EQ(t, e.max_feasible_step(surface.positions, dx));
+            EXPECT_EQ(t, e.evaluate(surface.positions)->max_feasible_step(dx));
         }
     IPCContactEnergy e(surface, options(1), std::make_shared<SpatialHash>());
     Vec common = Vec::Zero(18);
     for (int i = 0; i < 6; ++i)
         common.segment<3>(3 * i) = Eigen::Vector3d(100, -40, 3);
-    EXPECT_EQ(e.max_feasible_step(surface.positions, common), 1);
+    EXPECT_EQ(e.evaluate(surface.positions)->max_feasible_step(common), 1);
 }
 
 TEST(IPCContactEnergy, NearParallelMollifierDerivatives) {
@@ -371,8 +375,8 @@ TEST(IPCContactEnergy, NearParallelMollifierDerivatives) {
     mesh::TriangleMesh surface{x, mesh::TriangleTopology(6, {{0, 1, 2}, {3, 4, 5}})};
     IPCContactEnergy e(surface, options(0.5), std::make_shared<SpatialHash>());
     energy::test::expect_derivatives_match(e, x, 2e-5);
-    EXPECT_TRUE(e.eval_gradient(x).allFinite());
-    const Eigen::MatrixXd h = e.eval_hessian(x);
+    EXPECT_TRUE(e.evaluate(x)->gradient().allFinite());
+    const Eigen::MatrixXd h = e.evaluate(x)->hessian();
     EXPECT_LE((h - h.transpose()).norm(), 1e-10 * (1 + h.norm()));
 }
 
@@ -423,7 +427,7 @@ TEST(IPCContactEnergy, MatchesBruteForceOriginalCandidateSum) {
                 double z = dot(n, n) / eps;
                 expected += barrier(distance(p, edge_edge(p))) * (z < 1 ? z * (2 - z) : 1);
             }
-        EXPECT_NEAR(e.eval_value(x), expected, 1e-11 * (1 + expected));
+        EXPECT_NEAR(e.evaluate(x)->value(), expected, 1e-11 * (1 + expected));
         energy::test::expect_derivatives_match(e, x, 2e-5);
     }
 }
@@ -473,18 +477,18 @@ TEST(IPCContactEnergy, CoplanarOverlapAndEdgeCrossing) {
     x << -2, -2, 0, 2, -2, 0, 0, 2, 0, -0.3, 0, 0, 0.3, 0, 0, 0, 0.5, 0;
     mesh::TriangleMesh surface{x, mesh::TriangleTopology(6, {{0, 1, 2}, {3, 4, 5}})};
     IPCContactEnergy overlap(surface, options(0.1), std::make_shared<SpatialHash>());
-    EXPECT_THROW(overlap.max_feasible_step(x, Vec::Zero(18)), std::domain_error);
+    EXPECT_THROW(overlap.evaluate(x)->max_feasible_step(Vec::Zero(18)), std::domain_error);
     // Perpendicular edges sweep through one another while all vertices remain
     // separated. No endpoint-only CCD check can detect this motion.
     x << -1, 0, 0, 1, 0, 0, 0, -3, -1, 0, -1, 1, 0, 1, 1, 3, 0, 2;
     surface.positions = x;
     IPCContactEnergy e(surface, options(0.2), std::make_shared<SpatialHash>());
     Vec dx = translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -2));
-    double t = e.max_feasible_step(x, dx);
+    double t = e.evaluate(x)->max_feasible_step(dx);
     EXPECT_GT(t, 0);
     EXPECT_LT(t, 0.5);
     for (int i = 0; i <= 20; ++i)
-        EXPECT_NO_THROW(e.max_feasible_step(x + (t * i / 20) * dx, Vec::Zero(18)));
+        EXPECT_NO_THROW(e.evaluate(x + (t * i / 20) * dx)->max_feasible_step(Vec::Zero(18)));
 }
 
 // Many disjoint copies supply enough independent VF, EE, and mollifier
@@ -511,7 +515,7 @@ TEST(IPCContactEnergy, BitwiseDeterministicAcrossThreadCounts) {
         mesh::TriangleMesh surface{x, mesh::TriangleTopology(6 * copies, faces)};
         IPCContactEnergy e(surface, options(3, 0.05), std::make_shared<SpatialHash>());
         ASSERT_GT(e.num_active_pairs(x), copies);
-        for (auto kind : {energy::HessianKind::Exact, energy::HessianKind::Projected}) {
+        for (auto kind : {false, true}) {
             double value, value_only, step;
             Vec gradient, gradient_only;
             SpMat hessian, hessian_only;
@@ -521,9 +525,9 @@ TEST(IPCContactEnergy, BitwiseDeterministicAcrossThreadCounts) {
                     Vec g;
                     SpMat h;
                     double v = litepgo::testing::evaluate_energy(e, x, &g, &h, kind);
-                    double vo = e.eval_value(x), t = e.max_feasible_step(x, dx);
-                    Vec go = e.eval_gradient(x);
-                    SpMat ho = e.eval_hessian(x, kind);
+                    double vo = e.evaluate(x)->value(), t = e.evaluate(x)->max_feasible_step(dx);
+                    Vec go = e.evaluate(x)->gradient();
+                    SpMat ho = (kind ? e.evaluate(x)->projected_hessian() : e.evaluate(x)->hessian());
                     ASSERT_GT(t, 0);
                     ASSERT_LT(t, 0.5);
                     if (threads == 1 && repeat == 0) {
@@ -558,7 +562,7 @@ TEST(IPCContactEnergy, OwnedResultsFollowDisappearingAndReturningActiveSets) {
     for (int threads : {1, 4, 8}) {
         tbb::global_control limit(tbb::global_control::max_allowed_parallelism, threads);
         IPCContactEnergy e(surface, options(1), std::make_shared<SpatialHash>());
-        for (auto kind : {energy::HessianKind::Exact, energy::HessianKind::Projected}) {
+        for (auto kind : {false, true}) {
             Vec expected_g;
             SpMat expected_h;
             const double expected_value =
@@ -573,9 +577,9 @@ TEST(IPCContactEnergy, OwnedResultsFollowDisappearingAndReturningActiveSets) {
             EXPECT_EQ(std::memcmp(g.data(), expected_g.data(), g.size() * sizeof(double)), 0);
             EXPECT_EQ(std::memcmp(h.valuePtr(), expected_h.valuePtr(), h.nonZeros() * sizeof(double)), 0);
         }
-        ASSERT_EQ(e.eval_hessian(far).nonZeros(), 0);
-        EXPECT_NO_THROW(e.eval_hessian(surface.positions));
-        EXPECT_TRUE(e.eval_hessian(surface.positions).toDense().allFinite());
+        ASSERT_EQ(e.evaluate(far)->hessian().nonZeros(), 0);
+        EXPECT_NO_THROW(e.evaluate(surface.positions)->hessian());
+        EXPECT_TRUE(e.evaluate(surface.positions)->hessian().toDense().allFinite());
     }
 }
 
@@ -586,17 +590,18 @@ TEST(IPCContactEnergy, ParallelErrorsPropagateAndAllowRecovery) {
         IPCContactEnergy e(surface, options(3, 0.1), std::make_shared<SpatialHash>());
         Vec bad = translate_b(surface.positions, Eigen::Vector3d(0, 0, -0.45));
         // These fail inside the parallel potential evaluation, not input validation.
-        EXPECT_THROW(e.eval_value(bad), std::domain_error);
-        EXPECT_THROW(e.eval_gradient(bad), std::domain_error);
-        for (auto kind : {energy::HessianKind::Exact, energy::HessianKind::Projected})
-            EXPECT_THROW(e.eval_hessian(bad, kind), std::domain_error);
+        EXPECT_THROW(e.evaluate(bad)->value(), std::domain_error);
+        EXPECT_THROW(e.evaluate(bad)->gradient(), std::domain_error);
+        for (auto kind : {false, true})
+            EXPECT_THROW((kind ? e.evaluate(bad)->projected_hessian() : e.evaluate(bad)->hessian()), std::domain_error);
         // Finite swept bounds, but the CCD speed norm overflows inside a worker.
         Vec huge = translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -1e160));
-        EXPECT_THROW(e.max_feasible_step(surface.positions, huge), std::domain_error);
+        EXPECT_THROW(e.evaluate(surface.positions)->max_feasible_step(huge), std::domain_error);
         IPCContactEnergy empty(surface, options(3), std::make_shared<SpatialHash>());
-        EXPECT_NO_THROW(empty.eval_hessian(surface.positions));
-        EXPECT_TRUE(e.eval_gradient(surface.positions).allFinite());
-        EXPECT_GT(e.max_feasible_step(surface.positions, translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -2))), 0);
+        EXPECT_NO_THROW(empty.evaluate(surface.positions)->hessian());
+        EXPECT_TRUE(e.evaluate(surface.positions)->gradient().allFinite());
+        EXPECT_GT(
+            e.evaluate(surface.positions)->max_feasible_step(translate_b(Vec::Zero(18), Eigen::Vector3d(0, 0, -2))), 0);
     }
 }
 
@@ -609,10 +614,10 @@ TEST(IPCContactEnergy, RequestedDerivativeOrdersAgree) {
         const Vec x = surface.positions;
         Vec g;
         SpMat h;
-        const double value = litepgo::testing::evaluate_energy(e, x, &g, &h, energy::HessianKind::Exact);
-        const Vec g_only = e.eval_gradient(x);
-        const SpMat h_only = e.eval_hessian(x);
-        EXPECT_EQ(value, e.eval_value(x));
+        const double value = litepgo::testing::evaluate_energy(e, x, &g, &h, false);
+        const Vec g_only = e.evaluate(x)->gradient();
+        const SpMat h_only = e.evaluate(x)->hessian();
+        EXPECT_EQ(value, e.evaluate(x)->value());
         EXPECT_EQ(std::memcmp(g.data(), g_only.data(), sizeof(double) * g.size()), 0);
         ASSERT_EQ(h.nonZeros(), h_only.nonZeros());
         EXPECT_EQ(std::memcmp(h.valuePtr(), h_only.valuePtr(), sizeof(double) * h.nonZeros()), 0);

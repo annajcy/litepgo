@@ -58,19 +58,22 @@ def test_fem_snapshots_material_responses_and_releases_owners():
     force_cls = fem.VolumetricFemForceMaterialResponse[fem.TetP1Basis, fem.TetCentroidQuadrature]
     u = .1 * nodes.ravel()
     force = force_cls(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), dof.ConstantDofMap(topology, 2), mapping, [geometry], u, [plastic])
-    value, g, H = elastic.eval(u, gradient=True, hessian=energy.HessianKind.Exact)
+    elastic_evaluation = elastic.evaluate(u)
+    elastic_evaluation_hessian = elastic_evaluation.hessian()
+    elastic_evaluation_gradient = elastic_evaluation.gradient()
+    value, g, H = (elastic_evaluation.value, elastic_evaluation_gradient, elastic_evaluation_hessian)
     assert (plastic.queries, material.queries) == (2, 1)
     material.value *= 2
     plastic.value *= 1.1
-    assert elastic.eval_value(u) == value
+    assert elastic.evaluate(u).value == value
     rebuilt = cls(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, [geometry], [SpatialConstant(np.eye(3).ravel())], [material])
-    np.testing.assert_allclose(rebuilt.eval_gradient(u), 2*g)
+    np.testing.assert_allclose(rebuilt.evaluate(u).gradient(), 2*g)
     owners = [weakref.ref(obj) for obj in [geometry, plastic, material]]
     del geometry, plastic, material
     gc.collect()
     assert all(ref() is None for ref in owners)
     np.testing.assert_allclose(force.evaluate(np.array([2.0, 3.0])).value, g)
-    np.testing.assert_allclose(elastic.eval_hessian(u).toarray(), H.toarray())
+    np.testing.assert_allclose(elastic.evaluate(u).hessian().toarray(), H.toarray())
     with pytest.raises((TypeError, ValueError)):
         cls(fem.PointwiseVolumetricAdapter[fem.NeoHookean](), mapping, [None], [], [])
 

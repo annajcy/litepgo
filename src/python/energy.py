@@ -15,24 +15,26 @@ values and sums shared-DOF VJP contributions. Each evaluation retains its per-el
 child states across value and derivative calls. ExpResponse(size) maps log parameters
 to positive coefficients. See guide/energy/parameter-transforms.
 
-Energy evaluates E(x), its gradient (n,), and full symmetric Hessian (n,n).
-Hessians are independent scipy.sparse.csc_matrix results. Required structure is
-prepared automatically for each input; no public pattern management is needed.
-eval_value, eval_gradient, and eval_hessian(x, kind=HessianKind.Exact) return
-independent results. eval(x, gradient=False, hessian=None) returns
-(value, gradient_or_None, hessian_or_None) in one numerical assembly.
-Projected is an implementation-provided solver approximation, not necessarily PSD.
-max_feasible_step bounds the entire closed segment conservatively, not maximally.
+Energy.evaluate(x) returns an EnergyEvaluation borrowing the model and owning a
+copy of x; Python keeps the model alive. value, gradient(), hessian(), and
+projected_hessian() compute lazily and cache results. Hessian requests also
+prepare exact value and gradient. Returned vectors and CSC matrices own storage.
+Exact and projected Hessians are separate; projected_hessian() promises a PSD
+optimization approximation, with default symmetric spectral clamping. Mesh/FEM
+and contact use local projection, which can differ from global projection.
+Default global projection may produce a dense matrix. max_feasible_step(dx)
+bounds the entire closed segment from the evaluation's input conservatively.
 
 Subclass FixedPatternEnergy(pattern) or DynamicPatternEnergy(num_dofs).
-Implement eval_values(x, want_gradient, hessian_kind), returning the triple above;
-return None for infeasibility (public calls raise ValueError). Other exceptions
-propagate. Dynamic subclasses implement hessian_pattern_at(x). Optional
-feasible_step(x, dx) defaults to 1, appropriate only for unrestricted domains.
-Python inputs own their data. Hessians may be dense or sparse and must fit the
-declared structure. Fixed structure is snapshotted; dynamic structure is per call.
-The mathematical base permits reentry. MeshEnergy and composites with shared
-workspaces reject overlapping evaluation. Batch hooks may run concurrently.
+Implement eval_values(x, need_gradient, need_hessian), returning
+(value, gradient_or_None, hessian_or_None). The exact Hessian fits the declared
+pattern. Optional eval_projected_values with the same signature returns a PSD
+approximation and may have a different pattern. Omission uses spectral projection.
+Return None for infeasibility; unrelated exceptions propagate. Dynamic subclasses
+implement hessian_pattern_at(x). Optional feasible_step(x, dx) defaults to 1.
+Model and callback configuration must stay fixed while evaluations are in use.
+Each evaluation is used by one caller at a time. Implementations with shared
+workspaces reject overlapping computation; batch hooks may run concurrently.
 
 MeshEnergy(map, batch_size=256) implements eval_batch(ids, x, need_gradient,
 need_hessian), returning shapes (B,), (B,n), (B*n,n). Optional
@@ -96,7 +98,7 @@ products do not remove the stored Jacobian pattern. Evaluation state belongs to 
 
 from litepgo._core import energy as _native
 
-HessianKind = _native.HessianKind
+EnergyEvaluation = _native.EnergyEvaluation
 Energy = _native.Energy
 FixedPatternEnergy = _native.FixedPatternEnergy
 DynamicPatternEnergy = _native.DynamicPatternEnergy
@@ -105,7 +107,7 @@ VertexPullingEnergy = _native.VertexPullingEnergy
 WeightedSumEnergy = _native.WeightedSumEnergy
 AffineMappedEnergy = _native.AffineMappedEnergy
 
-__all__ = ["FixedPatternEnergy", "DynamicPatternEnergy", "HessianKind", "Energy", "QuadraticEnergy", "VertexPullingEnergy", "WeightedSumEnergy", "AffineMappedEnergy"]
+__all__ = ["FixedPatternEnergy", "DynamicPatternEnergy", "EnergyEvaluation", "Energy", "QuadraticEnergy", "VertexPullingEnergy", "WeightedSumEnergy", "AffineMappedEnergy"]
 
 from litepgo._core.energy import Response, ResponseEvaluation, FixedPatternResponse, DynamicPatternResponse
 

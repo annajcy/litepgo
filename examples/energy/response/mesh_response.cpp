@@ -100,7 +100,7 @@ int main(int argc, char** argv) {
         std::vector<std::shared_ptr<litepgo::energy::Response>>(
             topology.num_cells(),
             std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((truth).size(), 3), truth)));
-    const Vec observed = energy.eval_gradient(displacement);
+    const Vec observed = energy.evaluate(displacement)->gradient();
     const Eigen::MatrixXd J = single.evaluate(truth)->jacobian();
     if (!single.evaluate(truth)->value().isApprox(observed) || !batched.evaluate(truth)->value().isApprox(observed) ||
         !Eigen::MatrixXd(batched.evaluate(truth)->jacobian()).isApprox(J) || J.topRows(15).fullPivLu().rank() != 2)

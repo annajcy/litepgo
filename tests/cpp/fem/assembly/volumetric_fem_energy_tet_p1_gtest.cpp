@@ -109,9 +109,10 @@ TEST(TetP1FemEnergy, GradientAndHessianMatchFiniteDifferences) {
             }
             d.normalize();
             v.normalize();
-            const double mixed = (energy.eval_value(x + h * d + h * v) - energy.eval_value(x + h * d - h * v) -
-                                  energy.eval_value(x - h * d + h * v) + energy.eval_value(x - h * d - h * v)) /
-                                 (4 * h * h);
+            const double mixed =
+                (energy.evaluate(x + h * d + h * v)->value() - energy.evaluate(x + h * d - h * v)->value() -
+                 energy.evaluate(x - h * d + h * v)->value() + energy.evaluate(x - h * d - h * v)->value()) /
+                (4 * h * h);
             EXPECT_NEAR(d.dot(H * v), mixed, (10 * h * h + 1e-7) * (1 + H.norm()));
         }
     }
@@ -135,22 +136,22 @@ TEST(TetP1FemEnergy, ConstructionRejectsInvalidGeometry) {
 TEST(TetP1FemEnergy, FeasibleStepBoundsTheWholeSegmentAndUsesBothElements) {
     const Vec X = tet_p1_rest_positions(), zero = Vec::Zero(X.size());
     auto energy = make_tet_p1_energy(X);
-    EXPECT_EQ(energy.max_feasible_step(zero, zero), 1);
-    EXPECT_EQ(energy.max_feasible_step(zero, 0.1 * X), 1);
+    EXPECT_EQ(energy.evaluate(zero)->max_feasible_step(zero), 1);
+    EXPECT_EQ(energy.evaluate(zero)->max_feasible_step(0.1 * X), 1);
     Vec direction = zero;
     for (int v = 0; v < X.size() / 3; ++v) {
         direction[3 * v] = -4 * X[3 * v];
         direction[3 * v + 1] = -4 * X[3 * v + 1];
     }
-    EXPECT_TRUE(std::isfinite(energy.eval_value(direction)));
-    const double alpha = energy.max_feasible_step(zero, direction);
+    EXPECT_TRUE(std::isfinite(energy.evaluate(direction)->value()));
+    const double alpha = energy.evaluate(zero)->max_feasible_step(direction);
     EXPECT_NEAR(alpha, 0.225, 1e-6);
     for (int i = 0; i <= 20; ++i)
-        EXPECT_TRUE(std::isfinite(energy.eval_value((alpha * i / 20) * direction)));
+        EXPECT_TRUE(std::isfinite(energy.evaluate((alpha * i / 20) * direction)->value()));
     direction.setZero();
     direction[14] = 16;
-    EXPECT_NEAR(energy.max_feasible_step(zero, direction), 0.1125, 1e-12);
-    EXPECT_THROW(energy.max_feasible_step(-X, zero), std::domain_error);
+    EXPECT_NEAR(energy.evaluate(zero)->max_feasible_step(direction), 0.1125, 1e-12);
+    EXPECT_THROW(energy.evaluate(-X)->max_feasible_step(zero), std::domain_error);
 }
 
 TEST(TetP1FemEnergy, NewtonRelaxesTheFreeVerticesWithFeasibleSteps) {
@@ -158,7 +159,7 @@ TEST(TetP1FemEnergy, NewtonRelaxesTheFreeVerticesWithFeasibleSteps) {
     Vec u = Vec::Zero(15);
     u[11] = 0.3;
     u[14] = -0.2;
-    const double initial = energy.eval_value(u);
+    const double initial = energy.evaluate(u)->value();
     const dof::DofReduction fixed(15, {0, 1, 2, 3, 4, 5, 6, 7, 8});
     solver::NewtonOptions options;
     options.gradient_tolerance = 1e-9;
@@ -249,17 +250,23 @@ TEST(TetP1FemEnergy, VolumetricFemEnergyAcceptsInterpolatedFixedFields) {
         {std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((1.1 * fp_mean).size(), 3), 1.1 * fp_mean)},
         {std::make_shared<litepgo::energy::AffineResponse>(litepgo::SpMat((2 * theta_mean).size(), 3),
                                                            2 * theta_mean)});
-    EXPECT_NEAR(energy.eval_value(u), first.eval_value(u) + second.eval_value(u), 1e-12);
-    EXPECT_TRUE(energy.eval_gradient(u).isApprox(first.eval_gradient(u) + second.eval_gradient(u), 1e-12));
-    EXPECT_TRUE(Eigen::MatrixXd(energy.eval_hessian(u))
-                    .isApprox(Eigen::MatrixXd(first.eval_hessian(u)) + Eigen::MatrixXd(second.eval_hessian(u)), 1e-12));
+    EXPECT_NEAR(energy.evaluate(u)->value(), first.evaluate(u)->value() + second.evaluate(u)->value(), 1e-12);
+    EXPECT_TRUE(
+        energy.evaluate(u)->gradient().isApprox(first.evaluate(u)->gradient() + second.evaluate(u)->gradient(), 1e-12));
+    EXPECT_TRUE(
+        Eigen::MatrixXd(energy.evaluate(u)->hessian())
+            .isApprox(Eigen::MatrixXd(first.evaluate(u)->hessian()) + Eigen::MatrixXd(second.evaluate(u)->hessian()),
+                      1e-12));
     const Vec direction = -2 * positions;
-    EXPECT_DOUBLE_EQ(energy.max_feasible_step(u, direction),
-                     std::min(first.max_feasible_step(u, direction), second.max_feasible_step(u, direction)));
-    EXPECT_NEAR(energy.eval_value(u), reference.eval_value(u), 1e-12);
-    EXPECT_TRUE(energy.eval_gradient(u).isApprox(reference.eval_gradient(u), 1e-12));
-    EXPECT_TRUE(Eigen::MatrixXd(energy.eval_hessian(u)).isApprox(Eigen::MatrixXd(reference.eval_hessian(u)), 1e-12));
-    EXPECT_DOUBLE_EQ(energy.max_feasible_step(u, -2 * positions), reference.max_feasible_step(u, -2 * positions));
+    EXPECT_DOUBLE_EQ(
+        energy.evaluate(u)->max_feasible_step(direction),
+        std::min(first.evaluate(u)->max_feasible_step(direction), second.evaluate(u)->max_feasible_step(direction)));
+    EXPECT_NEAR(energy.evaluate(u)->value(), reference.evaluate(u)->value(), 1e-12);
+    EXPECT_TRUE(energy.evaluate(u)->gradient().isApprox(reference.evaluate(u)->gradient(), 1e-12));
+    EXPECT_TRUE(Eigen::MatrixXd(energy.evaluate(u)->hessian())
+                    .isApprox(Eigen::MatrixXd(reference.evaluate(u)->hessian()), 1e-12));
+    EXPECT_DOUBLE_EQ(energy.evaluate(u)->max_feasible_step(-2 * positions),
+                     reference.evaluate(u)->max_feasible_step(-2 * positions));
 }
 
 } // namespace litepgo::fem::test

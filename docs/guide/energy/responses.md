@@ -29,8 +29,8 @@ An evaluation retains its value. Equilibrium evaluations additionally retain the
 solved state and lazily prepare exact stiffness for reuse. Independent evaluations
 never share a last-input cache. Model and callback configuration must remain fixed
 while an evaluation is in use. Use each evaluation from one caller at a time.
-Shared C++ responses are retained automatically; a stack-allocated response must
-outlive its evaluations. Python keeps the response alive and returns value copies.
+C++ evaluations borrow their response; the response must outlive its evaluations,
+whether it is stack-allocated or managed by a shared pointer. Python keeps the response alive and returns value copies.
 C++ `value()` returns a const reference valid for the evaluation's lifetime.
 
 Matrices are SciPy CSC matrices in Python and `SpMat` in C++. Vectors are NumPy
