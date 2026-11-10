@@ -4,41 +4,40 @@ Historical measurements: input sharing was later removed in favor of uniform
 input ownership. See [the owning-input comparison](energy-own.md).
 
 
-The allocation/input-sharing optimization is now implemented on top of native
-cache reuse (`7b17320`). It replaces the earlier experiment 2 prototype; the
-small-workload serial-path experiment remains disabled.
+The historical allocation/input-sharing optimization was implemented on top of
+native cache reuse (`7b17320`). It replaced the earlier experiment 2 prototype;
+the small-workload serial-path experiment remained disabled.
 
-## Implementation and API
+## Historical implementation and API
 
-Public C++/Python `evaluate(x)` still takes an independent snapshot. Internal
-WeightedSum children borrow their parent's read-only input; this also applies to
-nested sums. Affine-mapped child evaluations own `T*x+b`. Default leaf states use
-`make_shared` to combine object/control-block allocation. The Energy model is
-still borrowed, with no additional shared model ownership.
+Public C++/Python `evaluate(x)` took an independent snapshot. Internal
+WeightedSum children borrowed their parent's read-only input, including nested
+sums. Affine-mapped child evaluations owned `T*x+b`. Default leaf states used
+`make_shared` to combine object/control-block allocation. The Energy model was
+borrowed, with no additional shared model ownership.
 
-Evaluation objects cannot be copied or moved, and their input storage/view are
-const. Built-in child states are private and are destroyed before their parent's
-snapshot. The internal child-creation helper takes a parent evaluation rather
-than an arbitrary vector.
+Evaluation objects could not be copied or moved, and their input storage/view
+was const. Built-in child states were private and were destroyed before their
+parent's snapshot. The internal child-creation helper took a parent evaluation
+rather than an arbitrary vector.
 
-Advanced C++ subclasses must override `make_evaluation(x, bool borrow_input)` and
-forward the flag to the state constructor, or choose to copy the input. The
-protected `x_` is now a read-only ConstVecRef. Public evaluate calls pass false;
-borrowed children must not escape their parent. The ordinary numerical hooks,
-public C++/Python methods, and independently owned derivative results are
-unchanged. See the [custom evaluation contract](../guide/energy/custom.md).
+That version required custom C++ factories to accept an input-ownership flag,
+and exposed protected `x_` as a read-only `ConstVecRef`. This contract has been
+removed: current factories take only `make_evaluation(x)`, and every evaluation
+owns its input in a read-only `Vec`. See the current
+[custom evaluation contract](../guide/energy/custom.md).
 
 ## Correctness
 
 Release CTest: 509/509, including Python 660 passed / 81 skipped. ASan/UBSan:
-88 Energy/Response and 35 solver tests passed. The native regression verifies
+88 Energy/Response and 35 solver tests passed. The native regression at that revision verified
 input pointer sharing, distinct live public snapshots, custom-factory policy
 forwarding, interleaved evaluation destruction, exact/projected derivatives,
-feasible steps, and reading the input during child destruction. Python tests
-exercise nested weighted/affine states with a non-contiguous input that is
+feasible steps, and reading the input during child destruction. Python tests at that revision
+exercised nested weighted/affine states with a non-contiguous input that is
 mutated and deleted, model garbage collection, and both projection orders.
 All examples build. Tutorial notebooks were not rerun because their APIs did not
-change; the advanced C++ factory migration is documented separately.
+change; the historical factory contract is described above.
 
 ## Paired performance measurements
 
