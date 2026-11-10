@@ -38,6 +38,17 @@ void bind_newton(nb::module_& m) {
         .def_prop_ro("tolerance", &AbsoluteConvergence::tolerance)
         .def("__call__", &AbsoluteConvergence::operator());
 
+    nb::class_<CombinedConvergence>(m, "CombinedConvergence")
+        .def(nb::init<double, double, double, double, double, double>(), "absolute_tolerance"_a, "relative_tolerance"_a,
+             "force_scale"_a, "correction_tolerance"_a, "coordinate_scale"_a, "backward_error_tolerance"_a)
+        .def_ro("absolute_tolerance", &CombinedConvergence::absolute_tolerance)
+        .def_ro("relative_tolerance", &CombinedConvergence::relative_tolerance)
+        .def_ro("force_scale", &CombinedConvergence::force_scale)
+        .def_ro("correction_tolerance", &CombinedConvergence::correction_tolerance)
+        .def_ro("coordinate_scale", &CombinedConvergence::coordinate_scale)
+        .def_ro("backward_error_tolerance", &CombinedConvergence::backward_error_tolerance)
+        .def("__call__", &CombinedConvergence::operator());
+
     nb::class_<NewtonOptions>(m, "NewtonOptions")
         .def(
             "__init__",

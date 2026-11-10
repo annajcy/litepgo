@@ -37,6 +37,16 @@ class AbsoluteConvergence {
     double tolerance_;
 };
 
+// Absolute residual OR relative residual with a reliable, small full Newton correction.
+class CombinedConvergence {
+  public:
+    CombinedConvergence(double absolute_tolerance, double relative_tolerance, double force_scale,
+                        double correction_tolerance, double coordinate_scale, double backward_error_tolerance);
+    bool operator()(const NewtonConvergenceState& state) const;
+    const double absolute_tolerance, relative_tolerance, force_scale;
+    const double correction_tolerance, coordinate_scale, backward_error_tolerance;
+};
+
 struct NewtonOptions {
     int max_iterations = 50;
     bool project_hessian = true;

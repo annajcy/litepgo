@@ -4,7 +4,7 @@ Newton checks initial feasibility before convergence, including with all DOFs
 fixed. NewtonOptions.max_coordinate_step bounds movement in solver coordinates
 before the feasible-step query; its default is infinity. The required convergence policy sees a readonly scalar snapshot before Hessian
 assembly and again after computing a direction. Direction fields are None in
-the first phase. AbsoluteConvergence runs natively; Python callbacks run at most
+the first phase. AbsoluteConvergence and CombinedConvergence run natively; Python callbacks run at most
 twice per iteration and must not mutate solver state.
 
 Gauss-Newton accepts a Response and uses sparse damped normal equations for damped steps.
@@ -31,13 +31,14 @@ from litepgo._core import solver as _native
 
 ConvergenceState = _native.ConvergenceState
 AbsoluteConvergence = _native.AbsoluteConvergence
+CombinedConvergence = _native.CombinedConvergence
 NewtonOptions = _native.NewtonOptions
 NewtonStatus = _native.NewtonStatus
 NewtonStep = _native.NewtonStep
 NewtonResult = _native.NewtonResult
 newton_solve = _native.newton_solve
 
-__all__ = ["ConvergenceState", "AbsoluteConvergence", "NewtonOptions", "NewtonStatus", "NewtonStep", "NewtonResult", "newton_solve"]
+__all__ = ["ConvergenceState", "AbsoluteConvergence", "CombinedConvergence", "NewtonOptions", "NewtonStatus", "NewtonStep", "NewtonResult", "newton_solve"]
 
 GaussNewtonOptions = _native.GaussNewtonOptions
 GaussNewtonStatus = _native.GaussNewtonStatus

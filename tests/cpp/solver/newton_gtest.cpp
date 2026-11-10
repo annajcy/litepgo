@@ -441,3 +441,42 @@ TEST(Newton, RejectsInvalidCoordinateStepLimits) {
                      std::invalid_argument);
     }
 }
+
+TEST(CombinedConvergence, TwoPhasesRequireReliableFullCorrection) {
+    using namespace litepgo::solver;
+    const CombinedConvergence policy(1e-5, 1e-8, 2e6, 1e-12, 1., 1e-12);
+    NewtonConvergenceState s;
+    s.gradient_norm = 1e-3;
+    s.project_hessian = false;
+    EXPECT_FALSE(policy(s)); // No direction in the first phase.
+    s.newton_correction_norm = 1e-13;
+    s.diagonal_shifts = 0;
+    s.linear_backward_error = 1e-14;
+    EXPECT_TRUE(policy(s));
+    s.project_hessian = true;
+    EXPECT_FALSE(policy(s));
+    s.project_hessian = false;
+    s.diagonal_shifts = 1;
+    EXPECT_FALSE(policy(s));
+    s.diagonal_shifts = 0;
+    s.linear_backward_error = 1e-10;
+    EXPECT_FALSE(policy(s));
+    s.linear_backward_error = 1e-14;
+    s.newton_correction_norm = .1; // A CCD-shrunken step cannot substitute for this direction.
+    EXPECT_FALSE(policy(s));
+    s.newton_correction_norm = 1e-13;
+    s.gradient_norm = 1.;
+    EXPECT_FALSE(policy(s));
+    s.gradient_norm = 1e-6;
+    s.newton_correction_norm.reset();
+    EXPECT_TRUE(policy(s)); // Ordinary absolute convergence needs no direction.
+    s.gradient_norm = std::nan("");
+    EXPECT_FALSE(policy(s));
+}
+
+TEST(CombinedConvergence, RejectsInvalidParameters) {
+    using litepgo::solver::CombinedConvergence;
+    EXPECT_THROW(CombinedConvergence(-1., 1e-8, 1., 1e-12, 1., 1e-12), std::invalid_argument);
+    EXPECT_THROW(CombinedConvergence(1e-5, 1e-8, 0., 1e-12, 1., 1e-12), std::invalid_argument);
+    EXPECT_THROW(CombinedConvergence(1e-5, 1e-8, 1., 1e-12, std::nan(""), 1e-12), std::invalid_argument);
+}

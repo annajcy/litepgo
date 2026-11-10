@@ -15,6 +15,29 @@ AbsoluteConvergence::AbsoluteConvergence(double tolerance) : tolerance_(toleranc
         throw std::invalid_argument("AbsoluteConvergence: tolerance must be finite and non-negative");
 }
 
+CombinedConvergence::CombinedConvergence(double absolute, double relative, double force, double correction,
+                                         double coordinate, double backward)
+    : absolute_tolerance(absolute), relative_tolerance(relative), force_scale(force), correction_tolerance(correction),
+      coordinate_scale(coordinate), backward_error_tolerance(backward) {
+    for (double tolerance : {absolute, relative, correction, backward})
+        if (!std::isfinite(tolerance) || tolerance < 0)
+            throw std::invalid_argument("CombinedConvergence: tolerances must be finite and non-negative");
+    if (!std::isfinite(force) || force <= 0 || !std::isfinite(coordinate) || coordinate <= 0)
+        throw std::invalid_argument("CombinedConvergence: scales must be finite and positive");
+}
+
+bool CombinedConvergence::operator()(const NewtonConvergenceState& s) const {
+    if (!std::isfinite(s.gradient_norm) || s.gradient_norm < 0)
+        return false;
+    if (s.gradient_norm <= absolute_tolerance)
+        return true;
+    return s.gradient_norm / force_scale <= relative_tolerance && !s.project_hessian && s.diagonal_shifts &&
+           *s.diagonal_shifts == 0 && s.linear_backward_error && std::isfinite(*s.linear_backward_error) &&
+           *s.linear_backward_error >= 0 && *s.linear_backward_error <= backward_error_tolerance &&
+           s.newton_correction_norm && std::isfinite(*s.newton_correction_norm) && *s.newton_correction_norm >= 0 &&
+           *s.newton_correction_norm / coordinate_scale <= correction_tolerance;
+}
+
 namespace {
 
 constexpr int max_diagonal_shifts = 10;

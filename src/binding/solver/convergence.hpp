@@ -7,6 +7,8 @@ namespace litepgo::solver::binding {
 inline ConvergenceCheck convergence_check(nanobind::handle value) {
     if (nanobind::isinstance<AbsoluteConvergence>(value))
         return nanobind::cast<AbsoluteConvergence>(value);
+    if (nanobind::isinstance<CombinedConvergence>(value))
+        return nanobind::cast<CombinedConvergence>(value);
     if (!PyCallable_Check(value.ptr()))
         throw nanobind::type_error("convergence must be callable");
     return nanobind::cast<ConvergenceCheck>(value);

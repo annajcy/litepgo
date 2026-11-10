@@ -80,7 +80,7 @@ not proof of a global minimum. Rigid modes must be constrained or penalized.
 ## Two-stage convergence policy
 
 `convergence` is required and keyword-only in Python. It accepts the native
-`AbsoluteConvergence(tolerance)` or a callable `ConvergenceState -> bool`.
+`AbsoluteConvergence(tolerance)`, `CombinedConvergence(...)`, or a callable `ConvergenceState -> bool`.
 The native absolute policy requires a finite nonnegative tolerance and checks
 `gradient_norm <= tolerance` entirely in C++. A Python callable crosses the
 language boundary at most twice per iteration. Exceptions propagate.
@@ -198,3 +198,25 @@ normal convergence, improving tiny corrections, coordinate limits, synthetic and
 native IPC CCD restrictions, and shifted/projected directions. A unit-cell
 Neovius tight-contact reproduction also terminates with this status while the
 already-converged checkpoint retains `Converged`.
+
+### Native combined convergence
+
+`CombinedConvergence(absolute_tolerance, relative_tolerance, force_scale,
+correction_tolerance, coordinate_scale, backward_error_tolerance)` implements
+absolute residual acceptance **or** relative residual acceptance together with a
+small reliable full Newton correction. It is a fixed combination, not a generic
+boolean-expression builder. All tolerances must be finite and nonnegative; scales
+must be finite and positive and expressed in the solver's coordinate units.
+
+The relative arm requires `gradient_norm / force_scale <= relative_tolerance`,
+`newton_correction_norm / coordinate_scale <= correction_tolerance`, an unprojected
+Hessian, zero diagonal shifts, and a finite nonnegative `linear_backward_error`
+no larger than its tolerance. Missing direction diagnostics reject this arm in the
+first phase. The correction is the complete direction before coordinate caps,
+CCD and line search. The absolute arm can accept in either phase.
+
+Both native policies are converted directly to a C++ convergence function by the
+Newton binding; passing them does not introduce Python callbacks each iteration.
+The application supplies physically meaningful scales, independently of the
+initial predictor residual. Convergence still does not certify positive stiffness,
+uniqueness, or contact validity beyond the solver's feasibility checks.
