@@ -14,7 +14,7 @@ using namespace nb::literals;
 namespace litepgo::fem::binding {
 namespace {
 
-template <class B, class Q> struct BindForce {
+template <class B, class Q> struct BindFpForce {
     static void apply(nb::module_& m) {
         bind_force<VolumetricFemForceFpResponse<B, Q>, B, Q>(
             m, "VolumetricFemForceFpResponse", "theta",
@@ -24,6 +24,6 @@ template <class B, class Q> struct BindForce {
 } // namespace
 
 void bind_fem_volumetric_fem_force_fp_response(nb::module_& m) {
-    for_each_volumetric_instance<BindForce>(m);
+    for_each_volumetric_instance<BindFpForce>(m);
 }
 } // namespace litepgo::fem::binding
