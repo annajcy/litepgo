@@ -35,7 +35,9 @@ class SpatialHash {
         Cell lo, hi;
         std::size_t count = 1;
     };
-    static constexpr std::size_t limit = 1 << 20;
+    // Conservative allowance for the temporary record, hash node, bucket and IDs.
+    static constexpr std::size_t bytes_per_record = 128;
+    std::size_t record_limit_;
     std::vector<AABB> boxes_;
     std::vector<Range> ranges_;
     std::unordered_map<Cell, std::vector<std::size_t>, Hash> grid_;
@@ -56,7 +58,7 @@ class SpatialHash {
             r.lo[k] = static_cast<std::int64_t>(lo);
             r.hi[k] = static_cast<std::int64_t>(hi);
             auto d = static_cast<std::uint64_t>(r.hi[k]) - static_cast<std::uint64_t>(r.lo[k]);
-            if (d >= limit || r.count > limit / (d + 1))
+            if (d >= record_limit_ || r.count > record_limit_ / (d + 1))
                 throw std::length_error("SpatialHash: box or query exceeds the cell record limit");
             r.count *= static_cast<std::size_t>(d + 1);
         }
@@ -79,8 +81,13 @@ class SpatialHash {
     }
 
   public:
-    explicit SpatialHash(std::span<const AABB> boxes, std::optional<double> cell_size = std::nullopt)
-        : boxes_(boxes.begin(), boxes.end()) {
+    // The budget estimates grid storage, excluding input boxes and returned pairs.
+    // cell_size is a starting size; oversized grids are coarsened without dropping boxes.
+    explicit SpatialHash(std::span<const AABB> boxes, std::optional<double> cell_size = std::nullopt,
+                         std::size_t grid_memory_budget = 256 * 1024 * 1024)
+        : record_limit_(grid_memory_budget / bytes_per_record), boxes_(boxes.begin(), boxes.end()) {
+        if (record_limit_ == 0 || boxes_.size() > record_limit_)
+            throw std::length_error("SpatialHash: input boxes exceed the grid memory budget");
         if (cell_size && (!std::isfinite(*cell_size) || *cell_size <= 0))
             throw std::invalid_argument("SpatialHash: invalid cell size");
         std::vector<double> extents;
@@ -97,13 +104,28 @@ class SpatialHash {
             std::nth_element(extents.begin(), mid, extents.end());
             h_ = *mid;
         }
+        double largest_coordinate = 0;
+        for (const auto& b : boxes_)
+            largest_coordinate = std::max({largest_coordinate, b.lo.cwiseAbs().maxCoeff(), b.hi.cwiseAbs().maxCoeff()});
         std::size_t count = 0;
-        for (const auto& b : boxes_) {
-            auto r = range(b);
-            if (count > limit - r.count)
-                throw std::length_error("SpatialHash: total cell records exceed the limit");
-            count += r.count;
-            ranges_.push_back(r);
+        for (;;) {
+            count = 0;
+            ranges_.clear();
+            try {
+                for (const auto& b : boxes_) {
+                    auto r = range(b);
+                    if (count > record_limit_ - r.count)
+                        throw std::length_error("SpatialHash: grid memory budget exceeded");
+                    count += r.count;
+                    ranges_.push_back(r);
+                }
+                break;
+            } catch (const std::length_error&) {
+                // Beyond this size each axis can only occupy the cells adjacent to zero.
+                if (h_ > largest_coordinate || !std::isfinite(2 * h_))
+                    throw std::length_error("SpatialHash: grid cannot fit the memory budget even after coarsening");
+                h_ *= 2;
+            }
         }
         struct Record {
             Cell cell;
@@ -126,7 +148,16 @@ class SpatialHash {
     std::vector<std::size_t> query(const AABB& region) const {
         validate(region);
         std::vector<std::size_t> ids;
-        auto r = range(region);
+        Range r;
+        try {
+            r = range(region);
+        } catch (const std::length_error&) {
+            // A large query needs no grid allocation; scanning avoids enumerating empty cells.
+            for (std::size_t i = 0; i < boxes_.size(); ++i)
+                if (overlaps(region, boxes_[i]))
+                    ids.push_back(i);
+            return ids;
+        }
         cells(r, [&](Cell c) {
             auto it = grid_.find(c);
             if (it != grid_.end())

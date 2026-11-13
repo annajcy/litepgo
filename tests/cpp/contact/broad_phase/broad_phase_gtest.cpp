@@ -382,7 +382,8 @@ TEST(SpatialHash, RejectsUnrepresentableGridsAndValidatesCompleteInput) {
               box_oracle({cases[1], {true, true, true}}));
     EXPECT_THROW(SpatialHash(1).detect({cases[2], {true, true, true}}), std::overflow_error);
     for (int i : {3, 4, 5})
-        EXPECT_THROW(SpatialHash(1).detect({cases[i], {true, true, true}}), std::length_error);
+        EXPECT_EQ(canonical(SpatialHash(1).detect({cases[i], {true, true, true}})),
+                  box_oracle({cases[i], {true, true, true}}));
     EXPECT_EQ(canonical(SpatialHash{}.detect({cases[6], {true, true, true}})),
               box_oracle({cases[6], {true, true, true}}));
     for (const auto& first : cases) {

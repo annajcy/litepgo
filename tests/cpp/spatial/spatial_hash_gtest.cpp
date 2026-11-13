@@ -42,8 +42,53 @@ TEST(SpatialIndex, OwnsBoxesAndValidatesQueries) {
     EXPECT_THROW(SpatialHash(boxes, 0), std::invalid_argument);
     const double inf = std::numeric_limits<double>::infinity();
     EXPECT_THROW(index.query({Eigen::Vector3d::Constant(-inf), Eigen::Vector3d::Constant(inf)}), std::overflow_error);
-    EXPECT_THROW(index.query({Eigen::Vector3d::Zero(), Eigen::Vector3d::Constant(10000)}), std::length_error);
+    EXPECT_EQ(index.query({Eigen::Vector3d::Zero(), Eigen::Vector3d::Constant(10000)}), std::vector<std::size_t>{0});
     boxes.push_back({Eigen::Vector3d::Ones(), Eigen::Vector3d::Constant(2)});
     EXPECT_THROW(SpatialHash(boxes, 1e-20), std::overflow_error);
-    EXPECT_THROW(SpatialHash(boxes, 0.001), std::length_error);
+    EXPECT_NO_THROW(SpatialHash(boxes, 0.001));
+}
+
+TEST(SpatialIndex, CoarseningPreservesStaticAndSweptOverlaps) {
+    for (bool swept : {false, true}) {
+        std::vector<AABB> boxes;
+        for (int i = 0; i < 40; ++i) {
+            Eigen::Vector3d lo((i % 7) - 3., (i % 5) - 2., (i % 3) - 1.);
+            Eigen::Vector3d hi = lo + Eigen::Vector3d(1., .5, .25);
+            if (swept) {
+                Eigen::Vector3d delta((i % 3) - 1., 0.3, -0.7);
+                lo = lo.cwiseMin((lo + delta).eval());
+                hi = hi.cwiseMax((hi + delta).eval());
+            }
+            boxes.push_back({lo, hi});
+        }
+        for (int threads : {1, 4}) {
+            const tbb::global_control control(tbb::global_control::max_allowed_parallelism, threads);
+            // Each original box alone exceeds this budget; construction must coarsen.
+            SpatialHash index(boxes, .01, 64 * 1024);
+            std::vector<BoxPair> expected;
+            for (std::size_t i = 0; i < boxes.size(); ++i) {
+                std::vector<std::size_t> hits;
+                for (std::size_t j = 0; j < boxes.size(); ++j) {
+                    bool overlap = !(boxes[i].lo.array() > boxes[j].hi.array()).any() &&
+                                   !(boxes[j].lo.array() > boxes[i].hi.array()).any();
+                    if (overlap)
+                        hits.push_back(j);
+                    if (overlap && i < j && (i + j) % 2 == 0)
+                        expected.push_back({i, j});
+                }
+                EXPECT_EQ(index.query(boxes[i]), hits);
+            }
+            auto actual = index.overlapping_pairs([](auto i, auto j) { return (i + j) % 2 == 0; });
+            std::sort(actual.begin(), actual.end());
+            EXPECT_EQ(actual, expected);
+        }
+    }
+}
+
+TEST(SpatialIndex, RejectsImpossibleBudgetsAndInvalidBoxes) {
+    std::vector<AABB> boxes{{Eigen::Vector3d::Constant(-1), Eigen::Vector3d::Ones()}};
+    EXPECT_THROW(SpatialHash(boxes, 1, 0), std::length_error);
+    EXPECT_THROW(SpatialHash(boxes, 1, 128), std::length_error); // straddles all three zero planes
+    boxes[0].lo[0] = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_THROW(SpatialHash(boxes, 1), std::invalid_argument);
 }
