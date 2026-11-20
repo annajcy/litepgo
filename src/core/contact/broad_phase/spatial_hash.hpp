@@ -11,10 +11,12 @@ namespace litepgo::contact {
 // Unrepresentable coordinates and budgets too small for the input still throw.
 class SpatialHash final : public BroadPhase {
   public:
-    explicit SpatialHash(std::optional<double> cell_size = std::nullopt);
+    explicit SpatialHash(std::optional<double> cell_size = std::nullopt,
+                         std::size_t grid_memory_budget = 256 * 1024 * 1024);
     std::vector<BoxPair> detect(const BroadPhaseQuery& query) const override;
 
   private:
     const std::optional<double> cell_size_;
+    const std::size_t grid_memory_budget_;
 };
 } // namespace litepgo::contact

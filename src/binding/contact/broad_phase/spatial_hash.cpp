@@ -11,6 +11,7 @@ using namespace nb::literals;
 namespace litepgo::contact::binding {
 void bind_spatial_hash(nb::module_& m) {
     nb::class_<SpatialHash, BroadPhase>(m, "SpatialHash")
-        .def(nb::init<std::optional<double>>(), "cell_size"_a = nb::none());
+        .def(nb::init<std::optional<double>, std::size_t>(), "cell_size"_a = nb::none(),
+             "grid_memory_budget"_a = 256 * 1024 * 1024);
 }
 } // namespace litepgo::contact::binding

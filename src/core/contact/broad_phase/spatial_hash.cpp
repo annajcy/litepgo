@@ -4,7 +4,10 @@
 #include <cmath>
 #include <stdexcept>
 namespace litepgo::contact {
-SpatialHash::SpatialHash(std::optional<double> cell_size) : cell_size_(cell_size) {
+SpatialHash::SpatialHash(std::optional<double> cell_size, std::size_t grid_memory_budget)
+    : cell_size_(cell_size), grid_memory_budget_(grid_memory_budget) {
+    if (!grid_memory_budget)
+        throw std::invalid_argument("SpatialHash: grid memory budget must be positive");
     if (cell_size && (!std::isfinite(*cell_size) || *cell_size <= 0))
         throw std::invalid_argument("SpatialHash: cell_size must be finite and positive, or unset");
 }
@@ -26,7 +29,7 @@ std::vector<BoxPair> SpatialHash::detect(const BroadPhaseQuery& query) const {
         std::nth_element(extents.begin(), mid, extents.end());
         size = *mid;
     }
-    return spatial::SpatialHash(boxes, size).overlapping_pairs([&](auto i, auto j) {
+    return spatial::SpatialHash(boxes, size, grid_memory_budget_).overlapping_pairs([&](auto i, auto j) {
         return query.allowed_pairs.allows(query.boxes[i].kind, query.boxes[j].kind);
     });
 }
